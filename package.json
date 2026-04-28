@@ -1,0 +1,43 @@
+{
+  "name": "vybecord-ts",
+  "version": "1.0.0",
+  "description": "Discord Rich Presence with real-time synced lyrics — TypeScript edition",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsup src/index.ts --format esm --dts --clean && node -e \"const fs=require('fs');['dashboard.html','dashboard-v2.html'].forEach(f=>{try{fs.copyFileSync('src/web/'+f,'dist/'+f)}catch(e){console.log('skip '+f)}})\"",
+    "start": "node dist/index.js",
+    "build:exe": "node scripts/build-exe.mjs"
+  },
+  "pkg": {
+    "scripts": [
+      "node_modules/better-sqlite3/**/*.js",
+      "node_modules/bindings/**/*.js",
+      "node_modules/file-uri-to-path/**/*.js"
+    ],
+    "assets": [
+      "node_modules/better-sqlite3/build/Release/*.node",
+      "node_modules/better-sqlite3/prebuilds/**/*"
+    ]
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.9.0",
+    "dotenv": "^16.4.7",
+    "music-metadata": "^11.12.3",
+    "pinyin-pro": "^3.28.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.10.0",
+    "@yao-pkg/pkg": "^6.15.0",
+    "tsup": "^8.3.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "author": "TheUnknownMurda",
+  "license": "UNLICENSED",
+  "private": true
+}
