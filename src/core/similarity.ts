@@ -3,6 +3,11 @@
  * Implements Jaro-Winkler and Levenshtein — same logic as the Rust vybecord_native module.
  */
 
+// Pooled match arrays — avoids 2× Uint8Array allocation per jaro() call.
+// Grows once to max string length seen, then reused forever.
+let _pool1 = new Uint8Array(256);
+let _pool2 = new Uint8Array(256);
+
 /** Jaro similarity (0..1). */
 function jaro(s1: string, s2: string): number {
   if (s1 === s2) return 1.0;
@@ -10,9 +15,15 @@ function jaro(s1: string, s2: string): number {
   const len2 = s2.length;
   if (len1 === 0 || len2 === 0) return 0.0;
 
+  // Ensure pool is large enough (rare resize — amortized O(1))
+  if (len1 > _pool1.length) _pool1 = new Uint8Array(len1);
+  if (len2 > _pool2.length) _pool2 = new Uint8Array(len2);
+  const s1Matches = _pool1;
+  const s2Matches = _pool2;
+  s1Matches.fill(0, 0, len1);
+  s2Matches.fill(0, 0, len2);
+
   const matchDist = Math.max(Math.floor(Math.max(len1, len2) / 2) - 1, 0);
-  const s1Matches = new Uint8Array(len1);
-  const s2Matches = new Uint8Array(len2);
 
   let matches = 0;
   let transpositions = 0;
@@ -59,6 +70,9 @@ export function jaroWinkler(s1: string, s2: string): number {
   return j + prefix * 0.1 * (1 - j);
 }
 
+// Pooled Levenshtein row — same strategy as jaro pools
+let _levRow = new Uint32Array(257);
+
 /** Levenshtein distance. */
 function levenshteinDist(s1: string, s2: string): number {
   const len1 = s1.length;
@@ -66,8 +80,9 @@ function levenshteinDist(s1: string, s2: string): number {
   if (len1 === 0) return len2;
   if (len2 === 0) return len1;
 
-  // Single-row optimization
-  const row = new Uint32Array(len2 + 1);
+  // Ensure pool is large enough
+  if (len2 + 1 > _levRow.length) _levRow = new Uint32Array(len2 + 1);
+  const row = _levRow;
   for (let j = 0; j <= len2; j++) row[j] = j;
 
   for (let i = 1; i <= len1; i++) {
@@ -109,8 +124,12 @@ export function similarity(s1: string, s2: string): number {
 
   const score = jaroWinkler(a, b) * 0.7 + levenshteinSim(a, b) * 0.3;
   if (simCache.size >= SIM_CACHE_MAX) {
-    // Batch eviction: clear entirely (amortized cheaper than per-entry iterator)
-    simCache.clear();
+    // Evict oldest half — preserves hot entries from the current search batch
+    let toDelete = SIM_CACHE_MAX >> 1;
+    for (const k of simCache.keys()) {
+      if (toDelete-- <= 0) break;
+      simCache.delete(k);
+    }
   }
   simCache.set(key, score);
   return score;

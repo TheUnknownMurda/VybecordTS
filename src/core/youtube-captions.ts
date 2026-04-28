@@ -23,6 +23,7 @@ import { readdir, readFile, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createLogger } from './logger.js';
+import { evictOldest } from './utils.js';
 import type { LyricLine } from './types.js';
 
 const log = createLogger('YouTube-CC');
@@ -88,11 +89,7 @@ function getCached(key: string): CCResult | null {
 
 function setCache(key: string, result: CCResult): void {
   ccCache.set(key, { result, ts: Date.now() });
-  // Evict oldest if over limit
-  if (ccCache.size > CACHE_MAX) {
-    const oldest = ccCache.keys().next().value;
-    if (oldest) ccCache.delete(oldest);
-  }
+  evictOldest(ccCache, CACHE_MAX);
 }
 
 interface Json3Event {

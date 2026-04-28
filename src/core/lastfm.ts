@@ -16,6 +16,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createLogger } from './logger.js';
+import { evictOldest } from './utils.js';
 
 const log = createLogger('LastFM');
 
@@ -171,12 +172,8 @@ export async function getCorrection(
       log.info(`[CORRECT] "${rawArtist} - ${rawTrack}" → "${correction.artist} - ${correction.track}"`);
     }
 
-    // Evict before inserting to never exceed MAX_CACHE
-    if (correctionCache.size >= MAX_CACHE) {
-      const firstKey = correctionCache.keys().next().value;
-      if (firstKey) correctionCache.delete(firstKey);
-    }
     correctionCache.set(cacheKey, correction);
+    evictOldest(correctionCache, MAX_CACHE);
 
     return correction;
   } catch {

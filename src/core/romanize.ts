@@ -5,6 +5,7 @@
  */
 
 import { pinyin } from 'pinyin-pro';
+import { evictOldest } from './utils.js';
 
 // ── Japanese: Hiragana & Katakana → Romaji ──
 
@@ -130,11 +131,7 @@ function romanizeChinese(text: string): string {
   if (cached === undefined) {
     cached = pinyin(text, { toneType: 'none', type: 'string', separator: ' ' });
     pinyinCache.set(text, cached);
-    // Evict oldest entries if cache grows too large
-    if (pinyinCache.size > PINYIN_CACHE_LIMIT) {
-      const first = pinyinCache.keys().next().value;
-      if (first !== undefined) pinyinCache.delete(first);
-    }
+    evictOldest(pinyinCache, PINYIN_CACHE_LIMIT);
   }
   return cached;
 }
@@ -159,12 +156,14 @@ const CYRILLIC_MAP: Record<string, string> = {
   'Ё': 'Yo', 'ё': 'yo',
 };
 
+function mapChars(text: string, map: Record<string, string>): string {
+  const out: string[] = [];
+  for (const ch of text) out.push(map[ch] ?? ch);
+  return out.join('');
+}
+
 function romanizeCyrillic(text: string): string {
-  let result = '';
-  for (const ch of text) {
-    result += CYRILLIC_MAP[ch] ?? ch;
-  }
-  return result;
+  return mapChars(text, CYRILLIC_MAP);
 }
 
 // ── Greek → Latin (simplified transliteration) ──
@@ -183,11 +182,7 @@ const GREEK_MAP: Record<string, string> = {
 };
 
 function romanizeGreek(text: string): string {
-  let result = '';
-  for (const ch of text) {
-    result += GREEK_MAP[ch] ?? ch;
-  }
-  return result;
+  return mapChars(text, GREEK_MAP);
 }
 
 // ── Thai → Latin (RTGS-inspired approximation) ──
@@ -211,15 +206,10 @@ const THAI_DIGITS: Record<string, string> = {
   '๕': '5', '๖': '6', '๗': '7', '๘': '8', '๙': '9',
 };
 
+const THAI_ALL: Record<string, string> = { ...THAI_CONSONANTS, ...THAI_VOWELS, ...THAI_DIGITS };
+
 function romanizeThai(text: string): string {
-  let result = '';
-  for (const ch of text) {
-    if (THAI_CONSONANTS[ch]) result += THAI_CONSONANTS[ch];
-    else if (THAI_VOWELS[ch] !== undefined) result += THAI_VOWELS[ch];
-    else if (THAI_DIGITS[ch]) result += THAI_DIGITS[ch];
-    else result += ch;
-  }
-  return result;
+  return mapChars(text, THAI_ALL);
 }
 
 // ── Arabic → Latin (simplified transliteration) ──
@@ -238,11 +228,7 @@ const ARABIC_MAP: Record<string, string> = {
 };
 
 function romanizeArabic(text: string): string {
-  let result = '';
-  for (const ch of text) {
-    result += ARABIC_MAP[ch] ?? ch;
-  }
-  return result;
+  return mapChars(text, ARABIC_MAP);
 }
 
 // ── Devanagari (Hindi/Sanskrit) → IAST-inspired Latin ──
@@ -302,11 +288,7 @@ const GEORGIAN_MAP: Record<string, string> = {
 };
 
 function romanizeGeorgian(text: string): string {
-  let result = '';
-  for (const ch of text) {
-    result += GEORGIAN_MAP[ch] ?? ch;
-  }
-  return result;
+  return mapChars(text, GEORGIAN_MAP);
 }
 
 // ── Armenian → Latin (simplified transliteration) ──
@@ -324,11 +306,7 @@ const ARMENIAN_MAP: Record<string, string> = {
 };
 
 function romanizeArmenian(text: string): string {
-  let result = '';
-  for (const ch of text) {
-    result += ARMENIAN_MAP[ch] ?? ch;
-  }
-  return result;
+  return mapChars(text, ARMENIAN_MAP);
 }
 
 // ── Detection helpers ──

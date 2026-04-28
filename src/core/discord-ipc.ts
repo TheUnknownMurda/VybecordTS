@@ -35,7 +35,9 @@ function padMin2(s: string): string { return s.length < 2 ? s + ' ' : s; }
 export class DiscordIPC {
   private socket: net.Socket | null = null;
   private clientId: string;
-  private readBuffer = Buffer.alloc(0);
+  private readBuffer = Buffer.allocUnsafe(4096);
+  private readLen = 0;   // valid bytes in readBuffer
+  private readOffset = 0; // consumed bytes (leading slack)
   private pendingResolves: Map<string, { resolve: (data: unknown) => void; reject: (err: Error) => void; timer: ReturnType<typeof setTimeout> }> = new Map();
   private connected = false;
   private _onReady?: () => void;
@@ -46,6 +48,9 @@ export class DiscordIPC {
 
   // Hot-path optimization: monotonic nonce counter (cheaper than randomUUID)
   private nonceCounter = 0;
+  // Cached setActivity state: skip full rebuild + JSON.stringify when activity unchanged
+  private lastActivityJson = '';
+  private lastActivityArgs = '';
   private readonly pid = process.pid;
 
   constructor(clientId: string) {
@@ -112,7 +117,8 @@ export class DiscordIPC {
       sock.once('connect', () => {
         clearTimeout(timeout);
         this.socket = sock;
-        this.readBuffer = Buffer.alloc(0);
+        this.readLen = 0;
+        this.readOffset = 0;
         resolve();
       });
 
@@ -127,12 +133,23 @@ export class DiscordIPC {
     if (!this.socket) return;
 
     this.socket.on('data', (chunk: Buffer) => {
-      // Avoid Buffer.concat when readBuffer is empty (common fast-path)
-      if (this.readBuffer.length === 0) {
-        this.readBuffer = Buffer.from(chunk);
-      } else {
-        this.readBuffer = Buffer.concat([this.readBuffer, chunk]);
+      // Grow buffer if needed, then copy chunk in-place (avoids Buffer.concat alloc)
+      const needed = this.readLen + chunk.length;
+      if (needed > this.readBuffer.length) {
+        // Compact first: shift valid data to front, then resize if still insufficient
+        if (this.readOffset > 0) {
+          this.readBuffer.copyWithin(0, this.readOffset, this.readLen);
+          this.readLen -= this.readOffset;
+          this.readOffset = 0;
+        }
+        if (this.readLen + chunk.length > this.readBuffer.length) {
+          const newBuf = Buffer.allocUnsafe(Math.max(this.readBuffer.length * 2, this.readLen + chunk.length));
+          this.readBuffer.copy(newBuf, 0, 0, this.readLen);
+          this.readBuffer = newBuf;
+        }
       }
+      chunk.copy(this.readBuffer, this.readLen);
+      this.readLen += chunk.length;
       this.processBuffer();
     });
 
@@ -176,14 +193,16 @@ export class DiscordIPC {
   }
 
   private processBuffer(): void {
-    while (this.readBuffer.length >= 8) {
-      const opcode = this.readBuffer.readUInt32LE(0);
-      const length = this.readBuffer.readUInt32LE(4);
+    const buf = this.readBuffer;
+    while (this.readLen - this.readOffset >= 8) {
+      const opcode = buf.readUInt32LE(this.readOffset);
+      const length = buf.readUInt32LE(this.readOffset + 4);
+      const frameEnd = this.readOffset + 8 + length;
 
-      if (this.readBuffer.length < 8 + length) break; // Incomplete frame
+      if (this.readLen < frameEnd) break; // Incomplete frame
 
-      const payload = this.readBuffer.subarray(8, 8 + length).toString('utf-8');
-      this.readBuffer = this.readBuffer.subarray(8 + length);
+      const payload = buf.toString('utf-8', this.readOffset + 8, frameEnd);
+      this.readOffset = frameEnd;
 
       try {
         const data = JSON.parse(payload) as Record<string, unknown>;
@@ -191,6 +210,13 @@ export class DiscordIPC {
       } catch (e) {
         log.error(`Failed to parse IPC message: ${e}`);
       }
+    }
+
+    // Compact when >50% consumed (amortized — avoids copy on every frame)
+    if (this.readOffset > 0 && this.readOffset >= (this.readLen >> 1)) {
+      buf.copyWithin(0, this.readOffset, this.readLen);
+      this.readLen -= this.readOffset;
+      this.readOffset = 0;
     }
   }
 
@@ -231,7 +257,7 @@ export class DiscordIPC {
       }
       const json = JSON.stringify(data);
       const len = Buffer.byteLength(json, 'utf-8');
-      const buf = Buffer.alloc(8 + len);
+      const buf = Buffer.allocUnsafe(8 + len);
       buf.writeUInt32LE(opcode, 0);
       buf.writeUInt32LE(len, 4);
       buf.write(json, 8, 'utf-8');
@@ -282,13 +308,24 @@ export class DiscordIPC {
     // Wait for DISPATCH READY
     await new Promise<void>((resolve, reject) => {
       const onData = (chunk: Buffer) => {
-        this.readBuffer = Buffer.concat([this.readBuffer, chunk]);
-        while (this.readBuffer.length >= 8) {
-          const op = this.readBuffer.readUInt32LE(0);
-          const len = this.readBuffer.readUInt32LE(4);
-          if (this.readBuffer.length < 8 + len) return;
-          const payload = JSON.parse(this.readBuffer.subarray(8, 8 + len).toString('utf-8'));
-          this.readBuffer = this.readBuffer.subarray(8 + len);
+        // Append chunk using the shared offset-based buffer
+        if (this.readLen + chunk.length > this.readBuffer.length) {
+          const newBuf = Buffer.allocUnsafe(Math.max(this.readBuffer.length * 2, this.readLen + chunk.length));
+          this.readBuffer.copy(newBuf, 0, this.readOffset, this.readLen);
+          this.readLen -= this.readOffset;
+          this.readOffset = 0;
+          this.readBuffer = newBuf;
+        }
+        chunk.copy(this.readBuffer, this.readLen);
+        this.readLen += chunk.length;
+
+        while (this.readLen - this.readOffset >= 8) {
+          const op = this.readBuffer.readUInt32LE(this.readOffset);
+          const len = this.readBuffer.readUInt32LE(this.readOffset + 4);
+          const frameEnd = this.readOffset + 8 + len;
+          if (this.readLen < frameEnd) return;
+          const payload = JSON.parse(this.readBuffer.toString('utf-8', this.readOffset + 8, frameEnd));
+          this.readOffset = frameEnd;
           if (op === Opcode.FRAME && payload.evt === 'READY') {
             clearTimeout(timeout);
             this.socket!.removeListener('data', onData);
@@ -347,13 +384,18 @@ export class DiscordIPC {
     if (activity.details_url) rpcActivity.details_url = activity.details_url;
     if (activity.state_url) rpcActivity.state_url = activity.state_url;
 
-    // Fire-and-forget via sendFast (monotonic nonce, no Promise)
+    // Serialize the activity body; skip full re-stringify if unchanged (heartbeats)
+    const activityJson = JSON.stringify(rpcActivity);
     const nonce = `sa-${++this.nonceCounter}`;
-    const payload = JSON.stringify({
-      cmd: 'SET_ACTIVITY',
-      args: { pid: this.pid, activity: rpcActivity },
-      nonce,
-    });
+    let payload: string;
+    if (activityJson === this.lastActivityJson) {
+      // Reuse cached args portion, only swap nonce
+      payload = `{"cmd":"SET_ACTIVITY","args":${this.lastActivityArgs},"nonce":"${nonce}"}`;
+    } else {
+      this.lastActivityJson = activityJson;
+      this.lastActivityArgs = `{"pid":${this.pid},"activity":${activityJson}}`;
+      payload = `{"cmd":"SET_ACTIVITY","args":${this.lastActivityArgs},"nonce":"${nonce}"}`;
+    }
     this.sendFast(Opcode.FRAME, payload);
   }
 

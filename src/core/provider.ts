@@ -700,30 +700,12 @@ async function tryFuzzySearch(
 
 // ── Album art: aggressive title cleaning for search ──
 
-// Extra patterns for aggressive art-search cleaning (superset of cleanForSearch)
+// Delegates to cleanForSearch, then strips extra trailing separators (|) for broader art matches
 function cleanForArtSearch(name: string, artist: string): [cleanName: string, cleanArtist: string] {
-  let clean = name;
-  // Strip SoundCloud-style tags: [FREE DL], (EXCLUSIVE), etc.
-  clean = clean.replace(RE_SC_TAGS, ' ');
-  // Strip producer credits: (prod. Metro Boomin)
-  clean = clean.replace(RE_PROD_TAG, ' ');
-  // Strip "Type Beat" suffix
-  clean = clean.replace(RE_TYPE_BEAT, '');
-  // Strip hashtags: #rap #hiphop
-  clean = clean.replace(RE_HASHTAGS, ' ');
-  // Strip emoji
-  clean = clean.replace(RE_EMOJI, ' ');
-  // Strip featuring tags
-  clean = clean.replace(RE_FEAT, '');
-  // Strip bracket tags (official video, etc.)
-  clean = clean.replace(RE_BRACKET_TAG, '');
-  // Strip version suffixes
-  clean = clean.replace(RE_VERSION_SUFFIX, '');
-  // Collapse whitespace
-  clean = clean.replace(/\s{2,}/g, ' ').replace(/[-–—|]+\s*$/, '').trim();
-  // Clean artist too
-  const cleanArt = artist.split(RE_ARTIST_SPLIT)[0].replace(RE_TOPIC_SUFFIX, '').replace(RE_EMOJI, '').trim();
-  return [clean, cleanArt];
+  const [clean, cleanArt] = cleanForSearch(name, artist);
+  // Art search also strips trailing pipe separators (YouTube titles: "Song | Artist")
+  const artClean = clean.replace(/[-–—|]+\s*$/, '').trim();
+  return [artClean || clean, cleanArt];
 }
 
 // ── Album art: multi-source search (Deezer → iTunes → cleaned retry) ──

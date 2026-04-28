@@ -98,19 +98,37 @@ function formatTime(): string {
 }
 
 export function createLogger(name: string) {
+  // Pre-build per-level prefix strings (constant after construction — avoid per-log alloc)
+  const consolePrefix: Record<LogLevel, string> = {
+    debug: `${LEVEL_COLORS.debug}[`,
+    info:  `${LEVEL_COLORS.info}[`,
+    warn:  `${LEVEL_COLORS.warn}[`,
+    error: `${LEVEL_COLORS.error}[`,
+  };
+  const consoleSuffix: Record<LogLevel, string> = {
+    debug: `] [${LEVEL_TAGS.debug}] [${name}]${RESET} `,
+    info:  `] [${LEVEL_TAGS.info}] [${name}]${RESET} `,
+    warn:  `] [${LEVEL_TAGS.warn}] [${name}]${RESET} `,
+    error: `] [${LEVEL_TAGS.error}] [${name}]${RESET} `,
+  };
+  const fileTag: Record<LogLevel, string> = {
+    debug: `] [${LEVEL_TAGS.debug}] [${name}] `,
+    info:  `] [${LEVEL_TAGS.info}] [${name}] `,
+    warn:  `] [${LEVEL_TAGS.warn}] [${name}] `,
+    error: `] [${LEVEL_TAGS.error}] [${name}] `,
+  };
+
   const emit = (level: LogLevel, msg: string) => {
     if (LEVEL_PRIORITY[level] < LEVEL_PRIORITY[globalLevel]) return;
 
     const ts = formatTime();
-    const tag = LEVEL_TAGS[level];
 
-    // Console (colored)
-    const color = LEVEL_COLORS[level];
-    process.stdout.write(`${color}[${ts}] [${tag}] [${name}]${RESET} ${msg}\n`);
+    // Console (colored) — only 3 concats instead of a template literal
+    process.stdout.write(consolePrefix[level] + ts + consoleSuffix[level] + msg + '\n');
 
     // File (buffered)
     if (logFileStream) {
-      logBuffer += `[${ts}] [${tag}] [${name}] ${msg}\n`;
+      logBuffer += '[' + ts + fileTag[level] + msg + '\n';
       if (logBuffer.length >= LOG_FLUSH_THRESHOLD) flushLogBuffer();
     }
   };

@@ -56,6 +56,9 @@ export class DesktopSource {
   private restartTimer: ReturnType<typeof setTimeout> | null = null;
   private onTrack?: (track: TrackData | null) => void;
   private lastStderrMsg = '';
+  // Cached getCurrentTrack result — avoids re-creating an identical object every 400ms
+  private _cachedTrack: TrackData | null = null;
+  private _cachedDataRef: SmtcData | null = null; // reference equality check
 
   constructor(onTrack?: (track: TrackData | null) => void) {
     this.onTrack = onTrack;
@@ -136,6 +139,16 @@ export class DesktopSource {
     const d = this.latestData;
     if (!d || !d.is_playing || !d.title) return null;
 
+    // Fast path: same SmtcData reference → return cached TrackData (avoids object alloc every 400ms)
+    if (d === this._cachedDataRef && this._cachedTrack) {
+      // Update only the progress field (it's interpolated from performance.now())
+      const rawPos = d.is_live ? 0 : this.getCompensatedPosition(d);
+      const durMs = this._cachedTrack.duration_ms;
+      this._cachedTrack.progress_ms = durMs > 0 ? Math.min(rawPos, durMs) : rawPos;
+      this._cachedTrack._received_at = performance.now();
+      return this._cachedTrack;
+    }
+
     // Ignore Windows Media Player / video players — not a music streaming source
     if (d.source === 'wmp' || d.source === 'groove') return null;
     if (d.source === 'unknown' && d.source_id) {
@@ -175,7 +188,7 @@ export class DesktopSource {
     // Clamp position to duration (SMTC browser data can overshoot)
     const posMs = durMs > 0 ? Math.min(rawPos, durMs) : rawPos;
 
-    return {
+    const track: TrackData = {
       track_id: `desktop:${trackName}:${artistName}`,
       track_name: trackName,
       artist_name: artistName,
@@ -190,6 +203,9 @@ export class DesktopSource {
       media_source: source,
       _received_at: performance.now(),
     };
+    this._cachedDataRef = d;
+    this._cachedTrack = track;
+    return track;
   }
 
   /**

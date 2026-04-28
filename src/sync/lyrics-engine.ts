@@ -16,6 +16,7 @@ import { findLyricIndex } from '../core/lrc-parser.js';
 import { createLogger } from '../core/logger.js';
 import { romanize } from '../core/romanize.js';
 import { getCachedTranslation, translateText } from '../core/translate.js';
+import { evictOldest } from '../core/utils.js';
 import type { LyricLine, DiscordActivity, TrackData } from '../core/types.js';
 
 const log = createLogger('LyricsEngine');
@@ -118,6 +119,7 @@ export class LyricsEngine {
   private cachedButtons: { label: string; url: string }[] = [];
   private cachedLargeImage = '';
   private cachedIcon: [string, string] | null = null;
+  private cachedPlatText = '';  // Pre-built "Playing on X" string (avoids concat per emit)
 
   // Pre-resolved per-track URLs (avoid 3× resolveUrl + config lookups per emit)
   private cachedDetailsUrl = '';
@@ -128,6 +130,7 @@ export class LyricsEngine {
   private cachedDisplayArtist = '';
   private cachedHasAlbum = false;
   private cachedInfoText = '';
+  private cachedIsRedundantCtx = true;  // Pre-computed per track (avoids 3× toLowerCase per emit)
 
   private callbacks: LyricsEngineCallbacks | null = null;
   private running = false;
@@ -745,6 +748,7 @@ export class LyricsEngine {
 
     // Platform icon (reuse `source` from above)
     this.cachedIcon = PLATFORM_ICONS[source] ?? null;
+    this.cachedPlatText = this.cachedIcon ? `Playing on ${this.cachedIcon[1]}` : '';
 
     // Cache config flags to avoid per-emit boolean casts
     this.cfgShowLyrics = (this.rpcConfig.show_lyrics as boolean) !== false;
@@ -776,6 +780,7 @@ export class LyricsEngine {
     this.cachedDisplayArtist = deduplicateArtist(d.track_name, d.artist_name);
     this.cachedHasAlbum = !!(d.album_name && d.album_name.trim());
     this.cachedInfoText = buildInfoText(d, '', '');
+    this.cachedIsRedundantCtx = isRedundantContext(d);
   }
 
   // ── RPC payload building ──
@@ -844,7 +849,7 @@ export class LyricsEngine {
     } else {
       // No lyrics / lyrics disabled — use pre-computed display parts
       details = truncate(d.track_name, 128);
-      const ctx = isRedundantContext(d) ? '' : (d.context_name || '');
+      const ctx = this.cachedIsRedundantCtx ? '' : (d.context_name || '');
 
       if (ctx) {
         state = truncate(`🎼 ${ctx}`, 128);
@@ -926,47 +931,47 @@ export class LyricsEngine {
   /** Apply small icon to activity based on cached icon mode. */
   private applySmallIcon(activity: DiscordActivity, d: TrackData): void {
     if (this.cfgHideSmallIcon) return;
-    const platText = this.cachedIcon ? `Playing on ${this.cachedIcon[1]}` : '';
+    const pt = this.cachedPlatText; // Pre-built per-track (no concat per emit)
     switch (this.cfgIconMode) {
       case 'random':
         if (this.randomIconPick) {
           activity.assets!.small_image = this.randomIconPick[0];
-          activity.assets!.small_text = platText || this.randomIconPick[1];
+          activity.assets!.small_text = pt || this.randomIconPick[1];
         }
         break;
       case 'radiate':
         activity.assets!.small_image = 'https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/VVjYzmfdMIF5hHA8SUnbi.gif';
-        activity.assets!.small_text = platText || '✨ Radiate';
+        activity.assets!.small_text = pt || '✨ Radiate';
         break;
       case 'purple_rad':
         activity.assets!.small_image = 'https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/I9CeTrPc17wqbDilQPN9K.gif';
-        activity.assets!.small_text = platText || '💜 Purple Rad';
+        activity.assets!.small_text = pt || '💜 Purple Rad';
         break;
       case 'rouge':
         activity.assets!.small_image = 'https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/HrMk6Gy5NrHDuNewWnUOR.gif';
-        activity.assets!.small_text = platText || '🔴 Rouge';
+        activity.assets!.small_text = pt || '🔴 Rouge';
         break;
       case 'lrc_off':
         activity.assets!.small_image = 'https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/4CoaWZGd53cD62wNI1ZOT.png';
-        activity.assets!.small_text = platText || '🚫 LRC OFF';
+        activity.assets!.small_text = pt || '🚫 LRC OFF';
         break;
       case 'bleeding':
         activity.assets!.small_image = 'https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/6sALSWqWzao3chNZzHCXy.gif';
-        activity.assets!.small_text = platText || '🩸 Bleeding';
+        activity.assets!.small_text = pt || '🩸 Bleeding';
         break;
       case 'dance':
         if ((d.media_source || '') === 'spotify') {
           activity.assets!.small_image = 'https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/CmyJXMf4iahs7L24VfYDQ.gif';
-          activity.assets!.small_text = platText || '🎧 Club Mode';
+          activity.assets!.small_text = pt || '🎧 Club Mode';
         } else if (this.cachedIcon) {
           activity.assets!.small_image = this.cachedIcon[0];
-          activity.assets!.small_text = `Playing on ${this.cachedIcon[1]}`;
+          activity.assets!.small_text = pt;
         }
         break;
       default:
         if (this.cachedIcon) {
           activity.assets!.small_image = this.cachedIcon[0];
-          activity.assets!.small_text = `Playing on ${this.cachedIcon[1]}`;
+          activity.assets!.small_text = pt;
         }
         break;
     }
@@ -978,11 +983,7 @@ export class LyricsEngine {
     if (r === undefined) {
       r = romanize(text);
       this.romanizeCache.set(text, r);
-      // Evict old entries if cache grows too large (shouldn't happen for lyrics)
-      if (this.romanizeCache.size > 500) {
-        const first = this.romanizeCache.keys().next().value;
-        if (first !== undefined) this.romanizeCache.delete(first);
-      }
+      evictOldest(this.romanizeCache, 500);
     }
     return r;
   }

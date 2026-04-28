@@ -43,6 +43,7 @@ import { extractLocalArt } from './core/local-art.js';
 import { initBlacklist, flagLyrics, isLyricsFlagged, clearFlags, listFlaggedTracks, clearFlagsByKey } from './core/lyrics-blacklist.js';
 import { initHistory, historyTrackStart, historyTrackEnd, getRecentHistory, getHistoryCount, getWrappedStats } from './core/listening-history.js';
 import { translateBatch } from './core/translate.js';
+import { evictOldest, evictUntil } from './core/utils.js';
 import type { TrackData, SpotifyPlayback, LyricLine } from './core/types.js';
 
 const log = createLogger('Backend');
@@ -326,13 +327,7 @@ export class VybecordBackend extends EventEmitter {
     if (trackKey === this.currentTrackKey) {
       // Same track — sync progress to lyrics engine (instant, no poll delay)
       if (this.checkRepeatLoop(track)) return;
-      this.currentTrack = track;
-      this.lyricsEngine.syncProgress(track.progress_ms, track);
-      checkAndScrobble();
-      this.emit('progressUpdate', {
-        progress_ms: track.progress_ms,
-        duration_ms: track.duration_ms,
-      });
+      this.syncTrackProgress(track, true);
       // Update artist image if it arrived asynchronously (Tampermonkey fetches after first push)
       if (track.artist_art_url) {
         const primaryArtist = track.artist_name.split(ARTIST_SPLIT_RE)[0].trim().toLowerCase();
@@ -378,12 +373,7 @@ export class VybecordBackend extends EventEmitter {
     if (trackKey === this.currentTrackKey) {
       // Same track — sync exact progress (no drift with userscript)
       if (this.checkRepeatLoop(track)) return;
-      this.currentTrack = track;
-      this.lyricsEngine.syncProgress(track.progress_ms, track);
-      this.emit('progressUpdate', {
-        progress_ms: track.progress_ms,
-        duration_ms: track.duration_ms,
-      });
+      this.syncTrackProgress(track);
       return;
     }
 
@@ -421,12 +411,7 @@ export class VybecordBackend extends EventEmitter {
     if (trackKey === this.currentTrackKey) {
       // Same track — sync progress
       if (this.checkRepeatLoop(track)) return;
-      this.currentTrack = track;
-      this.lyricsEngine.syncProgress(track.progress_ms, track);
-      this.emit('progressUpdate', {
-        progress_ms: track.progress_ms,
-        duration_ms: track.duration_ms,
-      });
+      this.syncTrackProgress(track);
       return;
     }
 
@@ -464,13 +449,7 @@ export class VybecordBackend extends EventEmitter {
     if (trackKey === this.currentTrackKey) {
       // Same track — sync progress
       if (this.checkRepeatLoop(track)) return;
-      this.currentTrack = track;
-      this.lyricsEngine.syncProgress(track.progress_ms, track);
-      checkAndScrobble();
-      this.emit('progressUpdate', {
-        progress_ms: track.progress_ms,
-        duration_ms: track.duration_ms,
-      });
+      this.syncTrackProgress(track, true);
       return;
     }
 
@@ -499,12 +478,7 @@ export class VybecordBackend extends EventEmitter {
 
     // Store for later lookup (onNewTrack will check this)
     this.spotifyLyricsStore.set(data.track_id, lines);
-
-    // Evict old entries (keep last 10)
-    if (this.spotifyLyricsStore.size > 10) {
-      const firstKey = this.spotifyLyricsStore.keys().next().value;
-      if (firstKey !== undefined) this.spotifyLyricsStore.delete(firstKey);
-    }
+    evictOldest(this.spotifyLyricsStore, 10);
 
     log.info(`[SPOTIFY-LYRICS] Received ${lines.length} lines for track ${data.track_id}`);
 
@@ -540,10 +514,7 @@ export class VybecordBackend extends EventEmitter {
           const trackKey = this.buildTrackKey(spTrack);
           if (trackKey === this.currentTrackKey) {
             if (!this.checkRepeatLoop(spTrack)) {
-              this.currentTrack = spTrack;
-              this.lyricsEngine.syncProgress(spTrack.progress_ms, spTrack);
-              checkAndScrobble();
-              this.emit('progressUpdate', { progress_ms: spTrack.progress_ms, duration_ms: spTrack.duration_ms });
+              this.syncTrackProgress(spTrack, true);
             }
           }
           return;
@@ -555,9 +526,7 @@ export class VybecordBackend extends EventEmitter {
             const trackKey = this.buildTrackKey(ytTrack);
             if (trackKey === this.currentTrackKey) {
               if (!this.checkRepeatLoop(ytTrack)) {
-                this.currentTrack = ytTrack;
-                this.lyricsEngine.syncProgress(ytTrack.progress_ms, ytTrack);
-                this.emit('progressUpdate', { progress_ms: ytTrack.progress_ms, duration_ms: ytTrack.duration_ms });
+                this.syncTrackProgress(ytTrack);
               }
             }
             return;
@@ -569,9 +538,7 @@ export class VybecordBackend extends EventEmitter {
             const trackKey = this.buildTrackKey(scTrack);
             if (trackKey === this.currentTrackKey) {
               if (!this.checkRepeatLoop(scTrack)) {
-                this.currentTrack = scTrack;
-                this.lyricsEngine.syncProgress(scTrack.progress_ms, scTrack);
-                this.emit('progressUpdate', { progress_ms: scTrack.progress_ms, duration_ms: scTrack.duration_ms });
+                this.syncTrackProgress(scTrack);
               }
             }
             return;
@@ -588,10 +555,7 @@ export class VybecordBackend extends EventEmitter {
             const trackKey = this.buildTrackKey(bcTrack);
             if (trackKey === this.currentTrackKey) {
               if (!this.checkRepeatLoop(bcTrack)) {
-                this.currentTrack = bcTrack;
-                this.lyricsEngine.syncProgress(bcTrack.progress_ms, bcTrack);
-                checkAndScrobble();
-                this.emit('progressUpdate', { progress_ms: bcTrack.progress_ms, duration_ms: bcTrack.duration_ms });
+                this.syncTrackProgress(bcTrack, true);
               }
             }
             return;
@@ -632,12 +596,7 @@ export class VybecordBackend extends EventEmitter {
           const trackKey = this.buildTrackKey(ytTrack);
           if (trackKey === this.currentTrackKey) {
             if (!this.checkRepeatLoop(ytTrack)) {
-              this.currentTrack = ytTrack;
-              this.lyricsEngine.syncProgress(ytTrack.progress_ms, ytTrack);
-              this.emit('progressUpdate', {
-                progress_ms: ytTrack.progress_ms,
-                duration_ms: ytTrack.duration_ms,
-              });
+              this.syncTrackProgress(ytTrack);
             }
           }
           return;
@@ -671,12 +630,7 @@ export class VybecordBackend extends EventEmitter {
             const trackKey = this.buildTrackKey(ytTrack);
             if (trackKey === this.currentTrackKey) {
               if (!this.checkRepeatLoop(ytTrack)) {
-                this.currentTrack = ytTrack;
-                this.lyricsEngine.syncProgress(ytTrack.progress_ms, ytTrack);
-                this.emit('progressUpdate', {
-                  progress_ms: ytTrack.progress_ms,
-                  duration_ms: ytTrack.duration_ms,
-                });
+                this.syncTrackProgress(ytTrack);
               }
             }
             return;
@@ -689,12 +643,7 @@ export class VybecordBackend extends EventEmitter {
             const trackKey = this.buildTrackKey(scTrack);
             if (trackKey === this.currentTrackKey) {
               if (!this.checkRepeatLoop(scTrack)) {
-                this.currentTrack = scTrack;
-                this.lyricsEngine.syncProgress(scTrack.progress_ms, scTrack);
-                this.emit('progressUpdate', {
-                  progress_ms: scTrack.progress_ms,
-                  duration_ms: scTrack.duration_ms,
-                });
+                this.syncTrackProgress(scTrack);
               }
             }
             return;
@@ -712,13 +661,7 @@ export class VybecordBackend extends EventEmitter {
             const trackKey = this.buildTrackKey(bcTrack);
             if (trackKey === this.currentTrackKey) {
               if (!this.checkRepeatLoop(bcTrack)) {
-                this.currentTrack = bcTrack;
-                this.lyricsEngine.syncProgress(bcTrack.progress_ms, bcTrack);
-                checkAndScrobble();
-                this.emit('progressUpdate', {
-                  progress_ms: bcTrack.progress_ms,
-                  duration_ms: bcTrack.duration_ms,
-                });
+                this.syncTrackProgress(bcTrack, true);
               }
             }
             return;
@@ -756,13 +699,7 @@ export class VybecordBackend extends EventEmitter {
 
     if (trackKey === this.currentTrackKey) {
       if (this.checkRepeatLoop(trackData)) return;
-      this.currentTrack = trackData;
-      this.lyricsEngine.syncProgress(trackData.progress_ms, trackData);
-      // Emit progress so dashboard recalibrates on seek
-      this.emit('progressUpdate', {
-        progress_ms: trackData.progress_ms,
-        duration_ms: trackData.duration_ms,
-      });
+      this.syncTrackProgress(trackData);
 
       // Prefetch next track's lyrics when >80% done (fire-and-forget)
       if (trackData.duration_ms > 0 && trackData.progress_ms / trackData.duration_ms > 0.8) {
@@ -977,6 +914,14 @@ export class VybecordBackend extends EventEmitter {
     this.emit('progressUpdate', { progress_ms: 0, duration_ms: dur });
     this.recordPlay(track);
     return true;
+  }
+
+  /** Common fast-path: sync progress + emit update. Called from 14 poll/push sites. */
+  private syncTrackProgress(track: TrackData, scrobble = false): void {
+    this.currentTrack = track;
+    this.lyricsEngine.syncProgress(track.progress_ms, track);
+    if (scrobble) checkAndScrobble();
+    this.emit('progressUpdate', { progress_ms: track.progress_ms, duration_ms: track.duration_ms });
   }
 
   // ── New track handler ──
@@ -1514,15 +1459,8 @@ export class VybecordBackend extends EventEmitter {
       this.sessionArtistPlays.set(artistKey, { name: artistDisplay, art: t.album_art_url || '', artist_art: t.artist_art_url || '', count: 1 });
     }
 
-    // Evict oldest entries if maps grow too large (long sessions)
-    if (this.sessionTrackPlays.size > 500) {
-      const first = this.sessionTrackPlays.keys().next().value;
-      if (first !== undefined) this.sessionTrackPlays.delete(first);
-    }
-    if (this.sessionArtistPlays.size > 500) {
-      const first = this.sessionArtistPlays.keys().next().value;
-      if (first !== undefined) this.sessionArtistPlays.delete(first);
-    }
+    evictOldest(this.sessionTrackPlays, 500);
+    evictOldest(this.sessionArtistPlays, 500);
 
     this.emit('statsUpdate', this.getSessionStats());
   }
@@ -1617,16 +1555,8 @@ export class VybecordBackend extends EventEmitter {
   }
 
   private evictCache(): void {
-    while (this.lyricsCache.size > 50) {
-      const firstKey = this.lyricsCache.keys().next().value;
-      if (firstKey !== undefined) this.lyricsCache.delete(firstKey);
-      else break;
-    }
-    while (this.enrichedMeta.size > 50) {
-      const firstKey = this.enrichedMeta.keys().next().value;
-      if (firstKey !== undefined) this.enrichedMeta.delete(firstKey);
-      else break;
-    }
+    evictUntil(this.lyricsCache, 50);
+    evictUntil(this.enrichedMeta, 50);
   }
 
   // ── Shutdown ──

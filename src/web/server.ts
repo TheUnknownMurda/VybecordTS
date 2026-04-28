@@ -10,6 +10,7 @@ import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { createLogger } from '../core/logger.js';
 import { romanize, needsRomanization } from '../core/romanize.js';
+import { evictOldest } from '../core/utils.js';
 import { isScrobbleEnabled, canAuth, getAuthUrl, completeAuth, disconnectScrobble } from '../core/lastfm.js';
 import { translateText, translateBatch, TRANSLATE_LANGS, clearTranslationCache, getTranslationCacheSize, flushTranslationCache } from '../core/translate.js';
 import type { VybecordBackend } from '../backend.js';
@@ -23,10 +24,7 @@ function sseRomanizeCached(cache: Map<string, string>, text: string): string {
   if (r === undefined) {
     r = romanize(text);
     cache.set(text, r);
-    if (cache.size > 500) {
-      const first = cache.keys().next().value;
-      if (first !== undefined) cache.delete(first);
-    }
+    evictOldest(cache, 500);
   }
   return r;
 }
@@ -61,6 +59,8 @@ export class WebServer {
     const sseTranslateCache = new Map<string, string>();
     backend.on('trackUpdate', () => { sseTranslateCache.clear(); }); // clear on track change
     backend.on('lyricsUpdate', (data: { current?: string; next?: string; prev?: string; [k: string]: unknown }) => {
+      // Skip all enrichment work when no clients are listening (common when dashboard is closed)
+      if (this.sseClients.size === 0) return;
       // Attach romanized text for dashboard display (memoized per text)
       const cur = data.current || '';
       const nxt = data.next || '';
@@ -93,6 +93,7 @@ export class WebServer {
     });
     let lastProgressBroadcast = 0;
     backend.on('progressUpdate', (data) => {
+      if (this.sseClients.size === 0) return; // No clients → skip throttle check + broadcast
       const now = Date.now();
       if (now - lastProgressBroadcast < 1000) return; // Throttle to 1/s — dashboard only needs ~1Hz for seekbar
       lastProgressBroadcast = now;
@@ -182,16 +183,16 @@ export class WebServer {
         return await this.serveThumbnail(res);
       }
       if (url.pathname === '/api/spicetify' && method === 'POST') {
-        return await this.handleSpicetifyPush(req, res);
+        return await this.handlePush(req, res, d => this.backend.handleSpicetifyPush(d), 'Spicetify');
       }
       if (url.pathname === '/api/youtube' && method === 'POST') {
-        return await this.handleYouTubePush(req, res);
+        return await this.handlePush(req, res, d => this.backend.handleYouTubePush(d), 'YouTube');
       }
       if (url.pathname === '/api/soundcloud' && method === 'POST') {
-        return await this.handleSoundCloudPush(req, res);
+        return await this.handlePush(req, res, d => this.backend.handleSoundCloudPush(d), 'SoundCloud');
       }
       if (url.pathname === '/api/bandcamp' && method === 'POST') {
-        return await this.handleBandcampPush(req, res);
+        return await this.handlePush(req, res, d => this.backend.handleBandcampPush(d), 'Bandcamp');
       }
       if (url.pathname === '/api/spotify-lyrics' && method === 'POST') {
         return await this.handleSpotifyLyricsPush(req, res);
@@ -415,55 +416,21 @@ export class WebServer {
     }
   }
 
-  private async handleSpicetifyPush(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
-    try {
-      const body = await this.readBody(req, 8192); // Spicetify payloads are small
-      const data = JSON.parse(body);
-      this.backend.handleSpicetifyPush(data);
-      res.writeHead(204);
-      res.end();
-    } catch (e) {
-      res.writeHead(400, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: `Invalid payload: ${e}` }));
-    }
-  }
-
-  private async handleYouTubePush(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  private async handlePush(
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+    handler: (data: any) => void,  // eslint-disable-line @typescript-eslint/no-explicit-any -- JSON.parse returns any; backend handlers validate
+    label: string,
+  ): Promise<void> {
     try {
       const body = await this.readBody(req, 8192);
       const data = JSON.parse(body);
-      this.backend.handleYouTubePush(data);
+      handler(data);
       res.writeHead(204);
       res.end();
     } catch (e) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: `Invalid YouTube payload: ${e}` }));
-    }
-  }
-
-  private async handleSoundCloudPush(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
-    try {
-      const body = await this.readBody(req, 8192);
-      const data = JSON.parse(body);
-      this.backend.handleSoundCloudPush(data);
-      res.writeHead(204);
-      res.end();
-    } catch (e) {
-      res.writeHead(400, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: `Invalid SoundCloud payload: ${e}` }));
-    }
-  }
-
-  private async handleBandcampPush(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
-    try {
-      const body = await this.readBody(req, 8192);
-      const data = JSON.parse(body);
-      this.backend.handleBandcampPush(data);
-      res.writeHead(204);
-      res.end();
-    } catch (e) {
-      res.writeHead(400, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: `Invalid Bandcamp payload: ${e}` }));
+      res.end(JSON.stringify({ error: `Invalid ${label} payload: ${e}` }));
     }
   }
 

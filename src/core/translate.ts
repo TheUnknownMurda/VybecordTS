@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { createLogger } from './logger.js';
+import { evictOldest } from './utils.js';
 
 const log = createLogger('Translate');
 
@@ -49,9 +50,10 @@ function scheduleCacheFlush(): void {
 // Load cache on module init
 loadDiskCache();
 
-// ── Concurrency limiter (replaces token bucket — allows parallel with cap) ──
+// ── Concurrency limiter (async semaphore — zero polling) ──
 let activeRequests = 0;
 const MAX_CONCURRENT = 6;
+const waitQueue: (() => void)[] = [];
 
 // ── Supported languages ──
 export const TRANSLATE_LANGS: Record<string, string> = {
@@ -143,19 +145,40 @@ async function fetchMyMemory(text: string, source: string, target: string, signa
 
 // ── Core single-line translate (internal) ──
 
-async function translateOne(trimmed: string, targetLang: string, signal?: AbortSignal): Promise<string | null> {
-  // Wait for a slot
-  while (activeRequests >= MAX_CONCURRENT) {
-    await new Promise(r => setTimeout(r, 50));
-    if (signal?.aborted) return null;
+function acquireSlot(signal?: AbortSignal): Promise<boolean> {
+  if (activeRequests < MAX_CONCURRENT) {
+    activeRequests++;
+    return Promise.resolve(true);
   }
-  activeRequests++;
+  return new Promise<boolean>(resolve => {
+    const onAbort = () => { resolve(false); };
+    if (signal?.aborted) { resolve(false); return; }
+    signal?.addEventListener('abort', onAbort, { once: true });
+    waitQueue.push(() => {
+      signal?.removeEventListener('abort', onAbort);
+      activeRequests++;
+      resolve(true);
+    });
+  });
+}
+
+function releaseSlot(): void {
+  activeRequests--;
+  if (waitQueue.length > 0) {
+    const next = waitQueue.shift()!;
+    next();
+  }
+}
+
+async function translateOne(trimmed: string, targetLang: string, signal?: AbortSignal): Promise<string | null> {
+  const acquired = await acquireSlot(signal);
+  if (!acquired) return null;
   try {
     let result = await fetchLingva(trimmed, 'auto', targetLang, signal);
     if (!result) result = await fetchMyMemory(trimmed, 'auto', targetLang, signal);
     return result;
   } finally {
-    activeRequests--;
+    releaseSlot();
   }
 }
 
@@ -195,11 +218,7 @@ export async function translateText(
   if (result) {
     // Don't cache if translation is identical to input (same language)
     if (result.toLowerCase() === trimmed.toLowerCase()) return null;
-    // Evict old entries if cache is full
-    if (cache.size >= CACHE_MAX) {
-      const firstKey = cache.keys().next().value;
-      if (firstKey) cache.delete(firstKey);
-    }
+    evictOldest(cache, CACHE_MAX - 1);
     cache.set(key, result);
     scheduleCacheFlush();
     return { translation: result, cached: false };
@@ -248,9 +267,10 @@ export function getTranslationCacheSize(): number {
   return cache.size;
 }
 
-/** Sync cache lookup — returns cached translation or null. No network calls. */
+/** Sync cache lookup — returns cached translation or null. No network calls.
+ *  Hot path (~2-5 calls/sec) — callers are expected to pass already-trimmed text. */
 export function getCachedTranslation(text: string, targetLang: string): string | null {
-  const key = `${text.trim()}|${targetLang}`;
+  const key = `${text}|${targetLang}`;
   return cache.get(key) ?? null;
 }
 
