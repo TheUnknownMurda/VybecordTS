@@ -612,7 +612,8 @@ export class VybecordBackend extends EventEmitter {
             return;
           }
         }
-        if (this.youtubeSource.isPaused) {
+        // Only stop if no other media source is playing
+        if (this.youtubeSource.isPaused && !this.currentTrackKey) {
           this.onTrackStopped();
         }
         return;
@@ -653,6 +654,7 @@ export class VybecordBackend extends EventEmitter {
             this.onTrackStopped();
             return;
           }
+          // SoundCloud paused but a non-SC track is playing — fall through to SMTC
         }
         // Priority 3d: Bandcamp userscript — before SMTC
         if (this.bandcampSource.isActive && this.config.get('detect_other_apps') !== false) {
@@ -849,15 +851,16 @@ export class VybecordBackend extends EventEmitter {
       this.mergeEnriched(track);
       this.currentTrack = track;
 
-      // Web sources (browser, YouTube, SoundCloud): SMTC progress is fundamentally
-      // unreliable — it reports erratic, clamped, or stale values that cause lyrics
-      // to jump around. NEVER recalibrate from SMTC for web sources.
-      // The engine free-runs from performance.now(); the YouTube/SC/BC userscripts
-      // provide accurate progress via their own push paths (bypassing this code).
-      if (!this.cachedIsWebSource) {
+      // Web sources (browser, YouTube, SoundCloud): SMTC progress is unreliable
+      // when a userscript is active (the userscript pushes accurate progress via
+      // its own path). When NO userscript is active, SMTC is the only data source
+      // so we must use it — otherwise the engine free-runs and the bar gets stuck.
+      const hasUserscript = this.youtubeSource.isActive || this.soundcloudSource.isActive
+        || this.bandcampSource.isActive;
+      if (!this.cachedIsWebSource || !hasUserscript) {
         this.lyricsEngine.syncProgress(track.progress_ms, track);
       } else {
-        // Metadata-only update (album art, etc.) — no position recalibration
+        // Userscript active — metadata-only update (album art, etc.)
         this.lyricsEngine.syncProgress(-1, track);
       }
 
@@ -1483,6 +1486,7 @@ export class VybecordBackend extends EventEmitter {
       purple_rad_mode: cfg.purple_rad_mode,
       rouge_mode: cfg.rouge_mode,
       bleeding_mode: cfg.bleeding_mode,
+      blue_rad_mode: cfg.blue_rad_mode,
       lrc_off_mode: cfg.lrc_off_mode,
       random_icon_mode: cfg.random_icon_mode,
       hide_small_icon: cfg.hide_small_icon,

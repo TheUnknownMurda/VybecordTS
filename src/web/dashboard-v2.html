@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>VybecordTS</title>
+    <link rel="icon" type="image/gif" href="https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/T13Beb2q34Er50o2JrKn2.gif" />
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = { darkMode: "class", theme: { extend: { colors: { accent: "var(--accent-hex)" } } } };
@@ -287,7 +288,8 @@
         z-index: 2;
         transition: margin-left 0.3s var(--ease-out);
       }
-      .sidebar.pinned ~ .main-wrap {
+      .sidebar.pinned ~ .main-wrap,
+      .sidebar:hover ~ .main-wrap {
         margin-left: var(--sidebar-w-open);
       }
       /* Now Playing Bar */
@@ -1082,13 +1084,13 @@
         gap: 4px;
         padding: 4px 8px;
       }
-      .sidebar:not(:hover):not(.open) .status-badges .badge {
+      .sidebar:not(:hover):not(.open):not(.pinned) .status-badges .badge {
         padding: 4px;
         justify-content: center;
         font-size: 0;
         min-width: 32px;
       }
-      .sidebar:not(:hover):not(.open) .status-badges .badge .dot {
+      .sidebar:not(:hover):not(.open):not(.pinned) .status-badges .badge .dot {
         font-size: 10px;
       }
       .section-label {
@@ -2098,6 +2100,7 @@
                   <option value="purple_rad" data-i18n="purple_rad_mode">Purple Rad</option>
                   <option value="rouge" data-i18n="rouge_mode">Rouge</option>
                   <option value="bleeding" data-i18n="bleeding_mode">Bleeding</option>
+                  <option value="blue_rad" data-i18n="blue_rad_mode">Blue Rad</option>
                   <option value="lrc_off" data-i18n="lrc_off_mode">LRC OFF</option>
                   <option value="random" data-i18n="random_icon_mode">Random</option>
                   <option value="hidden" data-i18n="hide_small_icon">None</option>
@@ -3047,12 +3050,12 @@
           copied: "✓ Copied",
           switch_classic: "Classic UI",
           switch_modern: "Modern UI",
-          tab_stats: "📊 Stats",
-          tab_settings: "⚙ Settings",
-          tab_import: "🎶 Import",
-          tab_creds: "🔑 Credentials",
-          tab_history: "📜 History",
-          tab_bug: "🐛 Bug Report",
+          tab_stats: "Stats",
+          tab_settings: "Settings",
+          tab_import: "Import",
+          tab_creds: "Credentials",
+          tab_history: "History",
+          tab_bug: "Bug Report",
           top_tracks: "Top Tracks",
           top_artists: "Top Artists",
           session_top3: "Top 3 of the current session",
@@ -3078,6 +3081,7 @@
           purple_rad_mode: "Purple Rad",
           rouge_mode: "Rouge",
           bleeding_mode: "Bleeding",
+          blue_rad_mode: "Blue Rad",
           lrc_off_mode: "LRC OFF",
           random_icon_mode: "Random",
           hide_small_icon: "No icon",
@@ -3172,12 +3176,12 @@
           copied: "✓ Copié",
           switch_classic: "Interface classique",
           switch_modern: "Interface moderne",
-          tab_stats: "📊 Stats",
-          tab_settings: "⚙ Paramètres",
-          tab_import: "🎶 Importer",
-          tab_creds: "🔑 Identifiants",
-          tab_history: "📜 Historique",
-          tab_bug: "🐛 Signaler",
+          tab_stats: "Stats",
+          tab_settings: "Paramètres",
+          tab_import: "Importer",
+          tab_creds: "Identifiants",
+          tab_history: "Historique",
+          tab_bug: "Signaler",
           top_tracks: "Top titres",
           top_artists: "Top artistes",
           session_top3: "Top 3 de la session",
@@ -3202,6 +3206,7 @@
           purple_rad_mode: "Purple Rad",
           rouge_mode: "Rouge",
           bleeding_mode: "Bleeding",
+          blue_rad_mode: "Blue Rad",
           lrc_off_mode: "LRC OFF",
           random_icon_mode: "Aléatoire",
           hide_small_icon: "Aucune",
@@ -3284,12 +3289,12 @@
         es: {
           idle_title: "Esperando música…",
           idle_sub: "Reproduce una pista",
-          tab_stats: "📊 Stats",
-          tab_settings: "⚙ Ajustes",
-          tab_import: "🎶 Importar",
-          tab_creds: "🔑 Credenciales",
-          tab_history: "📜 Historial",
-          tab_bug: "🐛 Reportar",
+          tab_stats: "Stats",
+          tab_settings: "Ajustes",
+          tab_import: "Importar",
+          tab_creds: "Credenciales",
+          tab_history: "Historial",
+          tab_bug: "Reportar",
           save_settings: "Guardar",
           import_btn: "Importar",
           confirm_shutdown: "¿Detener VybecordTS?",
@@ -3301,12 +3306,12 @@
         },
         de: {
           idle_title: "Warte auf Musik…",
-          tab_stats: "📊 Stats",
-          tab_settings: "⚙ Einstellungen",
-          tab_import: "🎶 Import",
-          tab_creds: "🔑 Zugangsdaten",
-          tab_history: "📜 Verlauf",
-          tab_bug: "🐛 Fehler melden",
+          tab_stats: "Stats",
+          tab_settings: "Einstellungen",
+          tab_import: "Import",
+          tab_creds: "Zugangsdaten",
+          tab_history: "Verlauf",
+          tab_bug: "Fehler melden",
           save_settings: "Speichern",
           import_btn: "Importieren",
           confirm_shutdown: "VybecordTS beenden?",
@@ -3318,12 +3323,12 @@
         },
         pt: {
           idle_title: "Aguardando música…",
-          tab_stats: "📊 Stats",
-          tab_settings: "⚙ Configurações",
-          tab_import: "🎶 Importar",
-          tab_creds: "🔑 Credenciais",
-          tab_history: "📜 Histórico",
-          tab_bug: "🐛 Reportar",
+          tab_stats: "Stats",
+          tab_settings: "Configurações",
+          tab_import: "Importar",
+          tab_creds: "Credenciais",
+          tab_history: "Histórico",
+          tab_bug: "Reportar",
           save_settings: "Salvar",
           import_btn: "Importar",
           confirm_shutdown: "Encerrar VybecordTS?",
@@ -3335,12 +3340,12 @@
         },
         ru: {
           idle_title: "Ожидание музыки…",
-          tab_stats: "📊 Статистика",
-          tab_settings: "⚙ Настройки",
-          tab_import: "🎶 Импорт",
-          tab_creds: "🔑 Ключи",
-          tab_history: "📜 История",
-          tab_bug: "🐛 Баг-репорт",
+          tab_stats: "Статистика",
+          tab_settings: "Настройки",
+          tab_import: "Импорт",
+          tab_creds: "Ключи",
+          tab_history: "История",
+          tab_bug: "Баг-репорт",
           save_settings: "Сохранить",
           import_btn: "Импортировать",
           confirm_shutdown: "Остановить?",
@@ -3352,12 +3357,12 @@
         },
         ja: {
           idle_title: "音楽を待っています…",
-          tab_stats: "📊 統計",
-          tab_settings: "⚙ 設定",
-          tab_import: "🎶 インポート",
-          tab_creds: "🔑 認証",
-          tab_history: "📜 履歴",
-          tab_bug: "🐛 バグ報告",
+          tab_stats: "統計",
+          tab_settings: "設定",
+          tab_import: "インポート",
+          tab_creds: "認証",
+          tab_history: "履歴",
+          tab_bug: "バグ報告",
           save_settings: "保存",
           import_btn: "インポート",
           confirm_shutdown: "終了？",
@@ -3369,12 +3374,12 @@
         },
         ko: {
           idle_title: "음악 대기 중…",
-          tab_stats: "📊 통계",
-          tab_settings: "⚙ 설정",
-          tab_import: "🎶 가져오기",
-          tab_creds: "🔑 인증",
-          tab_history: "📜 기록",
-          tab_bug: "🐛 버그 신고",
+          tab_stats: "통계",
+          tab_settings: "설정",
+          tab_import: "가져오기",
+          tab_creds: "인증",
+          tab_history: "기록",
+          tab_bug: "버그 신고",
           save_settings: "저장",
           import_btn: "가져오기",
           confirm_shutdown: "종료?",
@@ -3386,12 +3391,12 @@
         },
         zh: {
           idle_title: "等待音乐…",
-          tab_stats: "📊 统计",
-          tab_settings: "⚙ 设置",
-          tab_import: "🎶 导入",
-          tab_creds: "🔑 凭据",
-          tab_history: "📜 历史",
-          tab_bug: "🐛 反馈",
+          tab_stats: "统计",
+          tab_settings: "设置",
+          tab_import: "导入",
+          tab_creds: "凭据",
+          tab_history: "历史",
+          tab_bug: "反馈",
           save_settings: "保存",
           import_btn: "导入",
           confirm_shutdown: "关闭？",
@@ -3456,10 +3461,10 @@
         const sb = $("sidebar");
         sb.classList.toggle("pinned");
         const pinned = sb.classList.contains("pinned");
-        localStorage.setItem("vybecord_sidebar_pinned", pinned ? "1" : "");
+        localStorage.setItem("vybecord_sidebar_pinned", pinned ? "1" : "0");
       }
-      // Restore pinned state on load
-      if (localStorage.getItem("vybecord_sidebar_pinned") === "1") {
+      // Restore pinned state on load (default: pinned)
+      if (localStorage.getItem("vybecord_sidebar_pinned") !== "0") {
         $("sidebar").classList.add("pinned");
       }
       // PAGE SWITCH
@@ -3986,13 +3991,15 @@
                 ? "rouge"
                 : c.bleeding_mode
                   ? "bleeding"
-                  : c.purple_rad_mode
-                    ? "purple_rad"
-                    : c.radiate_mode
-                      ? "radiate"
-                      : c.dance_mode
-                        ? "dance"
-                        : "default";
+                  : c.blue_rad_mode
+                    ? "blue_rad"
+                    : c.purple_rad_mode
+                      ? "purple_rad"
+                      : c.radiate_mode
+                        ? "radiate"
+                        : c.dance_mode
+                          ? "dance"
+                          : "default";
         $("cfgSmallIconMode").value = iconMode;
         $("cfgCcEnabled").checked = c.cc_enabled !== false;
         $("cfgCcLang").value = c.cc_lang || "auto";
@@ -4059,6 +4066,7 @@
           purple_rad_mode: $("cfgSmallIconMode").value === "purple_rad",
           rouge_mode: $("cfgSmallIconMode").value === "rouge",
           bleeding_mode: $("cfgSmallIconMode").value === "bleeding",
+          blue_rad_mode: $("cfgSmallIconMode").value === "blue_rad",
           lrc_off_mode: $("cfgSmallIconMode").value === "lrc_off",
           random_icon_mode: $("cfgSmallIconMode").value === "random",
           hide_small_icon: $("cfgSmallIconMode").value === "hidden",

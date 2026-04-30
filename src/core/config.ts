@@ -31,6 +31,7 @@ const DEFAULTS: VybecordConfig = {
   purple_rad_mode: false,
   rouge_mode: false,
   bleeding_mode: false,
+  blue_rad_mode: false,
   lrc_off_mode: false,
   random_icon_mode: false,
   hide_small_icon: false,

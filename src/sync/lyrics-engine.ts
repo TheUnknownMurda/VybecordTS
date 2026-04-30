@@ -42,6 +42,7 @@ const RANDOM_ICON_POOL: [string, string][] = [
   ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/VVjYzmfdMIF5hHA8SUnbi.gif', '✨ Radiate'],
   ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/I9CeTrPc17wqbDilQPN9K.gif', '💜 Purple Rad'],
   ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/HrMk6Gy5NrHDuNewWnUOR.gif', '🔴 Rouge'],
+  ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/BUo3vfJ4QVWlghZJYuyIB.gif', '💙 Blue Rad'],
   ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/4CoaWZGd53cD62wNI1ZOT.png', '🚫 LRC OFF'],
 ];
 
@@ -171,7 +172,7 @@ export class LyricsEngine {
   private cfgRomanize = false;
   private cfgActivityType = 2;
   private cfgHideSmallIcon = false;
-  private cfgIconMode: 'default' | 'dance' | 'radiate' | 'purple_rad' | 'rouge' | 'lrc_off' | 'bleeding' | 'random' = 'default';
+  private cfgIconMode: 'default' | 'dance' | 'radiate' | 'purple_rad' | 'rouge' | 'lrc_off' | 'bleeding' | 'blue_rad' | 'random' = 'default';
   private cfgRpcTranslate = false;
   private cfgTranslateLang = '';
 
@@ -757,12 +758,16 @@ export class LyricsEngine {
     this.cfgTranslateLang = (this.rpcConfig.translate_target_lang as string) || 'en';
     this.cfgActivityType = (this.rpcConfig.rpc_activity_type as number) ?? 2;
     this.cfgHideSmallIcon = (this.rpcConfig.hide_small_icon as boolean) === true;
+    // Custom icon modes are Spotify-specific — force 'default' (platform icon) for other sources
+    const isSpotify = source === 'spotify';
     this.cfgIconMode =
-      this.cfgHideSmallIcon ? 'default' :  // applySmallIcon checks cfgHideSmallIcon first
+      this.cfgHideSmallIcon ? 'default' :
+      !isSpotify ? 'default' :
       (this.rpcConfig.random_icon_mode as boolean) ? 'random' :
       (this.rpcConfig.lrc_off_mode as boolean) ? 'lrc_off' :
       (this.rpcConfig.rouge_mode as boolean) ? 'rouge' :
       (this.rpcConfig.bleeding_mode as boolean) ? 'bleeding' :
+      (this.rpcConfig.blue_rad_mode as boolean) ? 'blue_rad' :
       (this.rpcConfig.purple_rad_mode as boolean) ? 'purple_rad' :
       (this.rpcConfig.radiate_mode as boolean) ? 'radiate' :
       (this.rpcConfig.dance_mode as boolean) ? 'dance' : 'default';
@@ -958,6 +963,10 @@ export class LyricsEngine {
       case 'bleeding':
         activity.assets!.small_image = 'https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/6sALSWqWzao3chNZzHCXy.gif';
         activity.assets!.small_text = pt || '🩸 Bleeding';
+        break;
+      case 'blue_rad':
+        activity.assets!.small_image = 'https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/BUo3vfJ4QVWlghZJYuyIB.gif';
+        activity.assets!.small_text = pt || '💙 Blue Rad';
         break;
       case 'dance':
         if ((d.media_source || '') === 'spotify') {

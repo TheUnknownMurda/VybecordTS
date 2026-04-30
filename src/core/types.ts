@@ -127,6 +127,8 @@ export interface VybecordConfig {
   rouge_mode: boolean;
   /** Bleeding mode: bleeding animated GIF as small icon (all platforms) */
   bleeding_mode: boolean;
+  /** Blue Rad mode: blue animated GIF as small icon (all platforms) */
+  blue_rad_mode: boolean;
   /** LRC OFF mode: static icon as small image (all platforms) */
   lrc_off_mode: boolean;
   /** Random icon mode: pick a random small icon each track */

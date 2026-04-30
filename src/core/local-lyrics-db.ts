@@ -32,6 +32,7 @@ const GZ_PATTERN = /^lrclib.*\.sqlite3\.gz$/i;
 let db: Database.Database | null = null;
 let stmtExact: Database.Statement | null = null;
 let stmtFuzzy: Database.Statement | null = null;
+let stmtCustomExact: Database.Statement | null = null;
 let stmtInsertLyrics: Database.Statement | null = null;
 let stmtInsertTrack: Database.Statement | null = null;
 let stmtInsertFts: Database.Statement | null = null;
@@ -139,6 +140,11 @@ function openDb(dbPath: string): boolean {
     db.pragma('journal_mode = WAL');  // Allow concurrent reads + writes (custom lyrics import)
     db.pragma('cache_size = -64000'); // 64MB page cache for fast reads
 
+    // Migrate: add source column if the LRCLIB dump predates custom-lyrics support
+    try { db.exec(`ALTER TABLE lyrics ADD COLUMN source TEXT DEFAULT 'lrclib'`); } catch { /* already exists */ }
+    try { db.exec(`ALTER TABLE lyrics ADD COLUMN created_at TEXT`); } catch { /* already exists */ }
+    try { db.exec(`ALTER TABLE lyrics ADD COLUMN updated_at TEXT`); } catch { /* already exists */ }
+
     // Prepare reusable statements (much faster than ad-hoc queries)
     // Actual schema: tracks(name, name_lower, artist_name, artist_name_lower, duration, last_lyrics_id)
     //                lyrics(id, synced_lyrics, has_synced_lyrics, track_id)
@@ -167,6 +173,24 @@ function openDb(dbPath: string): boolean {
         AND l.synced_lyrics IS NOT NULL
         AND length(l.synced_lyrics) > 20
       LIMIT 20
+    `);
+
+    stmtCustomExact = db.prepare(`
+      SELECT l.synced_lyrics, t.duration
+      FROM tracks t
+      JOIN lyrics l ON l.id = t.last_lyrics_id
+      WHERE t.name_lower = lower(?)
+        AND (
+          t.artist_name_lower = lower(?)
+          OR t.artist_name_lower LIKE (lower(?) || ',%')
+          OR lower(?) LIKE (t.artist_name_lower || ',%')
+        )
+        AND l.source = 'custom'
+        AND l.has_synced_lyrics = 1
+        AND l.synced_lyrics IS NOT NULL
+        AND length(l.synced_lyrics) > 20
+      ORDER BY l.created_at DESC
+      LIMIT 1
     `);
 
     // Prepare write statements for insertCustomLyrics (reusable)
@@ -221,6 +245,18 @@ export function searchLocalDb(
   if (!db || !stmtExact || !stmtFuzzy) return null;
 
   try {
+    // Phase 0: Custom-imported lyrics always take priority (no duration filtering)
+    if (stmtCustomExact) {
+      const customRows = stmtCustomExact.all(trackName, artistName, artistName, artistName) as LocalRow[];
+      if (customRows.length > 0) {
+        const lines = parseLrc(customRows[0].synced_lyrics);
+        if (lines.length >= 2) {
+          log.info(`[LOCAL] Custom lyrics hit for "${trackName}" (${lines.length} lines)`);
+          return lines;
+        }
+      }
+    }
+
     // Phase 1: Exact match (artist + track)
     const exactRows = stmtExact.all(trackName, artistName) as LocalRow[];
     const exactResult = pickBestRow(exactRows, durationSec);
@@ -482,6 +518,7 @@ export function closeLocalDb(): void {
     db = null;
     stmtExact = null;
     stmtFuzzy = null;
+    stmtCustomExact = null;
     stmtInsertLyrics = null;
     stmtInsertTrack = null;
     stmtInsertFts = null;

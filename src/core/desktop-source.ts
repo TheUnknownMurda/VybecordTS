@@ -3,7 +3,7 @@
  * Works WITHOUT Spotify Premium. Detects any media session (Spotify, YouTube, etc.)
  */
 
-import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createLogger } from './logger.js';
@@ -11,19 +11,10 @@ import type { TrackData } from './types.js';
 
 const log = createLogger('DesktopSource');
 
-// Prefer pwsh.exe (PS 7.x — 2-3x faster startup/runtime) with fallback to powershell.exe (5.1)
-let _psExe: string | null = null;
+// SMTC WinRT APIs only work reliably under powershell.exe (5.1).
+// pwsh 7.x cannot enumerate GlobalSystemMediaTransportControls sessions — $mgr is always null.
 function getPowerShellExe(): string {
-  if (_psExe) return _psExe;
-  try {
-    execFileSync('pwsh.exe', ['-NoProfile', '-Command', 'exit 0'], { windowsHide: true, stdio: 'ignore', timeout: 3000 });
-    _psExe = 'pwsh.exe';
-    log.info('Using pwsh.exe (PowerShell 7.x) for SMTC reader');
-  } catch {
-    _psExe = 'powershell.exe';
-    log.info('pwsh.exe not found — falling back to powershell.exe (5.1)');
-  }
-  return _psExe;
+  return 'powershell.exe';
 }
 
 // Regex for cleaning browser/YouTube titles
@@ -78,8 +69,11 @@ export class DesktopSource {
 
     log.info('Starting SMTC reader...');
 
+    // Use powershell.exe (5.1) directly — pwsh 7.x cannot access WinRT SMTC sessions.
+    // The PS1 script sets [Console]::OutputEncoding = UTF8 internally.
     this.psProcess = spawn(getPowerShellExe(), [
       '-NoProfile',
+      '-InputFormat', 'None',
       '-ExecutionPolicy', 'Bypass',
       '-File', scriptPath,
     ], {
@@ -88,7 +82,7 @@ export class DesktopSource {
     });
 
     this.psProcess.stdout!.on('data', (chunk: Buffer) => {
-      this.lineBuffer += chunk.toString('utf-8');
+      this.lineBuffer += chunk.toString('utf8');
       const lines = this.lineBuffer.split('\n');
       this.lineBuffer = lines.pop() ?? '';
 
@@ -165,8 +159,8 @@ export class DesktopSource {
       const detected = detectWebService(d);
       if (detected) source = detected;
 
-      // Spotify Web Player: metadata is already clean (proper title, artist, album) — skip mangling
-      if (source === 'spotify') {
+      // Spotify/Apple Music Web Player: metadata is already clean — skip mangling
+      if (source === 'spotify' || source === 'apple_music') {
         // No title parsing or cleaning needed
       } else if (source === 'soundcloud') {
         // SoundCloud: SMTC artist is often the uploader profile, not the real artist.
@@ -253,6 +247,7 @@ function detectWebService(d: SmtcData): string | null {
   if (haystack.includes('bandcamp')) return 'bandcamp';
   if (haystack.includes('deezer')) return 'deezer';
   if (haystack.includes('tidal')) return 'tidal';
+  if (haystack.includes('apple music') || haystack.includes('music.apple')) return 'apple_music';
   // Spotify detection BEFORE YouTube (avoids YouTube false positives for Spotify Web Player)
   if (haystack.includes('spotify')) return 'spotify';
   if (haystack.includes('youtube music')) return 'youtube_music';

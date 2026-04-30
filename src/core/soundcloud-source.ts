@@ -81,10 +81,11 @@ export class SoundCloudSource {
     trackName = cleanTitle(trackName);
 
     // Compensate progress for time since last push
+    const durMs = d.duration_ms || 240_000; // Fallback like desktop source
     const elapsed = performance.now() - this.receivedAt;
     const compensatedProgress = Math.min(
       Math.round(d.progress_ms + elapsed),
-      d.duration_ms || Infinity,
+      durMs,
     );
 
     return {
@@ -92,7 +93,7 @@ export class SoundCloudSource {
       track_name: trackName,
       artist_name: artistName,
       album_name: '',
-      duration_ms: d.duration_ms,
+      duration_ms: durMs,
       progress_ms: compensatedProgress,
       is_playing: true,
       is_live: false,
