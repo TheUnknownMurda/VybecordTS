@@ -46,6 +46,10 @@ export interface TrackData {
   artist_art_url?: string;
   /** True if this is a live stream (YouTube live, radio, etc.) */
   is_live?: boolean;
+  /** True if playback is in shuffle mode */
+  is_shuffle?: boolean;
+  /** Repeat mode: 'off' | 'context' (playlist/album repeat) | 'track' (single track repeat) */
+  repeat_mode?: 'off' | 'context' | 'track';
   /** High-res timestamp (performance.now()) when this data was received */
   _received_at: number;
 }

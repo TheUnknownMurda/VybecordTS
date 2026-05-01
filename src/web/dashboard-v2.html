@@ -178,13 +178,8 @@
         width: 32px;
         height: 32px;
         min-width: 32px;
-        background: linear-gradient(135deg, var(--accent-hex), color-mix(in srgb, var(--accent-hex) 68%, black));
         border-radius: 9px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 800;
-        font-size: 14px;
+        object-fit: cover;
         box-shadow: 0 2px 12px rgba(var(--accent), 0.3);
         transition: transform 0.3s var(--ease-out);
       }
@@ -1625,7 +1620,7 @@
     <!-- SIDEBAR -->
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-logo">
-        <div class="logo-mark">♪</div>
+        <img class="logo-mark" src="https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/T13Beb2q34Er50o2JrKn2.gif" alt="V" />
         <span class="logo-text gradient-text" style="font-size: 15px; font-weight: 800; flex:1">VybecordTS</span>
         <button class="pin-btn" id="pinBtn" onclick="togglePin()" title="Pin sidebar open">📌</button>
       </div>

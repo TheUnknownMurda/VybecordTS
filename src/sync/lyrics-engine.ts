@@ -132,6 +132,7 @@ export class LyricsEngine {
   private cachedHasAlbum = false;
   private cachedInfoText = '';
   private cachedIsRedundantCtx = true;  // Pre-computed per track (avoids 3× toLowerCase per emit)
+  private cachedPlayModeSuffix = '';  // '[🔀]' or '[🔂]' appended to track name in RPC
 
   private callbacks: LyricsEngineCallbacks | null = null;
   private running = false;
@@ -392,6 +393,11 @@ export class LyricsEngine {
     const artChanged = trackData && this.trackData &&
       trackData.album_art_url !== this.trackData.album_art_url;
 
+    // Detect shuffle/repeat mode change
+    const modeChanged = trackData && this.trackData &&
+      (trackData.is_shuffle !== this.trackData.is_shuffle ||
+       trackData.repeat_mode !== this.trackData.repeat_mode);
+
     if (trackData) {
       this.trackData = trackData;
     }
@@ -400,6 +406,14 @@ export class LyricsEngine {
     if (artChanged) {
       this.rebuildTrackCache();   // rebuild cached image BEFORE emitting
       this.lastLargeImage = '';   // reset dedup so the new art actually pushes
+      this.lastUpdateTime = 0;
+      this.emitUpdate();
+    }
+
+    // Force RPC update when shuffle/repeat mode changes
+    if (modeChanged) {
+      this.rebuildNoLyricsCache();
+      this.lastRpcDetails = '';   // reset dedup so new suffix pushes
       this.lastUpdateTime = 0;
       this.emitUpdate();
     }
@@ -784,8 +798,22 @@ export class LyricsEngine {
     if (!d) return;
     this.cachedDisplayArtist = deduplicateArtist(d.track_name, d.artist_name);
     this.cachedHasAlbum = !!(d.album_name && d.album_name.trim());
-    this.cachedInfoText = buildInfoText(d, '', '');
     this.cachedIsRedundantCtx = isRedundantContext(d);
+    // Shuffle / repeat indicator
+    this.cachedPlayModeSuffix =
+      d.is_shuffle ? ' [🔀]' :
+      d.repeat_mode === 'track' ? ' [🔂]' : '';
+    this.cachedInfoText = buildInfoText(d, '', '');
+    // Insert play mode suffix right after track name (visible in large_text when lyrics are showing)
+    if (this.cachedPlayModeSuffix) {
+      const trackPart = `♫${d.track_name}`;
+      if (this.cachedInfoText.includes(trackPart)) {
+        this.cachedInfoText = truncate(
+          this.cachedInfoText.replace(trackPart, trackPart + this.cachedPlayModeSuffix),
+          128,
+        );
+      }
+    }
   }
 
   // ── RPC payload building ──
@@ -853,7 +881,7 @@ export class LyricsEngine {
         : this.cachedInfoText;
     } else {
       // No lyrics / lyrics disabled — use pre-computed display parts
-      details = truncate(d.track_name, 128);
+      details = truncate(d.track_name + this.cachedPlayModeSuffix, 128);
       const ctx = this.cachedIsRedundantCtx ? '' : (d.context_name || '');
 
       if (ctx) {

@@ -154,7 +154,7 @@
     input[type='range']::-moz-range-thumb{width:14px;height:14px;border-radius:50%;border:none;background:var(--accent-hex);box-shadow:0 0 10px rgba(var(--accent),.5)}
     .app-header{background:rgba(5,5,8,.82);backdrop-filter:blur(30px) saturate(1.5);-webkit-backdrop-filter:blur(30px) saturate(1.5);border-bottom:1px solid var(--border-s);position:sticky;top:0;z-index:50;overflow:hidden}
     .header-progress{margin-left:-24px;margin-right:-24px;margin-bottom:-14px}
-    .logo-mark{width:36px;height:36px;background:linear-gradient(135deg,var(--accent-hex),color-mix(in srgb,var(--accent-hex) 68%,black));border-radius:10px;display:flex;align-items:center;justify-content:center;color:#000;font-weight:800;font-size:14px;box-shadow:0 2px 14px rgba(var(--accent),.35),inset 0 1px 0 rgba(255,255,255,.15);transition:all .4s var(--ease-out)}
+    .logo-mark{width:36px;height:36px;border-radius:10px;object-fit:cover;box-shadow:0 2px 14px rgba(var(--accent),.35);transition:all .4s var(--ease-out)}
     .logo-mark:hover{transform:scale(1.06) rotate(-2deg);box-shadow:0 4px 24px rgba(var(--accent),.5)}
     .app-footer{background:rgba(5,5,8,.4);border-top:1px solid var(--border-s)}
     .text-accent{color:var(--accent-hex)!important}
@@ -438,7 +438,7 @@
   <header class="app-header px-6 py-3.5 flex flex-col">
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-3">
-        <div class="logo-mark"><svg viewBox="0 0 36 36" width="20" height="20" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="18" cy="18" r="16" stroke="currentColor" stroke-width="1.5" opacity=".3"/><circle cx="18" cy="18" r="11" stroke="currentColor" stroke-width="1.2" opacity=".2"/><circle cx="18" cy="18" r="5" fill="currentColor" opacity=".9"/><circle cx="18" cy="18" r="2" fill="var(--accent-hex)" opacity="1"/><path d="M18 2A16 16 0 0 1 34 18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".15"/><path d="M18 7A11 11 0 0 1 29 18" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity=".1"/><g opacity=".6"><path d="M21 14.5V23a2.5 2.5 0 1 1-2-2.45V16.5l6-1.5v-3z" fill="currentColor"/></g></svg></div>
+        <img class="logo-mark" src="https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/T13Beb2q34Er50o2JrKn2.gif" alt="V" />
         <div><h1 class="text-[15px] font-bold tracking-tight"><span class="gradient-text">VybecordTS</span></h1><p class="text-[11px] text-zinc-500 font-medium" data-i18n="subtitle">Synced Lyrics &bull; Discord RPC</p></div>
         <span class="version-tag">v1.0</span>
       </div>

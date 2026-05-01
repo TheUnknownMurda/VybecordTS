@@ -128,6 +128,10 @@
       context_url: contextUrl,
       context_type: contextType,
       artist_art_url: artistArtUrl,
+      is_shuffle: !!Spicetify.Player.getShuffle?.(),
+      repeat_mode: [0, 1, 2].includes(Spicetify.Player.getRepeat?.())
+        ? ['off', 'context', 'track'][Spicetify.Player.getRepeat()]
+        : 'off',
     };
   }
 

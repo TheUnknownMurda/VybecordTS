@@ -35,6 +35,8 @@ export interface SpicetifyPayload {
   context_url: string;
   context_type: string;
   artist_art_url?: string;
+  is_shuffle?: boolean;
+  repeat_mode?: string;
 }
 
 const STALE_THRESHOLD_MS = 10_000; // Data older than 10s = extension disconnected
@@ -94,6 +96,8 @@ export class SpicetifySource {
       context_type: d.context_type || '',
       artist_art_url: d.artist_art_url || '',
       media_source: 'spotify',
+      is_shuffle: d.is_shuffle ?? false,
+      repeat_mode: (d.repeat_mode === 'track' || d.repeat_mode === 'context') ? d.repeat_mode : 'off',
       _received_at: performance.now(),
     };
   }

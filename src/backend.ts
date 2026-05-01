@@ -234,7 +234,7 @@ export class VybecordBackend extends EventEmitter {
     });
 
     // 3. Start polling
-    const interval = this.config.get('poll_interval_ms') || 3000;
+    const interval = this.config.get('poll_interval_ms') || 1500;
     log.info(`Starting ${this.sourceMode.toUpperCase()} polling (every ${interval}ms)`);
     this.pollTimer = setInterval(() => this.poll(), interval);
 
@@ -307,14 +307,14 @@ export class VybecordBackend extends EventEmitter {
   // ── Spicetify push handler (event-driven, called by web server) ──
 
   handleSpicetifyPush(data: SpicetifyPayload): void {
-    log.debug(`[SPICETIFY-PUSH] track="${data.track_name}" album="${data.album_name}" context="${data.context_name}" ctx_type="${data.context_type}"`);
+    log.debug(`[SPICETIFY-PUSH] track="${data.track_name}" album="${data.album_name}" context="${data.context_name}" ctx_type="${data.context_type}" shuffle=${data.is_shuffle} repeat=${data.repeat_mode}`);
     this.spicetify.update(data);
 
     if (!this.config.get('detect_spotify')) return;
 
     if (!data.is_playing) {
-      // Paused via Spicetify — apply grace period logic
-      // (don't clear immediately; next poll handles the grace period)
+      // Paused via Spicetify — clear immediately (push is authoritative, no grace period needed)
+      this.onTrackStopped();
       return;
     }
 
@@ -360,7 +360,10 @@ export class VybecordBackend extends EventEmitter {
     if (!this.config.get('detect_youtube')) return;
 
     if (!data.is_playing) {
-      // Paused — next poll handles grace period
+      // Paused via userscript — clear immediately (push is authoritative)
+      if (this.currentTrack?.media_source === 'youtube' || this.currentTrack?.media_source === 'youtube_music') {
+        this.onTrackStopped();
+      }
       return;
     }
 
@@ -784,13 +787,13 @@ export class VybecordBackend extends EventEmitter {
 
   private handleDesktopTrack(track: TrackData | null): void {
     if (!track) {
-      // Grace period: wait 3s before treating as truly idle (prevents SMTC flicker)
+      // Grace period: wait 1.5s before treating as truly idle (prevents SMTC flicker)
       if (this.currentTrack) {
         const now = Date.now();
         if (this.idleSince === 0) {
           this.idleSince = now;
         }
-        if (now - this.idleSince < 3000) {
+        if (now - this.idleSince < 1500) {
           return; // Still in grace period — don't clear yet
         }
       }
