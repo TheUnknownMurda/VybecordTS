@@ -132,7 +132,7 @@ export class LyricsEngine {
   private cachedHasAlbum = false;
   private cachedInfoText = '';
   private cachedIsRedundantCtx = true;  // Pre-computed per track (avoids 3× toLowerCase per emit)
-  private cachedPlayModeSuffix = '';  // '[🔀]' or '[🔂]' appended to track name in RPC
+  private cachedPlayModeSuffix = '';  // '[⇄]' or '[↻]' appended to playlist/album in RPC
 
   private callbacks: LyricsEngineCallbacks | null = null;
   private running = false;
@@ -230,9 +230,7 @@ export class LyricsEngine {
     this.running = true;
     this.lyrics = lyrics;
     this.isCC = lyrics.length > 0 && lyrics[0].source === 'cc';
-    const src = trackData.media_source || '';
-    this.isPushSource = src === 'spotify' || src === 'youtube' || src === 'youtube_music'
-      || src === 'soundcloud' || src === 'bandcamp' || src.startsWith('browser_');
+    this.isPushSource = !!trackData._from_push;
     this.lastRecalibTime = 0;
     this.buildGroupTable();
     this.detectAutoOffset();
@@ -298,10 +296,16 @@ export class LyricsEngine {
       this.rebuildTrackCache();
     }
     this.lyrics = lyrics;
+    const wasCC = this.isCC;
     this.isCC = lyrics.length > 0 && lyrics[0].source === 'cc';
     this.buildGroupTable();
     this.detectAutoOffset();
     this.fetchingLyrics = false;
+
+    // Rebuild buttons when CC state changed (e.g. "Listen on Spotify" → "Watch on YouTube")
+    if (this.isCC !== wasCC && this.trackData) {
+      this.rebuildButtons(this.trackData, this.trackData.media_source || 'spotify');
+    }
 
     // Position within the lyrics using current elapsed time
     const baseMs = this.isCC ? 50 : BASE_OFFSET_MS;
@@ -454,12 +458,36 @@ export class LyricsEngine {
       return;
     }
 
-    // Cooldown: skip recalibration if we just recalibrated (prevents poll-burst cascades)
-    // Push sources (CC) have precise progress data → shorter cooldown
-    const cooldown = (this.isCC || this.isPushSource) ? CC_RECALIB_COOLDOWN_MS : RECALIB_COOLDOWN_MS;
+    // Push sources: always trust the player's reported progress (no cooldown).
+    // The free-running timer inevitably drifts vs. the real player position.
+    // Only log when drift is significant to avoid spam.
+    if (this.isPushSource && drift > threshold) {
+      this.initialProgressMs = progressMs;
+      this.trackStartHr = performance.now();
+      if (drift > threshold * 4) {
+        log.info(`[DRIFT] ${drift.toFixed(0)}ms (engine=${currentElapsed.toFixed(0)} vs player=${progressMs}) — push recalib`);
+      }
+
+      // Reschedule from new position
+      const baseMs = this.isCC ? 50 : BASE_OFFSET_MS;
+      const offset = baseMs + this.measuredLatencyMs;
+      const newIdx = findLyricIndex(this.lyrics, progressMs + offset);
+      if (newIdx !== this.currentIdx) {
+        this.currentIdx = newIdx;
+        this.emitUpdate();
+      }
+      this.cancelTimer();
+      this.scheduleNext();
+      return;
+    }
+
+    // Desktop/SMTC sources: cooldown to prevent poll-burst cascades
+    const cooldown = RECALIB_COOLDOWN_MS;
     if (drift > threshold && now - this.lastRecalibTime >= cooldown) {
+      const direction = currentElapsed > progressMs ? 'AHEAD' : 'BEHIND';
+      const sinceLast = (now - this.lastRecalibTime) / 1000;
+      log.info(`[DRIFT] ${drift.toFixed(0)}ms ${direction} (engine=${currentElapsed.toFixed(0)} vs player=${progressMs}) after ${sinceLast.toFixed(1)}s — recalibrating`);
       this.lastRecalibTime = now;
-      log.info(`[DRIFT] ${drift.toFixed(0)}ms drift detected — recalibrating`);
       this.initialProgressMs = progressMs;
       this.trackStartHr = performance.now();
 
@@ -495,6 +523,9 @@ export class LyricsEngine {
     this.currentIdx = -1;
     this.lastEmittedIdx = -1;
   }
+
+  /** Whether the engine is currently running (not stopped). */
+  isRunning(): boolean { return this.running; }
 
   /** Get real-time playback position (public, for SSE progress emission). */
   getElapsed(): number {
@@ -747,19 +778,7 @@ export class LyricsEngine {
     this.cachedArtistSearch = platformSearchUrl(source, d.artist_name);
 
     // Buttons (stable per-track + config)
-    const btn1Label = (this.rpcConfig.rpc_button1_label as string) || '';
-    const btn1Url = (this.rpcConfig.rpc_button1_url as string) || '';
-    const btn2Label = (this.rpcConfig.rpc_button2_label as string) || '';
-    const buttons: { label: string; url: string }[] = [];
-    if (btn1Label && btn1Url) {
-      buttons.push({ label: truncate(btn1Label, 32), url: btn1Url });
-    }
-    if (btn2Label) {
-      // Dynamic label: replace platform name if label follows "Listen on X" / "Search on X" pattern
-      const btn2Resolved = platformButtonLabel(btn2Label, source);
-      buttons.push({ label: truncate(btn2Resolved, 32), url: d.spotify_url || this.cachedSpotifySearch });
-    }
-    this.cachedButtons = buttons;
+    this.rebuildButtons(d, source);
 
     // Platform icon (reuse `source` from above)
     this.cachedIcon = PLATFORM_ICONS[source] ?? null;
@@ -799,21 +818,35 @@ export class LyricsEngine {
     this.cachedDisplayArtist = deduplicateArtist(d.track_name, d.artist_name);
     this.cachedHasAlbum = !!(d.album_name && d.album_name.trim());
     this.cachedIsRedundantCtx = isRedundantContext(d);
-    // Shuffle / repeat indicator
+    // Shuffle / repeat indicator (appended to playlist/album, not track name)
     this.cachedPlayModeSuffix =
-      d.is_shuffle ? ' [🔀]' :
-      d.repeat_mode === 'track' ? ' [🔂]' : '';
+      d.is_shuffle ? ' | ⇄' :
+      d.repeat_mode === 'track' ? ' | ↻' : '';
     this.cachedInfoText = buildInfoText(d, '', '');
-    // Insert play mode suffix right after track name (visible in large_text when lyrics are showing)
+    // Insert play mode suffix after context/album in infoText (visible in large_text when lyrics are showing)
     if (this.cachedPlayModeSuffix) {
-      const trackPart = `♫${d.track_name}`;
-      if (this.cachedInfoText.includes(trackPart)) {
-        this.cachedInfoText = truncate(
-          this.cachedInfoText.replace(trackPart, trackPart + this.cachedPlayModeSuffix),
-          128,
-        );
-      }
+      this.cachedInfoText = truncate(this.cachedInfoText + this.cachedPlayModeSuffix, 128);
     }
+  }
+
+  /** Build RPC buttons — overrides to "Watch on YouTube" when CC lyrics are active. */
+  private rebuildButtons(d: TrackData, source: string): void {
+    const btn1Label = (this.rpcConfig.rpc_button1_label as string) || '';
+    const btn1Url = (this.rpcConfig.rpc_button1_url as string) || '';
+    const btn2Label = (this.rpcConfig.rpc_button2_label as string) || '';
+    const buttons: { label: string; url: string }[] = [];
+    if (btn1Label && btn1Url) {
+      buttons.push({ label: truncate(btn1Label, 32), url: btn1Url });
+    }
+    if (btn2Label) {
+      // CC active → override to YouTube
+      const effectiveSource = this.isCC ? 'youtube' : source;
+      const btn2Resolved = platformButtonLabel(btn2Label, effectiveSource);
+      const ytSearch = platformSearchUrl('youtube', `${d.artist_name} ${d.track_name}`);
+      const btn2Url = this.isCC ? ytSearch : (d.spotify_url || this.cachedSpotifySearch);
+      buttons.push({ label: truncate(btn2Resolved, 32), url: btn2Url });
+    }
+    this.cachedButtons = buttons;
   }
 
   // ── RPC payload building ──
@@ -881,11 +914,11 @@ export class LyricsEngine {
         : this.cachedInfoText;
     } else {
       // No lyrics / lyrics disabled — use pre-computed display parts
-      details = truncate(d.track_name + this.cachedPlayModeSuffix, 128);
+      details = truncate(d.track_name, 128);
       const ctx = this.cachedIsRedundantCtx ? '' : (d.context_name || '');
 
       if (ctx) {
-        state = truncate(`🎼 ${ctx}`, 128);
+        state = truncate(`🎼 ${ctx}${this.cachedPlayModeSuffix}`, 128);
         if (status) {
           largeText = truncate(status, 128);
         } else {
@@ -899,7 +932,9 @@ export class LyricsEngine {
         if (status) {
           largeText = truncate(status, 128);
         } else {
-          largeText = this.cachedHasAlbum ? truncate(`💽 ${d.album_name}`, 128) : truncate(d.track_name, 128);
+          largeText = this.cachedHasAlbum
+            ? truncate(`💽 ${d.album_name}${this.cachedPlayModeSuffix}`, 128)
+            : truncate(d.track_name, 128);
         }
       }
     }
@@ -1149,8 +1184,14 @@ const PLATFORM_NAMES: Record<string, string> = {
 function platformButtonLabel(label: string, source: string): string {
   const name = PLATFORM_NAMES[source];
   if (!name) return label;
-  // Template: {platform} → resolved name
-  if (label.includes('{platform}')) return label.replace('{platform}', name);
-  // Legacy/auto: "Listen on Spotify" → "Listen on YouTube"
-  return label.replace(/(?:Listen|Search|Play)\s+on\s+\S+/i, `Listen on ${name}`);
+  const isVideo = source === 'youtube' || source === 'youtube_music' || source.startsWith('browser_');
+  const verb = isVideo ? 'Watch' : 'Listen';
+  // Template: {platform} → resolved name (also swap verb for video platforms)
+  if (label.includes('{platform}')) {
+    let resolved = label.replace('{platform}', name);
+    if (isVideo) resolved = resolved.replace(/\bListen\b/i, 'Watch');
+    return resolved;
+  }
+  // Legacy/auto: "Listen on Spotify" → "Watch on YouTube"
+  return label.replace(/(?:Listen|Search|Play|Watch)\s+on\s+\S+/i, `${verb} on ${name}`);
 }

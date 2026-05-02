@@ -44,6 +44,7 @@ export class YouTubeSource {
   private latestData: YouTubePayload | null = null;
   private receivedAt = 0;
   private _wasActive = false;
+  private _staleAt = 0;  // timestamp when userscript went stale
 
   /**
    * Ingest a push from the YouTube userscript.
@@ -106,6 +107,7 @@ export class YouTubeSource {
       artist_url: '',
       media_source: d.source || 'youtube',
       _received_at: performance.now(),
+      _from_push: true,
     };
   }
 
@@ -115,6 +117,7 @@ export class YouTubeSource {
     const stale = (performance.now() - this.receivedAt) > STALE_THRESHOLD_MS;
     if (stale && this._wasActive) {
       this._wasActive = false;
+      this._staleAt = performance.now();
       log.warn('YouTube userscript stale (>10s) — falling back to SMTC');
     }
     return !stale;
@@ -134,6 +137,14 @@ export class YouTubeSource {
   /** The raw latest payload. */
   get latest(): YouTubePayload | null {
     return this.isActive ? this.latestData : null;
+  }
+
+  /** True if the userscript was recently active (within last 30s).
+   *  Used to block SMTC ghost sessions from browser after it closes. */
+  get wasRecentlyActive(): boolean {
+    if (this.isActive) return true;
+    if (this._staleAt === 0) return false;
+    return (performance.now() - this._staleAt) < 30_000;
   }
 }
 

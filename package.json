@@ -3,6 +3,14 @@
   "version": "1.0.0",
   "description": "Discord Rich Presence with real-time synced lyrics — TypeScript edition",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TheUnknownMurda/VybecordTS.git"
+  },
+  "bugs": {
+    "url": "https://github.com/TheUnknownMurda/VybecordTS/issues"
+  },
+  "homepage": "https://github.com/TheUnknownMurda/VybecordTS#readme",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsup src/index.ts --format esm --dts --clean && node -e \"const fs=require('fs');['dashboard.html','dashboard-v2.html'].forEach(f=>{try{fs.copyFileSync('src/web/'+f,'dist/'+f)}catch(e){console.log('skip '+f)}})\"",
@@ -38,6 +46,6 @@
     "node": ">=20.0.0"
   },
   "author": "TheUnknownMurda",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "private": true
 }

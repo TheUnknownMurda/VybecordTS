@@ -52,6 +52,8 @@ export interface TrackData {
   repeat_mode?: 'off' | 'context' | 'track';
   /** High-res timestamp (performance.now()) when this data was received */
   _received_at: number;
+  /** True if this track came from a push source (Spicetify, YouTube/SC/BC userscript) */
+  _from_push?: boolean;
 }
 
 // ── Parsed lyric line ──
@@ -153,6 +155,8 @@ export interface VybecordConfig {
   translate_target_lang: string;
   // Polling
   poll_interval_ms: number;
+  /** Discord webhook URL for bug reports (optional) */
+  bug_report_webhook?: string;
   [key: string]: unknown;
 }
 

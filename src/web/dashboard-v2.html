@@ -386,9 +386,12 @@
         }
       }
       .np-bar .lyric-inline {
-        flex: 1;
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
         text-align: center;
-        min-width: 0;
+        max-width: 50%;
+        pointer-events: none;
         padding: 0 16px;
       }
       .np-bar .lyric-inline p {
@@ -398,12 +401,14 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        pointer-events: auto;
       }
       .np-bar .np-controls {
         display: flex;
         align-items: center;
         gap: 8px;
         flex-shrink: 0;
+        margin-left: auto;
       }
       .np-bar .time-display {
         font-size: 11px;
@@ -499,11 +504,23 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        justify-content: center;
         min-height: calc(100vh - 160px);
         text-align: center;
-        padding: 40px 20px;
+        padding: 0 20px;
         position: relative;
+      }
+      .lyrics-hero > #npLyrics,
+      .lyrics-hero > #plainLyrics {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+      }
+      .lyrics-hero > #npLyrics.hidden,
+      .lyrics-hero > #plainLyrics.hidden {
+        display: none !important;
       }
       .lyrics-hero .lyric-prev {
         font-size: clamp(14px, 2.5vw, 18px);
@@ -3930,7 +3947,7 @@
         $("lyricNextR").textContent = showR && data.r_next && data.next ? data.r_next : "";
         if (data.duration_ms > 0 && data.progress_ms != null)
           $("lyricTimecode").textContent = formatMs(data.progress_ms) + " / " + formatMs(data.duration_ms);
-        if (_lyricsExpanded) highlightExpandedLyric();
+        if (_lyricsExpanded) highlightExpandedLyric(data.progress_ms);
       }
       function showPlainLyrics(data) {
         const el = $("plainLyrics");
@@ -4550,6 +4567,7 @@
       }
       // EXPANDED LYRICS
       let _fullLyrics = [],
+        _fullTimestamps = [],
         _lyricsExpanded = false,
         _expandedActiveIdx = -1,
         _userScrolling = false,
@@ -4563,8 +4581,16 @@
       }
       function renderExpandedLyrics() {
         $("lyricsExpandedBody").innerHTML = _fullLyrics
-          .map((text, i) => `<div class="lx-line" data-idx="${i}">${text ? escHtml(text) : "♪"}</div>`)
+          .map((text, i) => `<div class="lx-line" data-idx="${i}">${text ? escHtml(text) : "\u266a"}</div>`)
           .join("");
+      }
+      /** Parse LRC timestamps to ms for each line */
+      function parseLrcTimestamps(lrc) {
+        return lrc.split("\n").map(line => {
+          const m = line.match(/^\[(\d+):(\d+)[.:](\d+)\]/);
+          if (!m) return -1;
+          return parseInt(m[1]) * 60000 + parseInt(m[2]) * 1000 + parseInt(m[3]) * (m[3].length === 2 ? 10 : 1);
+        }).filter(t => t >= 0);
       }
       async function _tryRefreshLyrics() {
         if (!_lyricsExpanded || _refreshRetries > 5) return;
@@ -4589,6 +4615,7 @@
             return;
           }
           _fullLyrics = parsed;
+          _fullTimestamps = parseLrcTimestamps(data.lrc);
           _expandedActiveIdx = -1;
           _userScrolling = false;
           renderExpandedLyrics();
@@ -4607,13 +4634,15 @@
           const r = await fetch("/api/lyrics/current");
           const data = await r.json();
           if (!data.lrc) return;
-          _fullLyrics = data.lrc
+          const rawLrc = data.lrc;
+          _fullLyrics = rawLrc
             .split("\n")
             .map((line) => {
               const m = line.match(/^\[[\d:.]+\]\s*(.*)/);
               return m ? m[1] : null;
             })
             .filter((x) => x !== null);
+          _fullTimestamps = parseLrcTimestamps(rawLrc);
           if (!_fullLyrics.length) return;
           renderExpandedLyrics();
           _lyricsExpanded = true;
@@ -4637,14 +4666,26 @@
         _refreshRetries = 0;
         _tryRefreshLyrics();
       }
-      function highlightExpandedLyric() {
+      function highlightExpandedLyric(progressMs) {
         const curText = $("lyricCurrent").textContent;
         const lines = $("lyricsExpandedBody").children;
         let idx = -1;
-        for (let i = 0; i < lines.length; i++) {
-          lines[i].classList.remove("active");
-          if (idx === -1 && lines[i].textContent === curText) idx = i;
+        // Use timestamps to find the correct occurrence of repeated lines
+        if (progressMs != null && _fullTimestamps.length === _fullLyrics.length) {
+          for (let i = _fullLyrics.length - 1; i >= 0; i--) {
+            if (_fullLyrics[i] === curText && _fullTimestamps[i] <= progressMs + 500) {
+              idx = i;
+              break;
+            }
+          }
         }
+        // Fallback: first text match
+        if (idx === -1) {
+          for (let i = 0; i < lines.length; i++) {
+            if (lines[i].textContent === curText) { idx = i; break; }
+          }
+        }
+        for (let i = 0; i < lines.length; i++) lines[i].classList.remove("active");
         if (idx >= 0) {
           lines[idx].classList.add("active");
           if (idx !== _expandedActiveIdx) {

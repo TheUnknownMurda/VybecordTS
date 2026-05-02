@@ -327,6 +327,17 @@ export class VybecordBackend extends EventEmitter {
     if (trackKey === this.currentTrackKey) {
       // Same track — sync progress to lyrics engine (instant, no poll delay)
       if (this.checkRepeatLoop(track)) return;
+
+      // Engine stopped (track duration reached) but same track still playing → repeat loop restart
+      if (!this.lyricsEngine.isRunning() && track.progress_ms < 5000) {
+        log.info(`[REPEAT] Engine stopped but track restarted (progress=${track.progress_ms}ms) — re-starting`);
+        this.currentTrack = track;
+        this.recordPlay(track);
+        this.emit('trackUpdate', track);
+        this.onNewTrack(track).catch(e => log.error(`[REPEAT] Error: ${e}`));
+        return;
+      }
+
       this.syncTrackProgress(track, true);
       // Update artist image if it arrived asynchronously (Tampermonkey fetches after first push)
       if (track.artist_art_url) {
@@ -517,7 +528,16 @@ export class VybecordBackend extends EventEmitter {
           const trackKey = this.buildTrackKey(spTrack);
           if (trackKey === this.currentTrackKey) {
             if (!this.checkRepeatLoop(spTrack)) {
-              this.syncTrackProgress(spTrack, true);
+              // Engine stopped but track still playing → repeat restart
+              if (!this.lyricsEngine.isRunning() && spTrack.progress_ms < 5000) {
+                log.info(`[REPEAT] Engine stopped but track restarted via poll (progress=${spTrack.progress_ms}ms)`);
+                this.currentTrack = spTrack;
+                this.recordPlay(spTrack);
+                this.emit('trackUpdate', spTrack);
+                this.onNewTrack(spTrack).catch(e => log.error(`[REPEAT] Error: ${e}`));
+              } else {
+                this.syncTrackProgress(spTrack, true);
+              }
             }
           }
           return;
@@ -824,10 +844,10 @@ export class VybecordBackend extends EventEmitter {
       return;
     }
 
-    // Block SMTC YouTube/browser sources when the userscript is active or owns the track.
-    // Tampermonkey provides far more accurate position/duration than SMTC for YouTube.
+    // Block SMTC YouTube/browser sources when the userscript is active, was recently active
+    // (prevents ghost sessions after browser close), or owns the current track.
     const isYtSmtc = src === 'youtube' || src === 'youtube_music' || src.startsWith('browser_');
-    if (isYtSmtc && (this.youtubeSource.isActive || this.currentTrackKey.startsWith('yt:'))) {
+    if (isYtSmtc && (this.youtubeSource.isActive || this.youtubeSource.wasRecentlyActive || this.currentTrackKey.startsWith('yt:'))) {
       return;
     }
 

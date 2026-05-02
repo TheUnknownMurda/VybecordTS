@@ -505,7 +505,12 @@ export class WebServer {
         res.end(JSON.stringify({ error: 'Missing summary' }));
         return;
       }
-      const webhookUrl = 'https://discord.com/api/webhooks/1496517886783521011/rkt9Jpph6PNZ7_OIi4Za3lt2QAzZ2xmVntl3RcDs7Bx4x4wz-92xL40ylqqeA7413hLR';
+      const webhookUrl = this.backend.getConfig().bug_report_webhook;
+      if (!webhookUrl) {
+        res.writeHead(501, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: 'Bug reporting not configured' }));
+        return;
+      }
       const trackInfo = data.track
         ? `${data.track.name || '?'} — ${data.track.artist || '?'} (${data.track.platform || '?'})`
         : 'No track playing';
