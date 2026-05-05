@@ -53,7 +53,7 @@ Official Spotify API integration — most reliable, full metadata, no third-part
 ### Option B: Spotify Free + Spicetify
 For Spotify Free users. Requires Spicetify (third-party Spotify modification).
 
-> ⚠️ **WARNING:** Spicetify violates Spotify's Terms of Service. Using it may result in account suspension. **We are not responsible** for any bans. Use at your own risk and follow Spicetify rules (no ad blocking, no premium feature unlocking).
+> ⚠️ **WARNING:** While using Spicetify is not against ToS, it is advised that you use it at your own risk. ONLY use Spicetify for the purpose of this app. DO NOT install any Spicetify plugins as it is not required. Some Spicetify plugins may violates Spotify's Terms of Service. Using thoses may result in account suspension. **We are not responsible** for any bans. Use at your own risk and follow Spicetify rules (no ad blocking, no premium feature unlocking).
 
 1. **Install Spicetify** following the [official guide](https://spicetify.app/) **without** ad-blocking extensions
 2. **Install VybecordTS** (download, extract, run)
