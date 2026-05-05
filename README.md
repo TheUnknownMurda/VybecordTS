@@ -1,3 +1,8 @@
+[BETA]
+THIS IS MY FIRST EVER GITHUB PUSHED TO PUBLIC SO PLEASE BE COMPREHENSIVE AND REPORT TO ME ANY ISSUES YOU MAY ENCOUNTER
+
+Installation Difficulty (Advanced) 
+
 # VybecordTS
 
 **Discord Rich Presence with real-time synced lyrics — TypeScript edition.**
