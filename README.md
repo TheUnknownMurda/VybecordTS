@@ -1,13 +1,18 @@
 [BETA]
 THIS IS MY FIRST EVER GITHUB PUSHED TO PUBLIC SO PLEASE BE COMPREHENSIVE AND REPORT TO ME ANY ISSUES YOU MAY ENCOUNTER
 
+LYRICS SYNCRONICITY MAY VARY
+1. Vybecord retrieves synchronized lyrics via LRCLib, an open community-driven database.
+Important: The accuracy of the synchronization depends entirely on the quality of the .lrc files uploaded by the community users. Some songs have perfectly timed lyrics, while others may have a slight offset or be completely missing.
+Import feature: You can easily import your own lyrics (.lrc files) directly into the app using our local import function. They will then be prioritized and will stay perfectly synchronized with your playback.
+
+2. DISCORD HAS A POLLING LIMIT FOR REFRESHING THE RICH PRESENCE.
+
 Installation Difficulty (Advanced) 
 
 # VybecordTS
 
-**Discord Rich Presence with real-time synced lyrics — TypeScript edition.**
-
-Zero-bloat backend focused on performance. Event-driven lyrics sync engine with sub-millisecond precision.
+**Discord Rich Presence with real-time synced lyrics **
 
 ---
 
