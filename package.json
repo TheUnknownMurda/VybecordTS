@@ -37,7 +37,14 @@
   "engines": {
     "node": ">=20.0.0"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TheUnknownMurda/VybecordTS.git"
+  },
+  "bugs": {
+    "url": "https://github.com/TheUnknownMurda/VybecordTS/issues"
+  },
+  "homepage": "https://github.com/TheUnknownMurda/VybecordTS#readme",
   "author": "TheUnknownMurda",
-  "license": "UNLICENSED",
-  "private": true
+  "license": "MIT"
 }

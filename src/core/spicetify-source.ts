@@ -99,6 +99,7 @@ export class SpicetifySource {
       is_shuffle: d.is_shuffle ?? false,
       repeat_mode: (d.repeat_mode === 'track' || d.repeat_mode === 'context') ? d.repeat_mode : 'off',
       _received_at: performance.now(),
+      _from_push: true,
     };
   }
 

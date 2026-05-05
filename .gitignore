@@ -1,22 +1,41 @@
-node_modules/
-dist/
-build/
-envs/.env
-envs/.cache.json
+# ── Secrets / credentials ──
+envs/
+.env
+.env.*
+!.env.example
+
+# ── User config / data ──
 config.json
-src/config.json
+local-lyrics.db
+local-lyrics.db-journal
+local-lyrics.db-shm
+local-lyrics.db-wal
 flagged-lyrics.json
 translate-cache.json
 stats-history.json
 listening-history.json
+
+# ── Logs ──
 logs/
 src/logs/
 *.log
-.DS_Store
 
-# LRCLib SQLite database dumps (can be 100GB+)
+# ── Dependencies / build ──
+node_modules/
+dist/
+build/
+
+# ── OS artifacts ──
+.DS_Store
+Thumbs.db
+
+# ── LRCLib SQLite database dumps (can be 100GB+) ──
 *.sqlite3
 *.sqlite3-shm
 *.sqlite3-wal
 *.sqlite3.gz
 *.db
+
+# ── Test scripts / backups ──
+test-wizard.ps1
+config.json.*-backup

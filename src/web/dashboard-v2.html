@@ -386,9 +386,12 @@
         }
       }
       .np-bar .lyric-inline {
-        flex: 1;
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
         text-align: center;
-        min-width: 0;
+        max-width: 50%;
+        pointer-events: none;
         padding: 0 16px;
       }
       .np-bar .lyric-inline p {
@@ -398,12 +401,14 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        pointer-events: auto;
       }
       .np-bar .np-controls {
         display: flex;
         align-items: center;
         gap: 8px;
         flex-shrink: 0;
+        margin-left: auto;
       }
       .np-bar .time-display {
         font-size: 11px;
@@ -499,11 +504,23 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        justify-content: center;
         min-height: calc(100vh - 160px);
         text-align: center;
-        padding: 40px 20px;
+        padding: 0 20px;
         position: relative;
+      }
+      .lyrics-hero > #npLyrics,
+      .lyrics-hero > #plainLyrics {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+      }
+      .lyrics-hero > #npLyrics.hidden,
+      .lyrics-hero > #plainLyrics.hidden {
+        display: none !important;
       }
       .lyrics-hero .lyric-prev {
         font-size: clamp(14px, 2.5vw, 18px);
@@ -1480,6 +1497,12 @@
                 Spotify API
               </div>
             </div>
+          </div>
+        </div>
+        <div class="setup-step" id="setupSpicetifyWarning" style="display:none">
+          <div style="background:rgba(255,193,7,0.1);border:1px solid rgba(255,193,7,0.3);border-radius:var(--r-md);padding:12px;font-size:12px;color:var(--text-muted)">
+            <div style="font-weight:600;color:#ffc107;margin-bottom:6px">⚠️ <span data-i18n="setup_spicetify_warning_title">Spicetify / Modded Spotify</span></div>
+            <div data-i18n-html="setup_spicetify_warning_text"></div>
           </div>
         </div>
         <div id="setupSpotifyFields" class="setup-spotify-fields">
@@ -3135,6 +3158,9 @@
           setup_tier_premium_desc: "Spotify API",
           setup_spotify_hint:
             'Get credentials at <a href="https://developer.spotify.com/dashboard" target="_blank">developer.spotify.com</a> → Create App → redirect URI: <code style="font-size:10px;background:rgba(255,255,255,.06);padding:1px 4px;border-radius:4px">http://127.0.0.1:8888/callback</code>',
+          setup_spicetify_warning_title: "Spicetify / Modded Spotify",
+          setup_spicetify_warning_text:
+            'Using Spicetify or modified Spotify clients (ad blockers, etc.) may violate Spotify\'s Terms of Service and could result in account suspension. <b>We are not responsible</b> for any bans or issues caused by using third-party modifications. Use at your own risk.',
           setup_go: "Start VybecordTS",
           setup_skip: "Skip — I'll configure later",
           bug_title: "Report a Bug",
@@ -3259,6 +3285,9 @@
           setup_tier_premium_desc: "API Spotify",
           setup_spotify_hint:
             'Obtenez les identifiants sur <a href="https://developer.spotify.com/dashboard" target="_blank">developer.spotify.com</a>',
+          setup_spicetify_warning_title: "Spicetify / Spotify modifié",
+          setup_spicetify_warning_text:
+            'L\'utilisation de Spicetify ou de clients Spotify modifiés (bloqueurs de pub, etc.) peut enfreindre les Conditions d\'utilisation de Spotify et entraîner une suspension de compte. <b>Nous ne sommes pas responsables</b> des bannissements ou problèmes causés par l\'utilisation de modifications tierces. Utilisez à vos propres risques.',
           setup_go: "Lancer VybecordTS",
           setup_skip: "Passer",
           bug_title: "Signaler un bug",
@@ -3930,7 +3959,7 @@
         $("lyricNextR").textContent = showR && data.r_next && data.next ? data.r_next : "";
         if (data.duration_ms > 0 && data.progress_ms != null)
           $("lyricTimecode").textContent = formatMs(data.progress_ms) + " / " + formatMs(data.duration_ms);
-        if (_lyricsExpanded) highlightExpandedLyric();
+        if (_lyricsExpanded) highlightExpandedLyric(data.progress_ms);
       }
       function showPlainLyrics(data) {
         const el = $("plainLyrics");
@@ -4550,6 +4579,7 @@
       }
       // EXPANDED LYRICS
       let _fullLyrics = [],
+        _fullTimestamps = [],
         _lyricsExpanded = false,
         _expandedActiveIdx = -1,
         _userScrolling = false,
@@ -4563,8 +4593,16 @@
       }
       function renderExpandedLyrics() {
         $("lyricsExpandedBody").innerHTML = _fullLyrics
-          .map((text, i) => `<div class="lx-line" data-idx="${i}">${text ? escHtml(text) : "♪"}</div>`)
+          .map((text, i) => `<div class="lx-line" data-idx="${i}">${text ? escHtml(text) : "\u266a"}</div>`)
           .join("");
+      }
+      /** Parse LRC timestamps to ms for each line */
+      function parseLrcTimestamps(lrc) {
+        return lrc.split("\n").map(line => {
+          const m = line.match(/^\[(\d+):(\d+)[.:](\d+)\]/);
+          if (!m) return -1;
+          return parseInt(m[1]) * 60000 + parseInt(m[2]) * 1000 + parseInt(m[3]) * (m[3].length === 2 ? 10 : 1);
+        }).filter(t => t >= 0);
       }
       async function _tryRefreshLyrics() {
         if (!_lyricsExpanded || _refreshRetries > 5) return;
@@ -4589,6 +4627,7 @@
             return;
           }
           _fullLyrics = parsed;
+          _fullTimestamps = parseLrcTimestamps(data.lrc);
           _expandedActiveIdx = -1;
           _userScrolling = false;
           renderExpandedLyrics();
@@ -4607,13 +4646,15 @@
           const r = await fetch("/api/lyrics/current");
           const data = await r.json();
           if (!data.lrc) return;
-          _fullLyrics = data.lrc
+          const rawLrc = data.lrc;
+          _fullLyrics = rawLrc
             .split("\n")
             .map((line) => {
               const m = line.match(/^\[[\d:.]+\]\s*(.*)/);
               return m ? m[1] : null;
             })
             .filter((x) => x !== null);
+          _fullTimestamps = parseLrcTimestamps(rawLrc);
           if (!_fullLyrics.length) return;
           renderExpandedLyrics();
           _lyricsExpanded = true;
@@ -4637,14 +4678,26 @@
         _refreshRetries = 0;
         _tryRefreshLyrics();
       }
-      function highlightExpandedLyric() {
+      function highlightExpandedLyric(progressMs) {
         const curText = $("lyricCurrent").textContent;
         const lines = $("lyricsExpandedBody").children;
         let idx = -1;
-        for (let i = 0; i < lines.length; i++) {
-          lines[i].classList.remove("active");
-          if (idx === -1 && lines[i].textContent === curText) idx = i;
+        // Use timestamps to find the correct occurrence of repeated lines
+        if (progressMs != null && _fullTimestamps.length === _fullLyrics.length) {
+          for (let i = _fullLyrics.length - 1; i >= 0; i--) {
+            if (_fullLyrics[i] === curText && _fullTimestamps[i] <= progressMs + 500) {
+              idx = i;
+              break;
+            }
+          }
         }
+        // Fallback: first text match
+        if (idx === -1) {
+          for (let i = 0; i < lines.length; i++) {
+            if (lines[i].textContent === curText) { idx = i; break; }
+          }
+        }
+        for (let i = 0; i < lines.length; i++) lines[i].classList.remove("active");
         if (idx >= 0) {
           lines[idx].classList.add("active");
           if (idx !== _expandedActiveIdx) {
@@ -4801,6 +4854,7 @@
         el.classList.add("active");
         const tier = el.getAttribute("data-tier");
         $("setupSpotifyFields").classList.toggle("open", tier === "premium");
+        $("setupSpicetifyWarning").style.display = tier === "premium" ? "block" : "none";
       }
       async function setupSave() {
         const discordId = $("setupDiscordId").value.trim(),
