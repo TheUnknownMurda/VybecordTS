@@ -132,7 +132,7 @@ export class LyricsEngine {
   private cachedHasAlbum = false;
   private cachedInfoText = '';
   private cachedIsRedundantCtx = true;  // Pre-computed per track (avoids 3× toLowerCase per emit)
-  private cachedPlayModeSuffix = '';  // '[⇄]' or '[↻]' appended to playlist/album in RPC
+  private cachedPlayModeSuffix = '';  // '🔀' or '🔂' appended to playlist/album in RPC
 
   private callbacks: LyricsEngineCallbacks | null = null;
   private running = false;
@@ -820,8 +820,8 @@ export class LyricsEngine {
     this.cachedIsRedundantCtx = isRedundantContext(d);
     // Shuffle / repeat indicator (appended to playlist/album, not track name)
     this.cachedPlayModeSuffix =
-      d.is_shuffle ? ' | ⇄' :
-      d.repeat_mode === 'track' ? ' | ↻' : '';
+      d.is_shuffle ? ' | 🔀' :
+      d.repeat_mode === 'track' ? ' | 🔂' : '';
     this.cachedInfoText = buildInfoText(d, '', '');
     // Insert play mode suffix after context/album in infoText (visible in large_text when lyrics are showing)
     if (this.cachedPlayModeSuffix) {
