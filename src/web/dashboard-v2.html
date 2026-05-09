@@ -1499,6 +1499,12 @@
             </div>
           </div>
         </div>
+        <div class="setup-step" id="setupSpicetifyWarning" style="display:none">
+          <div style="background:rgba(255,193,7,0.1);border:1px solid rgba(255,193,7,0.3);border-radius:var(--r-md);padding:12px;font-size:12px;color:var(--text-muted)">
+            <div style="font-weight:600;color:#ffc107;margin-bottom:6px">⚠️ <span data-i18n="setup_spicetify_warning_title">Spicetify / Modded Spotify</span></div>
+            <div data-i18n-html="setup_spicetify_warning_text"></div>
+          </div>
+        </div>
         <div id="setupSpotifyFields" class="setup-spotify-fields">
           <div class="setup-step">
             <label>Spotify Client ID</label>
@@ -3124,7 +3130,7 @@
           requires_restart: "Requires restart after changing.",
           footer_desc: "Synced Lyrics & Discord RPC",
           footer_discord: "💬 Discord",
-          qr_share: "📱 QR",
+          qr_share: "QR",
           qr_title: "Open on mobile",
           qr_subtitle: "Scan this QR code on the same network",
           copy_url: "📋 Copy URL",
@@ -3152,6 +3158,9 @@
           setup_tier_premium_desc: "Spotify API",
           setup_spotify_hint:
             'Get credentials at <a href="https://developer.spotify.com/dashboard" target="_blank">developer.spotify.com</a> → Create App → redirect URI: <code style="font-size:10px;background:rgba(255,255,255,.06);padding:1px 4px;border-radius:4px">http://127.0.0.1:8888/callback</code>',
+          setup_spicetify_warning_title: "Spicetify / Modded Spotify",
+          setup_spicetify_warning_text:
+            'Using Spicetify or modified Spotify clients (ad blockers, etc.) may violate Spotify\'s Terms of Service and could result in account suspension. <b>We are not responsible</b> for any bans or issues caused by using third-party modifications. Use at your own risk.',
           setup_go: "Start VybecordTS",
           setup_skip: "Skip — I'll configure later",
           bug_title: "Report a Bug",
@@ -3249,7 +3258,7 @@
           requires_restart: "Nécessite un redémarrage.",
           footer_desc: "Paroles synchronisées & Discord RPC",
           footer_discord: "💬 Discord",
-          qr_share: "📱 QR",
+          qr_share: "QR",
           qr_title: "Ouvrir sur mobile",
           qr_subtitle: "Scannez ce QR code sur le même réseau",
           copy_url: "📋 Copier URL",
@@ -3276,6 +3285,9 @@
           setup_tier_premium_desc: "API Spotify",
           setup_spotify_hint:
             'Obtenez les identifiants sur <a href="https://developer.spotify.com/dashboard" target="_blank">developer.spotify.com</a>',
+          setup_spicetify_warning_title: "Spicetify / Spotify modifié",
+          setup_spicetify_warning_text:
+            'L\'utilisation de Spicetify ou de clients Spotify modifiés (bloqueurs de pub, etc.) peut enfreindre les Conditions d\'utilisation de Spotify et entraîner une suspension de compte. <b>Nous ne sommes pas responsables</b> des bannissements ou problèmes causés par l\'utilisation de modifications tierces. Utilisez à vos propres risques.',
           setup_go: "Lancer VybecordTS",
           setup_skip: "Passer",
           bug_title: "Signaler un bug",
@@ -4842,6 +4854,7 @@
         el.classList.add("active");
         const tier = el.getAttribute("data-tier");
         $("setupSpotifyFields").classList.toggle("open", tier === "premium");
+        $("setupSpicetifyWarning").style.display = tier === "premium" ? "block" : "none";
       }
       async function setupSave() {
         const discordId = $("setupDiscordId").value.trim(),

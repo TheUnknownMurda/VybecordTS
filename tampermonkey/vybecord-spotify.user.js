@@ -475,7 +475,10 @@
       if (href.includes('/playlist/')) contextType = 'playlist';
       else if (href.includes('/album/')) contextType = 'album';
       else if (href.includes('/artist/')) contextType = 'artist';
-      else if (href.includes('/collection/')) contextType = 'collection';
+      else if (href.includes('/collection/')) {
+        contextType = 'collection';
+        if (!contextName) contextName = 'Liked Songs';
+      }
     }
 
     // Strategy 5: Fallback — parse from current page URL if nothing found
@@ -493,14 +496,21 @@
         contextName = headerEl?.textContent?.trim() || '';
         contextUrl = window.location.href;
         contextType = 'album';
+      } else if (path.startsWith('/collection/')) {
+        contextName = 'Liked Songs';
+        contextUrl = window.location.href;
+        contextType = 'collection';
       }
     }
 
     lastArtistId = artistId;
 
+    // Local files detection: no track ID but track name exists
+    const isLocal = !trackId && !!trackName;
+
     return {
       track_id: trackId,
-      uri: `spotify:track:${trackId}`,
+      uri: isLocal ? `spotify:local:${trackName}:${artistName}` : `spotify:track:${trackId}`,
       track_name: trackName,
       artist_name: artistName,
       album_name: albumName,
@@ -515,6 +525,7 @@
       context_url: contextUrl,
       context_type: contextType,
       artist_art_url: (artistId && artistImageCache[artistId]) || '',
+      is_local: isLocal,
     };
   }
 

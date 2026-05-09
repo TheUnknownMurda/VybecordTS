@@ -38,12 +38,58 @@ const MIME: Record<string, string> = {
   '.svg': 'image/svg+xml',
 };
 
+// ── Webhook Anti-Spam Protection ──
+interface RateLimitEntry {
+  count: number;
+  firstSeen: number;
+  lastSeen: number;
+  dailyCount: number;
+  dailyReset: number;
+}
+
+const RATE_LIMIT = {
+  // Per-IP: max 3 reports per 60 seconds
+  windowMs: 60_000,
+  maxPerWindow: 3,
+  // Per-IP: max 20 reports per day
+  dailyMax: 20,
+  // Global cooldown between any reports (prevents burst)
+  globalCooldownMs: 10_000,
+  // Max identical reports (prevents spamming same bug)
+  duplicateWindowMs: 300_000, // 5 minutes
+};
+
+const VALID_WEBHOOK_REGEX = /^https:\/\/discord(?:app)?\.com\/api\/webhooks\/\d+\/[A-Za-z0-9_-]+$/;
+const DISCORD_PING_REGEX = /@(?:everyone|here)|<@\d+>|<@&\d+>/g;
+
+function sanitizeDiscordContent(text: string): string {
+  // Remove Discord ping exploits
+  return text.replace(DISCORD_PING_REGEX, '[ping removed]');
+}
+
+function getClientIp(req: http.IncomingMessage): string {
+  // Try various headers, fallback to socket address
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string') {
+    return forwarded.split(',')[0].trim();
+  }
+  const realIp = req.headers['x-real-ip'];
+  if (typeof realIp === 'string') return realIp;
+  return req.socket.remoteAddress || 'unknown';
+}
+
 export class WebServer {
   private server: http.Server;
   private backend: VybecordBackend;
   private sseClients = new Set<http.ServerResponse>();
   private port: number;
   private keepaliveTimer: ReturnType<typeof setInterval> | null = null;
+
+  // Webhook rate limiting state
+  private rateLimitMap = new Map<string, RateLimitEntry>();
+  private lastGlobalReportTime = 0;
+  private recentContentHashes = new Map<string, number>(); // content hash -> timestamp
+  private lastRateLimitCleanup = Date.now();
 
   constructor(backend: VybecordBackend, port = 8888) {
     this.backend = backend;
@@ -484,45 +530,172 @@ export class WebServer {
     }
   }
 
-  private lastBugReportTime = 0;
+  private async cleanupRateLimits(): Promise<void> {
+    const now = Date.now();
+    if (now - this.lastRateLimitCleanup < 60_000) return; // Cleanup every minute max
+    this.lastRateLimitCleanup = now;
+
+    // Remove expired entries
+    for (const [ip, entry] of this.rateLimitMap) {
+      if (now - entry.lastSeen > RATE_LIMIT.windowMs * 2) {
+        this.rateLimitMap.delete(ip);
+      }
+    }
+
+    // Remove expired content hashes
+    for (const [hash, timestamp] of this.recentContentHashes) {
+      if (now - timestamp > RATE_LIMIT.duplicateWindowMs) {
+        this.recentContentHashes.delete(hash);
+      }
+    }
+  }
+
+  private checkRateLimit(ip: string): { allowed: boolean; reason?: string } {
+    const now = Date.now();
+    this.cleanupRateLimits();
+
+    // Global cooldown (prevents any burst)
+    if (now - this.lastGlobalReportTime < RATE_LIMIT.globalCooldownMs) {
+      const wait = Math.ceil((RATE_LIMIT.globalCooldownMs - (now - this.lastGlobalReportTime)) / 1000);
+      return { allowed: false, reason: `Global cooldown — wait ${wait}s` };
+    }
+
+    let entry = this.rateLimitMap.get(ip);
+    if (!entry) {
+      entry = { count: 0, firstSeen: now, lastSeen: now, dailyCount: 0, dailyReset: now + 86400000 };
+      this.rateLimitMap.set(ip, entry);
+    }
+
+    // Reset daily counter if needed
+    if (now > entry.dailyReset) {
+      entry.dailyCount = 0;
+      entry.dailyReset = now + 86400000;
+    }
+
+    // Check daily limit
+    if (entry.dailyCount >= RATE_LIMIT.dailyMax) {
+      return { allowed: false, reason: `Daily limit reached (${RATE_LIMIT.dailyMax} reports/day)` };
+    }
+
+    // Reset window counter if needed
+    if (now - entry.firstSeen > RATE_LIMIT.windowMs) {
+      entry.count = 0;
+      entry.firstSeen = now;
+    }
+
+    // Check window limit
+    if (entry.count >= RATE_LIMIT.maxPerWindow) {
+      const wait = Math.ceil((RATE_LIMIT.windowMs - (now - entry.firstSeen)) / 1000);
+      return { allowed: false, reason: `Rate limited — wait ${wait}s` };
+    }
+
+    return { allowed: true };
+  }
+
+  private computeContentHash(summary: string, details?: string): string {
+    // Simple hash for deduplication
+    let hash = 0;
+    const str = (summary + (details || '')).toLowerCase().trim();
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) - hash) + str.charCodeAt(i);
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return hash.toString(36);
+  }
 
   private async handleBugReport(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
     try {
+      const clientIp = getClientIp(req);
       const now = Date.now();
-      if (now - this.lastBugReportTime < 30_000) {
+
+      // Rate limit check
+      const rateCheck = this.checkRateLimit(clientIp);
+      if (!rateCheck.allowed) {
+        log.warn(`Bug report rate limited [${clientIp}]: ${rateCheck.reason}`);
         res.writeHead(429, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ ok: false, error: 'Rate limited — wait 30s' }));
+        res.end(JSON.stringify({ ok: false, error: rateCheck.reason }));
         return;
       }
+
       const body = await this.readBody(req, 16_384);
       const data = JSON.parse(body) as {
         summary?: string; category?: string; details?: string;
         track?: { name?: string; artist?: string; album?: string; platform?: string } | null;
         userAgent?: string; lang?: string; timestamp?: string;
       };
-      if (!data.summary) {
+
+      // Validate required fields
+      if (!data.summary || typeof data.summary !== 'string') {
         res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Missing summary' }));
+        res.end(JSON.stringify({ error: 'Missing or invalid summary' }));
         return;
       }
-      const webhookUrl = this.backend.getConfig().bug_report_webhook;
+      // Length limits
+      if (data.summary.length > 256) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Summary too long (max 256 chars)' }));
+        return;
+      }
+      if (data.details && data.details.length > 2000) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Details too long (max 2000 chars)' }));
+        return;
+      }
+
+      // Webhook config check
+      const webhookUrl = this.backend.getConfig().bug_report_webhook as string | undefined;
       if (!webhookUrl) {
         res.writeHead(501, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: false, error: 'Bug reporting not configured' }));
         return;
       }
+      // Webhook URL validation (prevent SSRF)
+      if (!VALID_WEBHOOK_REGEX.test(webhookUrl)) {
+        log.error(`Invalid webhook URL configured: ${webhookUrl.slice(0, 30)}...`);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: 'Invalid webhook configuration' }));
+        return;
+      }
+
+      // Duplicate check (same content within window)
+      const contentHash = this.computeContentHash(data.summary, data.details);
+      const lastDuplicate = this.recentContentHashes.get(contentHash);
+      if (lastDuplicate && now - lastDuplicate < RATE_LIMIT.duplicateWindowMs) {
+        log.warn(`Duplicate bug report blocked [${clientIp}]`);
+        res.writeHead(429, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: 'Similar report already submitted recently' }));
+        return;
+      }
+
+      // Update rate limits
+      const entry = this.rateLimitMap.get(clientIp)!;
+      entry.count++;
+      entry.dailyCount++;
+      entry.lastSeen = now;
+      this.lastGlobalReportTime = now;
+      this.recentContentHashes.set(contentHash, now);
+
       const trackInfo = data.track
         ? `${data.track.name || '?'} — ${data.track.artist || '?'} (${data.track.platform || '?'})`
         : 'No track playing';
+
+      // Sanitize all user-provided content to prevent Discord ping exploits
+      const safeSummary = sanitizeDiscordContent(data.summary);
+      const safeCategory = sanitizeDiscordContent(data.category || 'other');
+      const safeLang = sanitizeDiscordContent(data.lang || '?');
+      const safeTrackInfo = sanitizeDiscordContent(trackInfo);
+      const safeDetails = data.details ? sanitizeDiscordContent(data.details.slice(0, 1024)) : undefined;
+      const safeUserAgent = sanitizeDiscordContent((data.userAgent || '?').slice(0, 256));
+
       const embed = {
-        title: `🐛 ${data.summary}`.slice(0, 256),
+        title: `🐛 ${safeSummary}`.slice(0, 256),
         color: 0xff6b6b,
         fields: [
-          { name: 'Category', value: data.category || 'other', inline: true },
-          { name: 'Language', value: data.lang || '?', inline: true },
-          { name: 'Current Track', value: trackInfo, inline: false },
-          ...(data.details ? [{ name: 'Details', value: data.details.slice(0, 1024), inline: false }] : []),
-          { name: 'User Agent', value: (data.userAgent || '?').slice(0, 256), inline: false },
+          { name: 'Category', value: safeCategory, inline: true },
+          { name: 'Language', value: safeLang, inline: true },
+          { name: 'Current Track', value: safeTrackInfo, inline: false },
+          ...(safeDetails ? [{ name: 'Details', value: safeDetails, inline: false }] : []),
+          { name: 'User Agent', value: safeUserAgent, inline: false },
         ],
         timestamp: data.timestamp || new Date().toISOString(),
         footer: { text: 'VybecordTS Bug Report' },
@@ -546,7 +719,6 @@ export class WebServer {
         wreq.write(webhookBody);
         wreq.end();
       });
-      this.lastBugReportTime = now;
       log.info(`Bug report sent: ${data.summary}`);
       this.jsonResponse(res, { ok: true });
     } catch (e) {

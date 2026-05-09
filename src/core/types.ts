@@ -50,6 +50,8 @@ export interface TrackData {
   is_shuffle?: boolean;
   /** Repeat mode: 'off' | 'context' (playlist/album repeat) | 'track' (single track repeat) */
   repeat_mode?: 'off' | 'context' | 'track';
+  /** True if this is a local file (not on Spotify streaming service) */
+  is_local?: boolean;
   /** High-res timestamp (performance.now()) when this data was received */
   _received_at: number;
   /** True if this track came from a push source (Spicetify, YouTube/SC/BC userscript) */

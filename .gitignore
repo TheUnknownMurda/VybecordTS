@@ -35,3 +35,7 @@ Thumbs.db
 *.sqlite3-wal
 *.sqlite3.gz
 *.db
+
+# ── Test scripts / backups ──
+test-wizard.ps1
+config.json.*-backup
