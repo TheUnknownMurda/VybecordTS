@@ -361,7 +361,8 @@ export class DiscordIPC {
     if (activity.assets) {
       const a = activity.assets;
       const assets: Record<string, string> = {};
-      if (a.large_image) assets.large_image = a.large_image;
+      // Always set large_image (use default if not provided to avoid app logo)
+      assets.large_image = a.large_image || 'https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/zkR9FspOnC79sb6532RdH.gif';
       if (a.large_text) assets.large_text = sanitize(a.large_text);
       if (a.small_image) assets.small_image = a.small_image;
       if (a.small_text) assets.small_text = sanitize(a.small_text);

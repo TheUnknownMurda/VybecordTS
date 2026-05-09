@@ -132,6 +132,7 @@ export class LyricsEngine {
   private cachedHasAlbum = false;
   private cachedInfoText = '';
   private cachedIsRedundantCtx = true;  // Pre-computed per track (avoids 3× toLowerCase per emit)
+  private cachedContextName = '';  // Displayable context name (with Liked Songs fallback)
   private cachedPlayModeSuffix = '';  // '🔀' or '🔂' appended to playlist/album in RPC
 
   private callbacks: LyricsEngineCallbacks | null = null;
@@ -769,7 +770,11 @@ export class LyricsEngine {
     if (!d) return;
 
     // /api/thumbnail is a local-only path (SMTC thumb) — Discord needs a public URL
-    const art = d.album_art_url && d.album_art_url !== '/api/thumbnail' ? d.album_art_url : '';
+    // Also spotify:localfileimage:... are internal Spotify URLs that Discord cannot access
+    const isLocalFileImage = d.album_art_url?.startsWith('spotify:localfileimage:');
+    const art = d.album_art_url && d.album_art_url !== '/api/thumbnail' && !isLocalFileImage
+      ? d.album_art_url
+      : '';
     this.cachedLargeImage = art || DEFAULT_ART;
 
     // Clickable URLs — platform-aware
@@ -817,7 +822,8 @@ export class LyricsEngine {
     if (!d) return;
     this.cachedDisplayArtist = deduplicateArtist(d.track_name, d.artist_name);
     this.cachedHasAlbum = !!(d.album_name && d.album_name.trim());
-    this.cachedIsRedundantCtx = isRedundantContext(d);
+    this.cachedContextName = getContextDisplayName(d);
+    this.cachedIsRedundantCtx = !this.cachedContextName;
     // Shuffle / repeat indicator (appended to playlist/album, not track name)
     this.cachedPlayModeSuffix =
       d.is_shuffle ? ' | 🔀' :
@@ -915,7 +921,7 @@ export class LyricsEngine {
     } else {
       // No lyrics / lyrics disabled — use pre-computed display parts
       details = truncate(d.track_name, 128);
-      const ctx = this.cachedIsRedundantCtx ? '' : (d.context_name || '');
+      const ctx = this.cachedContextName;
 
       if (ctx) {
         state = truncate(`🎼 ${ctx}${this.cachedPlayModeSuffix}`, 128);
@@ -1110,12 +1116,27 @@ function truncate(text: string, max: number): string {
 
 /** Returns true if context_name is redundant (same as artist, album, or track name). */
 function isRedundantContext(d: TrackData): boolean {
+  // Don't skip collection type (Liked Songs) or local files even if context_name is empty
+  if (d.context_type === 'collection' || d.is_local) return false;
+  // Don't skip if context is explicitly "Local Files" / "Fichiers locaux" playlist
+  if (d.context_name?.toLowerCase().includes('local') || d.context_name?.toLowerCase().includes('fichiers')) return false;
   if (!d.context_name) return true;
   const ctx = d.context_name.toLowerCase().trim();
   if (!ctx) return true;
   return ctx === d.artist_name.toLowerCase()
     || ctx === d.album_name?.toLowerCase()
     || ctx === d.track_name.toLowerCase();
+}
+
+/** Get display name for context, with fallback for Liked Songs (collection) and Local Files. */
+function getContextDisplayName(d: TrackData): string {
+  const ctx = d.context_name?.trim();
+  if (ctx) return ctx;
+  // Fallback: Local files (no Spotify ID) or Local Files playlist
+  if (d.is_local || d.context_type === 'local') return 'Local Files';
+  // Fallback: Liked Songs has type 'collection' but often no name
+  if (d.context_type === 'collection') return 'Liked Songs';
+  return '';
 }
 
 /**
@@ -1142,7 +1163,8 @@ function buildInfoText(d: TrackData, currentText: string, nextText: string): str
   if (d.track_name && !vis.includes(d.track_name))   parts.push(`♫${d.track_name}`);
   if (displayArtist && !vis.includes(displayArtist)) parts.push(`🎤${displayArtist}`);
   if (d.album_name && !vis.includes(d.album_name))   parts.push(`💽${d.album_name}`);
-  if (d.context_name && !isRedundantContext(d) && !vis.includes(d.context_name)) parts.push(`🎼${d.context_name}`);
+  const ctxName = getContextDisplayName(d);
+  if (ctxName && !isRedundantContext(d) && !vis.includes(ctxName)) parts.push(`🎼${ctxName}`);
   return truncate(parts.join(' | ') || '  ', 128);
 }
 

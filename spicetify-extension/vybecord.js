@@ -29,6 +29,11 @@
     const item = data.item;
     const uri = item.uri || '';
     const trackId = uri.startsWith('spotify:track:') ? uri.slice(14) : '';
+    // Local files detection: URI starts with spotify:local: OR no track ID OR context is local playlist
+    const playerCtx = Spicetify.Player.data.context;
+    const ctxUri = playerCtx?.uri || '';
+    const isLocalFile = uri.startsWith('spotify:local:');
+    const isLocal = isLocalFile || !trackId || ctxUri.includes(':local:') || ctxUri.includes('local-files');
 
     // Collect all artists with their URIs
     const artists = (item.artists || []).map(a => ({
@@ -98,6 +103,12 @@
       if (parts[1] === 'user' && parts[3] === 'collection') {
         contextType = 'collection';
         contextUrl = 'https://open.spotify.com/collection/tracks';
+        contextName = 'Liked Songs';
+      } else if (parts[1] === 'local') {
+        // Local Files playlist
+        contextType = 'local';
+        contextUrl = 'https://open.spotify.com/collection/local-files';
+        contextName = 'Local Files';
       } else if (['playlist', 'album', 'artist'].includes(parts[1]) && parts[2]) {
         contextType = parts[1];
         contextUrl = `https://open.spotify.com/${parts[1]}/${parts[2]}`;
@@ -105,10 +116,23 @@
         contextType = parts[1] || '';
         // No reliable web URL for station, search, etc.
       }
-      // Context name from Spicetify metadata
-      contextName = ctx.metadata?.context_description
-        || ctx.metadata?.['context_description']
-        || '';
+      // Context name from Spicetify metadata (if not already set, e.g., for Liked Songs)
+      if (!contextName) {
+        contextName = ctx.metadata?.context_description
+          || ctx.metadata?.['context_description']
+          || '';
+      }
+      // Detect Local Files playlist by name (English or French) - fallback if empty
+      if (!contextName && contextType === 'local') {
+        contextName = 'Local Files';
+      }
+      // If context name contains "local" or "fichiers", treat as Local Files
+      if (!contextName && contextType === 'internal' && 
+          (ctx.metadata?.context_description?.toLowerCase().includes('local') ||
+           ctx.metadata?.context_description?.toLowerCase().includes('fichiers'))) {
+        contextType = 'local';
+        contextName = 'Local Files';
+      }
     }
 
     return {
@@ -132,6 +156,7 @@
       repeat_mode: [0, 1, 2].includes(Spicetify.Player.getRepeat?.())
         ? ['off', 'context', 'track'][Spicetify.Player.getRepeat()]
         : 'off',
+      is_local: isLocal,
     };
   }
 

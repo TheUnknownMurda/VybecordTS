@@ -346,7 +346,7 @@ export class VybecordBackend extends EventEmitter {
     this.currentTrackKey = trackKey;
     this.currentTrack = track;
     this.cachedIsWebSource = false; // Spicetify is Spotify — never a web source
-    log.info(`[NEW TRACK] ${track.track_name} — ${track.artist_name} (spicetify)`);
+    log.info(`[NEW TRACK] ${track.track_name} — ${track.artist_name} (spicetify)${track.is_local ? ' [local]' : ''}${track.context_name ? ` [${track.context_name}]` : ''}`);
     this.recordPlay(track);
     this.emit('trackUpdate', track);
     this.onNewTrack(track).catch(e => log.error(`[NEW TRACK] Error: ${e}`));

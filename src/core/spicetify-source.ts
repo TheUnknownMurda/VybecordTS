@@ -37,6 +37,7 @@ export interface SpicetifyPayload {
   artist_art_url?: string;
   is_shuffle?: boolean;
   repeat_mode?: string;
+  is_local?: boolean;
 }
 
 const STALE_THRESHOLD_MS = 10_000; // Data older than 10s = extension disconnected
@@ -78,7 +79,7 @@ export class SpicetifySource {
       d.duration_ms || Infinity,
     );
 
-    return {
+    const result = {
       track_id: d.track_id || `spicetify:${d.track_name}:${d.artist_name}`,
       track_name: d.track_name,
       artist_name: d.artist_name,
@@ -97,10 +98,12 @@ export class SpicetifySource {
       artist_art_url: d.artist_art_url || '',
       media_source: 'spotify',
       is_shuffle: d.is_shuffle ?? false,
-      repeat_mode: (d.repeat_mode === 'track' || d.repeat_mode === 'context') ? d.repeat_mode : 'off',
+      repeat_mode: ((d.repeat_mode === 'track' || d.repeat_mode === 'context') ? d.repeat_mode : 'off') as 'off' | 'track' | 'context',
+      is_local: d.is_local ?? false,
       _received_at: performance.now(),
       _from_push: true,
     };
+    return result;
   }
 
   /** True if the extension has sent data recently (< 10s). */
