@@ -36,11 +36,11 @@ const RE_CC_JUNK = /^[♪♫🎵🎶\s]+$|^\s*$/;
 const YT_DLP_TIMEOUT = 15_000;
 
 // Supported CC languages — ordered by preference (first = highest priority)
-const CC_LANGS = ['fr', 'en'];
-// Manual sub-lang: include locale variants (fr-CA, fr-FR, en-US, etc.)
-const MANUAL_SUB_LANG = 'fr,fr-CA,fr-FR,en,en-US,en-GB';
-// Auto CC sub-lang: keep minimal to avoid YouTube 429 rate limits
-const CC_SUB_LANG = 'fr-orig,en-orig,fr,en';
+const CC_LANGS = ['fr', 'en', 'es', 'de', 'it', 'pt', 'ja', 'ko', 'zh'];
+// Manual sub-lang: include locale variants
+const MANUAL_SUB_LANG = 'fr,fr-CA,fr-FR,en,en-US,en-GB,es,es-419,de,de-DE,it,it-IT,pt,pt-BR,pt-PT,ja,ja-JP,ko,ko-KR,zh,zh-CN,zh-TW,zh-HK';
+// Auto CC sub-lang: include both original and plain codes for maximum compatibility
+const CC_SUB_LANG = 'fr,fr-orig,en,en-orig,es,es-orig,de,de-orig,it,it-orig,pt,pt-orig,ja,ko,zh';
 
 // Maximum merged line length (chars) before forcing a break (Discord RPC max = 128)
 const MAX_MERGED_CHARS = 128;
@@ -62,6 +62,7 @@ let ytDlpAvailable = false;
 export interface CCResult {
   lines: LyricLine[];
   thumbnailUrl?: string;
+  ageRestricted?: boolean;
 }
 
 // ── In-memory cache ──
@@ -448,11 +449,21 @@ export async function fetchYouTubeCaptions(
     ];
 
     let isManualSub = false;
+    let lastError: unknown;
+    let isAgeRestricted = false;
+    
     await execFileAsync('yt-dlp', [
       ...baseArgs,
       '--write-sub',
       '--sub-lang', manualLangs,
-    ], { timeout: YT_DLP_TIMEOUT, signal }).catch(() => {});
+    ], { timeout: YT_DLP_TIMEOUT, signal }).catch((e) => {
+      lastError = e;
+      const errStr = String(e);
+      if (errStr.includes('Sign in to confirm your age') || errStr.includes('age')) {
+        isAgeRestricted = true;
+        log.warn('[CC] Video is age-restricted');
+      }
+    });
 
     let files = await readdir(tmpDir);
     let pick = files.length ? pickBestSubFile(files, sortOrder) : null;
@@ -462,28 +473,45 @@ export async function fetchYouTubeCaptions(
       log.info(`[CC] Found manual subtitles (${pick.lang}): ${pick.file}`);
     } else {
       // ── Step 2: No manual subs — fall back to auto-generated CC ──
-      log.debug('[CC] No manual subs — trying auto-CC...');
+      log.info('[CC] No manual subs — trying auto-CC...');
       await execFileAsync('yt-dlp', [
         ...baseArgs,
         '--write-auto-sub',
         '--sub-lang', autoLangs,
-      ], { timeout: YT_DLP_TIMEOUT, signal }).catch(() => {});
+      ], { timeout: YT_DLP_TIMEOUT, signal }).catch((e) => {
+        lastError = e;
+        const errStr = String(e);
+        if (errStr.includes('Sign in to confirm your age') || errStr.includes('age')) {
+          isAgeRestricted = true;
+          log.warn('[CC] Video is age-restricted');
+        }
+      });
 
       files = await readdir(tmpDir);
+      log.info(`[CC] Files in temp dir: ${files.join(', ') || '(none)'}`);
       pick = files.length ? pickBestSubFile(files, sortOrder) : null;
     }
 
     if (!pick) {
+      if (isAgeRestricted) {
+        log.info('[CC] No CC due to age restriction');
+        const ageRestrictedResult: CCResult = { lines: [], ageRestricted: true };
+        setCache(key, ageRestrictedResult);
+        return ageRestrictedResult;
+      }
       log.info('[CC] No subtitle files — video has no CC in supported languages');
       setCache(key, EMPTY);
       return EMPTY;
     }
 
-    log.debug(`[CC] Using ${isManualSub ? 'manual' : 'auto'} subs (${pick.lang}): ${pick.file}`);
+    log.info(`[CC] Using ${isManualSub ? 'manual' : 'auto'} subs (${pick.lang}): ${pick.file}`);
 
     // Parse json3 into LyricLine[]
     const raw = await readFile(path.join(tmpDir, pick.file), 'utf8');
+    log.debug(`[CC] Raw file size: ${raw.length} chars`);
+    
     let lines = parseJson3(raw);
+    log.info(`[CC] Parsed ${lines.length} raw lines from JSON3`);
 
     // Auto-generated CC: full post-processing pipeline (merge + clean + capitalize)
     if (!isManualSub && lines.length > 0) {
@@ -498,13 +526,14 @@ export async function fetchYouTubeCaptions(
     const extractedVideoId = extractVideoId(pick.file);
     const thumbnailUrl = extractedVideoId ? ytThumbnail(extractedVideoId) : undefined;
 
+    // Log final result
     if (lines.length > 0) {
       // Tag lines: 'sub' for manual subtitles (treated like normal lyrics), 'cc' for auto-CC
       const sourceTag = isManualSub ? 'sub' as const : 'cc' as const;
       for (const l of lines) l.source = sourceTag;
-      log.info(`[CC] Got ${lines.length} ${isManualSub ? 'manual subtitle' : 'auto-CC'} lines (${pick.lang})${videoId ? ` [${videoId}]` : ''}`);
+      log.info(`[CC] SUCCESS: ${lines.length} ${isManualSub ? 'manual subtitle' : 'auto-CC'} lines (${pick.lang})${videoId ? ` [${videoId}]` : ''}`);
     } else {
-      log.debug('[CC] No usable lines in captions');
+      log.info('[CC] FAILED: No usable lines in captions after filtering');
     }
 
     const result: CCResult = { lines, thumbnailUrl };

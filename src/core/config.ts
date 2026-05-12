@@ -37,6 +37,7 @@ const DEFAULTS: VybecordConfig = {
   hide_small_icon: false,
   cc_enabled: true,
   cc_lang: 'auto',
+  cc_cookies_file: '', // Path to cookies.txt for age-restricted videos
   lyrics_offset_ms: 0,
   romanize_lyrics: false,
   translate_lyrics: false,

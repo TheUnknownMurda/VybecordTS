@@ -35,8 +35,10 @@ let stmtFuzzy: Database.Statement | null = null;
 let stmtCustomExact: Database.Statement | null = null;
 let stmtInsertLyrics: Database.Statement | null = null;
 let stmtInsertTrack: Database.Statement | null = null;
+let stmtUpdateTrack: Database.Statement | null = null;
 let stmtInsertFts: Database.Statement | null = null;
 let stmtBacklinkLyrics: Database.Statement | null = null;
+let stmtFindTrackByUnique: Database.Statement | null = null;
 
 /**
  * Initialize the local lyrics database.
@@ -202,6 +204,14 @@ function openDb(dbPath: string): boolean {
       INSERT INTO tracks (name, name_lower, artist_name, artist_name_lower, album_name, album_name_lower, duration, last_lyrics_id, created_at, updated_at)
       VALUES (?, lower(?), ?, lower(?), ?, lower(?), ?, ?, ?, ?)
     `);
+    stmtUpdateTrack = db.prepare(`
+      UPDATE tracks SET last_lyrics_id = ?, updated_at = ?
+      WHERE name_lower = lower(?) AND artist_name_lower = lower(?) AND album_name_lower = lower(?) AND duration = ?
+    `);
+    stmtFindTrackByUnique = db.prepare(`
+      SELECT id FROM tracks
+      WHERE name_lower = lower(?) AND artist_name_lower = lower(?) AND album_name_lower = lower(?) AND duration = ?
+    `);
     stmtInsertFts = db.prepare(`
       INSERT INTO tracks_fts (rowid, name_lower, album_name_lower, artist_name_lower)
       VALUES (?, lower(?), lower(?), lower(?))
@@ -344,26 +354,43 @@ export function insertCustomLyrics(
   durationSec: number | undefined,
   syncedLyrics: string,
 ): number {
-  if (!db || !stmtInsertLyrics || !stmtInsertTrack || !stmtInsertFts || !stmtBacklinkLyrics) {
+  if (!db || !stmtInsertLyrics || !stmtInsertTrack || !stmtUpdateTrack || !stmtFindTrackByUnique || !stmtInsertFts || !stmtBacklinkLyrics) {
     throw new Error('Local DB not initialized');
   }
 
   const now = new Date().toISOString();
 
   const tx = db.transaction(() => {
-    const lyricsResult = stmtInsertLyrics!.run(syncedLyrics, now, now);
-    const lyricsId = lyricsResult.lastInsertRowid as number;
-    const trackResult = stmtInsertTrack!.run(
-      trackName, trackName,
-      artistName, artistName,
-      albumName, albumName,
-      durationSec ?? null,
-      lyricsId,
-      now, now,
-    );
-    const trackId = trackResult.lastInsertRowid as number;
-    stmtBacklinkLyrics!.run(trackId, lyricsId);
-    stmtInsertFts!.run(trackId, trackName, albumName, artistName);
+    // Check if track already exists
+    const existingTrack = stmtFindTrackByUnique!.get(
+      trackName, artistName, albumName, durationSec ?? null
+    ) as { id: number } | undefined;
+
+    let trackId: number;
+
+    if (existingTrack) {
+      // Update existing track with new lyrics
+      trackId = existingTrack.id;
+      const lyricsResult = stmtInsertLyrics!.run(syncedLyrics, now, now);
+      const lyricsId = lyricsResult.lastInsertRowid as number;
+      stmtUpdateTrack!.run(lyricsId, now, trackName, artistName, albumName, durationSec ?? null);
+      stmtBacklinkLyrics!.run(trackId, lyricsId);
+    } else {
+      // Insert new track
+      const lyricsResult = stmtInsertLyrics!.run(syncedLyrics, now, now);
+      const lyricsId = lyricsResult.lastInsertRowid as number;
+      const trackResult = stmtInsertTrack!.run(
+        trackName, trackName,
+        artistName, artistName,
+        albumName, albumName,
+        durationSec ?? null,
+        lyricsId,
+        now, now,
+      );
+      trackId = trackResult.lastInsertRowid as number;
+      stmtBacklinkLyrics!.run(trackId, lyricsId);
+      stmtInsertFts!.run(trackId, trackName, albumName, artistName);
+    }
     return trackId;
   });
 
@@ -521,8 +548,10 @@ export function closeLocalDb(): void {
     stmtCustomExact = null;
     stmtInsertLyrics = null;
     stmtInsertTrack = null;
+    stmtUpdateTrack = null;
     stmtInsertFts = null;
     stmtBacklinkLyrics = null;
+    stmtFindTrackByUnique = null;
     log.info('Local LRCLib database closed');
   }
 }

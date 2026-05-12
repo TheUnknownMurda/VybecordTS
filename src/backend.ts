@@ -1065,6 +1065,7 @@ export class VybecordBackend extends EventEmitter {
             // If already in store (pre-fetched from previous track or fast push), use immediately.
             // Otherwise, fall through to LRCLib/Netease. If TM lyrics arrive later,
             // handleSpotifyLyrics() will hot-inject them and the Phase 3 guard prevents overwrite.
+            const isYouTubeSource = trackData.track_id.startsWith('yt:');
             const spotifyLyrics = this.spotifyLyricsStore.get(trackData.track_id);
             if (spotifyLyrics && spotifyLyrics.length > 0) {
               log.info(`[SPOTIFY-LYRICS] Using ${spotifyLyrics.length} pre-fetched official lyrics`);
@@ -1098,14 +1099,20 @@ export class VybecordBackend extends EventEmitter {
 
               // CC disabled by user → skip entirely
               if (this.config.get('cc_enabled') === false) {
-                log.debug('[CC] YouTube CC disabled by config — skipping');
+                log.info('[CC] YouTube CC disabled by config — skipping');
                 return [];
               }
 
               // Extract video ID from YouTubeSource (yt:VIDEO_ID) for direct CC fetch
               const ytVideoId = trackData.track_id.startsWith('yt:') ? trackData.track_id.slice(3) : undefined;
               const ccLang = this.config.get('cc_lang') || 'auto';
+              
+              log.info(`[CC] Fetching captions for "${trackData.track_name}" (videoId: ${ytVideoId || 'search'}, lang: ${ccLang})`);
+              
               const ccResult = await fetchYouTubeCaptions(trackData.track_name, trackData.artist_name, signal, ytVideoId, ccLang);
+              
+              log.info(`[CC] Result: ${ccResult.lines.length} lines, thumbnail: ${ccResult.thumbnailUrl ? 'yes' : 'no'}`);
+              
               // YouTube thumbnail takes priority — more relevant than generic album art
               if (ccResult.thumbnailUrl) {
                 trackData.album_art_url = ccResult.thumbnailUrl;
@@ -1120,13 +1127,29 @@ export class VybecordBackend extends EventEmitter {
                     artist_name: trackData.artist_name,
                   });
                 }
-                log.debug(`[CC] Using YouTube thumbnail as album art`);
+                log.info(`[CC] Using YouTube thumbnail as album art`);
               }
-              if (ccResult.lines.length > 0) return ccResult.lines;
+              
+              // Handle age-restricted videos
+              if (ccResult.ageRestricted) {
+                log.info('[CC] Age-restricted video — showing message');
+                // Return special lyrics line for age-restricted
+                return [{ time: 0, text: '🔞 CC unavailable — age-restricted video', source: 'cc' }];
+              }
+              
+              if (ccResult.lines.length > 0) {
+                log.info(`[CC] Using ${ccResult.lines.length} caption lines`);
+                return ccResult.lines;
+              }
+              
               // Stale guard: skip fallback if track changed during CC fetch
-              if (this.currentTrackKey !== this.buildTrackKey(trackData)) return [];
-              log.debug('[CC] No captions and no provider lyrics');
-              return [];
+              if (this.currentTrackKey !== this.buildTrackKey(trackData)) {
+                log.info('[CC] Track changed during fetch, aborting');
+                return [];
+              }
+              
+              log.info(`[CC] No captions found — falling back to LRCLib/Netease...`);
+              // Fall through to LRCLib/Netease fetch
             }
             return fetchLyrics(trackData.track_name, trackData.artist_name, trackData.album_name, lyricsDuration, signal);
           })()
@@ -1142,9 +1165,11 @@ export class VybecordBackend extends EventEmitter {
         lyrics = [];
       }
 
-      // Cache lyrics
-      this.lyricsCache.set(cacheKey, lyrics);
-      this.evictCache();
+      // Cache lyrics (only if found, to allow retry on empty results)
+      if (lyrics.length > 0) {
+        this.lyricsCache.set(cacheKey, lyrics);
+        this.evictCache();
+      }
     }
 
     // Persist enriched track + re-emit to dashboard
@@ -1177,6 +1202,8 @@ export class VybecordBackend extends EventEmitter {
       }
     } else {
       // No lyrics found — flash "No Lyrics Found" for 5s, then revert
+      const noLyricsSource = trackData.track_id.startsWith('yt:') ? 'CC fetch failed or empty' : 'LRCLib/Netease fetch failed';
+      log.info(`[LYRICS] No lyrics found for "${trackData.track_name}" — ${noLyricsSource}`);
       this.lyricsEngine.setNoLyricsFound();
       this.lyricsEngine.updateTrackData(trackData);
 
