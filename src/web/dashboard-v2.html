@@ -874,6 +874,16 @@
         color: var(--accent-hex);
         background: rgba(var(--accent), 0.03);
       }
+      .btn-ghost[aria-disabled="true"] {
+        opacity: 0.38;
+        cursor: help;
+      }
+      .btn-ghost[aria-disabled="true"]:hover {
+        transform: none;
+        border-color: var(--border-d);
+        color: var(--text-tertiary);
+        background: rgba(255, 255, 255, 0.025);
+      }
       .setting-row {
         display: flex;
         align-items: center;
@@ -1058,6 +1068,50 @@
         padding: 10px 22px;
         font-size: 14px;
         border-radius: var(--r-md);
+      }
+      .stamp-btn[disabled],
+      .stamp-btn:disabled {
+        opacity: 0.38;
+        cursor: not-allowed;
+        pointer-events: none;
+      }
+      /* Undo: keep hover tooltips — native title often fails on disabled <button> */
+      .stamp-btn[aria-disabled="true"] {
+        opacity: 0.38;
+        cursor: help;
+      }
+      .stamp-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 0 8px;
+      }
+      .stamp-progress-track {
+        flex: 1;
+        min-width: 96px;
+        max-width: 200px;
+        height: 4px;
+        background: rgba(var(--accent), 0.12);
+        border-radius: 99px;
+        overflow: hidden;
+      }
+      .stamp-progress-fill {
+        height: 100%;
+        width: 0%;
+        background: var(--accent-hex);
+        transition: width 0.15s ease;
+      }
+      .stamp-next-preview {
+        font-size: 10px;
+        color: var(--text-dim);
+        max-width: min(220px, 42vw);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      html.light .stamp-progress-track {
+        background: rgba(0, 0, 0, 0.08);
       }
       input[type="range"] {
         -webkit-appearance: none;
@@ -2544,6 +2598,8 @@
                 class="btn btn-ghost"
                 style="font-size: 12px; padding: 6px 12px"
                 data-i18n="fill_from_current"
+                data-i18n-title="fill_current_tip"
+                title=""
               >
                 📥 Fill from track
               </button>
@@ -2606,20 +2662,53 @@
                 <input type="number" id="import_duration" />
               </div>
             </div>
-            <div style="display: flex; align-items: center; gap: 6px; padding: 2px 0 6px">
+            <div class="stamp-toolbar">
               <label style="font-size: 11px; color: var(--text-muted); font-weight: 500">LRC *</label>
-              <div style="flex: 1"></div>
-              <span id="stampTime" class="stamp-time">00:00.00</span>
+              <span id="stampTime" class="stamp-time" data-i18n-title="stamp_time_tip" title="">00:00.00</span>
+              <div class="stamp-progress-track" title="" data-i18n-title="stamp_progress_tip">
+                <div id="stampProgressFill" class="stamp-progress-fill"></div>
+              </div>
               <span
                 id="stampInfo"
                 style="font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums"
+                data-i18n-title="stamp_line_status_tip"
+                title=""
               >
                 Line 1
               </span>
-              <button type="button" onclick="stampLine()" class="stamp-btn stamp-btn-accent stamp-btn-big">
+              <span id="stampNextPreview" class="stamp-next-preview" data-i18n-title="stamp_next_preview_tip" title=""></span>
+              <div style="flex: 1; min-width: 8px"></div>
+              <button
+                type="button"
+                id="btnStampUndo"
+                onclick="undoStamp()"
+                class="stamp-btn"
+                data-i18n="stamp_undo_btn"
+                data-i18n-title="stamp_undo_tip"
+                title=""
+              >
+                ↩ Undo
+              </button>
+              <button
+                type="button"
+                onclick="stampLine()"
+                class="stamp-btn stamp-btn-accent stamp-btn-big"
+                data-i18n="stamp_btn"
+                data-i18n-title="stamp_btn_tip"
+                title=""
+              >
                 ⏱ Stamp
               </button>
-              <button type="button" onclick="resetStamp()" class="stamp-btn">↺</button>
+              <button
+                type="button"
+                onclick="resetStamp()"
+                class="stamp-btn"
+                data-i18n="stamp_clear_btn"
+                data-i18n-title="stamp_clear_tip"
+                title=""
+              >
+                ↺ Clear
+              </button>
             </div>
             <textarea
               id="import_lrc"
@@ -2630,7 +2719,7 @@
             ></textarea>
             <p style="font-size: 10px; color: var(--text-dim); margin-top: 4px" data-i18n-html="stamp_hint"></p>
             <div style="display: flex; align-items: center; gap: 8px; margin-top: 12px">
-              <button id="btnImportLyrics" class="btn btn-accent" data-i18n="import_btn">Import</button>
+              <button id="btnImportLyrics" class="btn btn-accent" data-i18n="import_btn" data-i18n-title="import_btn_tip" title="">Import</button>
               <span id="importStatus" class="hidden" style="font-size: 12px"></span>
             </div>
           </div>
@@ -2650,7 +2739,15 @@
                 style="flex: 1; font-size: 12px"
                 oninput="dbSearchDebounce()"
               />
-              <button class="btn btn-ghost" style="font-size: 12px; padding: 6px 10px" onclick="loadCustomLyrics()">
+              <button
+                type="button"
+                id="btnDbRefresh"
+                class="btn btn-ghost"
+                style="font-size: 12px; padding: 6px 10px"
+                onclick="loadCustomLyrics()"
+                data-i18n-title="db_refresh_tip"
+                title=""
+              >
                 🔄
               </button>
             </div>
@@ -2684,21 +2781,27 @@
             </div>
             <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 8px">
               <button
+                type="button"
                 class="btn btn-ghost"
                 style="font-size: 12px; padding: 4px 12px"
                 id="dbPrev"
                 onclick="dbPage(-1)"
-                disabled
+                data-i18n-title="db_page_prev_tip"
+                title=""
+                aria-disabled="true"
               >
                 ←
               </button>
               <span id="dbPageInfo" style="font-size: 11px; color: var(--text-muted)"></span>
               <button
+                type="button"
                 class="btn btn-ghost"
                 style="font-size: 12px; padding: 4px 12px"
                 id="dbNext"
                 onclick="dbPage(1)"
-                disabled
+                data-i18n-title="db_page_next_tip"
+                title=""
+                aria-disabled="true"
               >
                 →
               </button>
@@ -3124,9 +3227,21 @@
           clear_cache: "Clear cache",
           import_custom_lyrics: "Import Custom Lyrics (LRC)",
           fill_from_current: "📥 Fill from track",
+          fill_current_tip: "Fill artist, album, duration and lyrics from the track now playing",
           stamp_hint:
-            'Play a song → paste lyrics → press <kbd class="text-zinc-400">Space</kbd>, <kbd class="text-zinc-400">Ctrl+Enter</kbd> or <kbd class="text-zinc-400">Alt+S</kbd> to stamp each line',
+            'Play a track → paste lyrics → <kbd class="text-zinc-400">Space</kbd> / <kbd class="text-zinc-400">Ctrl+Enter</kbd> / <kbd class="text-zinc-400">Alt+S</kbd> to stamp · <kbd class="text-zinc-400">Alt+Z</kbd> undo last · click a line to stamp from there',
+          stamp_time_tip: "Playback position used for stamping (current track)",
+          stamp_line_status_tip: "Next line index for stamping vs total rows",
+          stamp_next_preview_tip: "Preview of the next line text to stamp",
+          stamp_btn: "⏱ Stamp",
+          stamp_btn_tip: "Stamp: insert timestamp at playback time on the active line. Shortcuts: Space (in lyrics box), Ctrl+Enter, Alt+S",
+          stamp_undo_btn: "↩ Undo",
+          stamp_undo_tip: "Undo the last stamped line (in chronological order). Shortcut: Alt+Z",
+          stamp_clear_btn: "↺ Clear",
+          stamp_clear_tip: "Clear: remove every [mm:ss.xx] timestamp; lyrics text unchanged",
+          stamp_progress_tip: "Progress: stamped lines versus total lyrics lines",
           import_btn: "Import",
+          import_btn_tip: "Submit and save custom LRC text to your local lyrics database",
           requires_restart: "Requires restart after changing.",
           footer_desc: "Synced Lyrics & Discord RPC",
           footer_discord: "💬 Discord",
@@ -3143,6 +3258,9 @@
           clearing: "Clearing…",
           importing: "Importing…",
           lyrics_loaded: "✓ Lyrics loaded — edit and import to save",
+          stamp_empty: "Paste lyrics in the box",
+          stamp_line_label: "Line",
+          stamp_done: "Done",
           no_lyrics_yet: "No lyrics yet — paste your own LRC",
           fields_required: "✗ Title, Artist and LRC required",
           lrc_placeholder: "Paste lyrics here, then use Stamp to add timestamps line by line",
@@ -3182,6 +3300,13 @@
           flagged_count_label: "flagged",
           flagged_empty: "No flagged tracks",
           flagged_hint: "Tracks whose auto-fetched lyrics were marked as wrong.",
+          db_refresh_tip: "Reload list from the local lyrics database",
+          db_edit_tip: "Edit this saved lyric entry",
+          db_delete_tip: "Delete this entry from the local database",
+          db_page_prev_tip: "Previous page",
+          db_page_next_tip: "Next page",
+          flagged_unflag_tip: "Clear flag — lyrics will fetch from sources again on this track",
+          flagged_import_tip: "Open Import tab with this track to add custom corrected lyrics",
         },
         fr: {
           subtitle: "Paroles synchronisées &bull; Discord RPC",
@@ -3252,9 +3377,21 @@
           clear_cache: "Vider le cache",
           import_custom_lyrics: "Importer des paroles (LRC)",
           fill_from_current: "📥 Remplir depuis le titre",
+          fill_current_tip: "Remplir titre, artiste, album, durée et paroles à partir du morceau en cours",
           stamp_hint:
-            'Jouez → collez → <kbd class="text-zinc-400">Espace</kbd> ou <kbd class="text-zinc-400">Alt+S</kbd> pour synchroniser',
+            'Lisez un titre → collez → <kbd class="text-zinc-400">Espace</kbd> / <kbd class="text-zinc-400">Alt+S</kbd> pour marquer · <kbd class="text-zinc-400">Alt+Z</kbd> annuler · cliquez une ligne pour reprendre',
+          stamp_time_tip: "Position lecture utilisée pour le stamp (titre détecté)",
+          stamp_line_status_tip: "Ligne suivante à horodater / nombre de lignes",
+          stamp_next_preview_tip: "Aperçu du texte de la prochaine ligne à marquer",
+          stamp_btn: "⏱ Stamp",
+          stamp_btn_tip: "Insère l’horodatage au temps courant sur la ligne active · Espace / Ctrl+Entrée / Alt+S",
+          stamp_undo_btn: "↩ Annuler",
+          stamp_undo_tip: "Annule le dernier stamp (par ordre) · Alt+Z",
+          stamp_clear_btn: "↺ Effacer",
+          stamp_clear_tip: "Retire tous les tags [mm:ss.xx]; le texte des paroles est conservé",
+          stamp_progress_tip: "Avancement du marquage (lignes horodatées / total)",
           import_btn: "Importer",
+          import_btn_tip: "Enregistrer ce texte LRC dans la base de paroles locales",
           requires_restart: "Nécessite un redémarrage.",
           footer_desc: "Paroles synchronisées & Discord RPC",
           footer_discord: "💬 Discord",
@@ -3270,6 +3407,9 @@
           flagged: "✓ Signalé",
           importing: "Importation…",
           lyrics_loaded: "✓ Paroles chargées",
+          stamp_empty: "Collez les paroles ci-dessous",
+          stamp_line_label: "Ligne",
+          stamp_done: "Terminé",
           no_lyrics_yet: "Pas de paroles — collez votre LRC",
           fields_required: "✗ Titre, Artiste et LRC requis",
           lrc_placeholder: "Collez les paroles ici",
@@ -3309,6 +3449,13 @@
           flagged_count_label: "signalées",
           flagged_empty: "Aucun titre signalé",
           flagged_hint: "Titres dont les paroles ont été signalées.",
+          db_refresh_tip: "Recharger la liste depuis la base locale",
+          db_edit_tip: "Modifier cette entrée enregistrée",
+          db_delete_tip: "Supprimer cette entrée de la base locale",
+          db_page_prev_tip: "Page précédente",
+          db_page_next_tip: "Page suivante",
+          flagged_unflag_tip: "Lever le signal — les paroles seront à nouveau chargées depuis les sources",
+          flagged_import_tip: "Ouvre l’onglet Importer pour ce titre avec des paroles corrigées",
         },
         es: {
           idle_title: "Esperando música…",
@@ -3321,6 +3468,22 @@
           tab_bug: "Reportar",
           save_settings: "Guardar",
           import_btn: "Importar",
+          import_btn_tip: "Guardar este texto LRC en tu base de letras local",
+          fill_current_tip: "Rellenar título, artista, álbum, duración y letras del tema en reproducción",
+          stamp_time_tip: "Posición de reproducción para marcar tiempos (tema actual)",
+          stamp_line_status_tip: "Índice de la siguiente línea a marcar / total de líneas",
+          stamp_next_preview_tip: "Vista previa del texto de la siguiente línea a marcar",
+          stamp_btn_tip: "Inserta la marca de tiempo en la línea activa · Espacio / Ctrl+Intro / Alt+S",
+          stamp_undo_tip: "Deshacer el último sello (orden) · Alt+Z",
+          stamp_clear_tip: "Quita todas las etiquetas [mm:ss.xx]; el texto se mantiene",
+          stamp_progress_tip: "Progreso de líneas marcadas respecto al total",
+          db_refresh_tip: "Recargar lista desde la base local",
+          db_edit_tip: "Editar esta entrada de letras guardada",
+          db_delete_tip: "Eliminar esta entrada de la base local",
+          db_page_prev_tip: "Página anterior",
+          db_page_next_tip: "Página siguiente",
+          flagged_unflag_tip: "Quitar marca — las letras volverán a obtenerse de las fuentes",
+          flagged_import_tip: "Ir a Importar con este tema para añadir letras corregidas",
           confirm_shutdown: "¿Detener VybecordTS?",
           saved: "✓ Guardado",
           error: "✗ Error",
@@ -3338,6 +3501,24 @@
           tab_bug: "Fehler melden",
           save_settings: "Speichern",
           import_btn: "Importieren",
+          import_btn_tip: "Dieses LRC in der lokalen Songtext-Datenbank speichern",
+          fill_current_tip: "Titel, Künstler, Album, Länge und Texte vom laufenden Titel übernehmen",
+          stamp_time_tip: "Wiedergabeposition zum Stempeln (aktueller Titel)",
+          stamp_line_status_tip: "Index der nächsten zu stempelnden Zeile / Zeilenzahl gesamt",
+          stamp_next_preview_tip: "Vorschau des Texts der nächsten Zeile",
+          stamp_btn_tip:
+            "Zeitmarke zur aktuellen Position einfügen · Leertaste / Strg+Enter / Alt+S",
+          stamp_undo_tip: "Letztes Stempeln rückgängig machen · Alt+Z",
+          stamp_clear_tip: "Alle [mm:ss.xx]-Zeitmarken entfernen; Songtext bleibt",
+          stamp_progress_tip: "Fortschritt: gestempelte Zeilen gegenüber Gesamtzahl",
+          db_refresh_tip: "Liste aus der lokalen Datenbank neu laden",
+          db_edit_tip: "Diesen gespeicherten Eintrag bearbeiten",
+          db_delete_tip: "Eintrag aus der lokalen Datenbank löschen",
+          db_page_prev_tip: "Vorherige Seite",
+          db_page_next_tip: "Nächste Seite",
+          flagged_unflag_tip:
+            "Markierung aufheben — Songtext wird für diesen Titel wieder von Quellen geholt",
+          flagged_import_tip: "Importieren-Tab öffnen, um korrigierte Texte hinzuzufügen",
           confirm_shutdown: "VybecordTS beenden?",
           saved: "✓ Gespeichert",
           error: "✗ Fehler",
@@ -3355,6 +3536,22 @@
           tab_bug: "Reportar",
           save_settings: "Salvar",
           import_btn: "Importar",
+          import_btn_tip: "Salvar este LRC na base local de letras",
+          fill_current_tip: "Preencher título, artista, álbum, duração e letras da faixa atual",
+          stamp_time_tip: "Posição de reprodução para marcar linhas (faixa atual)",
+          stamp_line_status_tip: "Próxima linha a marcar / número total de linhas",
+          stamp_next_preview_tip: "Prévia do texto da próxima linha a marcar",
+          stamp_btn_tip: "Inserir marca de tempo na linha ativa · Espaço / Ctrl+Enter / Alt+S",
+          stamp_undo_tip: "Desfazer a última marca (ordem) · Alt+Z",
+          stamp_clear_tip: "Remover todas as etiquetas [mm:ss.xx]; o texto permanece",
+          stamp_progress_tip: "Progresso das linhas marcadas em relação ao total",
+          db_refresh_tip: "Recarregar lista a partir da base local",
+          db_edit_tip: "Editar esta letra gravada",
+          db_delete_tip: "Apagar esta entrada da base local",
+          db_page_prev_tip: "Página anterior",
+          db_page_next_tip: "Próxima página",
+          flagged_unflag_tip: "Remover sinalização — letras voltarão das fontes",
+          flagged_import_tip: "Abrir Importar com esta faixa para letras corrigidas",
           confirm_shutdown: "Encerrar VybecordTS?",
           saved: "✓ Salvo",
           error: "✗ Erro",
@@ -3372,6 +3569,22 @@
           tab_bug: "Баг-репорт",
           save_settings: "Сохранить",
           import_btn: "Импортировать",
+          import_btn_tip: "Сохранить этот LRC в локальной базе текстов",
+          fill_current_tip: "Подставить данные текущего трека и тексты из плеера",
+          stamp_time_tip: "Позиция воспроизведения для разметки (текущий трек)",
+          stamp_line_status_tip: "Следующая строка для метки / всего строк",
+          stamp_next_preview_tip: "Препросмотр текста следующей строки для метки",
+          stamp_btn_tip: "Вставить метку времени в активную строку · пробел / Ctrl+Enter / Alt+S",
+          stamp_undo_tip: "Отменить последнюю метку (по порядку) · Alt+Z",
+          stamp_clear_tip: "Убрать все метки [мм:ss.xx]; текст сохранится",
+          stamp_progress_tip: "Прогресс разметки относительно всех строк",
+          db_refresh_tip: "Обновить список из локальной базы",
+          db_edit_tip: "Редактировать эту сохранённую запись",
+          db_delete_tip: "Удалить запись из локальной базы",
+          db_page_prev_tip: "Предыдущая страница",
+          db_page_next_tip: "Следующая страница",
+          flagged_unflag_tip: "Снять жалобу — тексты снова подтягиваются из источников",
+          flagged_import_tip: "Открыть импорт с этим треком для своих текстов",
           confirm_shutdown: "Остановить?",
           saved: "✓ Сохранено",
           error: "✗ Ошибка",
@@ -3389,6 +3602,22 @@
           tab_bug: "バグ報告",
           save_settings: "保存",
           import_btn: "インポート",
+          import_btn_tip: "この歌詞テキストをローカルのカスタム歌詞データベースに保存",
+          fill_current_tip: "再生中トラックの曲名・アーティスト・アルバム・長さ・歌詞があれば埋める",
+          stamp_time_tip: "スタンプに使う再生位置（現在のトラック）",
+          stamp_line_status_tip: "次にタイムタグする行インデックス / 行の合計",
+          stamp_next_preview_tip: "次にスタンプする行のテキストのプレビュー",
+          stamp_btn_tip: "アクティブ行にタイムコードを付与 · Space / Ctrl+Enter / Alt+S",
+          stamp_undo_tip: "直近のスタンプを取り消し（順序どおり）· Alt+Z",
+          stamp_clear_tip: "[mm:ss.xx] のタイムタグをすべて削除（歌詞テキストは残す）",
+          stamp_progress_tip: "全体に対してどれだけタイムスタンプしたかの目安",
+          db_refresh_tip: "ローカルDBからリストを再読み込み",
+          db_edit_tip: "この保存エントリを編集",
+          db_delete_tip: "ローカルDBから削除",
+          db_page_prev_tip: "前のページ",
+          db_page_next_tip: "次のページ",
+          flagged_unflag_tip: "フラグ解除 — 再取得するとソースからの歌詞に戻る",
+          flagged_import_tip: "このトラックでインポート画面を開き修正歌詞を登録",
           confirm_shutdown: "終了？",
           saved: "✓ 保存済み",
           error: "✗ エラー",
@@ -3406,6 +3635,22 @@
           tab_bug: "버그 신고",
           save_settings: "저장",
           import_btn: "가져오기",
+          import_btn_tip: "이 가사 텍스트를 로컬 맞춤 가사 데이터베이스에 저장",
+          fill_current_tip: "재생 중 트랙 정보와 가사가 있으면 채우기",
+          stamp_time_tip: "스탬프에 사용하는 재생 위치(현재 트랙)",
+          stamp_line_status_tip: "다음에 타임스탬프할 줄 / 전체 줄 수",
+          stamp_next_preview_tip: "다음에 스탬프할 줄 텍스트 미리보기",
+          stamp_btn_tip: "활성 줄에 시간 삽입 · Space / Ctrl+Enter / Alt+S",
+          stamp_undo_tip: "마지막 스탬프 실행 취소(순서대로) · Alt+Z",
+          stamp_clear_tip: "모든 [mm:ss.xx] 타임코드 제거(가사 본문은 유지)",
+          stamp_progress_tip: "전체 대비 시간 태깅 진행도",
+          db_refresh_tip: "로컬 데이터베이스에서 목록 새로 고침",
+          db_edit_tip: "저장된 이 항목 편집",
+          db_delete_tip: "로컬 데이터베이스에서 삭제",
+          db_page_prev_tip: "이전 페이지",
+          db_page_next_tip: "다음 페이지",
+          flagged_unflag_tip: "플래그 해제 — 다시 불러오면 원본 소스 사용",
+          flagged_import_tip: "이 트랙으로 가져오기 탭에서 수정 가사 등록",
           confirm_shutdown: "종료?",
           saved: "✓ 저장됨",
           error: "✗ 오류",
@@ -3423,6 +3668,22 @@
           tab_bug: "反馈",
           save_settings: "保存",
           import_btn: "导入",
+          import_btn_tip: "将这段 LRC 保存到本地歌词库",
+          fill_current_tip: "用当前曲目信息与生成的歌词（若有）填满表单",
+          stamp_time_tip: "用于打点的时间轴位置（当前播放曲目）",
+          stamp_line_status_tip: "将要打下一行轴 / 总行数",
+          stamp_next_preview_tip: "下一行待打点歌词的预览",
+          stamp_btn_tip: "在当前行使播放时间对齐 · Space / Ctrl+Enter / Alt+S",
+          stamp_undo_tip: "撤销上一次打点（按顺序）· Alt+Z",
+          stamp_clear_tip: "去掉所有 [分:秒.xx] 时间标记；正文保留",
+          stamp_progress_tip: "已打点行相对于全部歌词的进度",
+          db_refresh_tip: "从本地数据库重新载入列表",
+          db_edit_tip: "编辑此项已保存歌词",
+          db_delete_tip: "从本地数据库删除该项",
+          db_page_prev_tip: "上一页",
+          db_page_next_tip: "下一页",
+          flagged_unflag_tip: "取消标记 — 该曲目将再次从在线源加载歌词",
+          flagged_import_tip: "在导入页用此曲目填写以提交修正歌词",
           confirm_shutdown: "关闭？",
           saved: "✓ 已保存",
           error: "✗ 错误",
@@ -3462,6 +3723,8 @@
         _lang = code;
         localStorage.setItem("vybecord_lang", _lang);
         applyLang();
+        loadCustomLyrics();
+        loadFlaggedTracks();
       }
       // NOISE
       (function () {
@@ -3509,6 +3772,8 @@
         if (name === "import") {
           loadCustomLyrics();
           loadFlaggedTracks();
+          initLrcStampUiOnce();
+          updateStampToolbar();
         }
       }
       function toggleOffset() {
@@ -4157,6 +4422,12 @@
         el.textContent = s;
         return el.innerHTML;
       }
+      function attrEsc(s) {
+        return String(s ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/"/g, "&quot;")
+          .replace(/</g, "&lt;");
+      }
       // ACTIONS
       async function shutdownApp() {
         if (!confirm(t("confirm_shutdown"))) return;
@@ -4399,6 +4670,7 @@
             st.textContent = `✓ Imported #${r.trackId}`;
             st.style.color = "var(--accent-hex)";
             $("import_lrc").value = "";
+            resetLrcStampSession(false);
             loadCustomLyrics();
           } else {
             st.textContent = "✗ " + (r.error || "Failed");
@@ -4426,6 +4698,9 @@
         }, 300);
       }
       function dbPage(dir) {
+        const totalPages = Math.ceil(_dbTotal / _dbPageSize) || 0;
+        if (dir < 0 && _dbPage <= 0) return;
+        if (dir > 0 && (totalPages === 0 || _dbPage + 1 >= totalPages)) return;
         _dbPage = Math.max(0, _dbPage + dir);
         loadCustomLyrics();
       }
@@ -4449,14 +4724,18 @@
             body.innerHTML = r.entries
               .map((e) => {
                 const lines = (e.synced_lyrics || "").split("\n").filter((l) => l.trim()).length;
-                return `<tr style="border-top:1px solid var(--border-s)"><td style="padding:8px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.track_name)}">${esc(e.track_name)}</td><td style="padding:8px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-muted)">${esc(e.artist_name)}</td><td style="padding:8px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-faint)">${esc(e.album_name || "—")}</td><td style="padding:8px;text-align:center;color:var(--text-muted);font-variant-numeric:tabular-nums">${lines}</td><td style="padding:8px;text-align:right;white-space:nowrap"><button class="toolbar-btn" style="font-size:11px;padding:2px 6px" onclick="openEditModal(${e.track_id})">✏️</button> <button class="toolbar-btn toolbar-btn-danger" style="font-size:11px;padding:2px 6px" onclick="deleteCustomEntry(${e.track_id},'${esc(e.track_name).replace(/'/g, "\\'")}')">🗑</button></td></tr>`;
+                return `<tr style="border-top:1px solid var(--border-s)"><td style="padding:8px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.track_name)}">${esc(e.track_name)}</td><td style="padding:8px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-muted)">${esc(e.artist_name)}</td><td style="padding:8px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-faint)">${esc(e.album_name || "—")}</td><td style="padding:8px;text-align:center;color:var(--text-muted);font-variant-numeric:tabular-nums">${lines}</td><td style="padding:8px;text-align:right;white-space:nowrap"><button type="button" class="toolbar-btn" style="font-size:11px;padding:2px 6px" title="${attrEsc(t("db_edit_tip"))}" onclick="openEditModal(${e.track_id})">✏️</button> <button type="button" class="toolbar-btn toolbar-btn-danger" style="font-size:11px;padding:2px 6px" title="${attrEsc(t("db_delete_tip"))}" onclick="deleteCustomEntry(${e.track_id},'${esc(e.track_name).replace(/'/g, "\\'")}')">🗑</button></td></tr>`;
               })
               .join("");
           }
           const totalPages = Math.ceil(_dbTotal / _dbPageSize);
           $("dbPageInfo").textContent = totalPages > 0 ? `${_dbPage + 1} / ${totalPages}` : "";
-          $("dbPrev").disabled = _dbPage <= 0;
-          $("dbNext").disabled = _dbPage + 1 >= totalPages;
+          const prevEl = $("dbPrev"),
+            nextEl = $("dbNext");
+          if (prevEl)
+            prevEl.setAttribute("aria-disabled", totalPages === 0 || _dbPage <= 0 ? "true" : "false");
+          if (nextEl)
+            nextEl.setAttribute("aria-disabled", totalPages === 0 || _dbPage + 1 >= totalPages ? "true" : "false");
         } catch (e) {
           console.error("loadCustomLyrics", e);
         }
@@ -4546,7 +4825,7 @@
                 const safeKey = esc(e.key).replace(/'/g, "\\'"),
                   safeTrack = esc(e.track).replace(/'/g, "\\'"),
                   safeArtist = esc(e.artist).replace(/'/g, "\\'");
-                return `<tr style="border-top:1px solid var(--border-s)"><td style="padding:8px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.track)}</td><td style="padding:8px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-muted)">${esc(e.artist)}</td><td style="padding:8px;text-align:center;color:var(--text-muted);font-variant-numeric:tabular-nums">${e.count}</td><td style="padding:8px;text-align:right;white-space:nowrap"><button class="toolbar-btn" style="font-size:11px;padding:2px 6px" onclick="unflagTrack('${safeKey}')">🔓</button> <button class="toolbar-btn" style="font-size:11px;padding:2px 6px" onclick="importFromFlagged('${safeTrack}','${safeArtist}')">🎶</button></td></tr>`;
+                return `<tr style="border-top:1px solid var(--border-s)"><td style="padding:8px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.track)}</td><td style="padding:8px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-muted)">${esc(e.artist)}</td><td style="padding:8px;text-align:center;color:var(--text-muted);font-variant-numeric:tabular-nums">${e.count}</td><td style="padding:8px;text-align:right;white-space:nowrap"><button type="button" class="toolbar-btn" style="font-size:11px;padding:2px 6px" title="${attrEsc(t("flagged_unflag_tip"))}" onclick="unflagTrack('${safeKey}')">🔓</button> <button type="button" class="toolbar-btn" style="font-size:11px;padding:2px 6px" title="${attrEsc(t("flagged_import_tip"))}" onclick="importFromFlagged('${safeTrack}','${safeArtist}')">🎶</button></td></tr>`;
               })
               .join("");
           }
@@ -4574,6 +4853,7 @@
         $("import_album").value = "";
         $("import_duration").value = "";
         $("import_lrc").value = "";
+        resetLrcStampSession(false);
         $("import_lrc").focus();
         switchPage("import");
       }
@@ -4719,18 +4999,71 @@
           .then((data) => {
             if (data.lrc) {
               $("import_lrc").value = data.lrc;
+              onLrcContentChangedFromPasteOrLoad();
               showSaveStatus(t("lyrics_loaded"), "color:var(--accent-hex)");
             } else {
               $("import_lrc").value = "";
+              resetLrcStampSession(false);
               $("import_lrc").focus();
               showSaveStatus(t("no_lyrics_yet"), "color:var(--text-muted)");
             }
           })
           .catch(() => {});
       }
-      // STAMP
-      let _stampLine = 0,
-        _stampPaused = false;
+      // STAMP — LRC sync while playing (Undo = stack of stamped line indices)
+      const LRC_TAG_RE = /^\s*\[[\d:.]+\]\s*/;
+      let _stampLine = 0;
+      /** @type {number[]} Line indices stamped in order (Alt+Z / Undo pops) */
+      let _stampHistory = [];
+      function isImportPageActive() {
+        const p = $("page-import");
+        return !!(p && p.classList.contains("active"));
+      }
+      function stripLrcLineTag(line) {
+        return (line || "").replace(LRC_TAG_RE, "");
+      }
+      /** First line without an LRC tag, or lines.length if all tagged */
+      function recalcStampLineFromLrc() {
+        const ta = $("import_lrc");
+        if (!ta) return;
+        const lines = ta.value.split("\n");
+        if (!lines[0] && lines.length === 1) {
+          _stampLine = 0;
+          return;
+        }
+        let i = 0;
+        while (i < lines.length && LRC_TAG_RE.test(lines[i])) i++;
+        _stampLine = Math.min(i, lines.length);
+      }
+      /** After paste / prefill loaded LRC — clear undo stack and resync pointer */
+      function onLrcContentChangedFromPasteOrLoad() {
+        _stampHistory = [];
+        recalcStampLineFromLrc();
+        updateStampToolbar();
+        selectStampLine();
+      }
+      /** Reset stamp pointer (and optionally strip all tags) */
+      function resetLrcStampSession(stripTags) {
+        _stampHistory = [];
+        const ta = $("import_lrc");
+        if (stripTags && ta?.value)
+          ta.value = ta.value.split("\n").map((l) => stripLrcLineTag(l)).join("\n");
+        recalcStampLineFromLrc();
+        updateStampToolbar();
+      }
+      function syncStampLineFromCursor() {
+        const ta = $("import_lrc");
+        if (!ta) return;
+        const lines = ta.value.split("\n");
+        if (!lines[0] && lines.length === 1) {
+          _stampLine = 0;
+        } else {
+          const pos = ta.selectionStart ?? 0;
+          const lineIdx = ta.value.substring(0, pos).split("\n").length - 1;
+          _stampLine = Math.max(0, Math.min(lineIdx, lines.length - 1));
+        }
+        updateStampToolbar();
+      }
       function getCurrentPlaybackMs() {
         if (!currentTrack || !progressBaseTime) return 0;
         const ms = progressBaseMs + (performance.now() - progressBaseTime);
@@ -4743,56 +5076,131 @@
         return `[${String(m).padStart(2, "0")}:${s.toFixed(2).padStart(5, "0")}]`;
       }
       function stampLine() {
-        const ta = $("import_lrc"),
-          lines = ta.value.split("\n");
+        const ta = $("import_lrc");
+        if (!ta) return;
+        const lines = ta.value.split("\n");
         if (!lines[0] && lines.length === 1) return;
         if (_stampLine >= lines.length) return;
         const ts = fmtLrcTs(getCurrentPlaybackMs());
-        lines[_stampLine] = ts + " " + lines[_stampLine].replace(/^\[\d+:\d+\.\d+\]\s?/, "");
+        const idx = _stampLine;
+        lines[idx] = ts + " " + stripLrcLineTag(lines[idx]);
         ta.value = lines.join("\n");
+        _stampHistory.push(idx);
         _stampLine++;
-        updateStampInfo();
+        updateStampToolbar();
+        selectStampLine();
+      }
+      function undoStamp() {
+        const ta = $("import_lrc");
+        if (!ta || _stampHistory.length === 0) return;
+        const idx = _stampHistory.pop();
+        const lines = ta.value.split("\n");
+        if (idx >= 0 && idx < lines.length) lines[idx] = stripLrcLineTag(lines[idx]);
+        ta.value = lines.join("\n");
+        _stampLine = idx;
+        updateStampToolbar();
         selectStampLine();
       }
       function selectStampLine() {
-        const ta = $("import_lrc"),
-          lines = ta.value.split("\n");
+        const ta = $("import_lrc");
+        if (!ta) return;
+        const lines = ta.value.split("\n");
+        if (!lines[0] && lines.length <= 1) return;
+        const idx = Math.min(_stampLine, Math.max(0, lines.length - 1));
         let pos = 0;
-        for (let i = 0; i < _stampLine && i < lines.length; i++) pos += lines[i].length + 1;
-        const endPos = pos + (lines[_stampLine] || "").length;
+        for (let i = 0; i < idx && i < lines.length; i++) pos += lines[i].length + 1;
+        const lineText = lines[idx] ?? "";
+        const endPos = pos + lineText.length;
         ta.setSelectionRange(pos, endPos);
         ta.focus();
         const lineHeight = parseInt(getComputedStyle(ta).lineHeight) || 20;
-        ta.scrollTop = Math.max(0, _stampLine * lineHeight - ta.clientHeight / 2);
+        ta.scrollTop = Math.max(0, idx * lineHeight - ta.clientHeight / 2);
       }
-      function updateStampInfo() {
-        $("stampInfo").textContent = `Line ${_stampLine + 1}`;
-        const ms = getCurrentPlaybackMs(),
-          sec = ms / 1000,
-          m = Math.floor(sec / 60),
-          s = sec % 60;
-        $("stampTime").textContent = `${String(m).padStart(2, "0")}:${s.toFixed(2).padStart(5, "0")}`;
+      function updateStampToolbar() {
+        const ta = $("import_lrc");
+        const info = $("stampInfo"),
+          undoBtn = $("btnStampUndo"),
+          bar = $("stampProgressFill"),
+          prev = $("stampNextPreview");
+        if (!ta || !info) return;
+        const lines = ta.value.split("\n");
+        const emptyDoc = !lines[0] && lines.length === 1;
+        const total = emptyDoc ? 0 : lines.length;
+
+        const stampEl = $("stampTime");
+        if (stampEl) {
+          const ms = getCurrentPlaybackMs(),
+            sec = ms / 1000,
+            m = Math.floor(sec / 60),
+            s = sec % 60;
+          stampEl.textContent = `${String(m).padStart(2, "0")}:${s.toFixed(2).padStart(5, "0")}`;
+        }
+
+        if (total === 0) {
+          info.textContent = t("stamp_empty");
+          info.style.color = "";
+          if (bar) bar.style.width = "0%";
+          if (prev) {
+            prev.textContent = "";
+            prev.title = "";
+          }
+          if (undoBtn) {
+            undoBtn.setAttribute("aria-disabled", "true");
+          }
+          return;
+        }
+
+        if (_stampLine >= total) {
+          info.textContent = `✓ ${t("stamp_done")} (${total}/${total})`;
+          info.style.color = "var(--accent-hex)";
+          if (bar) bar.style.width = "100%";
+          if (prev) {
+            prev.textContent = "";
+            prev.title = "";
+          }
+        } else {
+          const lbl = t("stamp_line_label");
+          info.textContent = `${lbl} ${_stampLine + 1} / ${total}`;
+          info.style.color = "";
+          const pct = Math.min(100, Math.round((_stampLine / total) * 100));
+          if (bar) bar.style.width = pct + "%";
+          const raw = lines[_stampLine] || "";
+          const plain = stripLrcLineTag(raw).trim();
+          if (prev) {
+            const clip = plain.slice(0, 56);
+            prev.textContent = plain ? `→ ${clip}${plain.length > 56 ? "…" : ""}` : "→";
+            const tipBase = t("stamp_next_preview_tip");
+            prev.title = plain ? `${tipBase} — ${plain}` : tipBase;
+          }
+        }
+        if (undoBtn) {
+          const idle = _stampHistory.length === 0;
+          undoBtn.setAttribute("aria-disabled", idle ? "true" : "false");
+        }
       }
       function resetStamp() {
-        _stampLine = 0;
-        const ta = $("import_lrc");
-        ta.value = ta.value
-          .split("\n")
-          .map((l) => l.replace(/^\[[\d:.]+\]\s*/, ""))
-          .join("\n");
-        updateStampInfo();
+        resetLrcStampSession(true);
+        selectStampLine();
+        $("import_lrc")?.focus();
       }
       setInterval(() => {
-        if (progressBaseTime) updateStampInfo();
+        if (!isImportPageActive()) return;
+        updateStampToolbar();
       }, 100);
       document.addEventListener("keydown", (e) => {
+        if (!isImportPageActive()) return;
+        if (e.altKey && (e.key === "z" || e.key === "Z")) {
+          e.preventDefault();
+          undoStamp();
+          return;
+        }
         if ((e.altKey && e.key === "s") || (e.ctrlKey && e.key === "Enter")) {
           e.preventDefault();
           stampLine();
+          return;
         }
         if (e.key === " " && document.activeElement === $("import_lrc") && !e.shiftKey && !e.ctrlKey) {
           const ta = $("import_lrc"),
-            lines = ta.value.split("\n"),
             curLine = ta.value.substring(0, ta.selectionStart).split("\n").length - 1;
           if (curLine === _stampLine) {
             e.preventDefault();
@@ -4800,6 +5208,18 @@
           }
         }
       });
+      let _lrcStampUiInit = false;
+      function initLrcStampUiOnce() {
+        if (_lrcStampUiInit) return;
+        const ta = $("import_lrc");
+        if (!ta) return;
+        _lrcStampUiInit = true;
+        ta.addEventListener("click", syncStampLineFromCursor);
+        ta.addEventListener("keyup", (e) => {
+          if (["ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"].includes(e.key)) syncStampLineFromCursor();
+        });
+        ta.addEventListener("paste", () => setTimeout(onLrcContentChangedFromPasteOrLoad, 0));
+      }
       // THEME
       const _themeMq = window.matchMedia("(prefers-color-scheme: light)");
       function applyThemeMode(mode) {
@@ -5056,9 +5476,11 @@
       $("btnSave").addEventListener("click", saveConfig);
       $("btnImportLyrics").addEventListener("click", importCustomLyrics);
       // INIT
+      initLrcStampUiOnce();
       initTheme();
       applyLang();
       connectSSE();
+      updateStampToolbar();
       // User scroll detection for expanded lyrics
       $("contentArea").addEventListener(
         "scroll",
