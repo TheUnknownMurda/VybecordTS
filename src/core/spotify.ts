@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import http from 'node:http';
 import { createLogger } from './logger.js';
+import { atomicWriteFileSync } from './utils.js';
 import type { SpotifyPlayback, TokenCache } from './types.js';
 
 const log = createLogger('Spotify');
@@ -55,7 +56,9 @@ export class SpotifyClient {
 
   private saveTokens(tokens: TokenCache): void {
     this.tokens = tokens;
-    fs.writeFileSync(this.cachePath, JSON.stringify(tokens, null, 2), 'utf-8');
+    // Atomic write — a crash mid-write would otherwise leave .cache.json
+    // truncated, forcing the user to re-authenticate from scratch.
+    atomicWriteFileSync(this.cachePath, JSON.stringify(tokens, null, 2));
   }
 
   get isAuthenticated(): boolean {

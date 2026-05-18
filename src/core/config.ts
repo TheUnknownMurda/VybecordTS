@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createLogger } from './logger.js';
+import { atomicWriteFileSync } from './utils.js';
 import type { VybecordConfig } from './types.js';
 
 const log = createLogger('Config');
@@ -92,7 +93,9 @@ export class ConfigManager {
   private save(config: VybecordConfig): void {
     this.skipNextReload = true;
     fs.mkdirSync(path.dirname(this.configPath), { recursive: true });
-    fs.writeFileSync(this.configPath, JSON.stringify(config, null, 2), 'utf-8');
+    // Atomic write — prevents the fs.watch handler (or any external editor)
+    // from reading a half-written JSON file.
+    atomicWriteFileSync(this.configPath, JSON.stringify(config, null, 2));
   }
 
   get<K extends keyof VybecordConfig>(key: K): VybecordConfig[K] {
@@ -144,11 +147,46 @@ export class ConfigManager {
   }
 
   private reload(): void {
-    this.config = this.loadOrCreate();
-    log.info('Config reloaded from disk');
-    if (this.onChange) {
-      this.onChange(this.config);
+    try {
+      // loadOrCreate handles its own errors by returning DEFAULTS — but that
+      // would silently wipe a user's customizations on a transient read error
+      // (editor mid-save, antivirus lock, etc.). Try a single retry before
+      // falling back to the *previous* in-memory config.
+      const fresh = this.loadOrCreateStrict();
+      this.config = fresh;
+      log.info('Config reloaded from disk');
+      if (this.onChange) {
+        this.onChange(this.config);
+      }
+    } catch (e) {
+      log.warn(`Config reload failed, keeping previous in-memory config: ${e}`);
     }
+  }
+
+  /**
+   * Strict variant of loadOrCreate: throws on parse error instead of returning
+   * DEFAULTS. Used by reload() so a corrupt half-written file doesn't wipe
+   * user config — caller falls back to the previous in-memory state.
+   */
+  private loadOrCreateStrict(): VybecordConfig {
+    if (!fs.existsSync(this.configPath)) {
+      const cfg = { ...DEFAULTS };
+      this.save(cfg);
+      log.info('config.json created with defaults');
+      return cfg;
+    }
+    const raw = fs.readFileSync(this.configPath, 'utf-8');
+    const parsed = JSON.parse(raw) as Partial<VybecordConfig>;
+    let dirty = false;
+    const merged = { ...DEFAULTS };
+    for (const [key, val] of Object.entries(parsed)) {
+      (merged as Record<string, unknown>)[key] = val;
+    }
+    for (const key of Object.keys(DEFAULTS)) {
+      if (!(key in parsed)) dirty = true;
+    }
+    if (dirty) this.save(merged);
+    return merged;
   }
 
   close(): void {

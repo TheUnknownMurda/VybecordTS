@@ -43,7 +43,7 @@ import { extractLocalArt } from './core/local-art.js';
 import { initBlacklist, flagLyrics, isLyricsFlagged, clearFlags, listFlaggedTracks, clearFlagsByKey } from './core/lyrics-blacklist.js';
 import { initHistory, historyTrackStart, historyTrackEnd, getRecentHistory, getHistoryCount, getWrappedStats } from './core/listening-history.js';
 import { translateBatch } from './core/translate.js';
-import { evictOldest, evictUntil } from './core/utils.js';
+import { evictOldest, evictUntil, atomicWriteFileSync } from './core/utils.js';
 import type { TrackData, SpotifyPlayback, LyricLine } from './core/types.js';
 
 const log = createLogger('Backend');
@@ -158,6 +158,7 @@ export class VybecordBackend extends EventEmitter {
         return this.discord.lastWriteLatencyMs;
       },
       onRpcUpdate: (activity) => {
+        if (this.shuttingDown) return;
         if (this.config.get('rpc_enabled')) {
           this.discord.setActivity(activity);
         }
@@ -307,6 +308,7 @@ export class VybecordBackend extends EventEmitter {
   // ── Spicetify push handler (event-driven, called by web server) ──
 
   handleSpicetifyPush(data: SpicetifyPayload): void {
+    if (this.shuttingDown) return;
     log.debug(`[SPICETIFY-PUSH] track="${data.track_name}" album="${data.album_name}" context="${data.context_name}" ctx_type="${data.context_type}" shuffle=${data.is_shuffle} repeat=${data.repeat_mode}`);
     this.spicetify.update(data);
 
@@ -355,6 +357,7 @@ export class VybecordBackend extends EventEmitter {
   // ── YouTube push handler (event-driven, called by web server) ──
 
   handleYouTubePush(data: YouTubePayload): void {
+    if (this.shuttingDown) return;
     this.youtubeSource.update(data);
 
     if (!this.config.get('detect_youtube')) return;
@@ -396,6 +399,7 @@ export class VybecordBackend extends EventEmitter {
   // ── SoundCloud push handler (event-driven, called by web server) ──
 
   handleSoundCloudPush(data: SoundCloudPayload): void {
+    if (this.shuttingDown) return;
     this.soundcloudSource.update(data);
 
     if (!this.config.get('detect_soundcloud')) return;
@@ -434,6 +438,7 @@ export class VybecordBackend extends EventEmitter {
   // ── Bandcamp push handler (event-driven, called by web server) ──
 
   handleBandcampPush(data: BandcampPayload): void {
+    if (this.shuttingDown) return;
     this.bandcampSource.update(data);
 
     if (this.config.get('detect_other_apps') === false) return;
@@ -472,6 +477,7 @@ export class VybecordBackend extends EventEmitter {
   // ── Spotify Web lyrics handler (event-driven, called by web server) ──
 
   handleSpotifyLyrics(data: { track_id: string; lines: { time: number; text: string }[] }): void {
+    if (this.shuttingDown) return;
     if (!data.track_id || !Array.isArray(data.lines)) return;
 
     // Convert to LyricLine format
@@ -506,6 +512,7 @@ export class VybecordBackend extends EventEmitter {
   // ── Polling (supports Premium API, Spicetify, & Free SMTC) ──
 
   private async poll(): Promise<void> {
+    if (this.shuttingDown) return;
     try {
       // Priority 1: Spicetify extension (push-based, highest quality for Spotify)
       // If active, skip API/SMTC for Spotify — but still run SMTC for non-Spotify media
@@ -1381,7 +1388,7 @@ export class VybecordBackend extends EventEmitter {
   private saveStatsHistory(): void {
     try {
       fs.mkdirSync(path.dirname(this.statsHistoryPath), { recursive: true });
-      fs.writeFileSync(this.statsHistoryPath, JSON.stringify(this.statsHistory, null, 2), 'utf-8');
+      atomicWriteFileSync(this.statsHistoryPath, JSON.stringify(this.statsHistory, null, 2));
     } catch (e) {
       log.warn(`Failed to save stats history: ${e}`);
     }

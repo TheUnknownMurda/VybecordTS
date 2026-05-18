@@ -7,6 +7,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createLogger } from './logger.js';
+import { atomicWriteFileSync } from './utils.js';
 
 const log = createLogger('History');
 const MAX_ENTRIES = 10_000;
@@ -122,7 +123,7 @@ function saveToDisk(): void {
   if (!historyPath) return;
   try {
     fs.mkdirSync(path.dirname(historyPath), { recursive: true });
-    fs.writeFileSync(historyPath, JSON.stringify(entries), 'utf-8');
+    atomicWriteFileSync(historyPath, JSON.stringify(entries));
   } catch (e) {
     log.warn(`Failed to save history: ${e}`);
   }

@@ -12,6 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { createLogger } from './logger.js';
+import { atomicWriteFileSync } from './utils.js';
 import type { LyricLine } from './types.js';
 
 const log = createLogger('Blacklist');
@@ -113,7 +114,7 @@ function persist(): void {
     for (const [key, hashes] of blacklist) {
       obj[key] = [...hashes];
     }
-    fs.writeFileSync(filePath, JSON.stringify(obj, null, 2), 'utf-8');
+    atomicWriteFileSync(filePath, JSON.stringify(obj, null, 2));
   } catch (e) {
     log.error(`Failed to save flagged-lyrics.json: ${e}`);
   }

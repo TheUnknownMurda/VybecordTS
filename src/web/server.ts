@@ -13,6 +13,9 @@ import { romanize, needsRomanization } from '../core/romanize.js';
 import { evictOldest } from '../core/utils.js';
 import { isScrobbleEnabled, canAuth, getAuthUrl, completeAuth, disconnectScrobble } from '../core/lastfm.js';
 import { translateText, translateBatch, TRANSLATE_LANGS, clearTranslationCache, getTranslationCacheSize, flushTranslationCache } from '../core/translate.js';
+import {
+  validateSpicetify, validateYouTube, validateSoundCloud, validateBandcamp, validateSpotifyLyrics,
+} from './validate.js';
 import type { VybecordBackend } from '../backend.js';
 
 const log = createLogger('WebServer');
@@ -62,6 +65,63 @@ const RATE_LIMIT = {
 const VALID_WEBHOOK_REGEX = /^https:\/\/discord(?:app)?\.com\/api\/webhooks\/\d+\/[A-Za-z0-9_-]+$/;
 const DISCORD_PING_REGEX = /@(?:everyone|here)|<@\d+>|<@&\d+>/g;
 
+// ── CORS policy ──
+// Routes that legitimate cross-origin clients (Spicetify webview, browser
+// userscripts) must POST to. CORS `*` is allowed here because:
+//   1. They are write-only (no secret returned)
+//   2. Payloads are validated via src/web/validate.ts
+//   3. They are rate-limited at the source class level (stale guards)
+// Everything else (config, status, history, lyrics CRUD, lastfm, shutdown,
+// dashboard) must be same-origin only — exposes secrets or admin actions.
+const CORS_PUSH_PATHS = new Set([
+  '/api/spicetify',
+  '/api/youtube',
+  '/api/soundcloud',
+  '/api/bandcamp',
+  '/api/spotify-lyrics',
+]);
+
+// Configuration / admin POST endpoints — protected by per-IP rate limit
+// (defense against a hostile localhost process or a CSRF-like attack
+// even though CORS already blocks remote browsers).
+const ADMIN_POST_PATHS = new Set([
+  '/api/config',
+  '/api/shutdown',
+  '/api/cache/clear',
+  '/api/dashboard/version',
+  '/api/lyrics/import',
+  '/api/lyrics/offset',
+  '/api/lyrics/flag',
+]);
+
+const ADMIN_RATE = {
+  windowMs: 10_000,    // 10s window
+  maxPerWindow: 30,    // 30 admin writes / 10s — plenty for the dashboard
+};
+
+// Sensitive config keys: stripped from any HTTP/SSE response.
+// These can still be SET via POST /api/config but are never echoed back.
+const SECRET_CONFIG_KEYS = new Set([
+  'bug_report_webhook',
+  'spotify_client_secret',
+  'lastfm_api_secret',
+]);
+
+/** Return a copy of the config with secret values masked. */
+function publicConfig(cfg: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(cfg)) {
+    if (SECRET_CONFIG_KEYS.has(k)) {
+      // Indicate presence (truthy non-empty string) without leaking the value.
+      // Frontend can render "(configured)" / "(not set)" based on this hint.
+      out[k] = typeof v === 'string' && v.length > 0 ? '__SET__' : '';
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
 function sanitizeDiscordContent(text: string): string {
   // Remove Discord ping exploits
   return text.replace(DISCORD_PING_REGEX, '[ping removed]');
@@ -90,6 +150,10 @@ export class WebServer {
   private lastGlobalReportTime = 0;
   private recentContentHashes = new Map<string, number>(); // content hash -> timestamp
   private lastRateLimitCleanup = Date.now();
+
+  // Admin-write rate limit (per-IP, sliding window) — defends config/shutdown/import endpoints
+  // against runaway clients or hostile local processes.
+  private adminRateMap = new Map<string, { count: number; windowStart: number }>();
 
   constructor(backend: VybecordBackend, port = 8888) {
     this.backend = backend;
@@ -135,7 +199,7 @@ export class WebServer {
       this.broadcast('lyricsUpdate', data);
     });
     backend.on('configUpdate', (cfg) => {
-      this.broadcast('configUpdate', cfg);
+      this.broadcast('configUpdate', publicConfig(cfg));
     });
     let lastProgressBroadcast = 0;
     backend.on('progressUpdate', (data) => {
@@ -183,25 +247,70 @@ export class WebServer {
 
   // ── Request router ──
 
+  /**
+   * Apply CORS headers only to whitelisted push paths.
+   * Everything else relies on the browser's same-origin policy
+   * (no `Access-Control-Allow-Origin` => cross-origin reads are blocked).
+   * Returns true if the request was a CORS preflight (response already sent).
+   */
+  private applyCors(req: http.IncomingMessage, res: http.ServerResponse, pathname: string): boolean {
+    const method = req.method ?? 'GET';
+    if (CORS_PUSH_PATHS.has(pathname)) {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      res.setHeader('Access-Control-Max-Age', '86400');
+    }
+    if (method === 'OPTIONS') {
+      res.writeHead(204);
+      res.end();
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Per-IP sliding window rate limit for admin/config writes.
+   * Returns true if the request is allowed.
+   */
+  private checkAdminRate(ip: string): boolean {
+    const now = Date.now();
+    let entry = this.adminRateMap.get(ip);
+    if (!entry || now - entry.windowStart > ADMIN_RATE.windowMs) {
+      entry = { count: 0, windowStart: now };
+      this.adminRateMap.set(ip, entry);
+    }
+    entry.count++;
+    // Bounded map: cap at 256 distinct IPs to prevent memory growth
+    if (this.adminRateMap.size > 256) {
+      const oldest = this.adminRateMap.keys().next().value;
+      if (oldest !== undefined) this.adminRateMap.delete(oldest);
+    }
+    return entry.count <= ADMIN_RATE.maxPerWindow;
+  }
+
   private async handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
     const url = new URL(req.url ?? '/', `http://127.0.0.1:${this.port}`);
     const method = req.method ?? 'GET';
 
-    // CORS headers
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    // CORS — applied selectively (push routes only)
+    if (this.applyCors(req, res, url.pathname)) return;
 
-    if (method === 'OPTIONS') {
-      res.writeHead(204);
-      res.end();
-      return;
+    // Admin rate-limit (POST/PUT/DELETE on protected paths)
+    if (method !== 'GET' && method !== 'OPTIONS' && ADMIN_POST_PATHS.has(url.pathname)) {
+      const ip = getClientIp(req);
+      if (!this.checkAdminRate(ip)) {
+        log.warn(`Admin rate-limit hit [${ip}] ${method} ${url.pathname}`);
+        res.writeHead(429, { 'Content-Type': 'application/json', 'Retry-After': '10' });
+        res.end(JSON.stringify({ error: 'Too many requests' }));
+        return;
+      }
     }
 
     try {
       // API routes
       if (url.pathname === '/api/config' && method === 'GET') {
-        return this.jsonResponse(res, this.backend.getConfig());
+        return this.jsonResponse(res, publicConfig(this.backend.getConfig()));
       }
       if (url.pathname === '/api/config' && method === 'POST') {
         return await this.handleConfigUpdate(req, res);
@@ -229,16 +338,20 @@ export class WebServer {
         return await this.serveThumbnail(res);
       }
       if (url.pathname === '/api/spicetify' && method === 'POST') {
-        return await this.handlePush(req, res, d => this.backend.handleSpicetifyPush(d), 'Spicetify');
+        return await this.handlePush(req, res, validateSpicetify,
+          d => this.backend.handleSpicetifyPush(d), 'Spicetify');
       }
       if (url.pathname === '/api/youtube' && method === 'POST') {
-        return await this.handlePush(req, res, d => this.backend.handleYouTubePush(d), 'YouTube');
+        return await this.handlePush(req, res, validateYouTube,
+          d => this.backend.handleYouTubePush(d), 'YouTube');
       }
       if (url.pathname === '/api/soundcloud' && method === 'POST') {
-        return await this.handlePush(req, res, d => this.backend.handleSoundCloudPush(d), 'SoundCloud');
+        return await this.handlePush(req, res, validateSoundCloud,
+          d => this.backend.handleSoundCloudPush(d), 'SoundCloud');
       }
       if (url.pathname === '/api/bandcamp' && method === 'POST') {
-        return await this.handlePush(req, res, d => this.backend.handleBandcampPush(d), 'Bandcamp');
+        return await this.handlePush(req, res, validateBandcamp,
+          d => this.backend.handleBandcampPush(d), 'Bandcamp');
       }
       if (url.pathname === '/api/spotify-lyrics' && method === 'POST') {
         return await this.handleSpotifyLyricsPush(req, res);
@@ -453,24 +566,38 @@ export class WebServer {
   private async handleConfigUpdate(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
     try {
       const body = await this.readBody(req);
-      const updates = JSON.parse(body) as Record<string, unknown>;
+      const raw = JSON.parse(body) as Record<string, unknown>;
+      // Strip `__SET__` placeholder echoes — never let the masked value
+      // sent to the client overwrite the real secret on disk.
+      const updates: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(raw)) {
+        if (SECRET_CONFIG_KEYS.has(k) && v === '__SET__') continue;
+        updates[k] = v;
+      }
       this.backend.updateConfig(updates);
-      this.jsonResponse(res, { ok: true, config: this.backend.getConfig() });
+      this.jsonResponse(res, { ok: true, config: publicConfig(this.backend.getConfig()) });
     } catch (e) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: `Invalid config: ${e}` }));
     }
   }
 
-  private async handlePush(
+  private async handlePush<T>(
     req: http.IncomingMessage,
     res: http.ServerResponse,
-    handler: (data: any) => void,  // eslint-disable-line @typescript-eslint/no-explicit-any -- JSON.parse returns any; backend handlers validate
+    validate: (raw: unknown) => T | null,
+    handler: (data: T) => void,
     label: string,
   ): Promise<void> {
     try {
       const body = await this.readBody(req, 8192);
-      const data = JSON.parse(body);
+      const raw = JSON.parse(body);
+      const data = validate(raw);
+      if (!data) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: `Invalid ${label} payload (validation failed)` }));
+        return;
+      }
       handler(data);
       res.writeHead(204);
       res.end();
@@ -483,7 +610,13 @@ export class WebServer {
   private async handleSpotifyLyricsPush(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
     try {
       const body = await this.readBody(req, 256_000); // Lyrics can be large
-      const data = JSON.parse(body);
+      const raw = JSON.parse(body);
+      const data = validateSpotifyLyrics(raw);
+      if (!data) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Invalid Spotify lyrics payload (validation failed)' }));
+        return;
+      }
       this.backend.handleSpotifyLyrics(data);
       res.writeHead(204);
       res.end();
@@ -803,7 +936,7 @@ export class WebServer {
     res.write(`data: ${JSON.stringify({
       type: 'init',
       track: this.backend.getCurrentTrack(),
-      config: this.backend.getConfig(),
+      config: publicConfig(this.backend.getConfig()),
       sourceMode: this.backend.getSourceMode(),
       discordConnected: this.backend.isDiscordConnected(),
       spotifyConnected: this.backend.isSpotifyConnected(),

@@ -20,6 +20,9 @@ const enum Opcode {
   PONG = 4,
 }
 
+/** Maximum size of the IPC read buffer (defense against runaway growth). */
+const MAX_READ_BUFFER = 1_048_576; // 1 MB — Discord IPC frames are < 64 KB in practice
+
 interface IpcMessage {
   opcode: number;
   data: Record<string, unknown>;
@@ -135,6 +138,16 @@ export class DiscordIPC {
     this.socket.on('data', (chunk: Buffer) => {
       // Grow buffer if needed, then copy chunk in-place (avoids Buffer.concat alloc)
       const needed = this.readLen + chunk.length;
+      // Hard cap: never let the buffer grow past MAX_READ_BUFFER. A frame this
+      // large is almost certainly a misbehaving Discord (corrupt stream,
+      // length-prefix attack) — drop the buffer and force reconnect.
+      if (needed > MAX_READ_BUFFER) {
+        log.error(`IPC read buffer would exceed ${MAX_READ_BUFFER} bytes (need ${needed}) — dropping buffer & resetting`);
+        this.readLen = 0;
+        this.readOffset = 0;
+        this.socket?.destroy();
+        return;
+      }
       if (needed > this.readBuffer.length) {
         // Compact first: shift valid data to front, then resize if still insufficient
         if (this.readOffset > 0) {
@@ -143,7 +156,11 @@ export class DiscordIPC {
           this.readOffset = 0;
         }
         if (this.readLen + chunk.length > this.readBuffer.length) {
-          const newBuf = Buffer.allocUnsafe(Math.max(this.readBuffer.length * 2, this.readLen + chunk.length));
+          const targetSize = Math.min(
+            Math.max(this.readBuffer.length * 2, this.readLen + chunk.length),
+            MAX_READ_BUFFER,
+          );
+          const newBuf = Buffer.allocUnsafe(targetSize);
           this.readBuffer.copy(newBuf, 0, 0, this.readLen);
           this.readBuffer = newBuf;
         }
@@ -197,8 +214,18 @@ export class DiscordIPC {
     while (this.readLen - this.readOffset >= 8) {
       const opcode = buf.readUInt32LE(this.readOffset);
       const length = buf.readUInt32LE(this.readOffset + 4);
-      const frameEnd = this.readOffset + 8 + length;
 
+      // Sanity check: a single frame > MAX_READ_BUFFER is corrupt or hostile.
+      // Drop the socket; reconnect cycle will restore a clean state.
+      if (length > MAX_READ_BUFFER) {
+        log.error(`IPC frame length ${length} exceeds maximum (${MAX_READ_BUFFER}) — closing socket`);
+        this.readLen = 0;
+        this.readOffset = 0;
+        this.socket?.destroy();
+        return;
+      }
+
+      const frameEnd = this.readOffset + 8 + length;
       if (this.readLen < frameEnd) break; // Incomplete frame
 
       const payload = buf.toString('utf-8', this.readOffset + 8, frameEnd);
@@ -309,8 +336,18 @@ export class DiscordIPC {
     await new Promise<void>((resolve, reject) => {
       const onData = (chunk: Buffer) => {
         // Append chunk using the shared offset-based buffer
+        if (this.readLen + chunk.length > MAX_READ_BUFFER) {
+          this.socket?.removeListener('data', onData);
+          clearTimeout(timeout);
+          reject(new Error(`Handshake buffer overflow (>${MAX_READ_BUFFER} bytes)`));
+          return;
+        }
         if (this.readLen + chunk.length > this.readBuffer.length) {
-          const newBuf = Buffer.allocUnsafe(Math.max(this.readBuffer.length * 2, this.readLen + chunk.length));
+          const targetSize = Math.min(
+            Math.max(this.readBuffer.length * 2, this.readLen + chunk.length),
+            MAX_READ_BUFFER,
+          );
+          const newBuf = Buffer.allocUnsafe(targetSize);
           this.readBuffer.copy(newBuf, 0, this.readOffset, this.readLen);
           this.readLen -= this.readOffset;
           this.readOffset = 0;
@@ -322,6 +359,13 @@ export class DiscordIPC {
         while (this.readLen - this.readOffset >= 8) {
           const op = this.readBuffer.readUInt32LE(this.readOffset);
           const len = this.readBuffer.readUInt32LE(this.readOffset + 4);
+          // Reject oversized frames (corrupt stream / hostile input)
+          if (len > MAX_READ_BUFFER) {
+            this.socket?.removeListener('data', onData);
+            clearTimeout(timeout);
+            reject(new Error(`Handshake frame length ${len} exceeds maximum`));
+            return;
+          }
           const frameEnd = this.readOffset + 8 + len;
           if (this.readLen < frameEnd) return;
           const payload = JSON.parse(this.readBuffer.toString('utf-8', this.readOffset + 8, frameEnd));

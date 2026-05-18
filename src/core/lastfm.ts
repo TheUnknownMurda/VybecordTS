@@ -16,7 +16,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createLogger } from './logger.js';
-import { evictOldest } from './utils.js';
+import { atomicWriteFileSync, evictOldest } from './utils.js';
 
 const log = createLogger('LastFM');
 
@@ -262,11 +262,11 @@ export async function completeAuth(token: string): Promise<boolean> {
     sessionKey = data.session.key;
     scrobbleEnabled = true;
 
-    // Persist session key
+    // Persist session key (atomic — avoid corrupting on crash mid-write)
     if (configDir) {
       const skPath = path.join(configDir, 'lastfm-session.txt');
       fs.mkdirSync(path.dirname(skPath), { recursive: true });
-      fs.writeFileSync(skPath, sessionKey, 'utf-8');
+      atomicWriteFileSync(skPath, sessionKey);
     }
 
     log.info(`[SCROBBLE] Authenticated as "${data.session.name}" ✓`);

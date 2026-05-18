@@ -1,7 +1,7 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { createLogger } from './logger.js';
-import { evictOldest } from './utils.js';
+import { atomicWriteFileSync, evictOldest } from './utils.js';
 
 const log = createLogger('Translate');
 
@@ -36,7 +36,7 @@ function flushDiskCache(): void {
     const dir = dirname(cacheFile);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     const entries = [...cache.entries()].slice(-CACHE_MAX);
-    writeFileSync(cacheFile, JSON.stringify(entries));
+    atomicWriteFileSync(cacheFile, JSON.stringify(entries));
     cacheDirty = false;
   } catch (e) { log.warn(`Failed to flush translation cache: ${e}`); }
 }
