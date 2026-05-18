@@ -2237,6 +2237,31 @@ function deduplicateArtist(trackName, artistName) {
 }
 
 // ═══ CONFIG ═══
+
+// Backend masks sensitive credentials with this sentinel in GET /api/config.
+// The dashboard displays a "(configured)" placeholder instead of the literal
+// sentinel, and omits the field on save when the user didn't retype it.
+const SECRET_PLACEHOLDER = '__SET__';
+
+function loadSecretInput(input, value) {
+  if (value === SECRET_PLACEHOLDER) {
+    input.value = '';
+    input.placeholder = '••••••••••• (configured — leave blank to keep)';
+    input.dataset.hasValue = '1';
+  } else {
+    input.value = value || '';
+    input.placeholder = '';
+    delete input.dataset.hasValue;
+  }
+}
+
+/** Returns the value to send for a credential field, or `undefined` to skip
+ *  (preserves the existing backend value when the user didn't retype it). */
+function readSecretInput(input) {
+  if (!input.value && input.dataset.hasValue) return undefined;
+  return input.value;
+}
+
 function loadConfig(c) {
   $('cfgRpcEnabled').checked = c.rpc_enabled !== false;
   $('cfgOnlyWhenPlaying').checked = c.rpc_only_when_playing === true;
@@ -2278,7 +2303,7 @@ function loadConfig(c) {
   $('cfgBtn2Label').value = c.rpc_button2_label || '';
   updateBtn2Preview();
   $('cfgSpotifyId').value = c.spotify_client_id || '';
-  $('cfgSpotifySecret').value = c.spotify_client_secret || '';
+  loadSecretInput($('cfgSpotifySecret'), c.spotify_client_secret);
   $('cfgDiscordId').value = c.discord_app_id || '';
   $('cfgLastfmKey').value = c.lastfm_api_key || '';
   const offsetMs = c.lyrics_offset_ms || 0;
@@ -2384,6 +2409,9 @@ async function saveConfig() {
     discord_app_id: $('cfgDiscordId').value,
     lastfm_api_key: $('cfgLastfmKey').value,
   };
+  // Preserve existing secret if user didn't retype it
+  const _ss = readSecretInput($('cfgSpotifySecret'));
+  if (_ss === undefined) delete u.spotify_client_secret;
   try {
     const resp = await fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(u) });
     const r = await resp.json();

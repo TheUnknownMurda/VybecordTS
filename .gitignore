@@ -39,3 +39,12 @@ Thumbs.db
 # ── Test scripts / backups ──
 test-wizard.ps1
 config.json.*-backup
+-e 
+# Environment and credential files
+.env
+.env.*
+*.env
+credentials.json
+*.pem
+*.key
+.credentials
