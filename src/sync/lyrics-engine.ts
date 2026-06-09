@@ -43,36 +43,36 @@ const RANDOM_ICON_POOL: [string, string][] = [
   ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/I9CeTrPc17wqbDilQPN9K.gif', '💜 Purple Rad'],
   ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/HrMk6Gy5NrHDuNewWnUOR.gif', '🔴 Rouge'],
   ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/BUo3vfJ4QVWlghZJYuyIB.gif', '💙 Blue Rad'],
-  ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/4CoaWZGd53cD62wNI1ZOT.png', '🚫 LRC OFF'],
 ];
 
 // ── Platform icons (external URLs — rendered by Discord image proxy) ──
+// Using reliable CDN URLs (i.imgur.com) - Discord compatible
 const PLATFORM_ICONS: Record<string, [string, string]> = {
   // Streaming services
-  spotify: ['https://upload.wikimedia.org/wikipedia/commons/thumb/8/84/Spotify_icon.svg/128px-Spotify_icon.svg.png', 'Spotify'],
-  apple_music: ['https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/Apple_Music_icon.svg/128px-Apple_Music_icon.svg.png', 'Apple Music'],
-  deezer: ['https://upload.wikimedia.org/wikipedia/commons/thumb/1/11/Deezer_logo_2023.svg/128px-Deezer_logo_2023.svg.png', 'Deezer'],
-  tidal: ['https://upload.wikimedia.org/wikipedia/commons/thumb/7/74/Tidal_%28service%29_logo.svg/128px-Tidal_%28service%29_logo.svg.png', 'Tidal'],
-  amazon_music: ['https://upload.wikimedia.org/wikipedia/commons/thumb/a/a0/Amazon_Music_2024.svg/128px-Amazon_Music_2024.svg.png', 'Amazon Music'],
-  soundcloud: ['https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Antu_soundcloud.svg/128px-Antu_soundcloud.svg.png', 'SoundCloud'],
-  bandcamp: ['https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/Bandcamp-button-circle-whiteblack.svg/128px-Bandcamp-button-circle-whiteblack.svg.png', 'Bandcamp'],
-  youtube_music: ['https://upload.wikimedia.org/wikipedia/commons/thumb/6/6a/Youtube_Music_icon.svg/128px-Youtube_Music_icon.svg.png', 'YouTube Music'],
-  youtube: ['https://upload.wikimedia.org/wikipedia/commons/thumb/0/09/YouTube_full-color_icon_%282017%29.svg/128px-YouTube_full-color_icon_%282017%29.svg.png', 'YouTube'],
+  spotify: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/ynkf4PMICGeuMIvv7CXpC.png', 'Spotify'],
+  apple_music: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/ICa0AUJOip2kfiPnSCfDq.png', 'Apple Music'],
+  deezer: ['https://i.imgur.com/6Q8bM8J.png', 'Deezer'],
+  tidal: ['https://i.imgur.com/8Q8LJQg.png', 'Tidal'],
+  amazon_music: ['https://i.imgur.com/cEfSqz9.png', 'Amazon Music'],
+  soundcloud: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/AUyaLDvEnlp1O2fX4HTvX.png', 'SoundCloud'],
+  bandcamp: ['https://i.imgur.com/WCm2y0d.png', 'Bandcamp'],
+  youtube_music: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/2Fhe7kDaQIQjvCtdlhlmo.png', 'YouTube Music'],
+  youtube: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/2Fhe7kDaQIQjvCtdlhlmo.png', 'YouTube'],
   // Browsers (YouTube / web player)
-  browser_chrome: ['https://upload.wikimedia.org/wikipedia/commons/thumb/0/09/YouTube_full-color_icon_%282017%29.svg/128px-YouTube_full-color_icon_%282017%29.svg.png', 'YouTube'],
-  browser_firefox: ['https://upload.wikimedia.org/wikipedia/commons/thumb/0/09/YouTube_full-color_icon_%282017%29.svg/128px-YouTube_full-color_icon_%282017%29.svg.png', 'YouTube'],
-  browser_edge: ['https://upload.wikimedia.org/wikipedia/commons/thumb/0/09/YouTube_full-color_icon_%282017%29.svg/128px-YouTube_full-color_icon_%282017%29.svg.png', 'YouTube'],
-  browser_brave: ['https://upload.wikimedia.org/wikipedia/commons/thumb/0/09/YouTube_full-color_icon_%282017%29.svg/128px-YouTube_full-color_icon_%282017%29.svg.png', 'YouTube'],
-  browser_opera: ['https://upload.wikimedia.org/wikipedia/commons/thumb/0/09/YouTube_full-color_icon_%282017%29.svg/128px-YouTube_full-color_icon_%282017%29.svg.png', 'YouTube'],
+  browser_chrome: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/2Fhe7kDaQIQjvCtdlhlmo.png', 'YouTube'],
+  browser_firefox: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/2Fhe7kDaQIQjvCtdlhlmo.png', 'YouTube'],
+  browser_edge: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/2Fhe7kDaQIQjvCtdlhlmo.png', 'YouTube'],
+  browser_brave: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/2Fhe7kDaQIQjvCtdlhlmo.png', 'YouTube'],
+  browser_opera: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/2Fhe7kDaQIQjvCtdlhlmo.png', 'YouTube'],
   // Desktop players
-  vlc: ['https://upload.wikimedia.org/wikipedia/commons/thumb/e/e6/VLC_Icon.svg/128px-VLC_Icon.svg.png', 'VLC'],
-  foobar2000: ['https://upload.wikimedia.org/wikipedia/commons/thumb/f/fb/Foobar2000_logo.svg/128px-Foobar2000_logo.svg.png', 'foobar2000'],
-  musicbee: ['https://upload.wikimedia.org/wikipedia/commons/4/40/MusicBee_Logo.png', 'MusicBee'],
-  aimp: ['https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/AIMP_Logo.svg/128px-AIMP_Logo.svg.png', 'AIMP'],
-  winamp: ['https://upload.wikimedia.org/wikipedia/commons/thumb/d/da/WinampIcon.svg/128px-WinampIcon.svg.png', 'Winamp'],
-  mediamonkey: ['https://upload.wikimedia.org/wikipedia/commons/thumb/5/52/Mediamonkey_logo.svg/128px-Mediamonkey_logo.svg.png', 'MediaMonkey'],
-  groove: ['https://upload.wikimedia.org/wikipedia/commons/thumb/4/45/Groove_Music_logo.svg/128px-Groove_Music_logo.svg.png', 'Groove Music'],
-  wmp: ['https://upload.wikimedia.org/wikipedia/commons/thumb/7/71/Windows_Media_Player_12.svg/128px-Windows_Media_Player_12.svg.png', 'Windows Media Player'],
+  vlc: ['https://i.imgur.com/0lW8H5y.png', 'VLC'],
+  foobar2000: ['https://i.imgur.com/F8X8g5v.png', 'foobar2000'],
+  musicbee: ['https://i.imgur.com/3Y8h0kK.png', 'MusicBee'],
+  aimp: ['https://i.imgur.com/6h7H7kJ.png', 'AIMP'],
+  winamp: ['https://i.imgur.com/5n8n9wM.png', 'Winamp'],
+  mediamonkey: ['https://i.imgur.com/4f4f5gH.png', 'MediaMonkey'],
+  groove: ['https://i.imgur.com/3g7G9wH.png', 'Groove Music'],
+  wmp: ['https://i.imgur.com/2d4d6fH.png', 'Windows Media Player'],
 };
 
 export interface LyricsEngineCallbacks {
@@ -144,9 +144,12 @@ export class LyricsEngine {
   private noLyricsTimer: ReturnType<typeof setTimeout> | null = null;
   private lyricsFlagged = false;
   private lyricsFlaggedTimer: ReturnType<typeof setTimeout> | null = null;
+  private lyricsToggled: 'enabled' | 'disabled' | null = null;
+  private lyricsToggledTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Instrumental gap: switch RPC to no-lyrics display when gap between lines > LYRIC_GAP_MS
   private inLyricGap = false;
+  private isEndOfSongGap = false;  // true when gap is at the end of the song (no more lyrics)
   private gapTimer: ReturnType<typeof setTimeout> | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -171,10 +174,11 @@ export class LyricsEngine {
 
   // Cached config flags (rebuilt on config change, avoid per-emit boolean casts)
   private cfgShowLyrics = true;
+  private cfgShowLyricsStatus = true;
   private cfgRomanize = false;
   private cfgActivityType = 2;
   private cfgHideSmallIcon = false;
-  private cfgIconMode: 'default' | 'dance' | 'radiate' | 'purple_rad' | 'rouge' | 'lrc_off' | 'bleeding' | 'blue_rad' | 'random' = 'default';
+  private cfgIconMode: 'default' | 'dance' | 'radiate' | 'purple_rad' | 'rouge' | 'bleeding' | 'blue_rad' | 'random' = 'default';
   private cfgRpcTranslate = false;
   private cfgTranslateLang = '';
 
@@ -218,6 +222,25 @@ export class LyricsEngine {
     }, 5000);
   }
 
+  /** Flash "Lyrics Enabled/Disabled" for 3 seconds when user toggles the setting. */
+  setLyricsToggled(enabled: boolean): void {
+    this.fetchingLyrics = false;
+    this.lyricsToggled = enabled ? 'enabled' : 'disabled';
+    if (this.lyricsToggledTimer) clearTimeout(this.lyricsToggledTimer);
+    // Reset all dedup to force Discord update
+    this.lastUpdateTime = 0;
+    this.lastRpcDetails = '';
+    this.lastRpcState = '';
+    this.lastLargeText = '';
+    this.lastRpcIdx = -1;
+    this.emitUpdate();
+    this.lyricsToggledTimer = setTimeout(() => {
+      this.lyricsToggled = null;
+      this.lyricsToggledTimer = null;
+      this.emitUpdate();
+    }, 3000);
+  }
+
   /**
    * Start syncing lyrics for a new track.
    * Called when a new track is detected.
@@ -250,6 +273,7 @@ export class LyricsEngine {
     this.lastRpcPushTime = 0;
     this.nextFireTimeMs = -1;
     this.inLyricGap = false;
+    this.isEndOfSongGap = false;
     this.romanizeCache.clear();
 
     // Pick random icon for this track (if random mode is on)
@@ -404,6 +428,11 @@ export class LyricsEngine {
        trackData.repeat_mode !== this.trackData.repeat_mode);
 
     if (trackData) {
+      // Preserve Catbox URL if current track has one and new trackData doesn't
+      const currentCatboxUrl = this.trackData?.album_art_url?.includes('catbox.moe') ? this.trackData.album_art_url : null;
+      if (currentCatboxUrl && !trackData.album_art_url?.includes('catbox.moe')) {
+        trackData.album_art_url = currentCatboxUrl;
+      }
       this.trackData = trackData;
     }
 
@@ -445,6 +474,7 @@ export class LyricsEngine {
       this.initialProgressMs = progressMs;
       this.trackStartHr = performance.now();
       this.inLyricGap = false;
+      this.isEndOfSongGap = false;
       this.clearGapTimer();
       this.romanizeCache.clear();
 
@@ -514,10 +544,13 @@ export class LyricsEngine {
     this.noLyricsFound = false;
     this.lyricsFound = false;
     this.lyricsFlagged = false;
+    this.lyricsToggled = null;
     this.inLyricGap = false;
+    this.isEndOfSongGap = false;
     if (this.lyricsFoundTimer) { clearTimeout(this.lyricsFoundTimer); this.lyricsFoundTimer = null; }
     if (this.noLyricsTimer) { clearTimeout(this.noLyricsTimer); this.noLyricsTimer = null; }
     if (this.lyricsFlaggedTimer) { clearTimeout(this.lyricsFlaggedTimer); this.lyricsFlaggedTimer = null; }
+    if (this.lyricsToggledTimer) { clearTimeout(this.lyricsToggledTimer); this.lyricsToggledTimer = null; }
     this.cancelTimer();
     this.clearHeartbeat();
     this.lyrics = [];
@@ -610,6 +643,7 @@ export class LyricsEngine {
         if (remaining > LYRIC_GAP_MS) {
           this.gapTimer = setTimeout(() => {
             this.inLyricGap = true;
+            this.isEndOfSongGap = true;  // Mark as end-of-song gap
             this.resetDedup();
             this.emitUpdate();
           }, LYRIC_GAP_MS);
@@ -646,6 +680,7 @@ export class LyricsEngine {
     this.timer = setTimeout(() => {
       if (!this.running) return;
       this.inLyricGap = false;
+      this.isEndOfSongGap = false;  // Reset end-of-song flag when moving to next line
       this.clearGapTimer();
       this.currentIdx = nextIdx;
       this.emitUpdate();
@@ -791,6 +826,8 @@ export class LyricsEngine {
 
     // Cache config flags to avoid per-emit boolean casts
     this.cfgShowLyrics = (this.rpcConfig.show_lyrics as boolean) !== false;
+    // Status messages follow the show_lyrics setting - when lyrics are disabled, hide status messages too
+    this.cfgShowLyricsStatus = this.cfgShowLyrics;
     this.cfgRomanize = (this.rpcConfig.romanize_lyrics as boolean) === true;
     this.cfgRpcTranslate = (this.rpcConfig.rpc_translate_lyrics as boolean) === true;
     this.cfgTranslateLang = (this.rpcConfig.translate_target_lang as string) || 'en';
@@ -802,7 +839,6 @@ export class LyricsEngine {
       this.cfgHideSmallIcon ? 'default' :
       !isSpotify ? 'default' :
       (this.rpcConfig.random_icon_mode as boolean) ? 'random' :
-      (this.rpcConfig.lrc_off_mode as boolean) ? 'lrc_off' :
       (this.rpcConfig.rouge_mode as boolean) ? 'rouge' :
       (this.rpcConfig.bleeding_mode as boolean) ? 'bleeding' :
       (this.rpcConfig.blue_rad_mode as boolean) ? 'blue_rad' :
@@ -811,8 +847,9 @@ export class LyricsEngine {
       (this.rpcConfig.dance_mode as boolean) ? 'dance' : 'default';
 
     // Pre-resolve clickable URLs (avoids 3× config lookups + switch per emit)
-    this.cachedDetailsUrl = this.resolveUrl(d, 'rpc_details_url', d.spotify_url || this.cachedSpotifySearch);
-    this.cachedStateUrl = this.resolveUrl(d, 'rpc_state_url', d.context_url || d.artist_url || this.cachedArtistSearch);
+    // Skip clickable URLs for local files (no external Spotify/artist page to link to)
+    this.cachedDetailsUrl = d.is_local ? '' : this.resolveUrl(d, 'rpc_details_url', d.spotify_url || this.cachedSpotifySearch);
+    this.cachedStateUrl = d.is_local ? '' : this.resolveUrl(d, 'rpc_state_url', d.context_url || d.artist_url || this.cachedArtistSearch);
     this.cachedLargeUrl = this.resolveUrl(d, 'rpc_large_url', d.album_url || d.spotify_url || this.cachedSpotifySearch);
   }
 
@@ -844,7 +881,8 @@ export class LyricsEngine {
     if (btn1Label && btn1Url) {
       buttons.push({ label: truncate(btn1Label, 32), url: btn1Url });
     }
-    if (btn2Label) {
+    // Skip "Listen on Spotify" button for local files (is_local) — they don't have a Spotify URL
+    if (btn2Label && !d.is_local) {
       // CC active → override to YouTube
       const effectiveSource = this.isCC ? 'youtube' : source;
       const btn2Resolved = platformButtonLabel(btn2Label, effectiveSource);
@@ -874,17 +912,46 @@ export class LyricsEngine {
     let largeText: string;
 
     // Status message (shown alone when active — no extra text)
-    const status = this.lyricsFlagged
-      ? '🚩 Lyrics Not Matching'
-      : this.noLyricsFound
-        ? '❌ No Lyrics Found'
-        : this.fetchingLyrics
-          ? '🔍 Fetching Lyrics...'
-          : this.lyricsFound
-            ? '✅ Lyrics Found'
-            : '';
+    // lyricsToggled always shows (feedback for user action), other statuses follow show_lyrics setting
+    const status = this.lyricsToggled
+      ? (this.lyricsToggled === 'enabled' ? '✅ Lyrics Enabled' : '❌ Lyrics Disabled')
+      : this.cfgShowLyricsStatus
+        ? (this.lyricsFlagged
+            ? '🚩 Lyrics Not Matching'
+            : this.noLyricsFound
+              ? '❌ No Lyrics Found'
+              : this.fetchingLyrics
+                ? '🔍 Fetching Lyrics...'
+                : this.lyricsFound
+                  ? '✅ Lyrics Found'
+                  : '')
+        : '';
 
-    if (hasLyrics && currentText && currentText !== '♪♪' && !this.inLyricGap) {
+    if (this.isEndOfSongGap) {
+      // End-of-song gap (>10s after last lyric) — show metadata instead of lyrics
+      details = truncate(d.track_name, 128);
+      const ctx = this.cachedContextName;
+      if (ctx) {
+        state = truncate(`🎼 ${ctx}${this.cachedPlayModeSuffix}`, 128);
+        if (status) {
+          largeText = truncate(status, 128);
+        } else {
+          const parts: string[] = [];
+          if (this.cachedDisplayArtist) parts.push(`🎤 ${this.cachedDisplayArtist}`);
+          if (this.cachedHasAlbum) parts.push(`💽 ${d.album_name}`);
+          largeText = truncate(parts.join(' | ') || d.track_name, 128);
+        }
+      } else {
+        state = this.cachedDisplayArtist ? truncate(`🎤 ${this.cachedDisplayArtist}`, 128) : '  ';
+        if (status) {
+          largeText = truncate(status, 128);
+        } else {
+          largeText = this.cachedHasAlbum
+            ? truncate(`💽 ${d.album_name}${this.cachedPlayModeSuffix}`, 128)
+            : truncate(d.track_name, 128);
+        }
+      }
+    } else if (hasLyrics && currentText && currentText !== '♪♪') {
       // Lyrics mode: details = current lyric, state = → next lyric
       let cur = this.cfgRomanize ? this.cachedRomanize(currentText) : currentText;
       let nxt = this.cfgRomanize && nextText ? this.cachedRomanize(nextText) : nextText;
@@ -913,7 +980,7 @@ export class LyricsEngine {
       }
 
       details = truncate(cur, 128);
-      state = nxt ? truncate(`→${nxt}`, 128) : ' · ';
+      state = nxt ? truncate(`→${nxt}`, 128) : ' ';
       // When lyrics are showing, details/state contain lyric LINES, not metadata.
       largeText = status
         ? truncate(status, 128)
@@ -966,19 +1033,24 @@ export class LyricsEngine {
     this.lastLargeImage = this.cachedLargeImage;
     this.lastRpcPushTime = rpcNow;
 
+    // Discord RPC accepts external URLs in large_image (Catbox URLs work here)
+    // Just pass the cached URL directly
+    const largeImageAsset = this.cachedLargeImage;
+    const largeImageUrl = this.cachedLargeUrl;
+
     const activity: DiscordActivity = {
       type: activityType,
       details,
       state,
       timestamps: endTs > startTs ? { start: startTs, end: endTs } : { start: startTs },
       assets: {
-        large_image: this.cachedLargeImage,
+        large_image: largeImageAsset || DEFAULT_ART,
         large_text: largeText,
       },
       buttons: this.cachedButtons.length > 0 ? this.cachedButtons : undefined,
       details_url: this.cachedDetailsUrl,
       state_url: this.cachedStateUrl,
-      large_url: this.cachedLargeUrl,
+      large_url: largeImageUrl,
     };
 
     // Small icon — resolved from cached icon mode (no per-emit boolean casts)
@@ -1024,10 +1096,6 @@ export class LyricsEngine {
       case 'rouge':
         activity.assets!.small_image = 'https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/HrMk6Gy5NrHDuNewWnUOR.gif';
         activity.assets!.small_text = pt || '🔴 Rouge';
-        break;
-      case 'lrc_off':
-        activity.assets!.small_image = 'https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/4CoaWZGd53cD62wNI1ZOT.png';
-        activity.assets!.small_text = pt || '🚫 LRC OFF';
         break;
       case 'bleeding':
         activity.assets!.small_image = 'https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/6sALSWqWzao3chNZzHCXy.gif';

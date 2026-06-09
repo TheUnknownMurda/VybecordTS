@@ -103,6 +103,8 @@ export interface VybecordConfig {
   show_lyrics: boolean;
   /** When true, Discord status disappears as soon as music stops */
   rpc_only_when_playing: boolean;
+  /** When false, don't show "Fetching Lyrics/Lyrics Found/No Lyrics Found" status messages on Discord */
+  show_lyrics_status: boolean;
   /** Master toggle: detect non-Spotify media sources (YouTube, SoundCloud, etc.) */
   detect_all_media: boolean;
   /** Per-platform detection toggles (only apply when detect_all_media is true) */
@@ -137,8 +139,6 @@ export interface VybecordConfig {
   bleeding_mode: boolean;
   /** Blue Rad mode: blue animated GIF as small icon (all platforms) */
   blue_rad_mode: boolean;
-  /** LRC OFF mode: static icon as small image (all platforms) */
-  lrc_off_mode: boolean;
   /** Random icon mode: pick a random small icon each track */
   random_icon_mode: boolean;
   /** Hide small icon: remove the small image entirely */

@@ -39,7 +39,7 @@ import { similarity } from './core/similarity.js';
 import { initLocalDb, closeLocalDb, insertCustomLyrics, listCustomLyrics, getCustomLyrics, updateCustomLyrics, deleteCustomLyrics } from './core/local-lyrics-db.js';
 import { initLastFm, scrobbleTrackStart, checkAndScrobble, scrobbleTrackEnd, isScrobbleEnabled, getAuthUrl, completeAuth, disconnectScrobble, canAuth } from './core/lastfm.js';
 import { uploadThumbForRpc } from './core/image-upload.js';
-import { extractLocalArt } from './core/local-art.js';
+import { extractLocalArt, extractArtFromPath } from './core/local-art.js';
 import { initBlacklist, flagLyrics, isLyricsFlagged, clearFlags, listFlaggedTracks, clearFlagsByKey } from './core/lyrics-blacklist.js';
 import { initHistory, historyTrackStart, historyTrackEnd, getRecentHistory, getHistoryCount, getWrappedStats } from './core/listening-history.js';
 import { translateBatch } from './core/translate.js';
@@ -112,6 +112,9 @@ export class VybecordBackend extends EventEmitter {
   private statsHistory: SessionSnapshot[] = [];
   private statsHistoryPath: string;
 
+  private _lastShowLyrics: boolean | undefined;
+  private _pendingLyricsToggle: boolean | null = null;
+
   constructor(configDir: string) {
     super();
     this.configDir = configDir;
@@ -125,6 +128,12 @@ export class VybecordBackend extends EventEmitter {
         log.info(`CC language changed: ${this._lastCcLang} → ${cfg.cc_lang}`);
       }
       this._lastCcLang = cfg.cc_lang;
+      // Queue lyrics toggle status to show after engine restart
+      if (this._lastShowLyrics !== undefined && this._lastShowLyrics !== cfg.show_lyrics) {
+        this._pendingLyricsToggle = cfg.show_lyrics;
+        log.info(`Lyrics ${cfg.show_lyrics ? 'enabled' : 'disabled'} — will flash status after engine restart`);
+      }
+      this._lastShowLyrics = cfg.show_lyrics;
       this.emit('configUpdate', cfg);
     });
 
@@ -136,6 +145,8 @@ export class VybecordBackend extends EventEmitter {
     this.discord = new DiscordIPC(discordAppId);
     this.lyricsEngine = new LyricsEngine();
     this.spicetify = new SpicetifySource();
+    // Initialize _lastShowLyrics to track changes
+    this._lastShowLyrics = this.config.get('show_lyrics');
     this.youtubeSource = new YouTubeSource();
     this.soundcloudSource = new SoundCloudSource();
     this.bandcampSource = new BandcampSource();
@@ -187,6 +198,11 @@ export class VybecordBackend extends EventEmitter {
         if (!cachedLyrics) {
           // Lyrics never fetched for this track — trigger a full fetch
           this.onNewTrack(this.currentTrack).catch(() => {});
+          // Still flash the toggle status (will show briefly before new track processing)
+          if (this._pendingLyricsToggle !== null) {
+            this.lyricsEngine.setLyricsToggled(this._pendingLyricsToggle);
+            this._pendingLyricsToggle = null;
+          }
         } else {
           this.lyricsEngine.startTrack(cachedLyrics, this.currentTrack, rpcConfig);
 
@@ -195,6 +211,11 @@ export class VybecordBackend extends EventEmitter {
             const tgtLang = (cfg.translate_target_lang as string) || 'en';
             const lines = cachedLyrics.map((l: LyricLine) => l.text).filter((t: string) => t && t.trim().length >= 2);
             translateBatch(lines, tgtLang).catch(() => {});
+          }
+          // Flash lyrics toggle status now that engine is restarted
+          if (this._pendingLyricsToggle !== null) {
+            this.lyricsEngine.setLyricsToggled(this._pendingLyricsToggle);
+            this._pendingLyricsToggle = null;
           }
         }
       }
@@ -940,18 +961,43 @@ export class VybecordBackend extends EventEmitter {
     this.fetchAbort = new AbortController();
     const { signal } = this.fetchAbort;
 
-    // Phase 0: Extract embedded album art from local files (Apple Music etc.)
+    // Phase 0: Extract embedded album art from local files (Apple Music, Groove Music, Spotify local files)
     // SMTC often doesn't provide thumbnails for local music files.
+    // Spotify local files have spotify:localfileimage: URIs that Discord can't access.
     // This searches the Music folder and reads the embedded cover art directly.
     const isLocalMusicApp = trackData.media_source === 'apple_music' || trackData.media_source === 'groove_music';
-    if (isLocalMusicApp && !trackData.album_art_url) {
-      const artFound = await extractLocalArt(
-        trackData.track_name, trackData.artist_name,
-        trackData.album_name, this.currentTrackKey,
-      );
+    const isInvalidSpotifyLocalUrl = trackData.album_art_url?.startsWith('spotify:localfileimage:');
+    const isSpotifyLocalFile = trackData.is_local && (!trackData.album_art_url || isInvalidSpotifyLocalUrl);
+    const needsLocalArtExtraction = (isLocalMusicApp && !trackData.album_art_url) || isSpotifyLocalFile;
+    if (needsLocalArtExtraction) {
+      let artFound = false;
+
+      // For spotify:localfileimage: URLs, try direct file path extraction first
+      if (isInvalidSpotifyLocalUrl && trackData.album_art_url) {
+        try {
+          // Extract and decode file path from spotify:localfileimage: URL
+          const encodedPath = trackData.album_art_url.replace('spotify:localfileimage:', '');
+          const filePath = decodeURIComponent(encodedPath);
+          log.info(`[ART] Trying direct path extraction from: ${filePath}`);
+          artFound = await extractArtFromPath(filePath);
+        } catch (e) {
+          log.debug(`[ART] Direct path extraction failed: ${e}`);
+        }
+      }
+
+      // Fallback to searching in Music directories
+      if (!artFound) {
+        artFound = await extractLocalArt(
+          trackData.track_name, trackData.artist_name,
+          trackData.album_name, this.currentTrackKey,
+        );
+      }
+
       if (artFound) {
         trackData.album_art_url = '/api/thumbnail';
         log.info(`[ART] Extracted local art for: ${trackData.track_name}`);
+      } else if (isSpotifyLocalFile) {
+        log.debug(`[ART] No local art found for Spotify local file: ${trackData.track_name}`);
       }
     }
 
@@ -992,15 +1038,22 @@ export class VybecordBackend extends EventEmitter {
       const isYouTubeSource = src === 'youtube' || src === 'youtube_music' || src.startsWith('browser_');
       const isVideoSource = VIDEO_SOURCES.some(s => src.startsWith(s));
 
-      const needsMetadata = !trackData.album_art_url || trackData.album_art_url === '/api/thumbnail';
+      // Don't fetch metadata for tracks that already have local art extracted
+      // (avoids race condition with Catbox upload - local art takes priority)
+      const hasLocalArtExtracted = trackData.album_art_url === '/api/thumbnail';
+      const needsMetadata = !trackData.album_art_url || (!hasLocalArtExtracted && trackData.album_art_url === '/api/thumbnail');
       const metadataPromise = needsMetadata
         ? fetchTrackMetadata(trackData.track_name, trackData.artist_name, trackData.album_name, signal).then((metadata) => {
             if (metadata) {
               // Don't overwrite local SMTC thumbnail (Apple Music etc.) — it's the correct local art.
               // CDN art will still be stored in enrichedMeta for Discord RPC (which needs a public URL).
               const hasLocalThumb = trackData.album_art_url === '/api/thumbnail';
+              // Don't overwrite external URLs (e.g., Catbox uploads from local art extraction)
+              const hasExternalUrl = trackData.album_art_url?.startsWith('http');
               // Don't overwrite YouTube thumbnail with generic album art
-              if (metadata.albumArtUrl && !hasLocalThumb && !(isYouTubeSource && trackData.album_art_url)) trackData.album_art_url = metadata.albumArtUrl;
+              if (metadata.albumArtUrl && !hasLocalThumb && !hasExternalUrl && !(isYouTubeSource && trackData.album_art_url)) {
+                trackData.album_art_url = metadata.albumArtUrl;
+              }
               if (metadata.albumName && !trackData.album_name) trackData.album_name = metadata.albumName;
               // Enrich artist: SMTC often has only 1 artist, Deezer/iTunes may have the full list
               if (metadata.artistName && metadata.artistName.length > trackData.artist_name.length) {
@@ -1013,8 +1066,13 @@ export class VybecordBackend extends EventEmitter {
                   trackData.artist_name = metadata.artistName;
                 }
               }
+              // Store metadata art in enrichedMeta, but don't overwrite Catbox URLs
+              const existing = this.enrichedMeta.get(this.currentTrackKey);
+              // If existing URL is a Catbox URL, preserve it (local art takes priority over CDN)
+              const isExistingCatbox = existing?.album_art_url?.includes('catbox.moe');
+              const artUrl = (isExistingCatbox ? existing?.album_art_url : (metadata.albumArtUrl || trackData.album_art_url)) || '';
               this.enrichedMeta.set(this.currentTrackKey, {
-                album_art_url: metadata.albumArtUrl || trackData.album_art_url,
+                album_art_url: artUrl,
                 album_name: trackData.album_name,
                 artist_name: trackData.artist_name,
               });
@@ -1146,7 +1204,8 @@ export class VybecordBackend extends EventEmitter {
     if (spotifyInjected) {
       log.info(`[LYRICS] Skipping external inject — Spotify official lyrics already active`);
     } else if (lyrics.length > 0) {
-      this.lyricsEngine.injectLyrics(lyrics, trackData);
+      // Use currentTrack to preserve any Catbox URL that was set by upload
+      this.lyricsEngine.injectLyrics(lyrics, this.currentTrack || trackData);
       log.info(`[LYRICS] Injected ${lyrics.length} lines into running engine`);
 
       // Pre-translate lyrics for RPC display (fire-and-forget, warms cache)
@@ -1158,7 +1217,8 @@ export class VybecordBackend extends EventEmitter {
     } else {
       // No lyrics found — flash "No Lyrics Found" for 5s, then revert
       this.lyricsEngine.setNoLyricsFound();
-      this.lyricsEngine.updateTrackData(trackData);
+      // Use currentTrack to preserve any Catbox URL that was set by upload
+      this.lyricsEngine.updateTrackData(this.currentTrack || trackData);
 
       // Async: fetch plain (unsynced) lyrics for dashboard display only (not RPC)
       if (!signal.aborted) {
@@ -1326,6 +1386,15 @@ export class VybecordBackend extends EventEmitter {
 
   /** Batch-update config keys and emit configUpdate so toggles react immediately. */
   updateConfig(updates: Record<string, unknown>): void {
+    // Detect show_lyrics toggle for Discord status feedback (dashboard save path)
+    if ('show_lyrics' in updates) {
+      const current = this.config.get('show_lyrics');
+      const next = updates.show_lyrics as boolean;
+      if (current !== next) {
+        this._pendingLyricsToggle = next;
+        log.info(`Lyrics ${next ? 'enabled' : 'disabled'} — will flash status after engine restart (dashboard)`);
+      }
+    }
     this.config.setMany(updates as any);
     this.emit('configUpdate', this.config.getAll());
   }
@@ -1490,7 +1559,6 @@ export class VybecordBackend extends EventEmitter {
       rouge_mode: cfg.rouge_mode,
       bleeding_mode: cfg.bleeding_mode,
       blue_rad_mode: cfg.blue_rad_mode,
-      lrc_off_mode: cfg.lrc_off_mode,
       random_icon_mode: cfg.random_icon_mode,
       hide_small_icon: cfg.hide_small_icon,
       lyrics_offset_ms: cfg.lyrics_offset_ms,
@@ -1536,7 +1604,13 @@ export class VybecordBackend extends EventEmitter {
     const key = track.track_id.startsWith('desktop:') ? track.track_id : this.currentTrackKey;
     const meta = this.enrichedMeta.get(key);
     if (!meta) return;
-    if (meta.album_art_url && !track.album_art_url) track.album_art_url = meta.album_art_url;
+    // Only restore album_art_url if track doesn't have one OR if enrichedMeta has a Catbox URL (local art takes priority)
+    const isMetaCatbox = meta.album_art_url?.includes('catbox.moe');
+    const isTrackSpotifyLocal = track.album_art_url?.startsWith('spotify:localfileimage:');
+    // Restore Catbox URL if polling brought back spotify:localfileimage: (which Discord can't use)
+    if (meta.album_art_url && (!track.album_art_url || isMetaCatbox || isTrackSpotifyLocal)) {
+      track.album_art_url = meta.album_art_url;
+    }
     if (meta.album_name && !track.album_name) track.album_name = meta.album_name;
     // Restore enriched artist (SMTC only has primary artist, metadata has all)
     if (meta.artist_name && meta.artist_name.length > track.artist_name.length) {
@@ -1554,10 +1628,25 @@ export class VybecordBackend extends EventEmitter {
       if (!publicUrl) return;
       // Make sure we're still on the same track
       if (this.currentTrackKey !== trackKey) return;
-      // Update RPC with the public URL (dashboard keeps using /api/thumbnail)
-      const rpcTrack = { ...trackData, album_art_url: publicUrl };
+      // Update currentTrack so subsequent startTrack calls have the correct URL
+      if (this.currentTrack) this.currentTrack.album_art_url = publicUrl;
+      // Notify dashboard to update the album art display
+      this.emit('trackUpdate', this.currentTrack);
+      // Update RPC with the public URL (use currentTrack for up-to-date data)
+      const rpcTrack = { ...(this.currentTrack || trackData), album_art_url: publicUrl };
       this.lyricsEngine.updateTrackData(rpcTrack);
-      log.info(`[RPC] Using uploaded local thumb for Apple Music`);
+      // Also persist in enrichedMeta so it survives subsequent metadata fetches
+      const existing = this.enrichedMeta.get(trackKey);
+      if (existing) {
+        existing.album_art_url = publicUrl;
+      } else {
+        this.enrichedMeta.set(trackKey, {
+          album_art_url: publicUrl,
+          album_name: trackData.album_name,
+          artist_name: trackData.artist_name,
+        });
+      }
+      log.info(`[RPC] Using uploaded local thumb: ${publicUrl}`);
     }).catch(() => { /* upload errors already logged in image-upload */ });
   }
 

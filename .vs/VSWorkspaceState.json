@@ -1,0 +1,15 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\scripts",
+    "\\spicetify-extension",
+    "\\src",
+    "\\src\\core",
+    "\\src\\sync",
+    "\\src\\web",
+    "\\tampermonkey",
+    "\\website"
+  ],
+  "SelectedNode": "\\src\\backend.ts",
+  "PreviewInSolutionExplorer": false
+}

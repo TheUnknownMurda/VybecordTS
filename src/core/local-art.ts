@@ -23,6 +23,26 @@ const AUDIO_EXTS = new Set(['.m4a', '.mp3', '.flac', '.aac', '.alac', '.wav', '.
 // Cache: trackKey → true (art found) / false (no art) / 'pending'
 const artCache = new Map<string, boolean | 'pending'>();
 
+/**
+ * Extract album art directly from a specific file path.
+ * Used when we already know the file path (e.g., from spotify:localfileimage: URL).
+ */
+export async function extractArtFromPath(filePath: string): Promise<boolean> {
+  try {
+    const metadata = await parseFile(filePath, { skipCovers: false });
+    const pictures = metadata.common.picture;
+    if (pictures && pictures.length > 0) {
+      const pic = pictures[0];
+      await fs.writeFile(THUMB_PATH, pic.data);
+      log.info(`Extracted art from path: ${path.basename(filePath)} (${pic.data.length} bytes)`);
+      return true;
+    }
+  } catch (e) {
+    log.debug(`Failed to extract art from ${filePath}: ${e}`);
+  }
+  return false;
+}
+
 // File index: normalized filename → full path (built once, refreshed on miss)
 let fileIndex: Map<string, string[]> | null = null;
 let indexedDirs: string[] = [];

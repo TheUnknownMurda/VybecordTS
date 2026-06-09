@@ -3254,6 +3254,8 @@
           app_stopped: "VybecordTS stopped.",
           saved: "✓ Saved",
           error: "✗ Error",
+          lyrics_enabled: "✓ Lyrics Enabled",
+          lyrics_disabled: "✗ Lyrics Disabled",
           flagged: "✓ Flagged",
           clearing: "Clearing…",
           importing: "Importing…",
@@ -3404,6 +3406,8 @@
           app_stopped: "VybecordTS arrêté.",
           saved: "✓ Sauvegardé",
           error: "✗ Erreur",
+          lyrics_enabled: "✓ Paroles activées",
+          lyrics_disabled: "✗ Paroles désactivées",
           flagged: "✓ Signalé",
           importing: "Importation…",
           lyrics_loaded: "✓ Paroles chargées",
@@ -5475,6 +5479,15 @@
       // SAVE BUTTON
       $("btnSave").addEventListener("click", saveConfig);
       $("btnImportLyrics").addEventListener("click", importCustomLyrics);
+      // LYRICS TOGGLE FEEDBACK
+      $("cfgShowLyrics").addEventListener("change", (e) => {
+        showLyricsToggleStatus(e.target.checked);
+      });
+      function showLyricsToggleStatus(enabled) {
+        const msg = enabled ? t("lyrics_enabled") : t("lyrics_disabled");
+        const style = enabled ? "color:var(--accent-hex)" : "color:var(--text-muted)";
+        showSaveStatus(msg, style);
+      }
       // INIT
       initLrcStampUiOnce();
       initTheme();

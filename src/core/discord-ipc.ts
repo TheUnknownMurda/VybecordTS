@@ -373,13 +373,13 @@ export class DiscordIPC {
       rpcActivity.buttons = activity.buttons.map(b => ({
         label: sanitize(b.label), url: b.url,
       }));
-      const meta: Record<string, unknown> = {
-        button_urls: activity.buttons.map(b => b.url),
-      };
-      if (activity.large_url) meta.large_image_url = activity.large_url;
-      rpcActivity.metadata = meta;
-    } else if (activity.large_url) {
-      rpcActivity.metadata = { large_image_url: activity.large_url };
+      rpcActivity.metadata = { button_urls: activity.buttons.map(b => b.url) };
+    }
+
+    // Add large_url to metadata if present (for external image URLs like Catbox)
+    if (activity.large_url) {
+      if (!rpcActivity.metadata) rpcActivity.metadata = {};
+      (rpcActivity.metadata as Record<string, unknown>).large_image_url = activity.large_url;
     }
 
     if (activity.details_url) rpcActivity.details_url = activity.details_url;
