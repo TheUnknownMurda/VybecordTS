@@ -39,7 +39,7 @@ import { similarity } from './core/similarity.js';
 import { initLocalDb, closeLocalDb, insertCustomLyrics, listCustomLyrics, getCustomLyrics, updateCustomLyrics, deleteCustomLyrics } from './core/local-lyrics-db.js';
 import { initLastFm, scrobbleTrackStart, checkAndScrobble, scrobbleTrackEnd, isScrobbleEnabled, getAuthUrl, completeAuth, disconnectScrobble, canAuth } from './core/lastfm.js';
 import { uploadThumbForRpc } from './core/image-upload.js';
-import { extractLocalArt } from './core/local-art.js';
+import { extractLocalArt, extractArtFromPath } from './core/local-art.js';
 import { initBlacklist, flagLyrics, isLyricsFlagged, clearFlags, listFlaggedTracks, clearFlagsByKey } from './core/lyrics-blacklist.js';
 import { initHistory, historyTrackStart, historyTrackEnd, getRecentHistory, getHistoryCount, getWrappedStats } from './core/listening-history.js';
 import { translateBatch } from './core/translate.js';
@@ -61,6 +61,15 @@ const MUSIC_APPS = new Set(['spotify', 'apple_music', 'deezer', 'tidal', 'amazon
 const WEB_SOURCES = ['browser_', 'soundcloud', 'bandcamp', 'youtube'];
 const VIDEO_SOURCES = ['browser_', 'youtube'];
 const ARTIST_SPLIT_RE = /[,&]/;  // Precompiled — used in recordPlay + artist key extraction
+
+// Platform-specific Discord App IDs (changes the app name shown in Discord)
+const PLATFORM_DISCORD_APP_IDS: Record<string, string> = {
+  spotify: '1513867708851294299',
+  youtube: '1513868157897412759',
+  youtube_music: '1513868157897412759',
+  soundcloud: '1513868059948093501',
+  // Default falls back to config discord_app_id or env DISCORD_CLIENT_ID
+};
 
 type TrackSourceMode = 'premium' | 'free';
 
@@ -101,6 +110,7 @@ export class VybecordBackend extends EventEmitter {
   private idleSince = 0;  // grace period timestamp (prevent SMTC flicker)
   private configDir: string;
   private cachedIsWebSource = false;  // cached per-track: avoids WEB_SOURCES.some() on every 400ms poll
+  private currentDiscordAppId = '';  // tracks current Discord App ID for platform-specific switching
 
   // Session stats (reset on app restart)
   private sessionTrackPlays = new Map<string, { name: string; artist: string; art: string; count: number }>();
@@ -134,6 +144,7 @@ export class VybecordBackend extends EventEmitter {
     }
 
     this.discord = new DiscordIPC(discordAppId);
+    this.currentDiscordAppId = discordAppId; // Track current App ID for platform switching
     this.lyricsEngine = new LyricsEngine();
     this.spicetify = new SpicetifySource();
     this.youtubeSource = new YouTubeSource();
@@ -166,6 +177,9 @@ export class VybecordBackend extends EventEmitter {
 
     // React to config toggles in real-time
     this.on('configUpdate', (cfg) => {
+      // Emit status update for dashboard (showLyrics badge, etc.)
+      this.emitStatus();
+
       if (!this.discord.isConnected) return;
 
       if (!cfg.rpc_enabled) {
@@ -955,23 +969,49 @@ export class VybecordBackend extends EventEmitter {
   private async onNewTrack(trackData: TrackData): Promise<void> {
     const rpcConfig = this.getRpcConfig();
 
+    // Switch Discord App ID based on media source (changes app name in Discord)
+    await this.reconnectDiscordForSource(trackData.media_source || '');
+
     // Abort any in-flight fetches from a previous track
     if (this.fetchAbort) this.fetchAbort.abort();
     this.fetchAbort = new AbortController();
     const { signal } = this.fetchAbort;
 
-    // Phase 0: Extract embedded album art from local files (Apple Music etc.)
+    // Phase 0: Extract embedded album art from local files (Apple Music, Spotify local files, etc.)
     // SMTC often doesn't provide thumbnails for local music files.
-    // This searches the Music folder and reads the embedded cover art directly.
+    // Spotify local files have spotify:localfileimage: URIs that Discord can't access.
     const isLocalMusicApp = trackData.media_source === 'apple_music' || trackData.media_source === 'groove_music';
-    if (isLocalMusicApp && !trackData.album_art_url) {
-      const artFound = await extractLocalArt(
-        trackData.track_name, trackData.artist_name,
-        trackData.album_name, this.currentTrackKey,
-      );
+    const isSpotifyLocalUrl = trackData.album_art_url?.startsWith('spotify:localfileimage:');
+    const needsLocalArtExtraction = (isLocalMusicApp && !trackData.album_art_url) || isSpotifyLocalUrl;
+
+    if (needsLocalArtExtraction) {
+      let artFound = false;
+
+      // For spotify:localfileimage: URLs, try direct file path extraction first
+      if (isSpotifyLocalUrl && trackData.album_art_url) {
+        try {
+          const encodedPath = trackData.album_art_url.replace('spotify:localfileimage:', '');
+          const filePath = decodeURIComponent(encodedPath);
+          log.info(`[ART] Trying direct path extraction from: ${filePath}`);
+          artFound = await extractArtFromPath(filePath);
+        } catch (e) {
+          log.debug(`[ART] Direct path extraction failed: ${e}`);
+        }
+      }
+
+      // Fallback: search in Music directories
+      if (!artFound) {
+        artFound = await extractLocalArt(
+          trackData.track_name, trackData.artist_name,
+          trackData.album_name, this.currentTrackKey,
+        );
+      }
+
       if (artFound) {
         trackData.album_art_url = '/api/thumbnail';
         log.info(`[ART] Extracted local art for: ${trackData.track_name}`);
+      } else if (isSpotifyLocalUrl) {
+        log.debug(`[ART] No local art found for Spotify local file: ${trackData.track_name}`);
       }
     }
 
@@ -1003,8 +1043,10 @@ export class VybecordBackend extends EventEmitter {
       this.mergeEnriched(trackData); // Restore enriched art from persistent store
       log.info(`[LYRICS] Cache hit (${lyrics.length} lines)`);
     } else {
-      // Show "Fetching Lyrics..." while searching (always — dashboard needs it too)
-      this.lyricsEngine.setFetchingLyrics(true);
+      // Show "Fetching Lyrics..." while searching (only when lyrics display is enabled)
+      if (this.config.get('show_lyrics') !== false) {
+        this.lyricsEngine.setFetchingLyrics(true);
+      }
 
       // Fire metadata fetch independently so album art appears ASAP
       // Also run when album_art_url is /api/thumbnail (local-only SMTC thumb) — Discord RPC needs a public CDN URL
@@ -1474,7 +1516,73 @@ export class VybecordBackend extends EventEmitter {
       spotifyConnected: this.spotify?.isAuthenticated ?? false,
       spicetifyActive: this.spicetify.isActive,
       sourceMode: this.sourceMode,
+      showLyrics: this.config.get('show_lyrics') !== false,
     });
+  }
+
+  /**
+   * Reconnect Discord with a different App ID based on media source.
+   * This changes the application name shown in Discord.
+   */
+  private async reconnectDiscordForSource(source: string): Promise<void> {
+    const platformAppId = PLATFORM_DISCORD_APP_IDS[source];
+    const defaultAppId = this.config.get('discord_app_id') || process.env.DISCORD_CLIENT_ID || '';
+    const targetAppId = platformAppId || defaultAppId;
+
+    // No change needed
+    if (targetAppId === this.currentDiscordAppId) return;
+
+    log.info(`[DISCORD] Switching App ID for ${source}: ${this.currentDiscordAppId || 'default'} → ${targetAppId}`);
+
+    // Store current activity to restore after reconnect
+    const wasConnected = this.discord.isConnected;
+
+    // Close current connection
+    this.discord.close();
+
+    // Create new DiscordIPC with new App ID
+    this.discord = new DiscordIPC(targetAppId);
+    this.currentDiscordAppId = targetAppId;
+
+    // Re-wire callbacks
+    this.discord.onReady(() => {
+      log.info('Discord RPC connected ✓');
+      this.setIdlePresence();
+      this.emitStatus();
+    });
+    this.discord.onDisconnect(() => {
+      log.warn('Discord disconnected — will retry');
+      this.emitStatus();
+    });
+
+    // Re-wire lyrics engine callback for Discord
+    this.lyricsEngine.setCallbacks({
+      onLyricChange: (current, next, prev) => {
+        log.debug(`[LYRIC] ${current} → ${next}`);
+        const t = this.currentTrack;
+        const lyricsState = {
+          current,
+          next,
+          prev,
+          progress_ms: Math.round(this.lyricsEngine.getElapsed()),
+          duration_ms: t ? t.duration_ms : 0,
+        };
+        this.lastLyricsState = lyricsState;
+        this.emit('lyricsUpdate', lyricsState);
+        // Return measured IPC pipe write latency for EMA compensation
+        return this.discord.lastWriteLatencyMs;
+      },
+      onRpcUpdate: (activity) => {
+        if (this.config.get('rpc_enabled')) {
+          this.discord.setActivity(activity);
+        }
+      },
+    });
+
+    // Connect in background
+    if (wasConnected) {
+      this.discord.connect().catch(() => {});
+    }
   }
 
   /** Record a track play for session stats + scrobbling. */
@@ -1601,10 +1709,12 @@ export class VybecordBackend extends EventEmitter {
       if (!publicUrl) return;
       // Make sure we're still on the same track
       if (this.currentTrackKey !== trackKey) return;
-      // Update RPC with the public URL (dashboard keeps using /api/thumbnail)
-      const rpcTrack = { ...trackData, album_art_url: publicUrl };
+      // Update currentTrack so the Catbox URL survives subsequent polls
+      if (this.currentTrack) this.currentTrack.album_art_url = publicUrl;
+      // Update RPC with the public URL (use currentTrack for up-to-date data)
+      const rpcTrack = { ...(this.currentTrack || trackData), album_art_url: publicUrl };
       this.lyricsEngine.updateTrackData(rpcTrack);
-      log.info(`[RPC] Using uploaded local thumb for Apple Music`);
+      log.info(`[RPC] Using uploaded local thumb: ${publicUrl}`);
     }).catch(() => { /* upload errors already logged in image-upload */ });
   }
 
