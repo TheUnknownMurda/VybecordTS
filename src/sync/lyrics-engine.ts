@@ -21,6 +21,9 @@ import type { LyricLine, DiscordActivity, TrackData } from '../core/types.js';
 
 const log = createLogger('LyricsEngine');
 
+// Status message types for unified status system
+ type StatusType = 'fetching' | 'found' | 'noLyrics' | 'flagged' | 'disabled';
+
 // ── Timing constants ──
 const BASE_OFFSET_MS = 100;       // Compensate for IPC + display delay (fire-and-forget ~10-30ms)
 const DRIFT_THRESHOLD_MS = 500;   // Recalibrate if drift > 500ms (tighter sync)
@@ -137,13 +140,19 @@ export class LyricsEngine {
 
   private callbacks: LyricsEngineCallbacks | null = null;
   private running = false;
+
+  // Unified status message system with priority (higher = more important)
+  // Priority: disabled(50) > flagged(40) > noLyrics(30) > found(20) > fetching(10) > none(0)
+  private statusMessage: { type: StatusType; text: string; priority: number } | null = null;
+  private statusMessageTimer: ReturnType<typeof setTimeout> | null = null;
+  private statusMessageExpiry = 0; // timestamp when current message expires
+
+  // Legacy flags for backward compatibility during transition
   private fetchingLyrics = false;
   private noLyricsFound = false;
   private lyricsFound = false;
-  private lyricsFoundTimer: ReturnType<typeof setTimeout> | null = null;
-  private noLyricsTimer: ReturnType<typeof setTimeout> | null = null;
   private lyricsFlagged = false;
-  private lyricsFlaggedTimer: ReturnType<typeof setTimeout> | null = null;
+  private lyricsDisabled = false;
 
   // Instrumental gap: switch RPC to no-lyrics display when gap between lines > LYRIC_GAP_MS
   private inLyricGap = false;
@@ -182,40 +191,102 @@ export class LyricsEngine {
     this.callbacks = cbs;
   }
 
+  /**
+   * Unified status message handler with priority system.
+   * Higher priority messages override lower priority ones.
+   * Messages auto-expire after durationMs.
+   */
+  private setStatusMessage(type: StatusType, text: string, priority: number, durationMs: number): void {
+    const now = performance.now();
+
+    // Check if a higher priority message is currently active and not expired
+    if (this.statusMessage && this.statusMessage.priority > priority && now < this.statusMessageExpiry) {
+      return; // Don't override higher priority message
+    }
+
+    // Update unified status
+    this.statusMessage = { type, text, priority };
+    this.statusMessageExpiry = now + durationMs;
+
+    // Sync legacy flags for backward compatibility
+    this.fetchingLyrics = type === 'fetching';
+    this.noLyricsFound = type === 'noLyrics';
+    this.lyricsFound = type === 'found';
+    this.lyricsFlagged = type === 'flagged';
+    this.lyricsDisabled = type === 'disabled';
+
+    // Clear existing timer
+    if (this.statusMessageTimer) {
+      clearTimeout(this.statusMessageTimer);
+      this.statusMessageTimer = null;
+    }
+
+    this.lastUpdateTime = 0; // bypass rate limiter
+    this.emitUpdate();
+
+    // Set expiry timer
+    if (durationMs > 0 && durationMs < 60000) { // sanity check: max 60s
+      this.statusMessageTimer = setTimeout(() => {
+        // Only clear if this message is still the current one
+        if (this.statusMessage?.type === type) {
+          this.clearStatusMessage();
+        }
+      }, durationMs);
+    }
+  }
+
+  /** Clear current status message and reset to normal display. */
+  private clearStatusMessage(): void {
+    this.statusMessage = null;
+    this.statusMessageExpiry = 0;
+    if (this.statusMessageTimer) {
+      clearTimeout(this.statusMessageTimer);
+      this.statusMessageTimer = null;
+    }
+    // Reset legacy flags
+    this.fetchingLyrics = false;
+    this.noLyricsFound = false;
+    this.lyricsFound = false;
+    this.lyricsFlagged = false;
+    this.lyricsDisabled = false;
+    this.emitUpdate();
+  }
+
   /** Show "Fetching Lyrics..." in RPC state while lyrics are loading. */
   setFetchingLyrics(fetching: boolean): void {
-    this.fetchingLyrics = fetching;
     if (fetching) {
-      this.lastUpdateTime = 0; // bypass rate limiter so the status change pushes
-      this.emitUpdate();
+      if (!this.cfgShowLyrics) return; // Don't show when lyrics are disabled
+      this.setStatusMessage('fetching', '🔍 Fetching Lyrics...', 10, 30000); // 30s max timeout
+    } else {
+      // Only clear if we're still showing fetching
+      if (this.statusMessage?.type === 'fetching') {
+        this.clearStatusMessage();
+      }
+      this.fetchingLyrics = false;
     }
   }
 
   /** Flash "🚩 Lyrics Not Matching" for 5s when the user flags bad lyrics. */
   setLyricsFlagged(): void {
-    this.fetchingLyrics = false;
-    this.lyricsFlagged = true;
-    if (this.lyricsFlaggedTimer) clearTimeout(this.lyricsFlaggedTimer);
-    this.lastUpdateTime = 0;
-    this.emitUpdate();
-    this.lyricsFlaggedTimer = setTimeout(() => {
-      this.lyricsFlagged = false;
-      this.lyricsFlaggedTimer = null;
-      this.emitUpdate();
-    }, 5000);
+    if (!this.cfgShowLyrics) return; // Don't show when lyrics are disabled
+    this.setStatusMessage('flagged', '🚩 Lyrics Not Matching', 40, 5000);
+  }
+
+  /** Flash "🚫 Lyrics Disabled" for 7s when lyrics are toggled off, then show normal metadata. */
+  setLyricsDisabled(): void {
+    this.setStatusMessage('disabled', '🚫 Lyrics Disabled', 50, 7000);
   }
 
   /** Flash "No Lyrics Found" for 5 seconds, then revert to normal display. */
   setNoLyricsFound(): void {
-    this.fetchingLyrics = false;
-    this.noLyricsFound = true;
-    if (this.noLyricsTimer) clearTimeout(this.noLyricsTimer);
-    this.emitUpdate();
-    this.noLyricsTimer = setTimeout(() => {
-      this.noLyricsFound = false;
-      this.noLyricsTimer = null;
-      this.emitUpdate();
-    }, 5000);
+    if (!this.cfgShowLyrics) return; // Don't show when lyrics are disabled
+    this.setStatusMessage('noLyrics', '❌ No Lyrics Found', 30, 5000);
+  }
+
+  /** Flash "Lyrics Found" for 5 seconds. */
+  private setLyricsFound(): void {
+    if (!this.cfgShowLyrics) return; // Don't show when lyrics are disabled
+    this.setStatusMessage('found', '✅ Lyrics Found', 20, 5000);
   }
 
   /**
@@ -315,17 +386,10 @@ export class LyricsEngine {
 
     // If lyrics haven't started yet, flash "Lyrics Found" for 5 seconds
     // If lyrics are already in progress, skip the message entirely
+    // Don't show when lyrics are disabled
     const lyricsNotStarted = lyrics.length > 0 && (this.currentIdx < 0 || !this.lyrics[this.currentIdx]?.text);
-    if (lyricsNotStarted) {
-      this.lyricsFound = true;
-      if (this.lyricsFoundTimer) clearTimeout(this.lyricsFoundTimer);
-      this.lyricsFoundTimer = setTimeout(() => {
-        this.lyricsFound = false;
-        this.lyricsFoundTimer = null;
-        this.emitUpdate();
-      }, 5000);
-    } else {
-      this.lyricsFound = false;
+    if (lyricsNotStarted && this.cfgShowLyrics) {
+      this.setLyricsFound();
     }
 
     // Reset dedup so the first lyric pushes immediately
@@ -404,6 +468,11 @@ export class LyricsEngine {
        trackData.repeat_mode !== this.trackData.repeat_mode);
 
     if (trackData) {
+      // Preserve Catbox URL if current track has one and new trackData doesn't
+      const currentCatboxUrl = this.trackData?.album_art_url?.includes('catbox.moe') ? this.trackData.album_art_url : null;
+      if (currentCatboxUrl && !trackData.album_art_url?.includes('catbox.moe')) {
+        trackData.album_art_url = currentCatboxUrl;
+      }
       this.trackData = trackData;
     }
 
@@ -510,14 +579,8 @@ export class LyricsEngine {
    */
   stop(): void {
     this.running = false;
-    this.fetchingLyrics = false;
-    this.noLyricsFound = false;
-    this.lyricsFound = false;
-    this.lyricsFlagged = false;
+    this.clearStatusMessage(); // Clear unified status message
     this.inLyricGap = false;
-    if (this.lyricsFoundTimer) { clearTimeout(this.lyricsFoundTimer); this.lyricsFoundTimer = null; }
-    if (this.noLyricsTimer) { clearTimeout(this.noLyricsTimer); this.noLyricsTimer = null; }
-    if (this.lyricsFlaggedTimer) { clearTimeout(this.lyricsFlaggedTimer); this.lyricsFlaggedTimer = null; }
     this.cancelTimer();
     this.clearHeartbeat();
     this.lyrics = [];
@@ -790,7 +853,12 @@ export class LyricsEngine {
     this.cachedPlatText = this.cachedIcon ? `Playing on ${this.cachedIcon[1]}` : '';
 
     // Cache config flags to avoid per-emit boolean casts
+    const wasShowLyrics = this.cfgShowLyrics;
     this.cfgShowLyrics = (this.rpcConfig.show_lyrics as boolean) !== false;
+    // Show "Lyrics Disabled" temporarily when show_lyrics is turned off
+    if (wasShowLyrics && !this.cfgShowLyrics) {
+      this.setLyricsDisabled();
+    }
     this.cfgRomanize = (this.rpcConfig.romanize_lyrics as boolean) === true;
     this.cfgRpcTranslate = (this.rpcConfig.rpc_translate_lyrics as boolean) === true;
     this.cfgTranslateLang = (this.rpcConfig.translate_target_lang as string) || 'en';
@@ -874,15 +942,11 @@ export class LyricsEngine {
     let largeText: string;
 
     // Status message (shown alone when active — no extra text)
-    const status = this.lyricsFlagged
-      ? '🚩 Lyrics Not Matching'
-      : this.noLyricsFound
-        ? '❌ No Lyrics Found'
-        : this.fetchingLyrics
-          ? '🔍 Fetching Lyrics...'
-          : this.lyricsFound
-            ? '✅ Lyrics Found'
-            : '';
+    // Use unified statusMessage system if active, fallback to legacy flags
+    let status = '';
+    if (this.statusMessage && performance.now() < this.statusMessageExpiry) {
+      status = this.statusMessage.text;
+    }
 
     if (hasLyrics && currentText && currentText !== '♪♪' && !this.inLyricGap) {
       // Lyrics mode: details = current lyric, state = → next lyric
@@ -913,7 +977,7 @@ export class LyricsEngine {
       }
 
       details = truncate(cur, 128);
-      state = nxt ? truncate(`→${nxt}`, 128) : ' · ';
+      state = nxt ? truncate(`→${nxt}`, 128) : '  ';
       // When lyrics are showing, details/state contain lyric LINES, not metadata.
       largeText = status
         ? truncate(status, 128)
@@ -923,7 +987,7 @@ export class LyricsEngine {
       details = truncate(d.track_name, 128);
       const ctx = this.cachedContextName;
 
-      if (ctx) {
+      if (ctx && !this.cachedIsRedundantCtx) {
         state = truncate(`🎼 ${ctx}${this.cachedPlayModeSuffix}`, 128);
         if (status) {
           largeText = truncate(status, 128);

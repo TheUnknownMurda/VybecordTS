@@ -1,0 +1,4 @@
+{
+    "RPC.idleTimeout": 360000,
+    "RPC.showFileInfo": false
+}
