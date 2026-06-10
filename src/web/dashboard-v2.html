@@ -1688,6 +1688,7 @@
             Spotify
           </span>
           <span id="badgeMode" class="badge badge-white">FREE</span>
+          <span id="badgeLyrics" class="badge badge-green">🎵 Lyrics</span>
         </div>
         <div class="nav-item" onclick="toggleTheme()">
           <span class="nav-icon" id="btnTheme">🌙</span>
@@ -4146,6 +4147,10 @@
         $("badgeSpotify").innerHTML = `<span class="dot">●</span> Spotify`;
         $("badgeMode").textContent = mode;
         $("badgeMode").className = `badge ${mode === "PREMIUM" ? "badge-spotify" : "badge-white"}`;
+        // Lyrics status badge
+        const showLyrics = msg.showLyrics !== false;
+        $("badgeLyrics").className = `badge ${showLyrics ? "badge-green" : "badge-red"}`;
+        $("badgeLyrics").textContent = showLyrics ? "🎵 Lyrics" : "🚫 Lyrics";
       }
       // HELPERS
       function formatMs(ms) {
