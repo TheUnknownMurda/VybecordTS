@@ -52,6 +52,9 @@ export class DiscordIPC {
   private lastActivityJson = '';
   private lastActivityArgs = '';
   private readonly pid = process.pid;
+  // Rate limiting: prevent rapid successive SET_ACTIVITY calls (Discord rate limit ~5 calls/5s)
+  private lastSetActivityTime = 0;
+  private readonly SET_ACTIVITY_COOLDOWN_MS = 200; // Max 5 calls per second
 
   constructor(clientId: string) {
     this.clientId = clientId;
@@ -346,9 +349,17 @@ export class DiscordIPC {
    * Set Discord Rich Presence activity.
    * This is the hot-path — called on every lyric line change.
    * Optimized: builds JSON string directly to avoid intermediate object allocations.
+   * Rate-limited to prevent Discord IPC errors (max 5 calls/second).
    */
   setActivity(activity: DiscordActivity): void {
     if (!this.connected) return;
+
+    // Rate limiting: skip if too soon since last call
+    const now = performance.now();
+    if (now - this.lastSetActivityTime < this.SET_ACTIVITY_COOLDOWN_MS) {
+      return;
+    }
+    this.lastSetActivityTime = now;
 
     // Build the RPC activity object (Discord IPC SET_ACTIVITY format)
     const rpcActivity: Record<string, unknown> = {};

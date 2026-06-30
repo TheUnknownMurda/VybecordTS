@@ -582,10 +582,10 @@
             <div class="setting-row" title="Masquer l'activité Discord quand la musique est en pause"><div><div class="s-label" data-i18n="only_when_playing">Only when playing</div></div><label class="toggle"><input type="checkbox" id="cfgOnlyWhenPlaying"><span class="slider"></span></label></div>
             <div class="setting-row" title="Afficher les paroles synchronisées en temps réel sur le dashboard"><div><div class="s-label" data-i18n="synced_lyrics">Synced lyrics</div></div><label class="toggle"><input type="checkbox" id="cfgShowLyrics" checked><span class="slider"></span></label></div>
             <div class="setting-row"><div><div class="s-label" data-i18n="romanize_lyrics">Romanize Lyrics</div><div class="s-hint" data-i18n="romanize_hint">JP, KR, ZH, RU, EL, TH, AR, HI, KA, HY → Latin</div></div><label class="toggle"><input type="checkbox" id="cfgRomanize"><span class="slider"></span></label></div>
-            <div class="setting-row"><div><div class="s-label" data-i18n="translate_lyrics">Translate lyrics</div><div class="s-hint" data-i18n="translate_hint">Real-time translation via Lingva</div></div><label class="toggle"><input type="checkbox" id="cfgTranslate"><span class="slider"></span></label></div>
-            <div class="setting-row" id="rpcTranslateRow" style="display:none"><div><div class="s-label" data-i18n="rpc_translate_lyrics">Translate RPC lyrics</div><div class="s-hint" data-i18n="rpc_translate_hint">Show translated lyrics on Discord RPC</div></div><label class="toggle"><input type="checkbox" id="cfgRpcTranslate"><span class="slider"></span></label></div>
+            <div class="setting-row"><div><div class="s-label" data-i18n="translate_lyrics">Translate lyrics</div><div class="s-hint" data-i18n="translate_hint">Real-time translation via Lingva (dashboard only)</div></div><label class="toggle"><input type="checkbox" id="cfgTranslate"><span class="slider"></span></label></div>
+            <div class="setting-row" id="rpcTranslateRow"><div><div class="s-label" data-i18n="rpc_translate_lyrics">Translate RPC lyrics</div><div class="s-hint" data-i18n="rpc_translate_hint">Show translated lyrics on Discord RPC</div></div><label class="toggle"><input type="checkbox" id="cfgRpcTranslate"><span class="slider"></span></label></div>
             <div class="setting-row" id="translateLangRow" style="display:none"><div><div class="s-label" data-i18n="translate_target">Target language</div></div><select id="cfgTranslateLang" style="background:rgba(255,255,255,.05);border:1px solid var(--border-d);border-radius:6px;color:#d4d4d8;font-size:12px;padding:4px 8px;cursor:pointer"><option value="en">English</option><option value="fr">Français</option><option value="es">Español</option><option value="de">Deutsch</option><option value="pt">Português</option><option value="it">Italiano</option><option value="ru">Русский</option><option value="ja">日本語</option><option value="ko">한국어</option><option value="zh">中文</option><option value="ar">العربية</option><option value="hi">हिन्दी</option><option value="tr">Türkçe</option><option value="pl">Polski</option><option value="nl">Nederlands</option><option value="sv">Svenska</option></select></div>
-            <div><label class="text-[11px] text-zinc-500 font-medium mb-1 block" data-i18n="small_icon_label">Small Icon Mode</label><select id="cfgSmallIconMode"><option value="default" data-i18n="icon_default">Default (platform)</option><option value="dance" data-i18n="club_mode">Club Mode</option><option value="radiate" data-i18n="radiate_mode">Radiate Mode</option><option value="purple_rad" data-i18n="purple_rad_mode">Purple Rad</option><option value="rouge" data-i18n="rouge_mode">Rouge</option><option value="bleeding" data-i18n="bleeding_mode">Bleeding</option><option value="lrc_off" data-i18n="lrc_off_mode">LRC OFF</option><option value="random" data-i18n="random_icon_mode">Random</option><option value="hidden" data-i18n="hide_small_icon">No Icon</option></select></div>
+            <div><label class="text-[11px] text-zinc-500 font-medium mb-1 block" data-i18n="small_icon_label">Small Icon Mode</label><select id="cfgSmallIconMode"><option value="default" data-i18n="icon_default">Default (platform)</option><option value="dance" data-i18n="club_mode">Club Mode</option><option value="radiate" data-i18n="radiate_mode">Radiate Mode</option><option value="purple_rad" data-i18n="purple_rad_mode">Purple Rad</option><option value="rouge" data-i18n="rouge_mode">Rouge</option><option value="bleeding" data-i18n="bleeding_mode">Bleeding</option><option value="random" data-i18n="random_icon_mode">Random</option><option value="hidden" data-i18n="hide_small_icon">No Icon</option></select></div>
             <div class="setting-row" style="border-top:1px solid var(--border-s);padding-top:8px"><div><div class="s-label" data-i18n="accent_color">🎨 Accent Color</div><div class="s-hint" data-i18n="accent_auto_hint">Auto = extracted from album art</div></div><div class="flex items-center gap-2"><input type="color" id="cfgAccentColor" value="#a78bfa" style="width:32px;height:26px;border:1px solid var(--border-d);border-radius:6px;background:transparent;cursor:pointer;padding:0" onchange="onAccentPick(this.value)"><button class="btn-ghost btn text-[10px] !py-0.5 !px-2" id="btnAccentReset" onclick="resetAccentColor()" data-i18n="accent_reset">Auto</button></div></div>
           </div>
           <div class="glass p-5 space-y-3">
@@ -839,7 +839,7 @@
   </div>
 
   <footer class="app-footer px-6 py-2 flex items-center justify-center gap-2 text-[10px] text-zinc-600 flex-shrink-0">
-    <span class="gradient-text font-semibold">VybecordTS</span><span class="text-zinc-700">·</span><span class="text-zinc-700" data-i18n="footer_desc">Synced Lyrics & Discord RPC</span><span class="text-zinc-700">·</span><a href="https://discord.gg/ZWQGwG6Egt" target="_blank" rel="noopener" style="color:var(--accent-hex);text-decoration:none;font-weight:600;transition:opacity .2s" onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'" data-i18n="footer_discord">💬 Discord</a><span class="text-zinc-700">·</span><button onclick="showQrModal()" style="background:none;border:none;color:var(--accent-hex);cursor:pointer;font-weight:600;font-size:10px;font-family:inherit;padding:0;transition:opacity .2s" onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'" data-i18n="qr_share">📱 QR</button>
+    <span class="gradient-text font-semibold">VybecordTS</span><span class="text-zinc-700">·</span><span class="text-zinc-700" data-i18n="footer_desc">Synced Lyrics & Discord RPC</span><span class="text-zinc-700">·</span><button onclick="showQrModal()" style="background:none;border:none;color:var(--accent-hex);cursor:pointer;font-weight:600;font-size:10px;font-family:inherit;padding:0;transition:opacity .2s" onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'" data-i18n="qr_share">📱 QR</button>
   </footer>
 
 <script>
@@ -885,7 +885,7 @@ const LANGS = {
     small_icon_label: 'Small Icon Mode', icon_default: 'Default (platform)',
     club_mode: 'Club Mode', radiate_mode: 'Radiate Mode',
     purple_rad_mode: 'Purple Rad', rouge_mode: 'Rouge', bleeding_mode: 'Bleeding',
-    lrc_off_mode: 'LRC OFF', random_icon_mode: 'Random', hide_small_icon: 'No Icon',
+    random_icon_mode: 'Random', hide_small_icon: 'No Icon',
     accent_color: '🎨 Accent Color', accent_auto_hint: 'Auto = extracted from album art', accent_reset: 'Auto',
     cc_lang_label: '🔤 CC / Subtitle Language', cc_auto: 'Auto (FR → EN)',
     rpc_display: 'RPC Display', activity_type: 'Activity Type',
@@ -980,7 +980,7 @@ const LANGS = {
     small_icon_label: 'Petite icône', icon_default: 'Défaut (plateforme)',
     club_mode: 'Mode Club', radiate_mode: 'Mode Radiate',
     purple_rad_mode: 'Purple Rad', rouge_mode: 'Rouge', bleeding_mode: 'Bleeding',
-    lrc_off_mode: 'LRC OFF', random_icon_mode: 'Random', hide_small_icon: 'Aucune',
+    random_icon_mode: 'Random', hide_small_icon: 'Aucune',
     accent_color: '🎨 Couleur d\'accent', accent_auto_hint: 'Auto = extraite de la pochette', accent_reset: 'Auto',
     cc_lang_label: '🔤 Langue CC / Sous-titres', cc_auto: 'Auto (FR → EN)',
     rpc_display: 'Affichage RPC', activity_type: 'Type d\'activité',
@@ -1071,7 +1071,7 @@ const LANGS = {
     small_icon_label: 'Icono pequeño', icon_default: 'Predeterminado (plataforma)',
     club_mode: 'Modo Club', radiate_mode: 'Modo Radiate',
     purple_rad_mode: 'Purple Rad', rouge_mode: 'Rouge', bleeding_mode: 'Bleeding',
-    lrc_off_mode: 'LRC OFF', random_icon_mode: 'Aleatorio', hide_small_icon: 'Sin icono',
+    random_icon_mode: 'Aleatorio', hide_small_icon: 'Sin icono',
     accent_color: '🎨 Color de acento', accent_auto_hint: 'Auto = extraído del arte del álbum', accent_reset: 'Auto',
     cc_lang_label: '🔤 Idioma CC / Subtítulos', cc_auto: 'Auto (FR → EN)',
     rpc_display: 'Pantalla RPC', activity_type: 'Tipo de actividad',
@@ -1151,7 +1151,7 @@ const LANGS = {
     small_icon_label: 'Kleines Icon', icon_default: 'Standard (Plattform)',
     club_mode: 'Club-Modus', radiate_mode: 'Radiate-Modus',
     purple_rad_mode: 'Purple Rad', rouge_mode: 'Rouge', bleeding_mode: 'Bleeding',
-    lrc_off_mode: 'LRC AUS', random_icon_mode: 'Zufällig', hide_small_icon: 'Kein Icon',
+    random_icon_mode: 'Zufällig', hide_small_icon: 'Kein Icon',
     accent_color: '🎨 Akzentfarbe', accent_auto_hint: 'Auto = aus Albumcover extrahiert', accent_reset: 'Auto',
     cc_lang_label: '🔤 CC-/Untertitelsprache', cc_auto: 'Auto (FR → EN)',
     rpc_display: 'RPC-Anzeige', activity_type: 'Aktivitätstyp',
@@ -1231,7 +1231,7 @@ const LANGS = {
     small_icon_label: 'Ícone pequeno', icon_default: 'Padrão (plataforma)',
     club_mode: 'Modo Club', radiate_mode: 'Modo Radiate',
     purple_rad_mode: 'Purple Rad', rouge_mode: 'Rouge', bleeding_mode: 'Bleeding',
-    lrc_off_mode: 'LRC OFF', random_icon_mode: 'Aleatório', hide_small_icon: 'Sem ícone',
+    random_icon_mode: 'Aleatório', hide_small_icon: 'Sem ícone',
     accent_color: '🎨 Cor de destaque', accent_auto_hint: 'Auto = extraída da capa do álbum', accent_reset: 'Auto',
     cc_lang_label: '🔤 Idioma CC / Legendas', cc_auto: 'Auto (FR → EN)',
     rpc_display: 'Exibição RPC', activity_type: 'Tipo de atividade',
@@ -1311,7 +1311,7 @@ const LANGS = {
     small_icon_label: 'Маленькая иконка', icon_default: 'По умолчанию (платформа)',
     club_mode: 'Club Mode', radiate_mode: 'Radiate Mode',
     purple_rad_mode: 'Purple Rad', rouge_mode: 'Rouge', bleeding_mode: 'Bleeding',
-    lrc_off_mode: 'LRC ВЫКЛ', random_icon_mode: 'Случайно', hide_small_icon: 'Без иконки',
+    random_icon_mode: 'Случайно', hide_small_icon: 'Без иконки',
     accent_color: '🎨 Цвет акцента', accent_auto_hint: 'Авто = из обложки альбома', accent_reset: 'Авто',
     cc_lang_label: '🔤 Язык CC / субтитров', cc_auto: 'Авто (FR → EN)',
     rpc_display: 'Отображение RPC', activity_type: 'Тип активности',
@@ -1391,7 +1391,7 @@ const LANGS = {
     small_icon_label: '小アイコン', icon_default: 'デフォルト（プラットフォーム）',
     club_mode: 'クラブモード', radiate_mode: 'Radiateモード',
     purple_rad_mode: 'Purple Rad', rouge_mode: 'Rouge', bleeding_mode: 'Bleeding',
-    lrc_off_mode: 'LRC OFF', random_icon_mode: 'ランダム', hide_small_icon: 'アイコンなし',
+    random_icon_mode: 'ランダム', hide_small_icon: 'アイコンなし',
     accent_color: '🎨 アクセントカラー', accent_auto_hint: '自動 = アルバムアートから抽出', accent_reset: '自動',
     cc_lang_label: '🔤 CC / 字幕言語', cc_auto: '自動 (FR → EN)',
     rpc_display: 'RPC表示', activity_type: 'アクティビティタイプ',
@@ -1471,7 +1471,7 @@ const LANGS = {
     small_icon_label: '작은 아이콘', icon_default: '기본 (플랫폼)',
     club_mode: '클럽 모드', radiate_mode: 'Radiate 모드',
     purple_rad_mode: 'Purple Rad', rouge_mode: 'Rouge', bleeding_mode: 'Bleeding',
-    lrc_off_mode: 'LRC OFF', random_icon_mode: '랜덤', hide_small_icon: '아이콘 없음',
+    random_icon_mode: '랜덤', hide_small_icon: '아이콘 없음',
     accent_color: '🎨 강조 색상', accent_auto_hint: '자동 = 앨범 아트에서 추출', accent_reset: '자동',
     cc_lang_label: '🔤 CC / 자막 언어', cc_auto: '자동 (FR → EN)',
     rpc_display: 'RPC 표시', activity_type: '활동 유형',
@@ -1551,7 +1551,7 @@ const LANGS = {
     small_icon_label: '小图标', icon_default: '默认（平台）',
     club_mode: '派对模式', radiate_mode: 'Radiate 模式',
     purple_rad_mode: 'Purple Rad', rouge_mode: 'Rouge', bleeding_mode: 'Bleeding',
-    lrc_off_mode: 'LRC 关闭', random_icon_mode: '随机', hide_small_icon: '无图标',
+    random_icon_mode: '随机', hide_small_icon: '无图标',
     accent_color: '🎨 强调色', accent_auto_hint: '自动 = 从专辑封面提取', accent_reset: '自动',
     cc_lang_label: '🔤 CC / 字幕语言', cc_auto: '自动 (FR → EN)',
     rpc_display: 'RPC 显示', activity_type: '活动类型',
@@ -2091,13 +2091,13 @@ function loadConfig(c) {
   $('cfgRpcTranslate').checked = c.rpc_translate_lyrics === true;
   $('cfgTranslateLang').value = c.translate_target_lang || 'en';
   const _updateTranslateVisibility = () => {
-    const on = $('cfgTranslate').checked;
-    $('rpcTranslateRow').style.display = on ? '' : 'none';
-    $('translateLangRow').style.display = on ? '' : 'none';
-    if (!on) $('cfgRpcTranslate').checked = false;
+    const dashboardOn = $('cfgTranslate').checked;
+    const rpcOn = $('cfgRpcTranslate').checked;
+    $('translateLangRow').style.display = (dashboardOn || rpcOn) ? '' : 'none';
   };
   _updateTranslateVisibility();
   $('cfgTranslate').onchange = _updateTranslateVisibility;
+  $('cfgRpcTranslate').onchange = _updateTranslateVisibility;
   $('cfgDetectAllMedia').checked = c.detect_all_media !== false;
   $('cfgDetectSpotify').checked = c.detect_spotify !== false;
   $('cfgDetectYoutube').checked = c.detect_youtube !== false;
@@ -2106,7 +2106,7 @@ function loadConfig(c) {
   $('cfgDetectOtherApps').checked = c.detect_other_apps !== false;
   updatePlatformToggles();
   // Small icon mode dropdown — derive from boolean flags
-  const iconMode = c.hide_small_icon ? 'hidden' : c.random_icon_mode ? 'random' : c.lrc_off_mode ? 'lrc_off' : c.rouge_mode ? 'rouge' : c.bleeding_mode ? 'bleeding' : c.purple_rad_mode ? 'purple_rad' : c.radiate_mode ? 'radiate' : c.dance_mode ? 'dance' : 'default';
+  const iconMode = c.hide_small_icon ? 'hidden' : c.random_icon_mode ? 'random' : c.rouge_mode ? 'rouge' : c.bleeding_mode ? 'bleeding' : c.purple_rad_mode ? 'purple_rad' : c.radiate_mode ? 'radiate' : c.dance_mode ? 'dance' : 'default';
   $('cfgSmallIconMode').value = iconMode;
   $('cfgCcEnabled').checked = c.cc_enabled !== false;
   $('cfgCcLang').value = c.cc_lang || 'auto';
@@ -2147,7 +2147,7 @@ function updatePlatformToggles() {
 const PLATFORM_DISPLAY = {
   spotify: 'Spotify', apple_music: 'Apple Music', deezer: 'Deezer',
   tidal: 'Tidal', amazon_music: 'Amazon Music', soundcloud: 'SoundCloud',
-  bandcamp: 'Bandcamp', youtube_music: 'YouTube Music',
+  bandcamp: 'Bandcamp', youtube_music: 'YouTube Music', kick: 'Kick', twitch: 'Twitch',
   browser_chrome: 'YouTube', browser_firefox: 'YouTube',
   browser_edge: 'YouTube', browser_brave: 'YouTube', browser_opera: 'YouTube',
 };
@@ -2161,6 +2161,8 @@ const PLATFORM_LINK_IMG = {
   bandcamp: 'https://cdn.simpleicons.org/bandcamp/1DA0C3',
   youtube_music: 'https://cdn.simpleicons.org/youtubemusic/FF0000',
   youtube: 'https://cdn.simpleicons.org/youtube/FF0000',
+  kick: 'https://cdn.simpleicons.org/kick/53FC18',
+  twitch: 'https://cdn.simpleicons.org/twitch/9146FF',
   browser_chrome: 'https://cdn.simpleicons.org/youtube/FF0000',
   browser_firefox: 'https://cdn.simpleicons.org/youtube/FF0000',
   browser_edge: 'https://cdn.simpleicons.org/youtube/FF0000',
@@ -2210,7 +2212,6 @@ async function saveConfig() {
     purple_rad_mode: $('cfgSmallIconMode').value === 'purple_rad',
     rouge_mode: $('cfgSmallIconMode').value === 'rouge',
     bleeding_mode: $('cfgSmallIconMode').value === 'bleeding',
-    lrc_off_mode: $('cfgSmallIconMode').value === 'lrc_off',
     random_icon_mode: $('cfgSmallIconMode').value === 'random',
     hide_small_icon: $('cfgSmallIconMode').value === 'hidden',
     cc_enabled: $('cfgCcEnabled').checked,

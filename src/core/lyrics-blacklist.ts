@@ -20,8 +20,9 @@ const log = createLogger('Blacklist');
 let blacklist = new Map<string, Set<string>>();
 let filePath = '';
 
-/** Initialise the blacklist, loading any previously flagged entries from disk. */
-export function initBlacklist(configDir: string): void {
+/** Initialise the blacklist, loading any previously flagged entries from disk.
+ * Returns true if initialization succeeded, false otherwise. */
+export function initBlacklist(configDir: string): boolean {
   filePath = path.join(configDir, 'flagged-lyrics.json');
   try {
     if (fs.existsSync(filePath)) {
@@ -31,9 +32,14 @@ export function initBlacklist(configDir: string): void {
       }
       const total = [...blacklist.values()].reduce((s, v) => s + v.size, 0);
       log.info(`Loaded ${total} flagged lyrics entries`);
+      return true;
     }
+    log.info('No flagged-lyrics.json found, starting with empty blacklist');
+    return true;
   } catch (e) {
-    log.warn(`Failed to load flagged-lyrics.json: ${e}`);
+    log.error(`Failed to load flagged-lyrics.json: ${e}`);
+    log.error('Flagged lyrics will not be available in this session');
+    return false;
   }
 }
 
@@ -113,7 +119,10 @@ function persist(): void {
     for (const [key, hashes] of blacklist) {
       obj[key] = [...hashes];
     }
-    fs.writeFileSync(filePath, JSON.stringify(obj, null, 2), 'utf-8');
+    // Use async write to avoid blocking event loop
+    fs.writeFile(filePath, JSON.stringify(obj, null, 2), 'utf-8', (err) => {
+      if (err) log.error(`Failed to save flagged-lyrics.json: ${err}`);
+    });
   } catch (e) {
     log.error(`Failed to save flagged-lyrics.json: ${e}`);
   }

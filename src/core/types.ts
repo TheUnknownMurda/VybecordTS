@@ -137,8 +137,6 @@ export interface VybecordConfig {
   bleeding_mode: boolean;
   /** Blue Rad mode: blue animated GIF as small icon (all platforms) */
   blue_rad_mode: boolean;
-  /** LRC OFF mode: static icon as small image (all platforms) */
-  lrc_off_mode: boolean;
   /** Random icon mode: pick a random small icon each track */
   random_icon_mode: boolean;
   /** Hide small icon: remove the small image entirely */
@@ -151,8 +149,10 @@ export interface VybecordConfig {
   lyrics_offset_ms: number;
   /** Auto-romanize Japanese/Korean lyrics (Kana→romaji, Hangul→romanization) */
   romanize_lyrics: boolean;
-  /** Enable real-time lyric translation */
+  /** Enable real-time lyric translation (dashboard only) */
   translate_lyrics: boolean;
+  /** Enable translated lyrics on Discord RPC */
+  rpc_translate_lyrics: boolean;
   /** Target language for lyric translation (ISO 639-1 code) */
   translate_target_lang: string;
   // Polling

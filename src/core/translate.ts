@@ -52,7 +52,7 @@ loadDiskCache();
 
 // ── Concurrency limiter (async semaphore — zero polling) ──
 let activeRequests = 0;
-const MAX_CONCURRENT = 6;
+const MAX_CONCURRENT = 12;
 const waitQueue: (() => void)[] = [];
 
 // ── Supported languages ──
@@ -240,7 +240,7 @@ export async function translateBatch(
   const unique = [...new Set(lines.filter(l => l.trim().length >= 2 && !/^[♪♫🎵\s]+$/.test(l.trim())))];
 
   // Run all unique lines in parallel with higher concurrency for batch
-  const BATCH_CONCURRENT = 10;
+  const BATCH_CONCURRENT = 20;
   for (let i = 0; i < unique.length; i += BATCH_CONCURRENT) {
     if (signal?.aborted) break;
     const chunk = unique.slice(i, i + BATCH_CONCURRENT);

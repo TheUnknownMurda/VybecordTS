@@ -380,6 +380,10 @@ export async function fetchLyrics(
   albumClean = albumClean.replace(RE_BRACKET_TAG, '').trim();
   albumClean = albumClean.replace(RE_VERSION_SUFFIX, '').trim();
 
+  // Global timeout to prevent indefinite hanging (20s max total)
+  const globalTimeout = AbortSignal.timeout(20_000);
+  const combinedSignal = signal ? AbortSignal.any([signal, globalTimeout]) : globalTimeout;
+
   // ── PHASE 0: LOCAL DB (~1ms) ──
   if (hasLocalDb()) {
     const localResult = searchLocalDb(cleanName, primaryArtist, durationSec)
@@ -395,14 +399,15 @@ export async function fetchLyrics(
   // ── PHASE 1: PARALLEL RACE — LRCLib direct | Netease ──
   // First valid result wins. This cuts latency from sequential ~600ms to ~200-300ms.
   // Child abort: cancel the loser when winner arrives (save bandwidth)
+  const phase1Start = Date.now();
   const raceAbort = new AbortController();
-  const raceSignal = signal ? AbortSignal.any([signal, raceAbort.signal]) : raceAbort.signal;
+  const raceSignal = combinedSignal ? AbortSignal.any([combinedSignal, raceAbort.signal]) : raceAbort.signal;
 
   const racers: Promise<{ source: string; lines: LyricLine[] }>[] = [];
 
   // Racer 1: LRCLib direct lookup (usually fastest for exact matches)
   racers.push(
-    tryDirectLookup(name, cleanName, artist, primaryArtist, albumClean, durationSec, raceSignal)
+    tryDirectLookup(name, cleanName, artist, primaryArtist, albumClean, durationSec, combinedSignal)
       .then(lines => {
         if (!lines) throw new Error('no result');
         return { source: 'LRCLib-direct', lines };
@@ -411,7 +416,7 @@ export async function fetchLyrics(
 
   // Racer 2: Netease Cloud Music (huge catalogue, often has what LRCLib doesn't)
   racers.push(
-    searchNetease(cleanName, primaryArtist, durationSec, raceSignal)
+    searchNetease(cleanName, primaryArtist, durationSec, combinedSignal)
       .then(lines => {
         if (!lines) throw new Error('no result');
         return { source: 'Netease', lines };
@@ -420,7 +425,7 @@ export async function fetchLyrics(
 
   // Racer 3: Musixmatch (largest synced lyrics database — guest token, no API key needed)
   racers.push(
-    searchMusixmatch(cleanName, primaryArtist, durationSec, raceSignal)
+    searchMusixmatch(cleanName, primaryArtist, durationSec, combinedSignal)
       .then(lines => {
         if (!lines) throw new Error('no result');
         return { source: 'Musixmatch', lines };
@@ -430,18 +435,22 @@ export async function fetchLyrics(
   try {
     const winner = await Promise.any(racers);
     raceAbort.abort(); // Cancel the loser
-    log.info(`[LYRICS] ${winner.source} won race (${winner.lines.length} lines)`);
+    const phase1Duration = Date.now() - phase1Start;
+    log.info(`[LYRICS] ${winner.source} won race (${winner.lines.length} lines) in ${phase1Duration}ms`);
     return winner.lines;
   } catch {
     // All racers failed — fall through
+    const phase1Duration = Date.now() - phase1Start;
+    log.info(`[LYRICS] Phase 1 failed after ${phase1Duration}ms (all racers timed out)`);
   } finally {
     raceAbort.abort(); // Ensure cleanup
   }
 
   // ── PHASE 1.5: LAST.FM AUTOCORRECT RETRY ──
   // If raw names failed, ask Last.fm to fix misspellings and retry
+  const phase15Start = Date.now();
   if (hasLastFm()) {
-    const correction = await getCorrection(cleanName, primaryArtist, signal);
+    const correction = await getCorrection(cleanName, primaryArtist, combinedSignal);
     if (correction) {
       const cTrack = correction.track;
       const cArtist = correction.artist;
@@ -466,25 +475,25 @@ export async function fetchLyrics(
 
         // Parallel race with corrected names
         const corrAbort = new AbortController();
-        const corrSignal = signal ? AbortSignal.any([signal, corrAbort.signal]) : corrAbort.signal;
+        const corrSignal = combinedSignal ? AbortSignal.any([combinedSignal, corrAbort.signal]) : corrAbort.signal;
         const corrRacers: Promise<{ source: string; lines: LyricLine[] }>[] = [];
         const [corrClean] = cleanForSearch(cTrack, cArtist);
         corrRacers.push(
-          tryDirectLookup(cTrack, corrClean, cArtist, cArtist, cAlbum, cDur, corrSignal)
+          tryDirectLookup(cTrack, corrClean, cArtist, cArtist, cAlbum, cDur, combinedSignal)
             .then(lines => {
               if (!lines) throw new Error('no result');
               return { source: 'LRCLib-corrected', lines };
             }),
         );
         corrRacers.push(
-          searchNetease(cTrack, cArtist, cDur, corrSignal)
+          searchNetease(cTrack, cArtist, cDur, combinedSignal)
             .then(lines => {
               if (!lines) throw new Error('no result');
               return { source: 'Netease-corrected', lines };
             }),
         );
         corrRacers.push(
-          searchMusixmatch(cTrack, cArtist, cDur, corrSignal)
+          searchMusixmatch(cTrack, cArtist, cDur, combinedSignal)
             .then(lines => {
               if (!lines) throw new Error('no result');
               return { source: 'Musixmatch-corrected', lines };
@@ -493,23 +502,33 @@ export async function fetchLyrics(
         try {
           const winner = await Promise.any(corrRacers);
           corrAbort.abort();
-          log.info(`[LYRICS] ${winner.source} won race (${winner.lines.length} lines)`);
+          const phase15Duration = Date.now() - phase15Start;
+          log.info(`[LYRICS] ${winner.source} won race (${winner.lines.length} lines) in ${phase15Duration}ms (Last.fm corrected)`);
           return winner.lines;
         } catch {
           // corrected names also failed
+          const phase15Duration = Date.now() - phase15Start;
+          log.info(`[LYRICS] Phase 1.5 failed after ${phase15Duration}ms (Last.fm correction failed)`);
         } finally {
           corrAbort.abort();
         }
       }
     }
+    const phase15Duration = Date.now() - phase15Start;
+    if (phase15Duration > 100) {
+      log.info(`[LYRICS] Phase 1.5 skipped after ${phase15Duration}ms (no correction needed)`);
+    }
   }
 
   // ── PHASE 2: FALLBACK — LRCLib fuzzy search + scoring ──
-  const searchResult = await tryFuzzySearch(name, cleanName, artist, primaryArtist, albumClean, durationSec, signal);
+  const phase2Start = Date.now();
+  const searchResult = await tryFuzzySearch(name, cleanName, artist, primaryArtist, albumClean, durationSec, combinedSignal);
+  const phase2Duration = Date.now() - phase2Start;
   if (searchResult) {
-    log.info(`[LYRICS] Fuzzy match (${searchResult.length} lines)`);
+    log.info(`[LYRICS] Fuzzy match (${searchResult.length} lines) in ${phase2Duration}ms`);
     return searchResult;
   }
+  log.info(`[LYRICS] Phase 2 failed after ${phase2Duration}ms (no fuzzy match)`);
 
   log.info('[LYRICS] No lyrics found (all providers exhausted)');
   return [];
@@ -573,7 +592,7 @@ async function tryDirectLookup(
     // Duration sanity check
     if (durationSec != null && result.duration != null) {
       const diff = Math.abs(durationSec - result.duration);
-      if (diff > 15) {
+      if (diff > 30) {
         log.debug(`[LYRICS] Direct hit rejected — duration mismatch (${diff}s): "${result.trackName}"`);
         return null;
       }
@@ -680,10 +699,10 @@ async function tryFuzzySearch(
       artistSim = Math.max(artistSim, similarity(artist, primaryCand));
     }
 
-    // Duration sanity check: reject candidates with >15s mismatch
+    // Duration sanity check: reject candidates with >30s mismatch
     if (durationSec != null && cand.duration != null) {
       const durDiff = Math.abs(durationSec - cand.duration);
-      if (durDiff > 15) {
+      if (durDiff > 30) {
         log.debug(`[LYRICS] Fuzzy rejected — duration mismatch (${durDiff}s): "${cand.trackName}"`);
         continue;
       }

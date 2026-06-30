@@ -263,10 +263,15 @@ export async function completeAuth(token: string): Promise<boolean> {
     scrobbleEnabled = true;
 
     // Persist session key
-    if (configDir) {
+    if (configDir && sessionKey) {
       const skPath = path.join(configDir, 'lastfm-session.txt');
-      fs.mkdirSync(path.dirname(skPath), { recursive: true });
-      fs.writeFileSync(skPath, sessionKey, 'utf-8');
+      const keyToSave = sessionKey; // Capture for TypeScript
+      fs.mkdir(path.dirname(skPath), { recursive: true }, (err) => {
+        if (err) return log.error(`Failed to create Last.fm directory: ${err}`);
+        fs.writeFile(skPath, keyToSave, 'utf-8', (writeErr) => {
+          if (writeErr) log.error(`Failed to save Last.fm session: ${writeErr}`);
+        });
+      });
     }
 
     log.info(`[SCROBBLE] Authenticated as "${data.session.name}" ✓`);

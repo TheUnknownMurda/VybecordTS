@@ -26,7 +26,11 @@
     "assets": [
       "node_modules/better-sqlite3/build/Release/*.node",
       "node_modules/better-sqlite3/prebuilds/**/*"
-    ]
+    ],
+    "targets": [
+      "node20-win-x64"
+    ],
+    "outputPath": "build/VybecordTS"
   },
   "dependencies": {
     "better-sqlite3": "^12.9.0",

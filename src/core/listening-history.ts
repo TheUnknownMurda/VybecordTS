@@ -121,8 +121,12 @@ function flushSave(): void {
 function saveToDisk(): void {
   if (!historyPath) return;
   try {
-    fs.mkdirSync(path.dirname(historyPath), { recursive: true });
-    fs.writeFileSync(historyPath, JSON.stringify(entries), 'utf-8');
+    fs.mkdir(path.dirname(historyPath), { recursive: true }, (err) => {
+      if (err) return log.warn(`Failed to create history directory: ${err}`);
+      fs.writeFile(historyPath, JSON.stringify(entries), 'utf-8', (writeErr) => {
+        if (writeErr) log.warn(`Failed to save history: ${writeErr}`);
+      });
+    });
   } catch (e) {
     log.warn(`Failed to save history: ${e}`);
   }

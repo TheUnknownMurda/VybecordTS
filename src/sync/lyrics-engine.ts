@@ -46,36 +46,42 @@ const RANDOM_ICON_POOL: [string, string][] = [
   ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/I9CeTrPc17wqbDilQPN9K.gif', '💜 Purple Rad'],
   ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/HrMk6Gy5NrHDuNewWnUOR.gif', '🔴 Rouge'],
   ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/BUo3vfJ4QVWlghZJYuyIB.gif', '💙 Blue Rad'],
-  ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/4CoaWZGd53cD62wNI1ZOT.png', '🚫 LRC OFF'],
 ];
 
 // ── Platform icons (external URLs — rendered by Discord image proxy) ──
+// Note: Discord no longer supports external URLs for small_image. Using compatible host.
 const PLATFORM_ICONS: Record<string, [string, string]> = {
   // Streaming services
-  spotify: ['https://upload.wikimedia.org/wikipedia/commons/thumb/8/84/Spotify_icon.svg/128px-Spotify_icon.svg.png', 'Spotify'],
-  apple_music: ['https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/Apple_Music_icon.svg/128px-Apple_Music_icon.svg.png', 'Apple Music'],
-  deezer: ['https://upload.wikimedia.org/wikipedia/commons/thumb/1/11/Deezer_logo_2023.svg/128px-Deezer_logo_2023.svg.png', 'Deezer'],
-  tidal: ['https://upload.wikimedia.org/wikipedia/commons/thumb/7/74/Tidal_%28service%29_logo.svg/128px-Tidal_%28service%29_logo.svg.png', 'Tidal'],
-  amazon_music: ['https://upload.wikimedia.org/wikipedia/commons/thumb/a/a0/Amazon_Music_2024.svg/128px-Amazon_Music_2024.svg.png', 'Amazon Music'],
-  soundcloud: ['https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Antu_soundcloud.svg/128px-Antu_soundcloud.svg.png', 'SoundCloud'],
-  bandcamp: ['https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/Bandcamp-button-circle-whiteblack.svg/128px-Bandcamp-button-circle-whiteblack.svg.png', 'Bandcamp'],
-  youtube_music: ['https://upload.wikimedia.org/wikipedia/commons/thumb/6/6a/Youtube_Music_icon.svg/128px-Youtube_Music_icon.svg.png', 'YouTube Music'],
-  youtube: ['https://upload.wikimedia.org/wikipedia/commons/thumb/0/09/YouTube_full-color_icon_%282017%29.svg/128px-YouTube_full-color_icon_%282017%29.svg.png', 'YouTube'],
+  spotify: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/ynkf4PMICGeuMIvv7CXpC.png', 'Spotify'],
+  apple_music: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/ICa0AUJOip2kfiPnSCfDq.png', 'Apple Music'],
+  deezer: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/VVjYzmfdMIF5hHA8SUnbi.gif', 'Deezer'],
+  tidal: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/VVjYzmfdMIF5hHA8SUnbi.gif', 'Tidal'],
+  amazon_music: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/VVjYzmfdMIF5hHA8SUnbi.gif', 'Amazon Music'],
+  soundcloud: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/AUyaLDvEnlp1O2fX4HTvX.png', 'SoundCloud'],
+  bandcamp: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/VVjYzmfdMIF5hHA8SUnbi.gif', 'Bandcamp'],
+  youtube_music: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/2Fhe7kDaQIQjvCtdlhlmo.png', 'YouTube Music'],
+  youtube: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/2Fhe7kDaQIQjvCtdlhlmo.png', 'YouTube'],
   // Browsers (YouTube / web player)
-  browser_chrome: ['https://upload.wikimedia.org/wikipedia/commons/thumb/0/09/YouTube_full-color_icon_%282017%29.svg/128px-YouTube_full-color_icon_%282017%29.svg.png', 'YouTube'],
-  browser_firefox: ['https://upload.wikimedia.org/wikipedia/commons/thumb/0/09/YouTube_full-color_icon_%282017%29.svg/128px-YouTube_full-color_icon_%282017%29.svg.png', 'YouTube'],
-  browser_edge: ['https://upload.wikimedia.org/wikipedia/commons/thumb/0/09/YouTube_full-color_icon_%282017%29.svg/128px-YouTube_full-color_icon_%282017%29.svg.png', 'YouTube'],
-  browser_brave: ['https://upload.wikimedia.org/wikipedia/commons/thumb/0/09/YouTube_full-color_icon_%282017%29.svg/128px-YouTube_full-color_icon_%282017%29.svg.png', 'YouTube'],
-  browser_opera: ['https://upload.wikimedia.org/wikipedia/commons/thumb/0/09/YouTube_full-color_icon_%282017%29.svg/128px-YouTube_full-color_icon_%282017%29.svg.png', 'YouTube'],
+  browser_chrome: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/2Fhe7kDaQIQjvCtdlhlmo.png', 'YouTube'],
+  browser_firefox: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/2Fhe7kDaQIQjvCtdlhlmo.png', 'YouTube'],
+  browser_edge: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/2Fhe7kDaQIQjvCtdlhlmo.png', 'YouTube'],
+  browser_brave: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/2Fhe7kDaQIQjvCtdlhlmo.png', 'YouTube'],
+  browser_opera: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/2Fhe7kDaQIQjvCtdlhlmo.png', 'YouTube'],
   // Desktop players
-  vlc: ['https://upload.wikimedia.org/wikipedia/commons/thumb/e/e6/VLC_Icon.svg/128px-VLC_Icon.svg.png', 'VLC'],
-  foobar2000: ['https://upload.wikimedia.org/wikipedia/commons/thumb/f/fb/Foobar2000_logo.svg/128px-Foobar2000_logo.svg.png', 'foobar2000'],
-  musicbee: ['https://upload.wikimedia.org/wikipedia/commons/4/40/MusicBee_Logo.png', 'MusicBee'],
-  aimp: ['https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/AIMP_Logo.svg/128px-AIMP_Logo.svg.png', 'AIMP'],
-  winamp: ['https://upload.wikimedia.org/wikipedia/commons/thumb/d/da/WinampIcon.svg/128px-WinampIcon.svg.png', 'Winamp'],
-  mediamonkey: ['https://upload.wikimedia.org/wikipedia/commons/thumb/5/52/Mediamonkey_logo.svg/128px-Mediamonkey_logo.svg.png', 'MediaMonkey'],
-  groove: ['https://upload.wikimedia.org/wikipedia/commons/thumb/4/45/Groove_Music_logo.svg/128px-Groove_Music_logo.svg.png', 'Groove Music'],
-  wmp: ['https://upload.wikimedia.org/wikipedia/commons/thumb/7/71/Windows_Media_Player_12.svg/128px-Windows_Media_Player_12.svg.png', 'Windows Media Player'],
+  vlc: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/VVjYzmfdMIF5hHA8SUnbi.gif', 'VLC'],
+  foobar2000: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/VVjYzmfdMIF5hHA8SUnbi.gif', 'foobar2000'],
+  musicbee: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/VVjYzmfdMIF5hHA8SUnbi.gif', 'MusicBee'],
+  aimp: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/VVjYzmfdMIF5hHA8SUnbi.gif', 'AIMP'],
+  winamp: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/VVjYzmfdMIF5hHA8SUnbi.gif', 'Winamp'],
+  mediamonkey: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/VVjYzmfdMIF5hHA8SUnbi.gif', 'MediaMonkey'],
+  groove: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/VVjYzmfdMIF5hHA8SUnbi.gif', 'Groove Music'],
+  wmp: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/VVjYzmfdMIF5hHA8SUnbi.gif', 'Windows Media Player'],
+};
+
+// ── Platform-specific large images (Discord rich presence assets) ──
+// These are asset names uploaded to the Discord application, not full URLs
+const PLATFORM_LARGE_IMAGES: Record<string, string> = {
+  kick: 'kicklogo.png',
 };
 
 export interface LyricsEngineCallbacks {
@@ -268,7 +274,9 @@ export class LyricsEngine {
 
   /** Flash "🚩 Lyrics Not Matching" for 5s when the user flags bad lyrics. */
   setLyricsFlagged(): void {
-    if (!this.cfgShowLyrics) return; // Don't show when lyrics are disabled
+    // Clear lyrics first so they stop displaying before the message appears
+    this.lyrics = [];
+    this.currentIdx = -1;
     this.setStatusMessage('flagged', '🚩 Lyrics Not Matching', 40, 5000);
   }
 
@@ -298,7 +306,9 @@ export class LyricsEngine {
     trackData: TrackData,
     rpcConfig: Record<string, unknown>,
   ): void {
-    this.stop();
+    // Preserve status message when restarting (e.g., when flagging lyrics)
+    const preserveStatus = this.statusMessage !== null;
+    this.stop(preserveStatus);
     this.running = true;
     this.lyrics = lyrics;
     this.isCC = lyrics.length > 0 && lyrics[0].source === 'cc';
@@ -577,9 +587,11 @@ export class LyricsEngine {
   /**
    * Stop the engine (pause/track end).
    */
-  stop(): void {
+  stop(preserveStatus = false): void {
     this.running = false;
-    this.clearStatusMessage(); // Clear unified status message
+    if (!preserveStatus) {
+      this.clearStatusMessage(); // Clear unified status message
+    }
     this.inLyricGap = false;
     this.cancelTimer();
     this.clearHeartbeat();
@@ -595,6 +607,16 @@ export class LyricsEngine {
   getElapsed(): number {
     if (!this.running) return 0;
     return this.getElapsedMs();
+  }
+
+  /** Get the current lyrics array (for server-side pre-translation). */
+  getLyrics(): LyricLine[] {
+    return this.lyrics;
+  }
+
+  /** Get the current lyric index (for server-side pre-translation). */
+  getCurrentIndex(): number {
+    return this.currentIdx;
   }
 
   // ── Core scheduling ──
@@ -672,6 +694,7 @@ export class LyricsEngine {
         // If >10s until track ends, switch to no-lyrics display during the outro
         if (remaining > LYRIC_GAP_MS) {
           this.gapTimer = setTimeout(() => {
+            if (!this.running) return;
             this.inLyricGap = true;
             this.resetDedup();
             this.emitUpdate();
@@ -679,7 +702,7 @@ export class LyricsEngine {
         }
         this.timer = setTimeout(() => {
           log.info('[END] Track duration reached');
-          this.running = false;
+          this.stop();
         }, remaining);
       }
       return;
@@ -700,6 +723,7 @@ export class LyricsEngine {
     // Schedule gap display if the delay until next line exceeds threshold
     if (delay > LYRIC_GAP_MS) {
       this.gapTimer = setTimeout(() => {
+        if (!this.running) return;
         this.inLyricGap = true;
         this.resetDedup();
         this.emitUpdate();
@@ -832,16 +856,19 @@ export class LyricsEngine {
     const d = this.trackData;
     if (!d) return;
 
+    // Clickable URLs — platform-aware
+    const source = d.media_source || 'spotify';
+
     // /api/thumbnail is a local-only path (SMTC thumb) — Discord needs a public URL
     // Also spotify:localfileimage:... are internal Spotify URLs that Discord cannot access
     const isLocalFileImage = d.album_art_url?.startsWith('spotify:localfileimage:');
     const art = d.album_art_url && d.album_art_url !== '/api/thumbnail' && !isLocalFileImage
       ? d.album_art_url
       : '';
-    this.cachedLargeImage = art || DEFAULT_ART;
+    // Use platform-specific large image if available (e.g., Kick uses kicklogo.png asset)
+    const platformLargeImage = PLATFORM_LARGE_IMAGES[source];
+    this.cachedLargeImage = platformLargeImage || art || DEFAULT_ART;
 
-    // Clickable URLs — platform-aware
-    const source = d.media_source || 'spotify';
     this.cachedSpotifySearch = platformSearchUrl(source, `${d.artist_name} ${d.track_name}`);
     this.cachedArtistSearch = platformSearchUrl(source, d.artist_name);
 
@@ -853,12 +880,7 @@ export class LyricsEngine {
     this.cachedPlatText = this.cachedIcon ? `Playing on ${this.cachedIcon[1]}` : '';
 
     // Cache config flags to avoid per-emit boolean casts
-    const wasShowLyrics = this.cfgShowLyrics;
     this.cfgShowLyrics = (this.rpcConfig.show_lyrics as boolean) !== false;
-    // Show "Lyrics Disabled" temporarily when show_lyrics is turned off
-    if (wasShowLyrics && !this.cfgShowLyrics) {
-      this.setLyricsDisabled();
-    }
     this.cfgRomanize = (this.rpcConfig.romanize_lyrics as boolean) === true;
     this.cfgRpcTranslate = (this.rpcConfig.rpc_translate_lyrics as boolean) === true;
     this.cfgTranslateLang = (this.rpcConfig.translate_target_lang as string) || 'en';
@@ -879,8 +901,14 @@ export class LyricsEngine {
       (this.rpcConfig.dance_mode as boolean) ? 'dance' : 'default';
 
     // Pre-resolve clickable URLs (avoids 3× config lookups + switch per emit)
-    this.cachedDetailsUrl = this.resolveUrl(d, 'rpc_details_url', d.spotify_url || this.cachedSpotifySearch);
-    this.cachedStateUrl = this.resolveUrl(d, 'rpc_state_url', d.context_url || d.artist_url || this.cachedArtistSearch);
+    // Kick/Twitch: make only state non-clickable (details remains clickable to profile)
+    if (d.media_source === 'kick' || d.media_source === 'twitch') {
+      this.cachedDetailsUrl = this.resolveUrl(d, 'rpc_details_url', d.spotify_url || d.context_url || '');
+      this.cachedStateUrl = '';
+    } else {
+      this.cachedDetailsUrl = this.resolveUrl(d, 'rpc_details_url', d.spotify_url || this.cachedSpotifySearch);
+      this.cachedStateUrl = this.resolveUrl(d, 'rpc_state_url', d.context_url || d.artist_url || this.cachedArtistSearch);
+    }
     this.cachedLargeUrl = this.resolveUrl(d, 'rpc_large_url', d.album_url || d.spotify_url || this.cachedSpotifySearch);
   }
 
@@ -891,7 +919,9 @@ export class LyricsEngine {
     this.cachedDisplayArtist = deduplicateArtist(d.track_name, d.artist_name);
     this.cachedHasAlbum = !!(d.album_name && d.album_name.trim());
     this.cachedContextName = getContextDisplayName(d);
-    this.cachedIsRedundantCtx = !this.cachedContextName;
+    // Mark context as redundant if empty OR if it matches album name exactly
+    const ctxMatchesAlbum = !!(this.cachedContextName && d.album_name && this.cachedContextName.toLowerCase() === d.album_name.toLowerCase());
+    this.cachedIsRedundantCtx = !this.cachedContextName || ctxMatchesAlbum;
     // Shuffle / repeat indicator (appended to playlist/album, not track name)
     this.cachedPlayModeSuffix =
       d.is_shuffle ? ' | 🔀' :
@@ -988,22 +1018,31 @@ export class LyricsEngine {
       const ctx = this.cachedContextName;
 
       if (ctx && !this.cachedIsRedundantCtx) {
-        state = truncate(`🎼 ${ctx}${this.cachedPlayModeSuffix}`, 128);
+        // Kick/Twitch: don't add context emoji
+        state = truncate((d.media_source === 'kick' || d.media_source === 'twitch') ? `${ctx}${this.cachedPlayModeSuffix}` : `🎼 ${ctx}${this.cachedPlayModeSuffix}`, 128);
         if (status) {
           largeText = truncate(status, 128);
         } else {
           const parts: string[] = [];
-          if (this.cachedDisplayArtist) parts.push(`🎤 ${this.cachedDisplayArtist}`);
-          if (this.cachedHasAlbum) parts.push(`💽 ${d.album_name}`);
+          // Kick/Twitch: don't add emojis
+          if (d.media_source === 'kick' || d.media_source === 'twitch') {
+            if (this.cachedDisplayArtist) parts.push(this.cachedDisplayArtist);
+            if (this.cachedHasAlbum) parts.push(d.album_name);
+          } else {
+            if (this.cachedDisplayArtist) parts.push(`🎤 ${this.cachedDisplayArtist}`);
+            if (this.cachedHasAlbum) parts.push(`💽 ${d.album_name}`);
+          }
           largeText = truncate(parts.join(' | ') || d.track_name, 128);
         }
       } else {
-        state = this.cachedDisplayArtist ? truncate(`🎤 ${this.cachedDisplayArtist}`, 128) : '  ';
+        // Kick/Twitch: don't add emoji to state
+        state = this.cachedDisplayArtist ? truncate((d.media_source === 'kick' || d.media_source === 'twitch') ? this.cachedDisplayArtist : `🎤 ${this.cachedDisplayArtist}`, 128) : '  ';
         if (status) {
           largeText = truncate(status, 128);
         } else {
+          // Kick/Twitch: don't add album emoji
           largeText = this.cachedHasAlbum
-            ? truncate(`💽 ${d.album_name}${this.cachedPlayModeSuffix}`, 128)
+            ? truncate((d.media_source === 'kick' || d.media_source === 'twitch') ? `${d.album_name}${this.cachedPlayModeSuffix}` : `💽 ${d.album_name}${this.cachedPlayModeSuffix}`, 128)
             : truncate(d.track_name, 128);
         }
       }
@@ -1088,10 +1127,6 @@ export class LyricsEngine {
       case 'rouge':
         activity.assets!.small_image = 'https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/HrMk6Gy5NrHDuNewWnUOR.gif';
         activity.assets!.small_text = pt || '🔴 Rouge';
-        break;
-      case 'lrc_off':
-        activity.assets!.small_image = 'https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/4CoaWZGd53cD62wNI1ZOT.png';
-        activity.assets!.small_text = pt || '🚫 LRC OFF';
         break;
       case 'bleeding':
         activity.assets!.small_image = 'https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/6sALSWqWzao3chNZzHCXy.gif';
@@ -1228,7 +1263,9 @@ function buildInfoText(d: TrackData, currentText: string, nextText: string): str
   if (displayArtist && !vis.includes(displayArtist)) parts.push(`🎤${displayArtist}`);
   if (d.album_name && !vis.includes(d.album_name))   parts.push(`💽${d.album_name}`);
   const ctxName = getContextDisplayName(d);
-  if (ctxName && !isRedundantContext(d) && !vis.includes(ctxName)) parts.push(`🎼${ctxName}`);
+  // Skip context if it matches album name exactly (avoid redundancy)
+  const ctxMatchesAlbum = ctxName && d.album_name && ctxName.toLowerCase() === d.album_name.toLowerCase();
+  if (ctxName && !ctxMatchesAlbum && !isRedundantContext(d) && !vis.includes(ctxName)) parts.push(`🎼${ctxName}`);
   return truncate(parts.join(' | ') || '  ', 128);
 }
 
@@ -1245,6 +1282,8 @@ const PLATFORM_SEARCH: Record<string, (q: string) => string> = {
   bandcamp:       q => `https://bandcamp.com/search?q=${encodeURIComponent(q)}`,
   youtube_music:  q => `https://music.youtube.com/search?q=${encodeURIComponent(q)}`,
   youtube:         q => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
+  kick:            q => `https://kick.com/search?q=${encodeURIComponent(q)}`,
+  twitch:          q => `https://www.twitch.tv/search?q=${encodeURIComponent(q)}`,
   browser_chrome: q => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
   browser_firefox:q => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
   browser_edge:   q => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
@@ -1260,7 +1299,7 @@ function platformSearchUrl(source: string, query: string): string {
 const PLATFORM_NAMES: Record<string, string> = {
   spotify: 'Spotify', apple_music: 'Apple Music', deezer: 'Deezer',
   tidal: 'Tidal', amazon_music: 'Amazon Music', soundcloud: 'SoundCloud',
-  bandcamp: 'Bandcamp', youtube_music: 'YouTube Music', youtube: 'YouTube',
+  bandcamp: 'Bandcamp', youtube_music: 'YouTube Music', youtube: 'YouTube', kick: 'Kick', twitch: 'Twitch',
   browser_chrome: 'YouTube', browser_firefox: 'YouTube',
   browser_edge: 'YouTube', browser_brave: 'YouTube', browser_opera: 'YouTube',
 };
@@ -1276,6 +1315,10 @@ function platformButtonLabel(label: string, source: string): string {
   if (label.includes('{platform}')) {
     let resolved = label.replace('{platform}', name);
     if (isVideo) resolved = resolved.replace(/\bListen\b/i, 'Watch');
+    // Kick: show "📺 Watch on Kick"
+    if (source === 'kick') resolved = `📺 Watch on ${name}`;
+    // Twitch: show "📺 Watch on YouTube"
+    if (source === 'twitch') resolved = `📺 Watch on YouTube`;
     return resolved;
   }
   // Legacy/auto: "Listen on Spotify" → "Watch on YouTube"

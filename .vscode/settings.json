@@ -1,4 +1,7 @@
 {
     "RPC.idleTimeout": 360000,
-    "RPC.showFileInfo": false
+    "RPC.showFileInfo": false,
+    "RPC.checkIdle": false,
+    "RPC.fileInfoText": "{language} file",
+    "RPC.viewingText": "Editing {file}"
 }

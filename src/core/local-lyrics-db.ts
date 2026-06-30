@@ -47,38 +47,51 @@ let stmtFindTrackByUnique: Database.Statement | null = null;
  * Returns true if a database was found and opened.
  */
 export async function initLocalDb(baseDir: string): Promise<boolean> {
+  log.debug('initLocalDb: Checking for existing .sqlite3 files...');
   // Check for ready-to-use .sqlite3 files first
   for (const name of DB_FILENAMES) {
     const dbPath = path.join(baseDir, name);
+    log.debug(`initLocalDb: Checking ${dbPath}...`);
     if (fs.existsSync(dbPath)) {
+      log.debug(`initLocalDb: Found existing DB: ${dbPath}`);
       return openDb(dbPath);
     }
   }
 
+  log.debug('initLocalDb: Scanning for any lrclib*.sqlite3 files...');
   // No exact-name match — scan for any lrclib*.sqlite3 file (e.g. dated dumps)
   try {
     const files = fs.readdirSync(baseDir);
+    log.debug(`initLocalDb: Found ${files.length} files in directory`);
     const sqliteFile = files.find(f => /^lrclib.*\.sqlite3$/i.test(f) && !f.endsWith('.gz'));
     if (sqliteFile) {
+      log.debug(`initLocalDb: Found lrclib*.sqlite3 file: ${sqliteFile}`);
       return openDb(path.join(baseDir, sqliteFile));
     }
-  } catch { /* ignore scan errors */ }
+  } catch (e) {
+    log.debug(`initLocalDb: Error scanning for sqlite files: ${e}`);
+  }
 
+  log.debug('initLocalDb: Looking for .gz dumps to decompress...');
   // Still nothing — look for .gz dumps to decompress
   try {
     const files = fs.readdirSync(baseDir);
     const gzFile = files.find(f => GZ_PATTERN.test(f));
     if (gzFile) {
+      log.debug(`initLocalDb: Found .gz file: ${gzFile}`);
       const gzPath = path.join(baseDir, gzFile);
       const outName = gzFile.replace(/\.gz$/i, '');
       const outPath = path.join(baseDir, outName);
 
       log.info(`Decompressing ${gzFile} → ${outName} (this may take a few minutes on first run)...`);
-      await pipeline(
-        createReadStream(gzPath),
-        createGunzip(),
-        createWriteStream(outPath),
-      );
+      await Promise.race([
+        pipeline(
+          createReadStream(gzPath),
+          createGunzip(),
+          createWriteStream(outPath),
+        ),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Decompression timeout (60s)')), 60000))
+      ]);
       log.info(`Decompression complete: ${outName}`);
       return openDb(outPath);
     }
@@ -137,9 +150,17 @@ function createEmptyDb(dbPath: string): boolean {
 
 /** Open and prepare the SQLite database. */
 function openDb(dbPath: string): boolean {
+  log.debug(`openDb: Opening database at ${dbPath}...`);
   try {
     db = new Database(dbPath, { readonly: false, fileMustExist: true });
-    db.pragma('journal_mode = WAL');  // Allow concurrent reads + writes (custom lyrics import)
+    log.debug('openDb: Database opened, setting pragmas...');
+    
+    // Set pragmas with timeout to prevent hanging on large databases
+    try {
+      db.pragma('journal_mode = WAL', { simple: true });  // Allow concurrent reads + writes (custom lyrics import)
+    } catch (e) {
+      log.warn(`Failed to set journal_mode to WAL: ${e}. Continuing without WAL mode.`);
+    }
     db.pragma('cache_size = -64000'); // 64MB page cache for fast reads
 
     // Migrate: add source column if the LRCLIB dump predates custom-lyrics support
@@ -269,6 +290,7 @@ export function searchLocalDb(
 
     // Phase 1: Exact match (artist + track)
     const exactRows = stmtExact.all(trackName, artistName) as LocalRow[];
+    log.debug(`[LOCAL] Exact query returned ${exactRows.length} rows for "${trackName}" by "${artistName}"`);
     const exactResult = pickBestRow(exactRows, durationSec);
     if (exactResult) {
       log.info(`[LOCAL] Exact match for "${trackName}" (${exactResult.length} lines)`);
@@ -279,6 +301,7 @@ export function searchLocalDb(
     // Escape double quotes in track name and wrap as FTS5 phrase
     const ftsQuery = '"' + trackName.replace(/"/g, '""') + '"';
     const fuzzyRows = stmtFuzzy.all(ftsQuery) as LocalRow[];
+    log.debug(`[LOCAL] FTS query returned ${fuzzyRows.length} rows for "${trackName}"`);
     if (fuzzyRows.length > 0) {
       // Filter by artist similarity using proper string similarity scoring
       const MIN_ARTIST_SIM = 0.50;
@@ -332,8 +355,9 @@ function pickBestRow(rows: LocalRow[], durationSec: number | undefined): LyricLi
         }
       }
     }
-    // Reject if best match is >15s off and we have duration info
-    if (bestDiff !== Infinity && bestDiff > 15) {
+    // Reject if best match is >30s off and we have duration info
+    if (bestDiff !== Infinity && bestDiff > 30) {
+      log.debug(`[LOCAL] Rejected due to duration mismatch (${bestDiff.toFixed(1)}s)`);
       return null;
     }
   }

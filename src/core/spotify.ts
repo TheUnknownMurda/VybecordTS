@@ -55,7 +55,10 @@ export class SpotifyClient {
 
   private saveTokens(tokens: TokenCache): void {
     this.tokens = tokens;
-    fs.writeFileSync(this.cachePath, JSON.stringify(tokens, null, 2), 'utf-8');
+    // Use async write to avoid blocking event loop
+    fs.writeFile(this.cachePath, JSON.stringify(tokens, null, 2), 'utf-8', (err) => {
+      if (err) log.error(`Failed to save Spotify tokens: ${err}`);
+    });
   }
 
   get isAuthenticated(): boolean {

@@ -32,7 +32,6 @@ const DEFAULTS: VybecordConfig = {
   rouge_mode: false,
   bleeding_mode: false,
   blue_rad_mode: false,
-  lrc_off_mode: false,
   random_icon_mode: false,
   hide_small_icon: false,
   cc_enabled: true,
@@ -41,6 +40,7 @@ const DEFAULTS: VybecordConfig = {
   lyrics_offset_ms: 0,
   romanize_lyrics: false,
   translate_lyrics: false,
+  rpc_translate_lyrics: false,
   translate_target_lang: 'en',
   poll_interval_ms: 3000,
 };
@@ -92,8 +92,12 @@ export class ConfigManager {
 
   private save(config: VybecordConfig): void {
     this.skipNextReload = true;
-    fs.mkdirSync(path.dirname(this.configPath), { recursive: true });
-    fs.writeFileSync(this.configPath, JSON.stringify(config, null, 2), 'utf-8');
+    fs.mkdir(path.dirname(this.configPath), { recursive: true }, (err) => {
+      if (err) return log.error(`Failed to create config directory: ${err}`);
+      fs.writeFile(this.configPath, JSON.stringify(config, null, 2), 'utf-8', (writeErr) => {
+        if (writeErr) log.error(`Failed to save config: ${writeErr}`);
+      });
+    });
   }
 
   get<K extends keyof VybecordConfig>(key: K): VybecordConfig[K] {

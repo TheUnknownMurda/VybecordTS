@@ -31,6 +31,8 @@ import { SpicetifySource, type SpicetifyPayload } from './core/spicetify-source.
 import { YouTubeSource, type YouTubePayload } from './core/youtube-source.js';
 import { SoundCloudSource, type SoundCloudPayload } from './core/soundcloud-source.js';
 import { BandcampSource, type BandcampPayload } from './core/bandcamp-source.js';
+import { KickSource, type KickPayload } from './core/kick-source.js';
+import { TwitchSource, type TwitchPayload } from './core/twitch-source.js';
 import { DiscordIPC } from './core/discord-ipc.js';
 import { LyricsEngine } from './sync/lyrics-engine.js';
 import { fetchLyrics, fetchTrackMetadata, fetchPlainLyrics } from './core/provider.js';
@@ -68,6 +70,8 @@ const PLATFORM_DISCORD_APP_IDS: Record<string, string> = {
   youtube: '1513868157897412759',
   youtube_music: '1513868157897412759',
   soundcloud: '1513868059948093501',
+  kick: '1519781115144044636',
+  twitch: '1489626057588998164',
   // Default falls back to config discord_app_id or env DISCORD_CLIENT_ID
 };
 
@@ -78,7 +82,7 @@ function platformConfigKey(src: string): keyof import('./core/types.js').Vybecor
   if (src === 'spotify') return 'detect_spotify';
   if (src === 'youtube' || src === 'youtube_music') return 'detect_youtube';
   if (src === 'soundcloud') return 'detect_soundcloud';
-  if (src === 'bandcamp' || src === 'deezer' || src === 'tidal' ||
+  if (src === 'kick' || src === 'twitch' || src === 'bandcamp' || src === 'deezer' || src === 'tidal' ||
       src === 'apple_music' || src === 'amazon_music') return 'detect_other_apps';
   if (src.startsWith('browser_') || src === 'unknown') return 'detect_browser';
   return null; // unknown — allow by default
@@ -92,6 +96,8 @@ export class VybecordBackend extends EventEmitter {
   private youtubeSource: YouTubeSource;
   private soundcloudSource: SoundCloudSource;
   private bandcampSource: BandcampSource;
+  private kickSource: KickSource;
+  private twitchSource: TwitchSource;
   private discord: DiscordIPC;
   private lyricsEngine: LyricsEngine;
 
@@ -150,6 +156,8 @@ export class VybecordBackend extends EventEmitter {
     this.youtubeSource = new YouTubeSource();
     this.soundcloudSource = new SoundCloudSource();
     this.bandcampSource = new BandcampSource();
+    this.kickSource = new KickSource();
+    this.twitchSource = new TwitchSource();
 
     // Wire lyrics engine callbacks
     this.lyricsEngine.setCallbacks({
@@ -162,6 +170,8 @@ export class VybecordBackend extends EventEmitter {
           prev,
           progress_ms: Math.round(this.lyricsEngine.getElapsed()),
           duration_ms: t ? t.duration_ms : 0,
+          lyrics: this.lyricsEngine.getLyrics(),
+          currentIndex: this.lyricsEngine.getCurrentIndex(),
         };
         this.lastLyricsState = lyricsState;
         this.emit('lyricsUpdate', lyricsState);
@@ -219,17 +229,44 @@ export class VybecordBackend extends EventEmitter {
     log.info('VybecordTS starting...');
 
     // 0. Init optional enhancements
-    await initLocalDb(this.configDir);
+    let localDbInitialized = false;
+    try {
+      localDbInitialized = await Promise.race([
+        initLocalDb(this.configDir),
+        new Promise<boolean>((_, reject) => setTimeout(() => reject(new Error('Database initialization timeout (30s)')), 30000))
+      ]);
+    } catch (e) {
+      log.error(`Local database initialization failed: ${e}`);
+      log.error('Imported lyrics will not be available. Run: npm rebuild better-sqlite3');
+    }
+
+    if (localDbInitialized) {
+      log.info('Local lyrics database initialized successfully');
+    }
+
     initLastFm(
       (this.config.getAll().lastfm_api_key as string | undefined) || process.env.LASTFM_API_KEY,
       (this.config.getAll().lastfm_api_secret as string | undefined) || process.env.LASTFM_API_SECRET,
       this.configDir,
     );
-    initBlacklist(this.configDir);
+
+    const blacklistInitialized = initBlacklist(this.configDir);
+    if (blacklistInitialized) {
+      log.info('Lyrics blacklist initialized successfully');
+    } else {
+      log.warn('Lyrics blacklist initialization failed - flagged lyrics will not work');
+    }
+
     initHistory(this.configDir);
 
     // 1. Detect user tier and init track source
-    await this.initTrackSource();
+    await Promise.race([
+      this.initTrackSource(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Track source detection timeout (15s)')), 15000))
+    ]).catch(e => {
+      log.warn(`Track source detection failed or timed out: ${e}. Falling back to FREE mode (SMTC).`);
+      this.startDesktopSource();
+    });
 
     // 2. Discord RPC connect (with retry)
     this.discord.onReady(() => {
@@ -339,6 +376,7 @@ export class VybecordBackend extends EventEmitter {
     const trackKey = this.buildTrackKey(track);
 
     if (trackKey === this.currentTrackKey) {
+      log.debug(`[SPOTIFY] Same track detected: ${track.track_name} — ${track.artist_name} (key: ${trackKey})`);
       // Same track — sync progress to lyrics engine (instant, no poll delay)
       if (this.checkRepeatLoop(track)) return;
 
@@ -399,6 +437,7 @@ export class VybecordBackend extends EventEmitter {
     const trackKey = this.buildTrackKey(track);
 
     if (trackKey === this.currentTrackKey) {
+      log.debug(`[YOUTUBE] Same track detected: ${track.track_name} — ${track.artist_name} (key: ${trackKey})`);
       // Same track — sync exact progress (no drift with userscript)
       if (this.checkRepeatLoop(track)) return;
       this.syncTrackProgress(track);
@@ -437,6 +476,7 @@ export class VybecordBackend extends EventEmitter {
     const trackKey = this.buildTrackKey(track);
 
     if (trackKey === this.currentTrackKey) {
+      log.debug(`[SOUNDCLOUD] Same track detected: ${track.track_name} — ${track.artist_name} (key: ${trackKey})`);
       // Same track — sync progress
       if (this.checkRepeatLoop(track)) return;
       this.syncTrackProgress(track);
@@ -475,6 +515,7 @@ export class VybecordBackend extends EventEmitter {
     const trackKey = this.buildTrackKey(track);
 
     if (trackKey === this.currentTrackKey) {
+      log.debug(`[BANDCAMP] Same track detected: ${track.track_name} — ${track.artist_name} (key: ${trackKey})`);
       // Same track — sync progress
       if (this.checkRepeatLoop(track)) return;
       this.syncTrackProgress(track, true);
@@ -493,6 +534,80 @@ export class VybecordBackend extends EventEmitter {
   }
 
   isBandcampSourceActive(): boolean { return this.bandcampSource.isActive; }
+
+  // ── Kick push handler (event-driven, called by web server) ──
+
+  handleKickPush(data: KickPayload): void {
+    this.kickSource.update(data);
+
+    if (this.config.get('detect_other_apps') === false) return;
+
+    if (!data.is_live) {
+      if (this.currentTrackKey.startsWith('kick:')) this.onTrackStopped();
+      return;
+    }
+
+    const track = this.kickSource.getCurrentTrack();
+    if (!track) return;
+
+    this.idleSince = 0;
+    const trackKey = this.buildTrackKey(track);
+
+    if (trackKey === this.currentTrackKey) {
+      log.debug(`[KICK] Same stream detected: ${track.track_name} — ${track.artist_name} (key: ${trackKey})`);
+      // Same stream — no progress sync needed for live streams
+      return;
+    }
+
+    // New stream detected
+    this.prefetchedKey = '';
+    this.currentTrackKey = trackKey;
+    this.currentTrack = track;
+    this.cachedIsWebSource = true; // Kick is a web source
+    log.info(`[NEW TRACK] ${track.track_name} — ${track.artist_name} (kick-userscript)`);
+    this.recordPlay(track);
+    this.emit('trackUpdate', track);
+    this.onNewTrack(track).catch(e => log.error(`[NEW TRACK] Error: ${e}`));
+  }
+
+  isKickSourceActive(): boolean { return this.kickSource.isActive; }
+
+  // ── Twitch push handler (event-driven, called by web server) ──
+
+  handleTwitchPush(data: TwitchPayload): void {
+    this.twitchSource.update(data);
+
+    if (this.config.get('detect_other_apps') === false) return;
+
+    if (!data.is_live) {
+      if (this.currentTrackKey.startsWith('twitch:')) this.onTrackStopped();
+      return;
+    }
+
+    const track = this.twitchSource.getCurrentTrack();
+    if (!track) return;
+
+    this.idleSince = 0;
+    const trackKey = this.buildTrackKey(track);
+
+    if (trackKey === this.currentTrackKey) {
+      log.debug(`[TWITCH] Same stream detected: ${track.track_name} — ${track.artist_name} (key: ${trackKey})`);
+      // Same stream — no progress sync needed for live streams
+      return;
+    }
+
+    // New stream detected
+    this.prefetchedKey = '';
+    this.currentTrackKey = trackKey;
+    this.currentTrack = track;
+    this.cachedIsWebSource = true; // Twitch is a web source
+    log.info(`[NEW TRACK] ${track.track_name} — ${track.artist_name} (twitch-userscript)`);
+    this.recordPlay(track);
+    this.emit('trackUpdate', track);
+    this.onNewTrack(track).catch(e => log.error(`[NEW TRACK] Error: ${e}`));
+  }
+
+  isTwitchSourceActive(): boolean { return this.twitchSource.isActive; }
 
   // ── Spotify Web lyrics handler (event-driven, called by web server) ──
 
@@ -603,6 +718,22 @@ export class VybecordBackend extends EventEmitter {
             return;
           }
         }
+        if (this.kickSource.isActive && this.config.get('detect_other_apps') !== false) {
+          const kickTrack = this.kickSource.getCurrentTrack();
+          if (kickTrack) {
+            const trackKey = this.buildTrackKey(kickTrack);
+            if (trackKey === this.currentTrackKey) {
+              // Same stream — no progress sync needed for live streams
+              return;
+            }
+            return;
+          }
+          // Kick active but not live — stop if current track is Kick
+          if (this.kickSource.isPaused && this.currentTrackKey.startsWith('kick:')) {
+            this.onTrackStopped();
+            return;
+          }
+        }
         if (this.desktop) {
           const desktopTrack = this.desktop.getCurrentTrack();
           const dSrc = desktopTrack?.media_source || '';
@@ -707,6 +838,40 @@ export class VybecordBackend extends EventEmitter {
           }
           // Bandcamp active but paused — stop if current track is Bandcamp
           if (this.bandcampSource.isPaused && this.currentTrackKey.startsWith('bc:')) {
+            this.onTrackStopped();
+            return;
+          }
+        }
+        // Priority 3e: Kick userscript — before SMTC
+        if (this.kickSource.isActive && this.config.get('detect_other_apps') !== false) {
+          const kickTrack = this.kickSource.getCurrentTrack();
+          if (kickTrack) {
+            const trackKey = this.buildTrackKey(kickTrack);
+            if (trackKey === this.currentTrackKey) {
+              // Same stream — no progress sync needed for live streams
+              return;
+            }
+            return;
+          }
+          // Kick active but not live — stop if current track is Kick
+          if (this.kickSource.isPaused && this.currentTrackKey.startsWith('kick:')) {
+            this.onTrackStopped();
+            return;
+          }
+        }
+        // Priority 3f: Twitch userscript — before SMTC
+        if (this.twitchSource.isActive && this.config.get('detect_other_apps') !== false) {
+          const twitchTrack = this.twitchSource.getCurrentTrack();
+          if (twitchTrack) {
+            const trackKey = this.buildTrackKey(twitchTrack);
+            if (trackKey === this.currentTrackKey) {
+              // Same stream — no progress sync needed for live streams
+              return;
+            }
+            return;
+          }
+          // Twitch active but not live — stop if current track is Twitch
+          if (this.twitchSource.isPaused && this.currentTrackKey.startsWith('twitch:')) {
             this.onTrackStopped();
             return;
           }
@@ -962,6 +1127,20 @@ export class VybecordBackend extends EventEmitter {
     this.lyricsEngine.syncProgress(track.progress_ms, track);
     if (scrobble) checkAndScrobble();
     this.emit('progressUpdate', { progress_ms: track.progress_ms, duration_ms: track.duration_ms });
+
+    // Detect track end: engine stopped but progress is at the end (not a repeat loop)
+    // Only call onTrackStopped if track key matches (to avoid interfering with new song detection)
+    if (!this.lyricsEngine.isRunning() && track.duration_ms > 0) {
+      const trackKey = this.buildTrackKey(track);
+      if (trackKey === this.currentTrackKey) {
+        const elapsed = this.lyricsEngine.getElapsed();
+        const isAtEnd = track.progress_ms >= track.duration_ms - 2000 || elapsed >= track.duration_ms - 2000;
+        if (isAtEnd && track.progress_ms > 5000) {
+          log.info(`[END] Track ended naturally (progress=${track.progress_ms}ms, duration=${track.duration_ms}ms)`);
+          this.onTrackStopped();
+        }
+      }
+    }
   }
 
   // ── New track handler ──
@@ -1230,6 +1409,10 @@ export class VybecordBackend extends EventEmitter {
     // don't overwrite them with external (LRCLib/Netease) results.
     const spotifyInjected = this.spotifyLyricsStore.has(trackData.track_id) &&
       (this.spotifyLyricsStore.get(trackData.track_id)?.length ?? 0) > 0;
+    
+    // Clear "Fetching Lyrics..." status message since fetch is complete
+    this.lyricsEngine.setFetchingLyrics(false);
+    
     if (spotifyInjected) {
       log.info(`[LYRICS] Skipping external inject — Spotify official lyrics already active`);
     } else if (lyrics.length > 0) {
@@ -1393,12 +1576,12 @@ export class VybecordBackend extends EventEmitter {
     // Remove from cache so next fetch tries again
     this.lyricsCache.delete(this.currentCacheKey);
 
-    // Restart lyrics engine with no lyrics immediately
+    // Set flagged status first (clears lyrics internally and sets message)
+    this.lyricsEngine.setLyricsFlagged();
+
+    // Restart lyrics engine with no lyrics (preserves the status message)
     const rpcConfig = this.getRpcConfig();
     this.lyricsEngine.startTrack([], t, rpcConfig);
-    if (this.config.get('show_lyrics')) {
-      this.lyricsEngine.setLyricsFlagged();
-    }
     this.lastLyricsState = null;
     this.emit('lyricsUpdate', { current: '', next: '', prev: '' });
 
@@ -1469,8 +1652,12 @@ export class VybecordBackend extends EventEmitter {
 
   private saveStatsHistory(): void {
     try {
-      fs.mkdirSync(path.dirname(this.statsHistoryPath), { recursive: true });
-      fs.writeFileSync(this.statsHistoryPath, JSON.stringify(this.statsHistory, null, 2), 'utf-8');
+      fs.mkdir(path.dirname(this.statsHistoryPath), { recursive: true }, (err) => {
+        if (err) return log.warn(`Failed to create stats history directory: ${err}`);
+        fs.writeFile(this.statsHistoryPath, JSON.stringify(this.statsHistory, null, 2), 'utf-8', (writeErr) => {
+          if (writeErr) log.warn(`Failed to save stats history: ${writeErr}`);
+        });
+      });
     } catch (e) {
       log.warn(`Failed to save stats history: ${e}`);
     }

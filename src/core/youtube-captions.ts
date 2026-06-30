@@ -445,6 +445,7 @@ export async function fetchYouTubeCaptions(
       '--no-warnings',
       '--no-check-certificates',
       '--ignore-errors',
+      '--js-runtimes', 'node',
       '-o', path.join(tmpDir, '%(id)s'),
     ];
 
@@ -459,6 +460,7 @@ export async function fetchYouTubeCaptions(
     ], { timeout: YT_DLP_TIMEOUT, signal }).catch((e) => {
       lastError = e;
       const errStr = String(e);
+      log.warn(`[CC] Manual subs fetch error: ${errStr}`);
       if (errStr.includes('Sign in to confirm your age') || errStr.includes('age')) {
         isAgeRestricted = true;
         log.warn('[CC] Video is age-restricted');
@@ -481,6 +483,7 @@ export async function fetchYouTubeCaptions(
       ], { timeout: YT_DLP_TIMEOUT, signal }).catch((e) => {
         lastError = e;
         const errStr = String(e);
+        log.warn(`[CC] Auto-CC fetch error: ${errStr}`);
         if (errStr.includes('Sign in to confirm your age') || errStr.includes('age')) {
           isAgeRestricted = true;
           log.warn('[CC] Video is age-restricted');

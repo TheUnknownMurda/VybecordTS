@@ -98,8 +98,11 @@ export class DesktopSource {
           }
           this.latestData = data;
           this.dataReceivedAt = performance.now();
-        } catch {
-          log.debug(`SMTC parse error: ${trimmed.slice(0, 100)}`);
+        } catch (e) {
+          // Limit error logging to prevent console spam
+          if (Math.random() < 0.01) { // Log ~1% of parse errors
+            log.debug(`SMTC parse error: ${trimmed.slice(0, 100)} - ${(e as Error).message}`);
+          }
         }
       }
     });

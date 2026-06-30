@@ -26,9 +26,6 @@ loadEnv({ path: path.join(envsDir, '.env') });
 
 // ── Init logging ──
 initLogFile(path.join(baseDir, 'logs'));
-if (process.argv.includes('--debug')) {
-  setLogLevel('debug');
-}
 
 // ── Banner ──
 log.info('╔══════════════════════════════════════╗');

@@ -9,7 +9,6 @@
  * %TEMP%/vybecord_thumb.jpg for serving via /api/thumbnail.
  */
 
-import { parseFile } from 'music-metadata';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -27,13 +26,24 @@ const artCache = new Map<string, boolean | 'pending'>();
 let fileIndex: Map<string, string[]> | null = null;
 let indexedDirs: string[] = [];
 
+// Dynamic import for music-metadata (ES module compatibility with pkg)
+let parseFile: any = null;
+async function getParseFile() {
+  if (!parseFile) {
+    const musicMetadata = await import('music-metadata');
+    parseFile = musicMetadata.parseFile;
+  }
+  return parseFile;
+}
+
 /**
  * Extract album art directly from a specific file path.
  * Used when we already know the file path (e.g., from spotify:localfileimage: URL).
  */
 export async function extractArtFromPath(filePath: string): Promise<boolean> {
   try {
-    const metadata = await parseFile(filePath, { skipCovers: false });
+    const parser = await getParseFile();
+    const metadata = await parser(filePath, { skipCovers: false });
     const pictures = metadata.common.picture;
     if (pictures && pictures.length > 0) {
       const pic = pictures[0];
@@ -79,7 +89,8 @@ export async function extractLocalArt(
 
     for (const filePath of candidates) {
       try {
-        const metadata = await parseFile(filePath, { skipCovers: false });
+        const parser = await getParseFile();
+        const metadata = await parser(filePath, { skipCovers: false });
         const pictures = metadata.common.picture;
         if (pictures && pictures.length > 0) {
           // Use the first (usually front cover) picture
@@ -103,7 +114,8 @@ export async function extractLocalArt(
       const retry = findCandidates(trackName, artistName, albumName);
       for (const filePath of retry) {
         try {
-          const metadata = await parseFile(filePath, { skipCovers: false });
+          const parser = await getParseFile();
+          const metadata = await parser(filePath, { skipCovers: false });
           const pictures = metadata.common.picture;
           if (pictures && pictures.length > 0) {
             await fs.writeFile(THUMB_PATH, pictures[0].data);

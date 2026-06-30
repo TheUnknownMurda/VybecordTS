@@ -104,7 +104,7 @@ export class WebServer {
     });
     const sseTranslateCache = new Map<string, string>();
     backend.on('trackUpdate', () => { sseTranslateCache.clear(); }); // clear on track change
-    backend.on('lyricsUpdate', (data: { current?: string; next?: string; prev?: string; [k: string]: unknown }) => {
+    backend.on('lyricsUpdate', (data: { current?: string; next?: string; prev?: string; lyrics?: unknown[]; currentIndex?: number; [k: string]: unknown }) => {
       // Skip all enrichment work when no clients are listening (common when dashboard is closed)
       if (this.sseClients.size === 0) return;
       // Attach romanized text for dashboard display (memoized per text)
@@ -124,12 +124,26 @@ export class WebServer {
         if (tCur) data.t_current = tCur;
         const tNxt = nxt ? sseTranslateCache.get(nxt + '|' + tgt) : undefined;
         if (tNxt) data.t_next = tNxt;
-        // Fire-and-forget: translate current + next in background, cache for later SSE pushes
+        // Fire-and-forget: translate current + next + look-ahead in background, cache for later SSE pushes
         if (!tCur && cur.length >= 2 && !/^[♪♫🎵\s]+$/.test(cur)) {
           translateText(cur, tgt).then(r => { if (r) sseTranslateCache.set(cur + '|' + tgt, r.translation); }).catch(() => {});
         }
         if (nxt && !tNxt && nxt.length >= 2 && !/^[♪♫🎵\s]+$/.test(nxt)) {
           translateText(nxt, tgt).then(r => { if (r) sseTranslateCache.set(nxt + '|' + tgt, r.translation); }).catch(() => {});
+        }
+        // Look-ahead: pre-translate upcoming lines (up to 8 lines ahead) for smoother dashboard experience
+        const lyrics = data.lyrics as { text?: string }[] | undefined;
+        const idx = data.currentIndex as number | undefined;
+        if (lyrics && Array.isArray(lyrics) && idx !== undefined && idx >= 0) {
+          for (let i = 2; i <= 8 && idx + i < lyrics.length; i++) {
+            const futureLine = lyrics[idx + i]?.text;
+            if (futureLine && futureLine.length >= 2 && !/^[♪♫🎵\s]+$/.test(futureLine)) {
+              const cacheKey = futureLine + '|' + tgt;
+              if (!sseTranslateCache.has(cacheKey)) {
+                translateText(futureLine, tgt).then(r => { if (r) sseTranslateCache.set(cacheKey, r.translation); }).catch(() => {});
+              }
+            }
+          }
         }
       }
       this.broadcast('lyricsUpdate', data);
@@ -158,13 +172,32 @@ export class WebServer {
 
   start(): void {
     this.server.listen(this.port, '127.0.0.1', () => {
-      log.info(`Dashboard → http://localhost:${this.port}`);
+      // Dashboard started
+    });
+
+    this.server.on('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EADDRINUSE') {
+        console.error(`Port ${this.port} is already in use. Another instance may be running.`);
+        console.error('Close the other instance or run: taskkill /F /IM node.exe (Windows)');
+        console.error('Or use: netstat -ano | findstr :8888 to find the process ID');
+      } else {
+        console.error(`Server error: ${err.message}`);
+      }
     });
 
     // SSE keepalive: prevent silent disconnections by proxies/firewalls
     this.keepaliveTimer = setInterval(() => {
       for (const client of this.sseClients) {
-        try { client.write(': keepalive\n\n'); } catch { this.sseClients.delete(client); }
+        try {
+          // Check if socket is still writable before attempting to write
+          if (!client.writable || client.writableEnded || client.closed) {
+            this.sseClients.delete(client);
+            continue;
+          }
+          client.write(': keepalive\n\n');
+        } catch {
+          this.sseClients.delete(client);
+        }
       }
     }, 30_000);
   }
@@ -214,6 +247,8 @@ export class WebServer {
           spotifyConnected: this.backend.isSpotifyConnected(),
           spicetifyActive: this.backend.isSpicetifyActive(),
           youtubeActive: this.backend.isYouTubeSourceActive(),
+          kickActive: this.backend.isKickSourceActive(),
+          twitchActive: this.backend.isTwitchSourceActive(),
         });
       }
       if (url.pathname === '/api/events' && method === 'GET') {
@@ -239,6 +274,12 @@ export class WebServer {
       }
       if (url.pathname === '/api/bandcamp' && method === 'POST') {
         return await this.handlePush(req, res, d => this.backend.handleBandcampPush(d), 'Bandcamp');
+      }
+      if (url.pathname === '/api/kick' && method === 'POST') {
+        return await this.handlePush(req, res, d => this.backend.handleKickPush(d), 'Kick');
+      }
+      if (url.pathname === '/api/twitch' && method === 'POST') {
+        return await this.handlePush(req, res, d => this.backend.handleTwitchPush(d), 'Twitch');
       }
       if (url.pathname === '/api/spotify-lyrics' && method === 'POST') {
         return await this.handleSpotifyLyricsPush(req, res);
@@ -326,7 +367,6 @@ export class WebServer {
       }
       if (url.pathname === '/api/shutdown' && method === 'POST') {
         this.jsonResponse(res, { ok: true });
-        log.info('Shutdown requested from dashboard');
         // Defer 100ms so HTTP response flushes, then trigger graceful shutdown
         setTimeout(() => this.backend.emit('shutdownRequested'), 100);
         return;
@@ -437,7 +477,7 @@ export class WebServer {
       res.writeHead(404, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Not found' }));
     } catch (e) {
-      log.error(`Request error: ${e}`);
+      console.error(`Request error: ${e}`);
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Internal server error' }));
     }
@@ -611,7 +651,6 @@ export class WebServer {
       // Rate limit check
       const rateCheck = this.checkRateLimit(clientIp);
       if (!rateCheck.allowed) {
-        log.warn(`Bug report rate limited [${clientIp}]: ${rateCheck.reason}`);
         res.writeHead(429, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: false, error: rateCheck.reason }));
         return;
@@ -651,7 +690,7 @@ export class WebServer {
       }
       // Webhook URL validation (prevent SSRF)
       if (!VALID_WEBHOOK_REGEX.test(webhookUrl)) {
-        log.error(`Invalid webhook URL configured: ${webhookUrl.slice(0, 30)}...`);
+        console.error(`Invalid webhook URL configured: ${webhookUrl.slice(0, 30)}...`);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: false, error: 'Invalid webhook configuration' }));
         return;
@@ -661,7 +700,6 @@ export class WebServer {
       const contentHash = this.computeContentHash(data.summary, data.details);
       const lastDuplicate = this.recentContentHashes.get(contentHash);
       if (lastDuplicate && now - lastDuplicate < RATE_LIMIT.duplicateWindowMs) {
-        log.warn(`Duplicate bug report blocked [${clientIp}]`);
         res.writeHead(429, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: false, error: 'Similar report already submitted recently' }));
         return;
@@ -719,10 +757,9 @@ export class WebServer {
         wreq.write(webhookBody);
         wreq.end();
       });
-      log.info(`Bug report sent: ${data.summary}`);
       this.jsonResponse(res, { ok: true });
     } catch (e) {
-      log.error(`Bug report failed: ${e}`);
+      console.error(`Bug report failed: ${e}`);
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: false, error: `${e}` }));
     }
@@ -828,6 +865,11 @@ export class WebServer {
     const buf = Buffer.from(`data: ${JSON.stringify({ type, data })}\n\n`, 'utf-8');
     for (const client of this.sseClients) {
       try {
+        // Check if socket is still writable before attempting to write
+        if (!client.writable || client.writableEnded || client.closed) {
+          this.sseClients.delete(client);
+          continue;
+        }
         client.write(buf);
       } catch {
         this.sseClients.delete(client);

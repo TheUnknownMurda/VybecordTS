@@ -542,6 +542,20 @@
         justify-content: center;
         transition: all 0.45s var(--ease-out);
         letter-spacing: -0.01em;
+        flex-direction: row;
+        gap: 24px;
+      }
+      .lyrics-hero .lyric-current .original {
+        flex: 1;
+        text-align: center;
+      }
+      .lyrics-hero .lyric-current .translation {
+        flex: 1;
+        text-align: center;
+        font-size: clamp(18px, 3.5vw, 28px);
+        font-weight: 500;
+        color: var(--text-secondary);
+        opacity: 0.8;
       }
       .lyric-pop {
         animation: lyricPop 0.5s var(--ease-out) !important;
@@ -1830,9 +1844,12 @@
               <div id="npLyrics" onclick="toggleLyricsExpanded()" style="cursor: pointer">
                 <p id="lyricPrev" class="lyric-prev"></p>
                 <p id="lyricPrevR" class="lyric-romaji"></p>
-                <p id="lyricCurrent" class="lyric-current"></p>
+                <p id="lyricCurrent" class="lyric-current">
+                  <span class="original"></span>
+                  <span class="translation"></span>
+                </p>
                 <p id="lyricCurrentR" class="lyric-romaji lyric-romaji-current"></p>
-                <p id="lyricCurrentT" class="lyric-translate"></p>
+                <p id="lyricCurrentT" class="lyric-translate" style="display: none;"></p>
                 <p id="lyricNext" class="lyric-next"></p>
                 <p id="lyricNextR" class="lyric-romaji"></p>
                 <p id="lyricTimecode" class="lyrics-timecode"></p>
@@ -2047,14 +2064,14 @@
               <div class="setting-row">
                 <div>
                   <div class="s-label" data-i18n="translate_lyrics">Translate lyrics</div>
-                  <div class="s-hint" data-i18n="translate_hint">Real-time translation via Lingva</div>
+                  <div class="s-hint" data-i18n="translate_hint">Real-time translation via Lingva (dashboard only)</div>
                 </div>
                 <label class="toggle">
                   <input type="checkbox" id="cfgTranslate" />
                   <span class="slider"></span>
                 </label>
               </div>
-              <div class="setting-row" id="rpcTranslateRow" style="display: none">
+              <div class="setting-row" id="rpcTranslateRow">
                 <div>
                   <div class="s-label" data-i18n="rpc_translate_lyrics">Translate RPC lyrics</div>
                   <div class="s-hint" data-i18n="rpc_translate_hint">Show translated lyrics on Discord RPC</div>
@@ -2120,7 +2137,6 @@
                   <option value="rouge" data-i18n="rouge_mode">Rouge</option>
                   <option value="bleeding" data-i18n="bleeding_mode">Bleeding</option>
                   <option value="blue_rad" data-i18n="blue_rad_mode">Blue Rad</option>
-                  <option value="lrc_off" data-i18n="lrc_off_mode">LRC OFF</option>
                   <option value="random" data-i18n="random_icon_mode">Random</option>
                   <option value="hidden" data-i18n="hide_small_icon">None</option>
                 </select>
@@ -3037,14 +3053,6 @@
           v
           <span id="appVersion">—</span>
         </span>
-        <a
-          href="https://discord.gg/vybecord"
-          target="_blank"
-          style="color: var(--text-faint); text-decoration: none"
-          data-i18n="footer_discord"
-        >
-          💬 Discord
-        </a>
       </div>
     </div>
     <script>
@@ -3682,6 +3690,8 @@
         soundcloud: "SoundCloud",
         bandcamp: "Bandcamp",
         youtube_music: "YouTube Music",
+        kick: "Kick",
+        twitch: "Twitch",
         browser_chrome: "YouTube",
         browser_firefox: "YouTube",
         browser_edge: "YouTube",
@@ -3698,6 +3708,8 @@
         bandcamp: "https://cdn.simpleicons.org/bandcamp/1DA0C3",
         youtube_music: "https://cdn.simpleicons.org/youtubemusic/FF0000",
         youtube: "https://cdn.simpleicons.org/youtube/FF0000",
+        kick: "https://cdn.simpleicons.org/kick/53FC18",
+        twitch: "https://cdn.simpleicons.org/twitch/9146FF",
         browser_chrome: "https://cdn.simpleicons.org/youtube/FF0000",
         browser_firefox: "https://cdn.simpleicons.org/youtube/FF0000",
         browser_edge: "https://cdn.simpleicons.org/youtube/FF0000",
@@ -3887,24 +3899,26 @@
       }
       function translateLyricLine(text, sseTranslation) {
         if (!config.translate_lyrics || !text || text === "♪♪" || /^[♪♫🎵\s]+$/.test(text)) {
-          $("lyricCurrentT").textContent = "";
+          const translationSpan = $("lyricCurrent").querySelector(".translation");
+          if (translationSpan) translationSpan.textContent = "";
           return;
         }
         const target = config.translate_target_lang || "en";
         const cacheKey = text + "|" + target;
+        const translationSpan = $("lyricCurrent").querySelector(".translation");
         // 1) SSE pushed translation — instant, zero latency
         if (sseTranslation) {
           _translateCache.set(cacheKey, sseTranslation);
-          $("lyricCurrentT").textContent = sseTranslation;
+          if (translationSpan) translationSpan.textContent = sseTranslation;
           return;
         }
         // 2) Local cache hit — instant
         if (_translateCache.has(cacheKey)) {
-          $("lyricCurrentT").textContent = _translateCache.get(cacheKey);
+          if (translationSpan) translationSpan.textContent = _translateCache.get(cacheKey);
           return;
         }
         // 3) Fallback: HTTP fetch with debounce
-        $("lyricCurrentT").textContent = "";
+        if (translationSpan) translationSpan.textContent = "";
         if (_translateDebounce) clearTimeout(_translateDebounce);
         _translatePending = text;
         _translateDebounce = setTimeout(async () => {
@@ -3915,8 +3929,9 @@
             const data = await r.json();
             if (data.translation) {
               _translateCache.set(snapText + "|" + target, data.translation);
-              if (_translatePending === snapText || $("lyricCurrent").textContent === snapText) {
-                $("lyricCurrentT").textContent = data.translation;
+              const currentOriginalSpan = $("lyricCurrent").querySelector(".original");
+              if (_translatePending === snapText || (currentOriginalSpan && currentOriginalSpan.textContent === snapText)) {
+                if (translationSpan) translationSpan.textContent = data.translation;
               }
             }
           } catch {}
@@ -3938,9 +3953,12 @@
         $("lyricPrev").textContent = data.prev || "";
         $("lyricPrev").style.display = data.prev ? "" : "none";
         const cur = $("lyricCurrent"),
+          originalSpan = cur.querySelector(".original"),
+          translationSpan = cur.querySelector(".translation"),
           newText = data.current || "♪♪";
         if (newText !== _lastLyricText) {
-          cur.textContent = newText;
+          originalSpan.textContent = newText;
+          translationSpan.textContent = data.t_current || "";
           cur.classList.remove("lyric-pop");
           void cur.offsetWidth;
           cur.classList.add("lyric-pop");
@@ -3992,13 +4010,13 @@
         $("cfgRpcTranslate").checked = c.rpc_translate_lyrics === true;
         $("cfgTranslateLang").value = c.translate_target_lang || "en";
         const _updateTranslateVis = () => {
-          const on = $("cfgTranslate").checked;
-          $("rpcTranslateRow").style.display = on ? "" : "none";
-          $("translateLangRow").style.display = on ? "" : "none";
-          if (!on) $("cfgRpcTranslate").checked = false;
+          const dashboardOn = $("cfgTranslate").checked;
+          const rpcOn = $("cfgRpcTranslate").checked;
+          $("translateLangRow").style.display = (dashboardOn || rpcOn) ? "" : "none";
         };
         _updateTranslateVis();
         $("cfgTranslate").onchange = _updateTranslateVis;
+        $("cfgRpcTranslate").onchange = _updateTranslateVis;
         $("cfgDetectAllMedia").checked = c.detect_all_media !== false;
         $("cfgDetectSpotify").checked = c.detect_spotify !== false;
         $("cfgDetectYoutube").checked = c.detect_youtube !== false;
