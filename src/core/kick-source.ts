@@ -67,7 +67,7 @@ export class KickSource {
       track_id: `kick:${d.username}`,
       track_name: `📺 ${d.display_name || d.username}`,
       artist_name: d.stream_title || d.category || 'Just Chatting',
-      album_name: d.category || '',
+      album_name: d.category ? `🎮 ${d.category}` : '',
       duration_ms: 0, // Live streams have no duration
       progress_ms: 0,
       is_playing: true,

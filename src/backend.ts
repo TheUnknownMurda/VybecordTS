@@ -62,7 +62,7 @@ interface SessionSnapshot {
 const MUSIC_APPS = new Set(['spotify', 'apple_music', 'deezer', 'tidal', 'amazon_music']);
 const WEB_SOURCES = ['browser_', 'soundcloud', 'bandcamp', 'youtube'];
 const VIDEO_SOURCES = ['browser_', 'youtube'];
-const ARTIST_SPLIT_RE = /[,&]/;  // Precompiled — used in recordPlay + artist key extraction
+const ARTIST_SPLIT_RE = /[,]/;  // Precompiled — used in recordPlay + artist key extraction
 
 // Platform-specific Discord App IDs (changes the app name shown in Discord)
 const PLATFORM_DISCORD_APP_IDS: Record<string, string> = {
@@ -1233,47 +1233,8 @@ export class VybecordBackend extends EventEmitter {
       const isYouTubeSource = src === 'youtube' || src === 'youtube_music' || src.startsWith('browser_');
       const isVideoSource = VIDEO_SOURCES.some(s => src.startsWith(s));
 
-      const needsMetadata = !trackData.album_art_url || trackData.album_art_url === '/api/thumbnail';
-      const metadataPromise = needsMetadata
-        ? fetchTrackMetadata(trackData.track_name, trackData.artist_name, trackData.album_name, signal).then((metadata) => {
-            if (metadata) {
-              // Don't overwrite local SMTC thumbnail (Apple Music etc.) — it's the correct local art.
-              // CDN art will still be stored in enrichedMeta for Discord RPC (which needs a public URL).
-              const hasLocalThumb = trackData.album_art_url === '/api/thumbnail';
-              // Don't overwrite YouTube thumbnail with generic album art
-              if (metadata.albumArtUrl && !hasLocalThumb && !(isYouTubeSource && trackData.album_art_url)) trackData.album_art_url = metadata.albumArtUrl;
-              if (metadata.albumName && !trackData.album_name) trackData.album_name = metadata.albumName;
-              // Enrich artist: SMTC often has only 1 artist, Deezer/iTunes may have the full list
-              if (metadata.artistName && metadata.artistName.length > trackData.artist_name.length) {
-                const currentLow = trackData.artist_name.toLowerCase();
-                const metaLow = metadata.artistName.toLowerCase();
-                // Accept if: metadata contains the SMTC artist, OR the primary artist is similar enough
-                const metaPrimary = metaLow.split(ARTIST_SPLIT_RE)[0].trim();
-                const primarySim = similarity(currentLow, metaPrimary);
-                if (metaLow.includes(currentLow) || primarySim >= 0.70) {
-                  trackData.artist_name = metadata.artistName;
-                }
-              }
-              this.enrichedMeta.set(this.currentTrackKey, {
-                album_art_url: metadata.albumArtUrl || trackData.album_art_url,
-                album_name: trackData.album_name,
-                artist_name: trackData.artist_name,
-              });
-              // Update session stats with enriched art + artist
-              const sEntry = this.sessionTrackPlays.get(this.lastStatsKey);
-              if (sEntry) {
-                if (trackData.album_art_url) sEntry.art = trackData.album_art_url;
-                sEntry.artist = trackData.artist_name;
-                this.statsDirty = true;
-                this.emit('statsUpdate', this.getSessionStats());
-              }
-              // Immediately push enriched data to dashboard + RPC (don't wait for lyrics)
-              this.currentTrack = trackData;
-              this.emit('trackUpdate', trackData);
-              this.lyricsEngine.updateTrackData(trackData);
-            }
-          })
-        : Promise.resolve();
+      // Metadata enrichment disabled per user request
+      const metadataPromise = Promise.resolve();
 
       // Video sources: duration ≠ song duration (music videos have intros/outros)
       // Skip duration matching only for video-based sources
@@ -1875,15 +1836,8 @@ export class VybecordBackend extends EventEmitter {
 
   /** Merge persisted enriched metadata (album art, album name, full artist) into a track object. */
   private mergeEnriched(track: TrackData): void {
-    const key = track.track_id.startsWith('desktop:') ? track.track_id : this.currentTrackKey;
-    const meta = this.enrichedMeta.get(key);
-    if (!meta) return;
-    if (meta.album_art_url && !track.album_art_url) track.album_art_url = meta.album_art_url;
-    if (meta.album_name && !track.album_name) track.album_name = meta.album_name;
-    // Restore enriched artist (SMTC only has primary artist, metadata has all)
-    if (meta.artist_name && meta.artist_name.length > track.artist_name.length) {
-      track.artist_name = meta.artist_name;
-    }
+    // Metadata enrichment disabled per user request
+    return;
   }
 
   /**
