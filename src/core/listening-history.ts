@@ -162,7 +162,7 @@ export function getWrappedStats(days?: number): WrappedStats {
     daySet.add(e.startedAt.slice(0, 10));
 
     // Track aggregation
-    const tKey = `${e.track.toLowerCase()}|${e.artist.toLowerCase().split(/[,&]/)[0].trim()}`;
+    const tKey = `${e.track.toLowerCase()}|${e.artist.toLowerCase().split(/[,]/)[0].trim()}`;
     const existing = trackMap.get(tKey);
     if (existing) {
       existing.totalMs += e.listenedMs;
@@ -173,7 +173,7 @@ export function getWrappedStats(days?: number): WrappedStats {
     }
 
     // Artist aggregation
-    const primaryArtist = e.artist.split(/[,&]/)[0].trim();
+    const primaryArtist = e.artist.split(/[,]/)[0].trim();
     const aKey = primaryArtist.toLowerCase();
     const existingA = artistMap.get(aKey);
     if (existingA) {

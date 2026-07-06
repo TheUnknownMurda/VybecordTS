@@ -302,7 +302,7 @@ export function scrobbleTrackStart(track: string, artist: string, album: string,
 
   scrobbleTrack = {
     track,
-    artist: artist.split(/[,&]/)[0].trim(), // Last.fm expects primary artist
+    artist: artist.split(/[,]/)[0].trim(), // Last.fm expects primary artist
     album,
     duration: Math.round(durationMs / 1000),
     startedAt: Math.round(Date.now() / 1000),
