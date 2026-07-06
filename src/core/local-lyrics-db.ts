@@ -309,7 +309,7 @@ export function searchLocalDb(
       const artistFiltered = fuzzyRows.filter(r => {
         const candArtist = (r.artist_name ?? '').toLowerCase();
         // Check full similarity + primary artist (before comma/&)
-        const primaryCand = candArtist.split(/[,&]/)[0].trim();
+        const primaryCand = candArtist.split(/[,]/)[0].trim();
         const sim = Math.max(
           similarity(artistLow, candArtist),
           similarity(artistLow, primaryCand),

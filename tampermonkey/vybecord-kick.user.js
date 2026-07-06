@@ -122,26 +122,65 @@
         }
         info.category = category;
 
-        // Try to get stream title - more specific selectors to avoid picking up category
+        // Try to get stream title - more specific selectors to avoid picking up category or pin messages
         let streamTitle = '';
         const titleSelectors = [
             '[class*="stream-title"]',
             '[class*="broadcast-title"]',
-            'h2',
+            '[class*="streamer-title"]',
             '.stream-title',
             '[data-testid*="stream-title"]',
+            '[data-testid*="broadcast-title"]',
+            'h1[class*="title"]',
+            'h2[class*="title"]',
         ];
+        
+        // Also try to find title in specific container structures
+        const containerSelectors = [
+            '[class*="stream-info"]',
+            '[class*="streamer-info"]',
+            '[class*="broadcast-info"]',
+        ];
+        
         for (const selector of titleSelectors) {
             const el = document.querySelector(selector);
             if (el && el.textContent.trim()) {
-                // Avoid picking up category text
                 const text = el.textContent.trim();
-                if (text && text !== info.category) {
+                // Avoid picking up category text, pin messages, or login prompts
+                if (text && 
+                    text !== info.category && 
+                    !text.toLowerCase().includes('log in') &&
+                    !text.toLowerCase().includes('pin') &&
+                    !text.toLowerCase().includes('earn') &&
+                    !text.toLowerCase().includes('jungle') &&
+                    text.length > 5) {
                     streamTitle = text;
                     break;
                 }
             }
         }
+        
+        // Fallback: try to find title within stream info containers
+        if (!streamTitle) {
+            for (const containerSel of containerSelectors) {
+                const container = document.querySelector(containerSel);
+                if (container) {
+                    const titleEl = container.querySelector('h1, h2, [class*="title"]');
+                    if (titleEl && titleEl.textContent.trim()) {
+                        const text = titleEl.textContent.trim();
+                        if (text && 
+                            text !== info.category && 
+                            !text.toLowerCase().includes('log in') &&
+                            !text.toLowerCase().includes('pin') &&
+                            text.length > 5) {
+                            streamTitle = text;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        
         info.stream_title = streamTitle;
 
         // Detect if stream is live
@@ -154,35 +193,83 @@
                            document.querySelector('img[src*="kick"]');
         if (thumbnailEl) {
             const src = thumbnailEl.getAttribute('src') || thumbnailEl.getAttribute('poster');
-            if (src) info.thumbnail_url = src;
+            if (src) {
+                // Fix URLs that start with //
+                info.thumbnail_url = src.startsWith('//') ? `https:${src}` : src;
+            }
         }
 
-        // Try to get profile picture - more specific Kick selectors
+        // Try to get profile picture - target the main streamer's avatar specifically
         let profilePicUrl = '';
-        const profilePicSelectors = [
-            'img[class*="avatar"]',
-            'img[alt*="avatar"]',
-            'img[src*="kick.com"]',
-            'img[src*="profile"]',
-            '[class*="user-avatar"] img',
-            '[class*="streamer-avatar"] img',
-            'img[src*="cdn.kick.com"]',
+        
+        // First, try to find the avatar within the main streamer section (not in sidebar/lists)
+        const mainStreamerSelectors = [
+            // Avatar in the main channel header/section
+            '[class*="channel-header"] img[class*="avatar"]',
+            '[class*="streamer-header"] img[class*="avatar"]',
+            '[class*="profile-header"] img[class*="avatar"]',
+            // Avatar in the main stream card
+            '[class*="stream-card"][class*="main"] img[class*="avatar"]',
+            '[class*="streamer-card"][class*="main"] img[class*="avatar"]',
+            // Avatar near the streamer name in the main content area
+            'main img[class*="avatar"]',
+            '[class*="channel-info"] img[class*="avatar"]',
+            '[class*="streamer-info"] img[class*="avatar"]',
         ];
-        for (const selector of profilePicSelectors) {
+        
+        for (const selector of mainStreamerSelectors) {
             const el = document.querySelector(selector);
             if (el && el.getAttribute('src')) {
                 const src = el.getAttribute('src');
-                // Prefer images that look like profile pictures (not thumbnails)
-                if (src && !src.includes('thumbnail') && !src.includes('preview')) {
-                    profilePicUrl = src;
+                // Only use if it looks like a real profile picture
+                if (src && !src.includes('thumbnail') && !src.includes('preview') && !src.includes('placeholder')) {
+                    profilePicUrl = src.startsWith('//') ? `https:${src}` : src;
                     break;
-                }
-                // Fallback to any image if no better match
-                if (!profilePicUrl && src) {
-                    profilePicUrl = src;
                 }
             }
         }
+        
+        // Fallback: try more general selectors but avoid sidebar/lists
+        if (!profilePicUrl) {
+            const generalSelectors = [
+                'img[class*="avatar"]',
+                'img[alt*="avatar"]',
+                '[class*="user-avatar"] img',
+                '[class*="streamer-avatar"] img',
+            ];
+            
+            for (const selector of generalSelectors) {
+                const els = document.querySelectorAll(selector);
+                for (const el of els) {
+                    const src = el.getAttribute('src');
+                    if (src && !src.includes('thumbnail') && !src.includes('preview') && !src.includes('placeholder')) {
+                        // Check if this avatar is in a main content area (not sidebar/footer)
+                        const parent = el.closest('aside, footer, [class*="sidebar"], [class*="recommended"], [class*="sidebar"]');
+                        if (!parent) {
+                            profilePicUrl = src.startsWith('//') ? `https:${src}` : src;
+                            break;
+                        }
+                    }
+                }
+                if (profilePicUrl) break;
+            }
+        }
+        
+        // Final fallback: any image from cdn.kick.com that's not a thumbnail
+        if (!profilePicUrl) {
+            const allImages = document.querySelectorAll('img[src*="cdn.kick.com"]');
+            for (const img of allImages) {
+                const src = img.getAttribute('src');
+                if (src && !src.includes('thumbnail') && !src.includes('preview')) {
+                    const parent = img.closest('aside, footer, [class*="sidebar"], [class*="recommended"], [class*="sidebar"]');
+                    if (!parent) {
+                        profilePicUrl = src.startsWith('//') ? `https:${src}` : src;
+                        break;
+                    }
+                }
+            }
+        }
+        
         info.profile_picture_url = profilePicUrl;
 
         console.log('[VybecordTS Kick] Extracted info:', info);

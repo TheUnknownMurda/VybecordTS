@@ -148,13 +148,13 @@ export function batchScore(
   candidates: { trackName: string; artistName: string; albumName?: string; duration?: number }[],
 ): { index: number; score: number; trackSim: number; artistSim: number; albumSim: number }[] {
   // Also extract primary artist for cross-comparison
-  const primaryTarget = targetArtist.split(/[,&]/)[0].trim();
+  const primaryTarget = targetArtist.split(/[,]/)[0].trim();
 
   const results = candidates.map((c, i) => {
     // Score against both raw and clean track name, take best
     const tSim = Math.max(similarity(targetName, c.trackName), similarity(targetCleanName, c.trackName));
     // Best of: full vs full, primary vs primary, full vs primary
-    const primaryCand = c.artistName.split(/[,&]/)[0].trim();
+    const primaryCand = c.artistName.split(/[,]/)[0].trim();
     let aSim = similarity(targetArtist, c.artistName);
     aSim = Math.max(aSim, similarity(primaryTarget, primaryCand));
     if (primaryCand !== c.artistName) {

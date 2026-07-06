@@ -537,25 +537,16 @@
         line-height: 1.25;
         max-width: 900px;
         min-height: 2.6em;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        display: block;
+        text-align: center;
         transition: all 0.45s var(--ease-out);
         letter-spacing: -0.01em;
-        flex-direction: row;
-        gap: 24px;
       }
       .lyrics-hero .lyric-current .original {
-        flex: 1;
-        text-align: center;
+        display: block;
       }
       .lyrics-hero .lyric-current .translation {
-        flex: 1;
-        text-align: center;
-        font-size: clamp(18px, 3.5vw, 28px);
-        font-weight: 500;
-        color: var(--text-secondary);
-        opacity: 0.8;
+        display: none;
       }
       .lyric-pop {
         animation: lyricPop 0.5s var(--ease-out) !important;
@@ -600,17 +591,6 @@
         font-size: clamp(12px, 2vw, 15px);
       }
       .lyric-translate {
-        font-size: clamp(11px, 1.8vw, 14px);
-        color: var(--text-muted);
-        opacity: 0.6;
-        font-style: italic;
-        font-weight: 400;
-        line-height: 1.5;
-        margin: 2px 0 0;
-        max-width: 800px;
-        transition: opacity 0.3s ease;
-      }
-      .lyric-translate:empty {
         display: none;
       }
       .lyrics-timecode {
@@ -3731,7 +3711,7 @@
       }
       function deduplicateArtist(trackName, artistName) {
         const parts = artistName
-          .split(/,\s*|\s+&\s+/)
+          .split(/,\s*|\s*&\s+/)
           .map((a) => a.trim())
           .filter(Boolean);
         if (parts.length <= 1) return artistName;
@@ -3887,11 +3867,11 @@
                 for (const [k, v] of Object.entries(d.translations)) {
                   _translateCache.set(k + "|" + target, v);
                 }
-                // Update display if current lyric was just translated
-                const curText = $("lyricCurrent").textContent;
-                if (curText && _translateCache.has(curText + "|" + target)) {
-                  $("lyricCurrentT").textContent = _translateCache.get(curText + "|" + target);
-                }
+                // Translation display disabled
+                // const curText = $("lyricCurrent").textContent;
+                // if (curText && _translateCache.has(curText + "|" + target)) {
+                //   $("lyricCurrentT").textContent = _translateCache.get(curText + "|" + target);
+                // }
               }
             } catch { break; }
           }

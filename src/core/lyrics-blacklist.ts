@@ -51,7 +51,7 @@ export function hashLyrics(lyrics: LyricLine[]): string {
 
 /** Build a normalised key for blacklist lookups. */
 function normaliseKey(trackName: string, artistName: string): string {
-  return `${trackName.toLowerCase().trim()}|${artistName.toLowerCase().trim().split(/[,&]/)[0].trim()}`;
+  return `${trackName.toLowerCase().trim()}|${artistName.toLowerCase().trim().split(/[,]/)[0].trim()}`;
 }
 
 /** Flag a set of lyrics as wrong for a given track. */

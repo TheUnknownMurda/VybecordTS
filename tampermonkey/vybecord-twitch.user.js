@@ -158,23 +158,80 @@
             if (src) info.thumbnail_url = src;
         }
 
-        // Try to get profile picture - more specific Twitch selectors
+        // Try to get profile picture - target the main streamer's avatar specifically
         let profilePicUrl = '';
-        const profilePicSelectors = [
-            'img.tw-avatar',
+        
+        // First, try to find the avatar within the main streamer section (not in sidebar/lists)
+        const mainStreamerSelectors = [
+            // Avatar in the main channel header/section
+            '[class*="channel-header"] img[class*="avatar"]',
+            '[class*="streamer-header"] img[class*="avatar"]',
+            '[data-a-target="channel-header-user"] img',
             '[data-a-target="user-avatar"] img',
             '.channel-header__avatar img',
-            '.user-avatar img',
-            '[class*="avatar"] img',
-            'img[src*="static-cdn.jtvnw.net/jtv_user_pictures"]',
+            // Avatar in the main stream card
+            '[class*="stream-card"][class*="main"] img[class*="avatar"]',
+            '[class*="streamer-card"][class*="main"] img[class*="avatar"]',
+            // Avatar near the streamer name in the main content area
+            'main img[class*="avatar"]',
+            '[class*="channel-info"] img[class*="avatar"]',
+            '[class*="streamer-info"] img[class*="avatar"]',
         ];
-        for (const selector of profilePicSelectors) {
+        
+        for (const selector of mainStreamerSelectors) {
             const el = document.querySelector(selector);
             if (el && el.getAttribute('src')) {
-                profilePicUrl = el.getAttribute('src');
-                break;
+                const src = el.getAttribute('src');
+                // Only use if it looks like a real profile picture
+                if (src && !src.includes('thumbnail') && !src.includes('preview') && !src.includes('placeholder')) {
+                    profilePicUrl = src.startsWith('//') ? `https:${src}` : src;
+                    break;
+                }
             }
         }
+        
+        // Fallback: try more general selectors but avoid sidebar/lists
+        if (!profilePicUrl) {
+            const generalSelectors = [
+                'img[class*="avatar"]',
+                'img[alt*="avatar"]',
+                '[class*="user-avatar"] img',
+                '[class*="streamer-avatar"] img',
+                'img.tw-avatar',
+            ];
+            
+            for (const selector of generalSelectors) {
+                const els = document.querySelectorAll(selector);
+                for (const el of els) {
+                    const src = el.getAttribute('src');
+                    if (src && !src.includes('thumbnail') && !src.includes('preview') && !src.includes('placeholder')) {
+                        // Check if this avatar is in a main content area (not sidebar/footer)
+                        const parent = el.closest('aside, footer, [class*="sidebar"], [class*="recommended"], [class*="browse"], [class*="directory"]');
+                        if (!parent) {
+                            profilePicUrl = src.startsWith('//') ? `https:${src}` : src;
+                            break;
+                        }
+                    }
+                }
+                if (profilePicUrl) break;
+            }
+        }
+        
+        // Final fallback: any image from Twitch CDN that's not a thumbnail
+        if (!profilePicUrl) {
+            const allImages = document.querySelectorAll('img[src*="static-cdn.jtvnw.net"], img[src*="twitch"]');
+            for (const img of allImages) {
+                const src = img.getAttribute('src');
+                if (src && !src.includes('thumbnail') && !src.includes('preview')) {
+                    const parent = img.closest('aside, footer, [class*="sidebar"], [class*="recommended"], [class*="browse"], [class*="directory"]');
+                    if (!parent) {
+                        profilePicUrl = src.startsWith('//') ? `https:${src}` : src;
+                        break;
+                    }
+                }
+            }
+        }
+        
         info.profile_picture_url = profilePicUrl;
 
         console.log('[VybecordTS Twitch] Extracted info:', info);

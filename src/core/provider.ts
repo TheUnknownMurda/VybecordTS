@@ -25,7 +25,7 @@ const FETCH_TIMEOUT = 8_000;
 // ── Regex for cleaning search queries ──
 const RE_VERSION_SUFFIX = /\s*[-–]\s*(Long Version|Extended Version|Extended|Radio Edit|Radio|Remastered|Deluxe|Deluxe Edition|Bonus Track|Acoustic|Live|Demo|Instrumental|Clean|Explicit|Edit|Mix|Remix|Version|Slowed|Sped Up|Reverb|Nightcore|Daycore|Bass Boosted|8D Audio|Lo-?fi)\s*$/i;
 const RE_BRACKET_TAG = /\s*[(\[](slowed|sped up|reverb|slowed \+ reverb|nightcore|daycore|bass boosted|8d(?: audio)?|lo-?fi|remix|acoustic|live|official audio|official video|official music video|music video|lyric video|official lyric video|official visualizer|visualizer|lyrics|with lyrics|audio|mv|m\/v|4k|hd|hq|clean|explicit|prod\.?\s+[^)\]]*|ft\.?\s+[^)\]]*)[)\]]/gi;
-const RE_ARTIST_SPLIT = /[,&]/;
+const RE_ARTIST_SPLIT = /[,]/;
 const RE_TOPIC_SUFFIX = /\s*-\s*Topic\s*$/i;
 const RE_UNRELEASED = /\s*[[(]\s*unreleased\s*\*?\s*[\])\]]\s*/gi;
 const RE_FEAT = /\s*\(?\s*feat\.?\s.*$/i;
@@ -580,7 +580,7 @@ async function tryDirectLookup(
     // Artist validation — LRCLib may return a different artist for common track names
     const resultArtist = (result.artistName ?? '').toLowerCase();
     const requestArtist = tryArtist.toLowerCase();
-    const primaryResult = resultArtist.split(/[,&]/)[0].trim();
+    const primaryResult = resultArtist.split(/[,]/)[0].trim();
     const artistSim = Math.max(
       similarity(requestArtist, resultArtist),
       similarity(requestArtist, primaryResult),
@@ -1002,7 +1002,7 @@ async function searchGenius(track: string, artist: string, signal?: AbortSignal)
         // Basic artist validation
         const hitArtist = (hit.result.primary_artist?.name ?? '').toLowerCase();
         const queryArtist = artist.toLowerCase();
-        if (similarity(queryArtist, hitArtist) >= 0.40 || hitArtist.includes(queryArtist.split(/[,&]/)[0].trim())) {
+        if (similarity(queryArtist, hitArtist) >= 0.40 || hitArtist.includes(queryArtist.split(/[,]/)[0].trim())) {
           return hit.result.url;
         }
       }

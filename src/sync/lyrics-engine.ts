@@ -902,7 +902,11 @@ export class LyricsEngine {
 
     // Pre-resolve clickable URLs (avoids 3× config lookups + switch per emit)
     // Kick/Twitch: make only state non-clickable (details remains clickable to profile)
-    if (d.media_source === 'kick' || d.media_source === 'twitch') {
+    // Local files: make both details and state non-clickable
+    if (d.is_local) {
+      this.cachedDetailsUrl = '';
+      this.cachedStateUrl = '';
+    } else if (d.media_source === 'kick' || d.media_source === 'twitch') {
       this.cachedDetailsUrl = this.resolveUrl(d, 'rpc_details_url', d.spotify_url || d.context_url || '');
       this.cachedStateUrl = '';
     } else {
@@ -942,7 +946,7 @@ export class LyricsEngine {
     if (btn1Label && btn1Url) {
       buttons.push({ label: truncate(btn1Label, 32), url: btn1Url });
     }
-    if (btn2Label) {
+    if (btn2Label && !d.is_local) {
       // CC active → override to YouTube
       const effectiveSource = this.isCC ? 'youtube' : source;
       const btn2Resolved = platformButtonLabel(btn2Label, effectiveSource);
@@ -1244,7 +1248,7 @@ function getContextDisplayName(d: TrackData): string {
  * Always keeps the primary (first) artist even if it appears in the title.
  */
 function deduplicateArtist(trackName: string, artistName: string): string {
-  const parts = artistName.split(/,\s*|\s+&\s+/).map(a => a.trim()).filter(Boolean);
+  const parts = artistName.split(/,\s*|\s*&\s+/).map(a => a.trim()).filter(Boolean);
   if (parts.length <= 1) return artistName;
   const titleLow = trackName.toLowerCase();
   // Keep primary artist always + others not found in title
