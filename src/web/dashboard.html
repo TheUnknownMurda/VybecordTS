@@ -594,8 +594,11 @@
               <div class="setting-row"><div><div class="s-label">🟢 Spotify</div></div><label class="toggle"><input type="checkbox" id="cfgDetectSpotify" checked><span class="slider"></span></label></div>
               <div class="setting-row"><div><div class="s-label">🔴 YouTube</div></div><label class="toggle"><input type="checkbox" id="cfgDetectYoutube" checked><span class="slider"></span></label></div>
               <div class="setting-row"><div><div class="s-label">🟠 SoundCloud</div></div><label class="toggle"><input type="checkbox" id="cfgDetectSoundcloud" checked><span class="slider"></span></label></div>
+              <div class="setting-row"><div><div class="s-label">🍎 Apple Music</div></div><label class="toggle"><input type="checkbox" id="cfgDetectAppleMusic" checked><span class="slider"></span></label></div>
+              <div class="setting-row"><div><div class="s-label">🟢 Kick</div></div><label class="toggle"><input type="checkbox" id="cfgDetectKick" checked><span class="slider"></span></label></div>
+              <div class="setting-row"><div><div class="s-label">🟣 Twitch</div></div><label class="toggle"><input type="checkbox" id="cfgDetectTwitch" checked><span class="slider"></span></label></div>
               <div class="setting-row"><div><div class="s-label">🌐 Browser</div></div><label class="toggle"><input type="checkbox" id="cfgDetectBrowser" checked><span class="slider"></span></label></div>
-              <div class="setting-row"><div><div class="s-label">🎵 Other apps</div><div class="s-hint">Apple Music, Deezer, Tidal…</div></div><label class="toggle"><input type="checkbox" id="cfgDetectOtherApps" checked><span class="slider"></span></label></div>
+              <div class="setting-row"><div><div class="s-label">🎵 Other apps</div><div class="s-hint">Deezer, Tidal, Bandcamp…</div></div><label class="toggle"><input type="checkbox" id="cfgDetectOtherApps" checked><span class="slider"></span></label></div>
             </div>
             <div style="border-top:1px solid var(--border-s);margin-top:8px;padding-top:8px">
               <div class="setting-row"><div><div class="s-label" data-i18n="cc_enabled_label">📺 YouTube CC / Subtitles</div><div class="s-hint" data-i18n="cc_enabled_hint">Use YouTube closed captions as lyrics source</div></div><label class="toggle"><input type="checkbox" id="cfgCcEnabled" checked onchange="$('cfgCcLang').disabled=!this.checked;$('cfgCcLang').style.opacity=this.checked?1:0.4"><span class="slider"></span></label></div>
@@ -2103,6 +2106,9 @@ function loadConfig(c) {
   $('cfgDetectSpotify').checked = c.detect_spotify !== false;
   $('cfgDetectYoutube').checked = c.detect_youtube !== false;
   $('cfgDetectSoundcloud').checked = c.detect_soundcloud !== false;
+  $('cfgDetectAppleMusic').checked = c.detect_apple_music !== false;
+  $('cfgDetectKick').checked = c.detect_kick !== false;
+  $('cfgDetectTwitch').checked = c.detect_twitch !== false;
   $('cfgDetectBrowser').checked = c.detect_browser !== false;
   $('cfgDetectOtherApps').checked = c.detect_other_apps !== false;
   updatePlatformToggles();
@@ -2137,7 +2143,7 @@ function updatePlatformToggles() {
   const master = $('cfgDetectAllMedia').checked;
   const panel = $('platformToggles');
   // Non-Spotify toggles are only meaningful when master is on
-  ['cfgDetectYoutube','cfgDetectSoundcloud','cfgDetectBrowser','cfgDetectOtherApps'].forEach(id => {
+  ['cfgDetectYoutube','cfgDetectSoundcloud','cfgDetectAppleMusic','cfgDetectKick','cfgDetectTwitch','cfgDetectBrowser','cfgDetectOtherApps'].forEach(id => {
     const row = $(id).closest('.setting-row');
     if (row) row.style.opacity = master ? '1' : '.35';
     $(id).disabled = !master;
@@ -2206,6 +2212,9 @@ async function saveConfig() {
     detect_spotify: $('cfgDetectSpotify').checked,
     detect_youtube: $('cfgDetectYoutube').checked,
     detect_soundcloud: $('cfgDetectSoundcloud').checked,
+    detect_apple_music: $('cfgDetectAppleMusic').checked,
+    detect_kick: $('cfgDetectKick').checked,
+    detect_twitch: $('cfgDetectTwitch').checked,
     detect_browser: $('cfgDetectBrowser').checked,
     detect_other_apps: $('cfgDetectOtherApps').checked,
     dance_mode: $('cfgSmallIconMode').value === 'dance',

@@ -56,6 +56,8 @@ export interface TrackData {
   _received_at: number;
   /** True if this track came from a push source (Spicetify, YouTube/SC/BC userscript) */
   _from_push?: boolean;
+  /** Direct URL to the video (YouTube, etc.) */
+  video_url?: string;
 }
 
 // ── Parsed lyric line ──
@@ -109,6 +111,9 @@ export interface VybecordConfig {
   detect_spotify: boolean;
   detect_youtube: boolean;
   detect_soundcloud: boolean;
+  detect_apple_music: boolean;
+  detect_kick: boolean;
+  detect_twitch: boolean;
   detect_browser: boolean;
   detect_other_apps: boolean;
   /** 'auto' = try API then SMTC, 'premium' = force API, 'free' = force SMTC */

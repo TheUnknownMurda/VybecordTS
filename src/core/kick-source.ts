@@ -80,6 +80,7 @@ export class KickSource {
       context_type: 'live',
       media_source: 'kick',
       _received_at: performance.now(),
+      video_url: d.profile_url || '',
     };
   }
 

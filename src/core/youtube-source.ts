@@ -108,6 +108,7 @@ export class YouTubeSource {
       media_source: d.source || 'youtube',
       _received_at: performance.now(),
       _from_push: true,
+      video_url: `https://www.youtube.com/watch?v=${d.video_id}`,
     };
   }
 

@@ -82,8 +82,10 @@ function platformConfigKey(src: string): keyof import('./core/types.js').Vybecor
   if (src === 'spotify') return 'detect_spotify';
   if (src === 'youtube' || src === 'youtube_music') return 'detect_youtube';
   if (src === 'soundcloud') return 'detect_soundcloud';
-  if (src === 'kick' || src === 'twitch' || src === 'bandcamp' || src === 'deezer' || src === 'tidal' ||
-      src === 'apple_music' || src === 'amazon_music') return 'detect_other_apps';
+  if (src === 'apple_music') return 'detect_apple_music';
+  if (src === 'kick') return 'detect_kick';
+  if (src === 'twitch') return 'detect_twitch';
+  if (src === 'bandcamp' || src === 'deezer' || src === 'tidal' || src === 'amazon_music') return 'detect_other_apps';
   if (src.startsWith('browser_') || src === 'unknown') return 'detect_browser';
   return null; // unknown — allow by default
 }

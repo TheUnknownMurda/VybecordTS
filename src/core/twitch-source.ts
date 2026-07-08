@@ -80,6 +80,7 @@ export class TwitchSource {
       context_type: 'live',
       media_source: 'twitch',
       _received_at: performance.now(),
+      video_url: d.profile_url || '',
     };
   }
 

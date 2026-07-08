@@ -2198,6 +2198,27 @@
                   </label>
                 </div>
                 <div class="setting-row">
+                  <div class="s-label">🍎 Apple Music</div>
+                  <label class="toggle">
+                    <input type="checkbox" id="cfgDetectAppleMusic" checked />
+                    <span class="slider"></span>
+                  </label>
+                </div>
+                <div class="setting-row">
+                  <div class="s-label">🟢 Kick</div>
+                  <label class="toggle">
+                    <input type="checkbox" id="cfgDetectKick" checked />
+                    <span class="slider"></span>
+                  </label>
+                </div>
+                <div class="setting-row">
+                  <div class="s-label">🟣 Twitch</div>
+                  <label class="toggle">
+                    <input type="checkbox" id="cfgDetectTwitch" checked />
+                    <span class="slider"></span>
+                  </label>
+                </div>
+                <div class="setting-row">
                   <div class="s-label">🌐 Browser</div>
                   <label class="toggle">
                     <input type="checkbox" id="cfgDetectBrowser" checked />
@@ -4001,6 +4022,9 @@
         $("cfgDetectSpotify").checked = c.detect_spotify !== false;
         $("cfgDetectYoutube").checked = c.detect_youtube !== false;
         $("cfgDetectSoundcloud").checked = c.detect_soundcloud !== false;
+        $("cfgDetectAppleMusic").checked = c.detect_apple_music !== false;
+        $("cfgDetectKick").checked = c.detect_kick !== false;
+        $("cfgDetectTwitch").checked = c.detect_twitch !== false;
         $("cfgDetectBrowser").checked = c.detect_browser !== false;
         $("cfgDetectOtherApps").checked = c.detect_other_apps !== false;
         updatePlatformToggles();
@@ -4052,7 +4076,7 @@
       }
       function updatePlatformToggles() {
         const master = $("cfgDetectAllMedia").checked;
-        ["cfgDetectYoutube", "cfgDetectSoundcloud", "cfgDetectBrowser", "cfgDetectOtherApps"].forEach((id) => {
+        ["cfgDetectYoutube", "cfgDetectSoundcloud", "cfgDetectAppleMusic", "cfgDetectKick", "cfgDetectTwitch", "cfgDetectBrowser", "cfgDetectOtherApps"].forEach((id) => {
           const row = $(id).closest(".setting-row");
           if (row) row.style.opacity = master ? "1" : ".35";
           $(id).disabled = !master;
@@ -4082,6 +4106,9 @@
           detect_spotify: $("cfgDetectSpotify").checked,
           detect_youtube: $("cfgDetectYoutube").checked,
           detect_soundcloud: $("cfgDetectSoundcloud").checked,
+          detect_apple_music: $("cfgDetectAppleMusic").checked,
+          detect_kick: $("cfgDetectKick").checked,
+          detect_twitch: $("cfgDetectTwitch").checked,
           detect_browser: $("cfgDetectBrowser").checked,
           detect_other_apps: $("cfgDetectOtherApps").checked,
           dance_mode: $("cfgSmallIconMode").value === "dance",

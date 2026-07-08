@@ -950,8 +950,16 @@ export class LyricsEngine {
       // CC active → override to YouTube
       const effectiveSource = this.isCC ? 'youtube' : source;
       const btn2Resolved = platformButtonLabel(btn2Label, effectiveSource);
-      const ytSearch = platformSearchUrl('youtube', `${d.artist_name} ${d.track_name}`);
-      const btn2Url = this.isCC ? ytSearch : (d.spotify_url || this.cachedSpotifySearch);
+      let btn2Url: string;
+      // Use direct video URL if available (YouTube, Twitch, Kick), otherwise search
+      if (d.video_url && (effectiveSource === 'youtube' || effectiveSource === 'youtube_music' || effectiveSource === 'twitch' || effectiveSource === 'kick')) {
+        btn2Url = d.video_url;
+      } else if (this.isCC) {
+        const ytSearch = platformSearchUrl('youtube', `${d.artist_name} ${d.track_name}`);
+        btn2Url = ytSearch;
+      } else {
+        btn2Url = d.spotify_url || this.cachedSpotifySearch;
+      }
       buttons.push({ label: truncate(btn2Resolved, 32), url: btn2Url });
     }
     this.cachedButtons = buttons;
@@ -1321,8 +1329,10 @@ function platformButtonLabel(label: string, source: string): string {
     if (isVideo) resolved = resolved.replace(/\bListen\b/i, 'Watch');
     // Kick: show "📺 Watch on Kick"
     if (source === 'kick') resolved = `📺 Watch on ${name}`;
-    // Twitch: show "📺 Watch on YouTube"
-    if (source === 'twitch') resolved = `📺 Watch on YouTube`;
+    // Twitch: show "📺 Watch on Twitch"
+    if (source === 'twitch') resolved = `📺 Watch on ${name}`;
+    // YouTube: show "📺 Watch on YouTube"
+    if (source === 'youtube') resolved = `📺 Watch on ${name}`;
     return resolved;
   }
   // Legacy/auto: "Listen on Spotify" → "Watch on YouTube"
