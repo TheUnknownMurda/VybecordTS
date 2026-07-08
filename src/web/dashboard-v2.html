@@ -1597,43 +1597,6 @@
         </div>
       </div>
     </div>
-    <!-- QR Modal -->
-    <div id="qrModal" class="modal-overlay hidden" onclick="if (event.target === this) closeQrModal();">
-      <div class="modal-card" style="text-align: center; max-width: 340px">
-        <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 4px" data-i18n="qr_title">Open on mobile</h3>
-        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px" data-i18n="qr_subtitle">
-          Scan this QR code on the same network
-        </p>
-        <canvas
-          id="qrCanvas"
-          width="200"
-          height="200"
-          style="border-radius: 12px; display: block; margin: 0 auto 12px"
-        ></canvas>
-        <p
-          id="qrUrl"
-          style="
-            font-size: 11px;
-            color: var(--text-faint);
-            font-family: monospace;
-            word-break: break-all;
-            margin-bottom: 12px;
-          "
-        ></p>
-        <div style="display: flex; gap: 8px; justify-content: center">
-          <button
-            id="btnCopyQr"
-            class="btn btn-ghost"
-            style="font-size: 12px"
-            onclick="copyQrUrl()"
-            data-i18n="copy_url"
-          >
-            📋 Copy URL
-          </button>
-          <button class="btn btn-ghost" style="font-size: 12px" onclick="closeQrModal()">Close</button>
-        </div>
-      </div>
-    </div>
     <!-- SIDEBAR -->
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-logo">
@@ -1717,14 +1680,6 @@
             <option value="ko">한국어</option>
             <option value="zh">中文</option>
           </select>
-        </div>
-        <div class="nav-item" onclick="switchDashboard()" id="btnSwitchDash">
-          <span class="nav-icon">🔀</span>
-          <span class="nav-label" data-i18n="switch_classic">Classic UI</span>
-        </div>
-        <div class="nav-item" onclick="showQrModal()">
-          <span class="nav-icon">📱</span>
-          <span class="nav-label" data-i18n="qr_share">QR</span>
         </div>
         <div class="nav-item" onclick="shutdownApp()" id="btnShutdown" style="color: #f87171">
           <span class="nav-icon">⏻</span>
@@ -3076,8 +3031,6 @@
           flag_wrong: "🚩 Wrong?",
           copy_lyrics: "📋 Copy",
           copied: "✓ Copied",
-          switch_classic: "Classic UI",
-          switch_modern: "Modern UI",
           tab_stats: "Stats",
           tab_settings: "Settings",
           tab_import: "Import",
@@ -3140,11 +3093,6 @@
           requires_restart: "Requires restart after changing.",
           footer_desc: "Synced Lyrics & Discord RPC",
           footer_discord: "💬 Discord",
-          qr_share: "QR",
-          qr_title: "Open on mobile",
-          qr_subtitle: "Scan this QR code on the same network",
-          copy_url: "📋 Copy URL",
-          url_copied: "✓ Copied",
           confirm_shutdown: "Shut down VybecordTS?",
           app_stopped: "VybecordTS stopped.",
           saved: "✓ Saved",
@@ -4906,50 +4854,6 @@
         } catch {}
         setupDismiss();
       }
-      // QR
-      async function showQrModal() {
-        $("qrModal").classList.remove("hidden");
-        try {
-          const r = await (await fetch("/api/network")).json();
-          const url = `http://${r.ip}:${r.port}`;
-          $("qrUrl").textContent = url;
-          drawQr(url);
-        } catch {
-          $("qrUrl").textContent = "—";
-        }
-      }
-      function closeQrModal() {
-        $("qrModal").classList.add("hidden");
-      }
-      function copyQrUrl() {
-        const url = $("qrUrl").textContent;
-        navigator.clipboard
-          .writeText(url)
-          .then(() => {
-            const btn = $("btnCopyQr");
-            btn.textContent = t("url_copied");
-            setTimeout(() => (btn.textContent = t("copy_url")), 1500);
-          })
-          .catch(() => {});
-      }
-      function drawQr(text) {
-        const canvas = $("qrCanvas"),
-          ctx = canvas.getContext("2d");
-        const size = 200;
-        canvas.width = size;
-        canvas.height = size;
-        ctx.fillStyle = "#111";
-        ctx.fillRect(0, 0, size, size);
-        ctx.fillStyle = "#fafafa";
-        ctx.font = "12px monospace";
-        ctx.textAlign = "center";
-        ctx.fillText("QR: " + text, size / 2, size / 2);
-        try {
-          if (typeof QRCode !== "undefined") {
-            QRCode.toCanvas(canvas, text, { width: size, margin: 2, color: { dark: "#fafafa", light: "#0e0e14" } });
-          }
-        } catch {}
-      }
       // BUG REPORT
       let _lastBugTime = 0;
       async function submitBugReport() {
@@ -5068,19 +4972,6 @@
       }
       function loadMoreHistory() {
         loadHistory(true);
-      }
-      // DASHBOARD SWITCH
-      async function switchDashboard() {
-        try {
-          await fetch("/api/dashboard/version", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ version: "v1" }),
-          });
-          window.location.href = "/";
-        } catch {
-          window.location.href = "/v1";
-        }
       }
       // SAVE BUTTON
       $("btnSave").addEventListener("click", saveConfig);

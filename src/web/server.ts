@@ -443,33 +443,8 @@ export class WebServer {
         return this.jsonResponse(res, { ok: true });
       }
 
-      // Dashboard version switch: POST /api/dashboard/version
-      if (url.pathname === '/api/dashboard/version' && method === 'POST') {
-        const body = await this.readBody(req);
-        const { version } = JSON.parse(body);
-        const v = version === 'v1' ? 'v1' : 'v2';
-        res.writeHead(200, {
-          'Content-Type': 'application/json',
-          'Set-Cookie': `vybecord_dashboard=${v}; Path=/; Max-Age=31536000; SameSite=Lax`
-        });
-        res.end(JSON.stringify({ ok: true, version: v }));
-        return;
-      }
-      if (url.pathname === '/api/dashboard/version' && method === 'GET') {
-        const cookie = (req.headers.cookie || '').match(/vybecord_dashboard=(v[12])/);
-        return this.jsonResponse(res, { version: cookie ? cookie[1] : 'v2' });
-      }
-
       // Static file serving (dashboard)
-      if (url.pathname === '/' || url.pathname === '/index.html') {
-        const cookie = (req.headers.cookie || '').match(/vybecord_dashboard=(v[12])/);
-        const ver = cookie ? cookie[1] : 'v2';
-        return await this.serveFile(res, ver === 'v1' ? 'dashboard.html' : 'dashboard-v2.html');
-      }
-      if (url.pathname === '/v1') {
-        return await this.serveFile(res, 'dashboard.html');
-      }
-      if (url.pathname === '/v2') {
+      if (url.pathname === '/' || url.pathname === '/index.html' || url.pathname === '/v2') {
         return await this.serveFile(res, 'dashboard-v2.html');
       }
 
