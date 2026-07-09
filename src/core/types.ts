@@ -162,6 +162,8 @@ export interface VybecordConfig {
   translate_target_lang: string;
   // Polling
   poll_interval_ms: number;
+  /** Prevent Discord from showing user as idle/absent when app is running */
+  prevent_idle: boolean;
   /** Discord webhook URL for bug reports (optional) */
   bug_report_webhook?: string;
   [key: string]: unknown;

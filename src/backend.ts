@@ -105,6 +105,7 @@ export class VybecordBackend extends EventEmitter {
 
   private sourceMode: TrackSourceMode = 'free';
   private pollTimer: ReturnType<typeof setInterval> | null = null;
+  private idlePreventionTimer: ReturnType<typeof setInterval> | null = null;
   private currentTrack: TrackData | null = null;
   private currentTrackKey = '';
   private currentCacheKey = '';
@@ -290,6 +291,12 @@ export class VybecordBackend extends EventEmitter {
     const interval = this.config.get('poll_interval_ms') || 1500;
     log.info(`Starting ${this.sourceMode.toUpperCase()} polling (every ${interval}ms)`);
     this.pollTimer = setInterval(() => this.poll(), interval);
+
+    // 4. Start idle prevention if enabled
+    if (this.config.get('prevent_idle')) {
+      log.info('Idle prevention enabled — starting heartbeat timer');
+      this.idlePreventionTimer = setInterval(() => this.preventIdle(), 60000); // Every 60 seconds
+    }
 
     // Immediate first poll
     this.poll();
@@ -1836,6 +1843,21 @@ export class VybecordBackend extends EventEmitter {
     });
   }
 
+  /** Periodically sends a minimal activity update to prevent Discord idle/absent status */
+  private preventIdle(): void {
+    if (!this.discord.isConnected) return;
+    if (!this.config.get('rpc_enabled')) return;
+    if (!this.config.get('prevent_idle')) return;
+
+    // If music is playing, the lyrics engine already keeps activity updated
+    // Only send heartbeat when no music is playing
+    if (this.currentTrack && this.currentTrack.is_playing) return;
+
+    // Send a minimal activity update to reset Discord's idle timer
+    log.debug('Sending idle prevention heartbeat');
+    this.setIdlePresence();
+  }
+
   /** Merge persisted enriched metadata (album art, album name, full artist) into a track object. */
   private mergeEnriched(track: TrackData): void {
     // Metadata enrichment disabled per user request
@@ -1883,6 +1905,12 @@ export class VybecordBackend extends EventEmitter {
     if (this.pollTimer) {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
+    }
+
+    // 2.5. Stop idle prevention timer
+    if (this.idlePreventionTimer) {
+      clearInterval(this.idlePreventionTimer);
+      this.idlePreventionTimer = null;
     }
 
     // 3. Stop lyrics engine
