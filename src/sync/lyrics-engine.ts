@@ -61,6 +61,7 @@ const PLATFORM_ICONS: Record<string, [string, string]> = {
   bandcamp: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/VVjYzmfdMIF5hHA8SUnbi.gif', 'Bandcamp'],
   youtube_music: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/2Fhe7kDaQIQjvCtdlhlmo.png', 'YouTube Music'],
   youtube: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/2Fhe7kDaQIQjvCtdlhlmo.png', 'YouTube'],
+  twitch: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/VGmX6BMle1xqCoM7LDX4w.png', 'Twitch'],
   // Browsers (YouTube / web player)
   browser_chrome: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/2Fhe7kDaQIQjvCtdlhlmo.png', 'YouTube'],
   browser_firefox: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/2Fhe7kDaQIQjvCtdlhlmo.png', 'YouTube'],
@@ -287,8 +288,8 @@ export class LyricsEngine {
 
   /** Flash "No Lyrics Found" for 5 seconds, then revert to normal display. */
   setNoLyricsFound(): void {
-    if (!this.cfgShowLyrics) return; // Don't show when lyrics are disabled
-    this.setStatusMessage('noLyrics', '❌ No Lyrics Found', 30, 5000);
+    // Disabled - do not show "No Lyrics Found" message
+    return;
   }
 
   /** Flash "Lyrics Found" for 5 seconds. */
@@ -815,6 +816,21 @@ export class LyricsEngine {
       next = nextGroupIdx >= 0 ? this.getDisplayText(nextGroupIdx) : '';
       const prevGroupIdx = this.getPrevGroupEnd(this.currentIdx);
       prev = prevGroupIdx >= 0 ? this.getDisplayText(prevGroupIdx) : '';
+
+      // Add music notes for Spotify and SoundCloud
+      const source = this.trackData?.media_source || '';
+      if (source === 'spotify' || source === 'soundcloud') {
+        if (current && current !== '♪♪') {
+          current = '♪ ' + current;
+        }
+        if (next && next !== '♪♪') {
+          next = next + ' ♪';
+        }
+        // Add music note at the end of the last lyric line
+        if (this.currentIdx === this.lyrics.length - 1 && current && current !== '♪♪') {
+          current = current + ' ♪';
+        }
+      }
     }
 
     // Rate limiting: protect Discord from too-frequent updates.
@@ -976,7 +992,17 @@ export class LyricsEngine {
     const nowUnix = Math.floor(Date.now() / 1000);
     const rawElapsed = this.getElapsedMs();
     const elapsedSec = Math.floor((d.duration_ms > 0 ? Math.min(rawElapsed, d.duration_ms) : rawElapsed) / 1000);
-    const startTs = nowUnix - elapsedSec;
+    
+    // For live streams, use stream start time to show total stream duration instead of resetting to 0
+    let startTs: number;
+    if (d.is_live && d.stream_start_time_ms) {
+      startTs = Math.floor(d.stream_start_time_ms / 1000);
+      log.debug(`[LYRICS] Live stream: using start time ${startTs} (from ${d.stream_start_time_ms})`);
+    } else {
+      startTs = nowUnix - elapsedSec;
+      log.debug(`[LYRICS] Non-live or no start time: using elapsed ${elapsedSec}s`);
+    }
+    
     const endTs = d.duration_ms > 0 ? startTs + Math.floor(d.duration_ms / 1000) : 0;
 
     let details: string;

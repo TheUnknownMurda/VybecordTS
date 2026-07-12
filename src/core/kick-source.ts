@@ -29,6 +29,7 @@ export interface KickPayload {
   is_live: boolean;
   thumbnail_url: string;
   profile_picture_url: string;
+  stream_start_time_ms?: number;
 }
 
 const STALE_THRESHOLD_MS = 10_000;
@@ -37,6 +38,7 @@ export class KickSource {
   private latestData: KickPayload | null = null;
   private receivedAt = 0;
   private _wasActive = false;
+  private streamStartTime = 0; // Store stream start time once
 
   /**
    * Ingest a push from the Kick userscript.
@@ -49,6 +51,20 @@ export class KickSource {
     if (!this._wasActive) {
       this._wasActive = true;
       log.info('Kick userscript connected ✓ — using as primary Kick source');
+    }
+    
+    // Use stream start time from Tampermonkey script
+    if (data.stream_start_time_ms) {
+      this.streamStartTime = data.stream_start_time_ms;
+      log.debug(`[KICK] Stream start time from script: ${this.streamStartTime}`);
+    } else if (data.is_live && this.streamStartTime === 0) {
+      // Fallback: set locally if not provided by script
+      this.streamStartTime = Date.now();
+      log.debug(`[KICK] Stream start time set locally: ${this.streamStartTime}`);
+    }
+    // Reset when stream goes offline
+    if (!data.is_live) {
+      this.streamStartTime = 0;
     }
   }
 
@@ -72,6 +88,7 @@ export class KickSource {
       progress_ms: 0,
       is_playing: true,
       is_live: true,
+      stream_start_time_ms: this.streamStartTime, // Use stored start time
       album_art_url: d.profile_picture_url || d.thumbnail_url || '',
       spotify_url: d.profile_url || '',
       artist_url: '',

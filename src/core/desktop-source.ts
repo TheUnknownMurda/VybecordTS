@@ -198,6 +198,7 @@ export class DesktopSource {
       spotify_url: '',
       artist_url: '',
       media_source: source,
+      is_local: source === 'apple_music' && !d.source_id?.includes('music.apple'),  // Apple Music local files don't have music.apple URLs
       _received_at: performance.now(),
     };
     this._cachedDataRef = d;

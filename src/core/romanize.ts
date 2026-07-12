@@ -129,7 +129,29 @@ const PINYIN_CACHE_LIMIT = 200;
 function romanizeChinese(text: string): string {
   let cached = pinyinCache.get(text);
   if (cached === undefined) {
-    cached = pinyin(text, { toneType: 'none', type: 'string', separator: ' ' });
+    // Process only Chinese characters, leave Latin/English as-is
+    let result = '';
+    let chineseBuffer = '';
+    
+    for (const ch of text) {
+      if (ZH_REGEX.test(ch)) {
+        chineseBuffer += ch;
+      } else {
+        // Flush any accumulated Chinese characters
+        if (chineseBuffer) {
+          result += pinyin(chineseBuffer, { toneType: 'none', type: 'string', separator: ' ' });
+          chineseBuffer = '';
+        }
+        // Keep non-Chinese characters as-is
+        result += ch;
+      }
+    }
+    // Flush remaining Chinese buffer
+    if (chineseBuffer) {
+      result += pinyin(chineseBuffer, { toneType: 'none', type: 'string', separator: ' ' });
+    }
+    
+    cached = result;
     pinyinCache.set(text, cached);
     evictOldest(pinyinCache, PINYIN_CACHE_LIMIT);
   }

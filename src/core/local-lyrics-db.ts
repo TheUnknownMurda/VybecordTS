@@ -155,6 +155,9 @@ function openDb(dbPath: string): boolean {
     db = new Database(dbPath, { readonly: false, fileMustExist: true });
     log.debug('openDb: Database opened, setting pragmas...');
     
+    // Disable foreign key constraints to allow deletion of custom lyrics
+    db.pragma('foreign_keys = OFF');
+    
     // Set pragmas with timeout to prevent hanging on large databases
     try {
       db.pragma('journal_mode = WAL', { simple: true });  // Allow concurrent reads + writes (custom lyrics import)
@@ -544,18 +547,48 @@ export function updateCustomLyrics(trackId: number, data: { track_name?: string;
 export function deleteCustomLyrics(trackId: number): boolean {
   if (!db) return false;
   try {
-    const tx = db.transaction(() => {
-      const row = db!.prepare('SELECT last_lyrics_id FROM tracks WHERE id = ?').get(trackId) as { last_lyrics_id: number } | undefined;
-      if (!row) return false;
-      // Delete FTS, track, and lyrics
-      try { db!.prepare('DELETE FROM tracks_fts WHERE rowid = ?').run(trackId); } catch { /* ok */ }
-      db!.prepare('DELETE FROM tracks WHERE id = ?').run(trackId);
-      db!.prepare('DELETE FROM lyrics WHERE id = ?').run(row.last_lyrics_id);
-      return true;
-    });
-    const ok = tx();
-    if (ok) log.info(`[LOCAL] Deleted custom lyrics track #${trackId}`);
-    return ok;
+    log.info(`[LOCAL] Attempting to delete custom lyrics track #${trackId}`);
+    
+    const row = db.prepare(`
+      SELECT t.last_lyrics_id, l.source 
+      FROM tracks t
+      JOIN lyrics l ON l.id = t.last_lyrics_id
+      WHERE t.id = ?
+    `).get(trackId) as { last_lyrics_id: number; source: string } | undefined;
+    
+    if (!row) {
+      log.warn(`[LOCAL] Track #${trackId} not found`);
+      return false;
+    }
+    
+    log.info(`[LOCAL] Found track #${trackId} with lyrics_id=${row.last_lyrics_id}, source=${row.source}`);
+    
+    // Only delete custom lyrics, not LRCLib official lyrics
+    if (row.source !== 'custom') {
+      log.warn(`[LOCAL] Cannot delete non-custom lyrics track #${trackId} (source: ${row.source})`);
+      return false;
+    }
+    
+    // Step-by-step deletion with logging
+    log.info(`[LOCAL] Step 1: Clearing last_lyrics_id reference`);
+    db.prepare('UPDATE tracks SET last_lyrics_id = NULL WHERE id = ?').run(trackId);
+    
+    log.info(`[LOCAL] Step 2: Clearing track_id in lyrics`);
+    db.prepare('UPDATE lyrics SET track_id = NULL WHERE id = ?').run(row.last_lyrics_id);
+    
+    log.info(`[LOCAL] Step 3: Deleting FTS entry`);
+    try { db.prepare('DELETE FROM tracks_fts WHERE rowid = ?').run(trackId); } catch (e) { 
+      log.debug(`[LOCAL] FTS deletion failed (non-critical): ${e}`); 
+    }
+    
+    log.info(`[LOCAL] Step 4: Deleting lyrics`);
+    db.prepare('DELETE FROM lyrics WHERE id = ?').run(row.last_lyrics_id);
+    
+    log.info(`[LOCAL] Step 5: Deleting track`);
+    db.prepare('DELETE FROM tracks WHERE id = ?').run(trackId);
+    
+    log.info(`[LOCAL] Successfully deleted custom lyrics track #${trackId}`);
+    return true;
   } catch (e) {
     log.warn(`[LOCAL] deleteCustomLyrics error: ${e}`);
     return false;

@@ -36,6 +36,7 @@ export interface YouTubePayload {
   thumbnail_url: string;
   /** 'youtube' or 'youtube_music' */
   source: string;
+  stream_start_time_ms?: number;
 }
 
 const STALE_THRESHOLD_MS = 10_000; // Data older than 10s = userscript disconnected
@@ -45,6 +46,7 @@ export class YouTubeSource {
   private receivedAt = 0;
   private _wasActive = false;
   private _staleAt = 0;  // timestamp when userscript went stale
+  private streamStartTime = 0; // Store stream start time once
 
   /**
    * Ingest a push from the YouTube userscript.
@@ -57,6 +59,18 @@ export class YouTubeSource {
     if (!this._wasActive) {
       this._wasActive = true;
       log.info('YouTube userscript connected ✓ — using as primary YouTube source');
+    }
+    
+    // Use stream start time from Tampermonkey script
+    if (data.stream_start_time_ms) {
+      this.streamStartTime = data.stream_start_time_ms;
+    } else if (data.is_live && this.streamStartTime === 0) {
+      // Fallback: set locally if not provided by script
+      this.streamStartTime = Date.now();
+    }
+    // Reset when stream goes offline or when switching to non-live content
+    if (!data.is_live) {
+      this.streamStartTime = 0;
     }
   }
 
@@ -102,6 +116,7 @@ export class YouTubeSource {
       progress_ms: compensatedProgress,
       is_playing: true,
       is_live: d.is_live,
+      stream_start_time_ms: d.is_live ? this.streamStartTime : undefined,
       album_art_url: d.thumbnail_url || `https://i.ytimg.com/vi/${d.video_id}/hqdefault.jpg`,
       spotify_url: '',
       artist_url: '',

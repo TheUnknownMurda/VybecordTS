@@ -1980,13 +1980,6 @@
                 </label>
               </div>
               <div class="setting-row">
-                <div><div class="s-label" data-i18n="prevent_idle">Empêcher le statut inactif</div></div>
-                <label class="toggle">
-                  <input type="checkbox" id="cfgPreventIdle" />
-                  <span class="slider"></span>
-                </label>
-              </div>
-              <div class="setting-row">
                 <div><div class="s-label" data-i18n="synced_lyrics">Synced lyrics</div></div>
                 <label class="toggle">
                   <input type="checkbox" id="cfgShowLyrics" checked />
@@ -2387,14 +2380,13 @@
                   type="text"
                   id="cfgBtn2Label"
                   placeholder="🎵 Listen on {platform}"
-                  disabled
-                  style="background: var(--bg-base); cursor: not-allowed; opacity: 0.6"
+                  oninput="updateBtn2Preview()"
                 />
                 <p
-                  style="font-size: 11px; color: var(--text-dim); margin-top: 4px"
-                >
-                  Automatically set to current song (cannot be modified)
-                </p>
+                  id="btn2Preview"
+                  class="hidden"
+                  style="font-size: 11px; color: var(--accent-hex); margin-top: 4px"
+                ></p>
               </div>
             </div>
             <div class="card" style="grid-column: 1/-1">
@@ -3054,7 +3046,6 @@
           visibility: "Visibility",
           discord_activity: "Discord activity",
           only_when_playing: "Only when playing",
-          prevent_idle: "Prevent idle status",
           synced_lyrics: "Synced lyrics",
           romanize_lyrics: "Romanize Lyrics",
           romanize_hint: "JP, KR, ZH, RU, EL, TH, AR, HI, KA, HY → Latin",
@@ -3178,7 +3169,6 @@
           visibility: "Visibilité",
           discord_activity: "Activité Discord",
           only_when_playing: "Uniquement en lecture",
-          prevent_idle: "Empêcher le statut inactif",
           synced_lyrics: "Paroles synchronisées",
           romanize_lyrics: "Romaniser",
           romanize_hint: "JP, KR, ZH → Latin",
@@ -3295,7 +3285,6 @@
           setup_title: "Bienvenido a VybecordTS",
           setup_go: "Iniciar",
           setup_skip: "Omitir",
-          prevent_idle: "Evitar estado inactivo",
         },
         de: {
           idle_title: "Warte auf Musik…",
@@ -3313,7 +3302,6 @@
           setup_title: "Willkommen bei VybecordTS",
           setup_go: "Starten",
           setup_skip: "Überspringen",
-          prevent_idle: "Inaktivitätsstatus verhindern",
         },
         pt: {
           idle_title: "Aguardando música…",
@@ -3331,7 +3319,6 @@
           setup_title: "Bem-vindo ao VybecordTS",
           setup_go: "Iniciar",
           setup_skip: "Pular",
-          prevent_idle: "Evitar status inativo",
         },
         ru: {
           idle_title: "Ожидание музыки…",
@@ -3349,7 +3336,6 @@
           setup_title: "Добро пожаловать",
           setup_go: "Запустить",
           setup_skip: "Пропустить",
-          prevent_idle: "Предотвратить неактивность",
         },
         ja: {
           idle_title: "音楽を待っています…",
@@ -3367,7 +3353,6 @@
           setup_title: "VybecordTSへようこそ",
           setup_go: "起動",
           setup_skip: "スキップ",
-          prevent_idle: "アイドル状態を防ぐ",
         },
         ko: {
           idle_title: "음악 대기 중…",
@@ -3385,7 +3370,6 @@
           setup_title: "VybecordTS 환영",
           setup_go: "시작",
           setup_skip: "건너뛰기",
-          prevent_idle: "자리 비움 상태 방지",
         },
         zh: {
           idle_title: "等待音乐…",
@@ -3403,7 +3387,6 @@
           setup_title: "欢迎",
           setup_go: "启动",
           setup_skip: "跳过",
-          prevent_idle: "防止离线状态",
         },
       };
       function detectLang() {
@@ -3756,6 +3739,7 @@
         artEl.classList.remove("hidden");
         artEl.style.display = "";
         startProgress(d.progress_ms, d.duration_ms, performance.now());
+        updateBtn2Preview();
         if (_lyricsExpanded) {
           _fullLyrics = [];
           _expandedActiveIdx = -1;
@@ -3969,7 +3953,6 @@
       function loadConfig(c) {
         $("cfgRpcEnabled").checked = c.rpc_enabled !== false;
         $("cfgOnlyWhenPlaying").checked = c.rpc_only_when_playing === true;
-        $("cfgPreventIdle").checked = c.prevent_idle === true;
         $("cfgShowLyrics").checked = c.show_lyrics !== false;
         $("cfgRomanize").checked = c.romanize_lyrics === true;
         $("cfgTranslate").checked = c.translate_lyrics === true;
@@ -4026,6 +4009,7 @@
         $("cfgBtn1Label").value = c.rpc_button1_label || "";
         $("cfgBtn1Url").value = c.rpc_button1_url || "";
         $("cfgBtn2Label").value = c.rpc_button2_label || "";
+        updateBtn2Preview();
         $("cfgSpotifyId").value = c.spotify_client_id || "";
         $("cfgSpotifySecret").value = c.spotify_client_secret || "";
         $("cfgDiscordId").value = c.discord_app_id || "";
@@ -4046,11 +4030,21 @@
           $(id).disabled = !master;
         });
       }
+      function updateBtn2Preview() {
+        const label = $("cfgBtn2Label").value,
+          preview = $("btn2Preview");
+        if (!label.includes("{platform}")) {
+          preview.classList.add("hidden");
+          return;
+        }
+        const src = currentTrack ? currentTrack.media_source || "spotify" : "spotify";
+        preview.textContent = "Preview: " + label.replace("{platform}", PLATFORM_DISPLAY[src] || src);
+        preview.classList.remove("hidden");
+      }
       async function saveConfig() {
         const u = {
           rpc_enabled: $("cfgRpcEnabled").checked,
           rpc_only_when_playing: $("cfgOnlyWhenPlaying").checked,
-          prevent_idle: $("cfgPreventIdle").checked,
           show_lyrics: $("cfgShowLyrics").checked,
           romanize_lyrics: $("cfgRomanize").checked,
           translate_lyrics: $("cfgTranslate").checked,
@@ -4880,30 +4874,18 @@
         btn.disabled = true;
         btn.textContent = "…";
         try {
-          console.log("Sending bug report...");
-          const payload = {
-                summary,
-                category: $("bugCategory").value,
-                details: $("bugDetails").value,
-                track: currentTrack ? {
-                  name: currentTrack.track_name,
-                  artist: currentTrack.artist_name,
-                  album: currentTrack.album_name,
-                  platform: currentTrack.media_source,
-                } : null,
-                userAgent: navigator.userAgent,
-                lang: _lang || 'en',
-                timestamp: new Date().toISOString(),
-              };
-          console.log("Payload:", payload);
           const r = await (
             await fetch("/api/bug-report", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
+              body: JSON.stringify({
+                summary,
+                category: $("bugCategory").value,
+                details: $("bugDetails").value,
+                track: currentTrack,
+              }),
             })
           ).json();
-          console.log("Response:", r);
           if (r.ok) {
             $("bugStatus").textContent = t("bug_sent");
             $("bugStatus").style.color = "var(--accent-hex)";
@@ -4911,12 +4893,11 @@
             $("bugDetails").value = "";
             _lastBugTime = Date.now();
           } else {
-            $("bugStatus").textContent = t("bug_error") + (r.error ? `: ${r.error}` : '');
+            $("bugStatus").textContent = t("bug_error");
             $("bugStatus").style.color = "#f87171";
           }
-        } catch (e) {
-          console.error("Bug report error:", e);
-          $("bugStatus").textContent = t("bug_error") + ": " + e.message;
+        } catch {
+          $("bugStatus").textContent = t("bug_error");
           $("bugStatus").style.color = "#f87171";
         } finally {
           $("bugStatus").classList.remove("hidden");

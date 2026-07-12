@@ -26,6 +26,7 @@
   let video = null;
   let currentInterval = BASE_INTERVAL_MS;
   let consecutiveFails = 0;
+  let streamStartTime = 0; // Track when live stream started
 
   // ── Helpers ──
 
@@ -100,6 +101,15 @@
                    (vid.duration === Infinity) ||
                    !!document.querySelector('.badge-style-type-live-now');
 
+    // Set stream start time when stream goes live
+    if (isLive && streamStartTime === 0) {
+      streamStartTime = Date.now();
+    }
+    // Reset when stream goes offline or when switching to non-live content
+    if (!isLive) {
+      streamStartTime = 0;
+    }
+
     return {
       video_id: videoId,
       title: title,
@@ -109,6 +119,7 @@
       progress_ms: Math.round((vid.currentTime || 0) * 1000),
       is_playing: !vid.paused && !vid.ended,
       is_live: isLive,
+      stream_start_time_ms: isLive ? streamStartTime : undefined,
       thumbnail_url: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
       source: isYouTubeMusic() ? 'youtube_music' : 'youtube',
     };

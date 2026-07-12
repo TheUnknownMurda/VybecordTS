@@ -46,6 +46,8 @@ export interface TrackData {
   artist_art_url?: string;
   /** True if this is a live stream (YouTube live, radio, etc.) */
   is_live?: boolean;
+  /** Stream start time in Unix timestamp (seconds) for live streams - used to show total stream time instead of resetting to 0 */
+  stream_start_time_ms?: number;
   /** True if playback is in shuffle mode */
   is_shuffle?: boolean;
   /** Repeat mode: 'off' | 'context' (playlist/album repeat) | 'track' (single track repeat) */
@@ -162,8 +164,6 @@ export interface VybecordConfig {
   translate_target_lang: string;
   // Polling
   poll_interval_ms: number;
-  /** Prevent Discord from showing user as idle/absent when app is running */
-  prevent_idle: boolean;
   /** Discord webhook URL for bug reports (optional) */
   bug_report_webhook?: string;
   [key: string]: unknown;

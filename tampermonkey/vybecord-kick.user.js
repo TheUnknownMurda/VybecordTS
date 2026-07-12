@@ -23,6 +23,7 @@
     let pushTimer = null;
     let currentInterval = BASE_INTERVAL_MS;
     let consecutiveFails = 0;
+    let streamStartTime = 0; // Track when stream started
 
     // ── Helpers ──
 
@@ -80,7 +81,8 @@
             profile_url: '',
             is_live: false,
             thumbnail_url: '',
-            profile_picture_url: ''
+            profile_picture_url: '',
+            stream_start_time_ms: 0
         };
 
         // Try to get username from URL
@@ -186,6 +188,16 @@
         // Detect if stream is live
         info.is_live = !!document.querySelector('[class*="live"], [class*="online"]') ||
                        !document.querySelector('[class*="offline"]');
+
+        // Set stream start time when stream goes live
+        if (info.is_live && streamStartTime === 0) {
+            streamStartTime = Date.now();
+        }
+        // Reset when stream goes offline
+        if (!info.is_live) {
+            streamStartTime = 0;
+        }
+        info.stream_start_time_ms = streamStartTime;
 
         // Try to get thumbnail
         const thumbnailEl = document.querySelector('video') ||
