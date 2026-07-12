@@ -46,8 +46,6 @@ const DEFAULTS: VybecordConfig = {
   rpc_translate_lyrics: false,
   translate_target_lang: 'en',
   poll_interval_ms: 3000,
-  prevent_idle: false,
-  bug_report_webhook: 'https://discord.com/api/webhooks/1524606839856042054/OIPDjWN9zRVqnISxm00WHiNQDBb4w5Hm087SLSTmAVbtfomu6iYHdeYJy7ijlXcOBzcD',
 };
 
 export class ConfigManager {

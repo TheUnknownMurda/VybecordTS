@@ -105,7 +105,6 @@ export class VybecordBackend extends EventEmitter {
 
   private sourceMode: TrackSourceMode = 'free';
   private pollTimer: ReturnType<typeof setInterval> | null = null;
-  private idlePreventionTimer: ReturnType<typeof setInterval> | null = null;
   private currentTrack: TrackData | null = null;
   private currentTrackKey = '';
   private currentCacheKey = '';
@@ -292,12 +291,6 @@ export class VybecordBackend extends EventEmitter {
     log.info(`Starting ${this.sourceMode.toUpperCase()} polling (every ${interval}ms)`);
     this.pollTimer = setInterval(() => this.poll(), interval);
 
-    // 4. Start idle prevention if enabled
-    if (this.config.get('prevent_idle')) {
-      log.info('Idle prevention enabled — starting heartbeat timer');
-      this.idlePreventionTimer = setInterval(() => this.preventIdle(), 60000); // Every 60 seconds
-    }
-
     // Immediate first poll
     this.poll();
   }
@@ -447,9 +440,15 @@ export class VybecordBackend extends EventEmitter {
 
     if (trackKey === this.currentTrackKey) {
       log.debug(`[YOUTUBE] Same track detected: ${track.track_name} — ${track.artist_name} (key: ${trackKey})`);
-      // Same track — sync exact progress (no drift with userscript)
+      // Same track — update to ensure stream_start_time_ms is passed to lyrics-engine
+      this.currentTrack = track;
       if (this.checkRepeatLoop(track)) return;
-      this.syncTrackProgress(track);
+      // For live streams, force syncProgress to update trackData with stream_start_time_ms
+      if (track.is_live) {
+        this.lyricsEngine.syncProgress(track.progress_ms, track);
+      } else {
+        this.syncTrackProgress(track);
+      }
       return;
     }
 
@@ -564,7 +563,10 @@ export class VybecordBackend extends EventEmitter {
 
     if (trackKey === this.currentTrackKey) {
       log.debug(`[KICK] Same stream detected: ${track.track_name} — ${track.artist_name} (key: ${trackKey})`);
-      // Same stream — no progress sync needed for live streams
+      // Same stream — update track to ensure stream_start_time_ms is passed to lyrics-engine
+      this.currentTrack = track;
+      // Force syncProgress to update trackData in lyrics-engine (even for live streams)
+      this.lyricsEngine.syncProgress(track.progress_ms, track);
       return;
     }
 
@@ -601,7 +603,10 @@ export class VybecordBackend extends EventEmitter {
 
     if (trackKey === this.currentTrackKey) {
       log.debug(`[TWITCH] Same stream detected: ${track.track_name} — ${track.artist_name} (key: ${trackKey})`);
-      // Same stream — no progress sync needed for live streams
+      // Same stream — update track to ensure stream_start_time_ms is passed to lyrics-engine
+      this.currentTrack = track;
+      // Force syncProgress to update trackData in lyrics-engine (even for live streams)
+      this.lyricsEngine.syncProgress(track.progress_ms, track);
       return;
     }
 
@@ -1224,6 +1229,9 @@ export class VybecordBackend extends EventEmitter {
     const cacheKey = `${trackData.track_id}|${trackData.track_name}|${trackData.artist_name}|${trackData.duration_ms}`;
     this.currentCacheKey = cacheKey;
 
+    // Preserve original album_art_url to prevent losing local art during lyrics search
+    const originalAlbumArtUrl = trackData.album_art_url;
+
     let lyrics: LyricLine[];
     const cached = this.lyricsCache.get(cacheKey);
     if (cached && cached.length > 0) {
@@ -1305,7 +1313,8 @@ export class VybecordBackend extends EventEmitter {
               log.info(`[CC] Result: ${ccResult.lines.length} lines, thumbnail: ${ccResult.thumbnailUrl ? 'yes' : 'no'}`);
               
               // YouTube thumbnail takes priority — more relevant than generic album art
-              if (ccResult.thumbnailUrl) {
+              // But preserve local album art if it was already extracted
+              if (ccResult.thumbnailUrl && trackData.album_art_url !== '/api/thumbnail') {
                 trackData.album_art_url = ccResult.thumbnailUrl;
                 // Persist in enrichedMeta so it survives subsequent poll cycles
                 const existing = this.enrichedMeta.get(this.currentTrackKey);
@@ -1364,6 +1373,10 @@ export class VybecordBackend extends EventEmitter {
     }
 
     // Persist enriched track + re-emit to dashboard
+    // Restore original album_art_url to prevent losing local art during lyrics search
+    // But preserve uploaded public URL if uploadLocalThumbForRpc completed during lyrics search
+    const uploadedUrl = this.currentTrack?.album_art_url?.startsWith('https://') ? this.currentTrack.album_art_url : null;
+    trackData.album_art_url = uploadedUrl || originalAlbumArtUrl;
     this.currentTrack = trackData;
     this.emit('trackUpdate', trackData);
 
@@ -1396,10 +1409,9 @@ export class VybecordBackend extends EventEmitter {
         translateBatch(lines, tgtLang, signal).catch(() => {});
       }
     } else {
-      // No lyrics found — flash "No Lyrics Found" for 5s, then revert
+      // No lyrics found
       const noLyricsSource = trackData.track_id.startsWith('yt:') ? 'CC fetch failed or empty' : 'LRCLib/Netease fetch failed';
       log.info(`[LYRICS] No lyrics found for "${trackData.track_name}" — ${noLyricsSource}`);
-      this.lyricsEngine.setNoLyricsFound();
       this.lyricsEngine.updateTrackData(trackData);
 
       // Async: fetch plain (unsynced) lyrics for dashboard display only (not RPC)
@@ -1843,21 +1855,6 @@ export class VybecordBackend extends EventEmitter {
     });
   }
 
-  /** Periodically sends a minimal activity update to prevent Discord idle/absent status */
-  private preventIdle(): void {
-    if (!this.discord.isConnected) return;
-    if (!this.config.get('rpc_enabled')) return;
-    if (!this.config.get('prevent_idle')) return;
-
-    // If music is playing, the lyrics engine already keeps activity updated
-    // Only send heartbeat when no music is playing
-    if (this.currentTrack && this.currentTrack.is_playing) return;
-
-    // Send a minimal activity update to reset Discord's idle timer
-    log.debug('Sending idle prevention heartbeat');
-    this.setIdlePresence();
-  }
-
   /** Merge persisted enriched metadata (album art, album name, full artist) into a track object. */
   private mergeEnriched(track: TrackData): void {
     // Metadata enrichment disabled per user request
@@ -1905,12 +1902,6 @@ export class VybecordBackend extends EventEmitter {
     if (this.pollTimer) {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
-    }
-
-    // 2.5. Stop idle prevention timer
-    if (this.idlePreventionTimer) {
-      clearInterval(this.idlePreventionTimer);
-      this.idlePreventionTimer = null;
     }
 
     // 3. Stop lyrics engine
