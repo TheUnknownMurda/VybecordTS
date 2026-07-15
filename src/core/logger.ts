@@ -11,38 +11,37 @@ const LEVEL_PRIORITY: Record<LogLevel, number> = {
 };
 
 const LEVEL_COLORS: Record<LogLevel, string> = {
-  debug: '\x1b[38;2;128;128;128m', // gray
-  info:  '\x1b[38;2;200;200;200m', // light gray
-  warn:  '\x1b[38;2;255;200;100m', // orange
-  error: '\x1b[38;2;255;100;100m', // red
+  debug: '\x1b[38;2;190;188;255m', // pastel lavender
+  info:  '\x1b[38;2;172;244;255m', // pastel cyan
+  warn:  '\x1b[38;2;255;246;170m', // pastel gold
+  error: '\x1b[38;2;255;140;140m', // pastel coral-red
 };
 
 const RESET = '\x1b[0m';
 
-// ── Rainbow gradient (vibrant pink → orange → yellow → green → cyan → blue) ──
+// ── Rainbow gradient (pastel pink → yellow → green → cyan → blue) ──
 // Same left-to-right per-character gradient used by "PC Gaming Redists" style
 // installer banners. Reserved for decorative/banner output, not per-line logs.
 const RAINBOW: readonly string[] = [
-  '\x1b[38;2;255;0;128m',   '\x1b[38;2;255;50;128m',  '\x1b[38;2;255;100;128m',
-  '\x1b[38;2;255;150;128m', '\x1b[38;2;255;200;128m', '\x1b[38;2;255;255;128m',
-  '\x1b[38;2;255;255;100m', '\x1b[38;2;255;255;50m',  '\x1b[38;2;255;255;0m',
-  '\x1b[38;2;200;255;0m',
-  '\x1b[38;2;150;255;0m',   '\x1b[38;2;100;255;0m',  '\x1b[38;2;50;255;0m',
-  '\x1b[38;2;0;255;0m',     '\x1b[38;2;0;255;50m',   '\x1b[38;2;0;255;100m',
-  '\x1b[38;2;0;255;150m',   '\x1b[38;2;0;255;200m',  '\x1b[38;2;0;255;255m',
-  '\x1b[38;2;0;200;255m',
-  '\x1b[38;2;0;150;255m',   '\x1b[38;2;0;100;255m',  '\x1b[38;2;0;50;255m',
-  '\x1b[38;2;0;0;255m',     '\x1b[38;2;50;0;255m',   '\x1b[38;2;100;0;255m',
-  '\x1b[38;2;150;0;255m',   '\x1b[38;2;200;0;255m',  '\x1b[38;2;255;0;255m',
-  '\x1b[38;2;255;0;200m',
-  '\x1b[38;2;255;0;150m',   '\x1b[38;2;255;0;100m',  '\x1b[38;2;255;0;50m',
-  '\x1b[38;2;255;0;0m',     '\x1b[38;2;255;50;0m',   '\x1b[38;2;255;100;0m',
-  '\x1b[38;2;255;150;0m',   '\x1b[38;2;255;200;0m',  '\x1b[38;2;255;255;0m',
-  '\x1b[38;2;200;255;0m',
-  '\x1b[38;2;150;255;0m',   '\x1b[38;2;100;255;0m',  '\x1b[38;2;50;255;0m',
-  '\x1b[38;2;0;255;0m',     '\x1b[38;2;0;255;50m',   '\x1b[38;2;0;255;100m',
-  '\x1b[38;2;0;255;150m',   '\x1b[38;2;0;255;200m',  '\x1b[38;2;0;255;255m',
-  '\x1b[38;2;0;200;255m',
+  '\x1b[38;2;255;182;193m', '\x1b[38;2;255;186;191m', '\x1b[38;2;255;190;189m',
+  '\x1b[38;2;255;194;187m', '\x1b[38;2;255;198;185m', '\x1b[38;2;255;202;183m',
+  '\x1b[38;2;255;206;181m', '\x1b[38;2;255;210;179m', '\x1b[38;2;255;214;177m',
+  '\x1b[38;2;255;218;175m',
+  '\x1b[38;2;255;222;173m', '\x1b[38;2;255;226;172m', '\x1b[38;2;255;230;171m',
+  '\x1b[38;2;255;234;170m', '\x1b[38;2;255;238;170m', '\x1b[38;2;255;242;170m',
+  '\x1b[38;2;255;246;170m', '\x1b[38;2;255;250;170m', '\x1b[38;2;253;252;172m',
+  '\x1b[38;2;248;254;174m',
+  '\x1b[38;2;243;255;176m', '\x1b[38;2;235;255;178m', '\x1b[38;2;227;255;180m',
+  '\x1b[38;2;219;255;182m', '\x1b[38;2;211;255;184m', '\x1b[38;2;203;255;186m',
+  '\x1b[38;2;195;255;190m', '\x1b[38;2;190;255;195m', '\x1b[38;2;185;255;200m',
+  '\x1b[38;2;180;255;208m',
+  '\x1b[38;2;178;255;216m', '\x1b[38;2;176;255;224m', '\x1b[38;2;174;255;232m',
+  '\x1b[38;2;172;255;240m', '\x1b[38;2;172;252;248m', '\x1b[38;2;172;248;252m',
+  '\x1b[38;2;172;244;255m', '\x1b[38;2;172;238;255m', '\x1b[38;2;174;232;255m',
+  '\x1b[38;2;176;226;255m',
+  '\x1b[38;2;178;220;255m', '\x1b[38;2;180;214;255m', '\x1b[38;2;182;208;255m',
+  '\x1b[38;2;184;202;255m', '\x1b[38;2;186;196;255m', '\x1b[38;2;188;192;255m',
+  '\x1b[38;2;190;188;255m', '\x1b[38;2;192;185;255m',
 ];
 
 /** Apply the pastel rainbow gradient across a line of text, left to right. */
@@ -67,44 +66,47 @@ export function writeRainbow(text: string): void {
   }
 }
 
-/** Write a plain white/light-gray line to stdout (for subtitle text under banner). */
-export function writePlain(text: string): void {
-  const WHITE = '\x1b[38;2;220;220;220m';
-  process.stdout.write(WHITE + text + RESET + '\n');
-  if (logFileStream) {
-    logBuffer += text + '\n';
-    if (logBuffer.length >= LOG_FLUSH_THRESHOLD) flushLogBuffer();
-  }
-}
-
 // ── Big block-letter font (5x7 dot matrix, uppercase A-Z subset) ──
 // Used for the startup logo, in the same spirit as "PC Gaming Redists"'s
-// big ASCII-art title. Add more letters here if the logo text changes.
+// big ASCII-art title: solid fill ('#'), light-shade anti-aliasing on curves
+// ('.'), and a light-shade drop-shadow row underneath each letter.
+// Add more letters here if the logo text changes.
 const BLOCK_FONT: Record<string, string[]> = {
-  V: ['10001', '10001', '10001', '10001', '10001', '01010', '00100'],
-  Y: ['10001', '10001', '01010', '00100', '00100', '00100', '00100'],
-  B: ['11110', '10001', '10001', '11110', '10001', '10001', '11110'],
-  E: ['11111', '10000', '10000', '11110', '10000', '10000', '11111'],
-  C: ['01111', '10000', '10000', '10000', '10000', '10000', '01111'],
-  O: ['01110', '10001', '10001', '10001', '10001', '10001', '01110'],
-  R: ['11110', '10001', '10001', '11110', '10100', '10010', '10001'],
-  D: ['11110', '10001', '10001', '10001', '10001', '10001', '11110'],
-  ' ': ['00000', '00000', '00000', '00000', '00000', '00000', '00000'],
+  V: ['#   #', '#   #', '#   #', '#   #', '#   #', '.# #.', '  #  '],
+  Y: ['#   #', '#   #', '.# #.', '  #  ', '  #  ', '  #  ', '  #  '],
+  B: ['#### ', '#   #', '#   #', '#### ', '#   #', '#   #', '#### '],
+  E: ['#####', '#    ', '#    ', '#### ', '#    ', '#    ', '#####'],
+  C: [' .###', '#    ', '#    ', '#    ', '#    ', '#    ', ' .###'],
+  O: ['.###.', '#   #', '#   #', '#   #', '#   #', '#   #', '.###.'],
+  R: ['#### ', '#   #', '#   #', '#### ', '# #  ', '#  # ', '#   #'],
+  D: ['#### ', '#   #', '#   #', '#   #', '#   #', '#   #', '#### '],
+  ' ': ['     ', '     ', '     ', '     ', '     ', '     ', '     '],
 };
 
-/** Render text as big 5x7 block-letter ASCII art. Returns one string per row (7 rows). */
+/**
+ * Render text as big 5x7 block-letter ASCII art with a light-shade drop
+ * shadow underneath. Returns one string per row (8 rows: 7 letter + shadow).
+ */
 export function renderBigText(text: string, scaleX = 2): string[] {
   const rows = 7;
-  const lines = new Array(rows).fill('');
+  const lines = new Array(rows + 1).fill('');
+  const shadowSegments: string[] = [];
   for (const ch of text.toUpperCase()) {
     const glyph = BLOCK_FONT[ch];
     if (!glyph) continue; // skip characters we don't have a glyph for
+    let letterWidth = 0;
     for (let r = 0; r < rows; r++) {
       let seg = '';
-      for (const bit of glyph[r]) seg += (bit === '1' ? '█' : ' ').repeat(scaleX);
+      for (const px of glyph[r]) {
+        const c = px === '#' ? '█' : px === '.' ? '░' : ' ';
+        seg += c.repeat(scaleX);
+      }
+      letterWidth = seg.length;
       lines[r] += seg + ' '; // 1-column gap between letters
     }
+    shadowSegments.push('░'.repeat(letterWidth) + ' ');
   }
+  lines[rows] = shadowSegments.join('');
   return lines.map(l => l.trimEnd());
 }
 
@@ -113,6 +115,12 @@ export function writeBigRainbow(text: string, scaleX = 2): void {
   for (const line of renderBigText(text, scaleX)) {
     writeRainbow(line);
   }
+}
+
+/** Center a line of text within the given width by left-padding with spaces. */
+export function centerText(text: string, width: number): string {
+  if (text.length >= width) return text;
+  return ' '.repeat(Math.floor((width - text.length) / 2)) + text;
 }
 
 let globalLevel: LogLevel = 'info';
@@ -196,16 +204,22 @@ function formatTime(): string {
 export function createLogger(name: string) {
   // Pre-build per-level prefix strings (constant after construction — avoid per-log alloc)
   const consolePrefix: Record<LogLevel, string> = {
-    debug: `${LEVEL_COLORS.debug}[${name}]${RESET} `,
-    info:  `${LEVEL_COLORS.info}[${name}]${RESET} `,
-    warn:  `${LEVEL_COLORS.warn}[${name}]${RESET} `,
-    error: `${LEVEL_COLORS.error}[${name}]${RESET} `,
+    debug: `${LEVEL_COLORS.debug}[`,
+    info:  `${LEVEL_COLORS.info}[`,
+    warn:  `${LEVEL_COLORS.warn}[`,
+    error: `${LEVEL_COLORS.error}[`,
+  };
+  const consoleSuffix: Record<LogLevel, string> = {
+    debug: `] [${LEVEL_TAGS.debug}] [${name}]${RESET} `,
+    info:  `] [${LEVEL_TAGS.info}] [${name}]${RESET} `,
+    warn:  `] [${LEVEL_TAGS.warn}] [${name}]${RESET} `,
+    error: `] [${LEVEL_TAGS.error}] [${name}]${RESET} `,
   };
   const fileTag: Record<LogLevel, string> = {
-    debug: `[${name}] `,
-    info:  `[${name}] `,
-    warn:  `[${name}] `,
-    error: `[${name}] `,
+    debug: `] [${LEVEL_TAGS.debug}] [${name}] `,
+    info:  `] [${LEVEL_TAGS.info}] [${name}] `,
+    warn:  `] [${LEVEL_TAGS.warn}] [${name}] `,
+    error: `] [${LEVEL_TAGS.error}] [${name}] `,
   };
 
   const emit = (level: LogLevel, msg: string) => {
@@ -213,10 +227,10 @@ export function createLogger(name: string) {
 
     const ts = formatTime();
 
-    // Console (colored, minimal format)
-    process.stdout.write(consolePrefix[level] + msg + '\n');
+    // Console (colored) — only 3 concats instead of a template literal
+    process.stdout.write(consolePrefix[level] + ts + consoleSuffix[level] + msg + '\n');
 
-    // File (buffered, with timestamp)
+    // File (buffered)
     if (logFileStream) {
       logBuffer += '[' + ts + fileTag[level] + msg + '\n';
       if (logBuffer.length >= LOG_FLUSH_THRESHOLD) flushLogBuffer();
