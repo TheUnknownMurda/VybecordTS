@@ -8,7 +8,7 @@
 import path from 'node:path';
 import { exec } from 'node:child_process';
 import { config as loadEnv } from 'dotenv';
-import { initLogFile, setLogLevel, createLogger, flushAndClose } from './core/logger.js';
+import { initLogFile, setLogLevel, createLogger, flushAndClose, writeRainbow, writeBigRainbow } from './core/logger.js';
 import { flushTranslationCache } from './core/translate.js';
 import { VybecordBackend } from './backend.js';
 import { WebServer } from './web/server.js';
@@ -28,10 +28,10 @@ loadEnv({ path: path.join(envsDir, '.env') });
 initLogFile(path.join(baseDir, 'logs'));
 
 // ── Banner ──
-log.info('╔══════════════════════════════════════╗');
-log.info('║       VybecordTS v1.0.0              ║');
-log.info('║  Synced Lyrics • Discord RPC         ║');
-log.info('╚══════════════════════════════════════╝');
+writeBigRainbow('VYBECORD');
+writeRainbow('');
+writeRainbow('  Discord Rich Presence with Synced Lyrics — v1.0.0');
+writeRainbow('');
 
 // ── Global error safety net ──
 process.on('uncaughtException', (err) => {

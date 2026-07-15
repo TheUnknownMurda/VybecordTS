@@ -11,13 +11,98 @@ const LEVEL_PRIORITY: Record<LogLevel, number> = {
 };
 
 const LEVEL_COLORS: Record<LogLevel, string> = {
-  debug: '\x1b[37m',  // white
-  info: '\x1b[32m',   // light green
-  warn: '\x1b[33m',   // yellow
-  error: '\x1b[34m',  // light blue
+  debug: '\x1b[38;2;190;188;255m', // pastel lavender
+  info:  '\x1b[38;2;172;244;255m', // pastel cyan
+  warn:  '\x1b[38;2;255;246;170m', // pastel gold
+  error: '\x1b[38;2;255;140;140m', // pastel coral-red
 };
 
 const RESET = '\x1b[0m';
+
+// ── Rainbow gradient (pastel pink → yellow → green → cyan → blue) ──
+// Same left-to-right per-character gradient used by "PC Gaming Redists" style
+// installer banners. Reserved for decorative/banner output, not per-line logs.
+const RAINBOW: readonly string[] = [
+  '\x1b[38;2;255;182;193m', '\x1b[38;2;255;186;191m', '\x1b[38;2;255;190;189m',
+  '\x1b[38;2;255;194;187m', '\x1b[38;2;255;198;185m', '\x1b[38;2;255;202;183m',
+  '\x1b[38;2;255;206;181m', '\x1b[38;2;255;210;179m', '\x1b[38;2;255;214;177m',
+  '\x1b[38;2;255;218;175m',
+  '\x1b[38;2;255;222;173m', '\x1b[38;2;255;226;172m', '\x1b[38;2;255;230;171m',
+  '\x1b[38;2;255;234;170m', '\x1b[38;2;255;238;170m', '\x1b[38;2;255;242;170m',
+  '\x1b[38;2;255;246;170m', '\x1b[38;2;255;250;170m', '\x1b[38;2;253;252;172m',
+  '\x1b[38;2;248;254;174m',
+  '\x1b[38;2;243;255;176m', '\x1b[38;2;235;255;178m', '\x1b[38;2;227;255;180m',
+  '\x1b[38;2;219;255;182m', '\x1b[38;2;211;255;184m', '\x1b[38;2;203;255;186m',
+  '\x1b[38;2;195;255;190m', '\x1b[38;2;190;255;195m', '\x1b[38;2;185;255;200m',
+  '\x1b[38;2;180;255;208m',
+  '\x1b[38;2;178;255;216m', '\x1b[38;2;176;255;224m', '\x1b[38;2;174;255;232m',
+  '\x1b[38;2;172;255;240m', '\x1b[38;2;172;252;248m', '\x1b[38;2;172;248;252m',
+  '\x1b[38;2;172;244;255m', '\x1b[38;2;172;238;255m', '\x1b[38;2;174;232;255m',
+  '\x1b[38;2;176;226;255m',
+  '\x1b[38;2;178;220;255m', '\x1b[38;2;180;214;255m', '\x1b[38;2;182;208;255m',
+  '\x1b[38;2;184;202;255m', '\x1b[38;2;186;196;255m', '\x1b[38;2;188;192;255m',
+  '\x1b[38;2;190;188;255m', '\x1b[38;2;192;185;255m',
+];
+
+/** Apply the pastel rainbow gradient across a line of text, left to right. */
+export function rainbowText(text: string): string {
+  const len = text.length;
+  if (len === 0) return text;
+  let out = '';
+  for (let i = 0; i < len; i++) {
+    let idx = Math.floor((i / len) * RAINBOW.length);
+    if (idx >= RAINBOW.length) idx = RAINBOW.length - 1;
+    out += RAINBOW[idx] + text[i];
+  }
+  return out + RESET;
+}
+
+/** Write a rainbow-gradient line to stdout. Log file gets the plain (uncolored) text. */
+export function writeRainbow(text: string): void {
+  process.stdout.write(rainbowText(text) + '\n');
+  if (logFileStream) {
+    logBuffer += text + '\n';
+    if (logBuffer.length >= LOG_FLUSH_THRESHOLD) flushLogBuffer();
+  }
+}
+
+// ── Big block-letter font (5x7 dot matrix, uppercase A-Z subset) ──
+// Used for the startup logo, in the same spirit as "PC Gaming Redists"'s
+// big ASCII-art title. Add more letters here if the logo text changes.
+const BLOCK_FONT: Record<string, string[]> = {
+  V: ['10001', '10001', '10001', '10001', '10001', '01010', '00100'],
+  Y: ['10001', '10001', '01010', '00100', '00100', '00100', '00100'],
+  B: ['11110', '10001', '10001', '11110', '10001', '10001', '11110'],
+  E: ['11111', '10000', '10000', '11110', '10000', '10000', '11111'],
+  C: ['01111', '10000', '10000', '10000', '10000', '10000', '01111'],
+  O: ['01110', '10001', '10001', '10001', '10001', '10001', '01110'],
+  R: ['11110', '10001', '10001', '11110', '10100', '10010', '10001'],
+  D: ['11110', '10001', '10001', '10001', '10001', '10001', '11110'],
+  ' ': ['00000', '00000', '00000', '00000', '00000', '00000', '00000'],
+};
+
+/** Render text as big 5x7 block-letter ASCII art. Returns one string per row (7 rows). */
+export function renderBigText(text: string, scaleX = 2): string[] {
+  const rows = 7;
+  const lines = new Array(rows).fill('');
+  for (const ch of text.toUpperCase()) {
+    const glyph = BLOCK_FONT[ch];
+    if (!glyph) continue; // skip characters we don't have a glyph for
+    for (let r = 0; r < rows; r++) {
+      let seg = '';
+      for (const bit of glyph[r]) seg += (bit === '1' ? '█' : ' ').repeat(scaleX);
+      lines[r] += seg + ' '; // 1-column gap between letters
+    }
+  }
+  return lines.map(l => l.trimEnd());
+}
+
+/** Write big block-letter text to stdout, rainbow-gradient applied per row. */
+export function writeBigRainbow(text: string, scaleX = 2): void {
+  for (const line of renderBigText(text, scaleX)) {
+    writeRainbow(line);
+  }
+}
 
 let globalLevel: LogLevel = 'info';
 let logFileStream: fs.WriteStream | null = null;
