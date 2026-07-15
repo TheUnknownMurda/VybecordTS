@@ -29,8 +29,8 @@ initLogFile(path.join(baseDir, 'logs'));
 
 // ── Banner ──
 writeBigRainbow('VYBECORD');
-writeRainbow('');
-writeRainbow('  Discord Rich Presence with Synced Lyrics — v1.0.0');
+writeRainbow('  Discord Rich Presence with Synced Lyrics');
+writeRainbow('  v1.0.0');
 writeRainbow('');
 
 // ── Global error safety net ──

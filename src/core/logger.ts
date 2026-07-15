@@ -11,37 +11,38 @@ const LEVEL_PRIORITY: Record<LogLevel, number> = {
 };
 
 const LEVEL_COLORS: Record<LogLevel, string> = {
-  debug: '\x1b[38;2;190;188;255m', // pastel lavender
-  info:  '\x1b[38;2;172;244;255m', // pastel cyan
-  warn:  '\x1b[38;2;255;246;170m', // pastel gold
-  error: '\x1b[38;2;255;140;140m', // pastel coral-red
+  debug: '\x1b[38;2;128;128;128m', // gray
+  info:  '\x1b[38;2;200;200;200m', // light gray
+  warn:  '\x1b[38;2;255;200;100m', // orange
+  error: '\x1b[38;2;255;100;100m', // red
 };
 
 const RESET = '\x1b[0m';
 
-// ── Rainbow gradient (pastel pink → yellow → green → cyan → blue) ──
+// ── Rainbow gradient (vibrant pink → orange → yellow → green → cyan → blue) ──
 // Same left-to-right per-character gradient used by "PC Gaming Redists" style
 // installer banners. Reserved for decorative/banner output, not per-line logs.
 const RAINBOW: readonly string[] = [
-  '\x1b[38;2;255;182;193m', '\x1b[38;2;255;186;191m', '\x1b[38;2;255;190;189m',
-  '\x1b[38;2;255;194;187m', '\x1b[38;2;255;198;185m', '\x1b[38;2;255;202;183m',
-  '\x1b[38;2;255;206;181m', '\x1b[38;2;255;210;179m', '\x1b[38;2;255;214;177m',
-  '\x1b[38;2;255;218;175m',
-  '\x1b[38;2;255;222;173m', '\x1b[38;2;255;226;172m', '\x1b[38;2;255;230;171m',
-  '\x1b[38;2;255;234;170m', '\x1b[38;2;255;238;170m', '\x1b[38;2;255;242;170m',
-  '\x1b[38;2;255;246;170m', '\x1b[38;2;255;250;170m', '\x1b[38;2;253;252;172m',
-  '\x1b[38;2;248;254;174m',
-  '\x1b[38;2;243;255;176m', '\x1b[38;2;235;255;178m', '\x1b[38;2;227;255;180m',
-  '\x1b[38;2;219;255;182m', '\x1b[38;2;211;255;184m', '\x1b[38;2;203;255;186m',
-  '\x1b[38;2;195;255;190m', '\x1b[38;2;190;255;195m', '\x1b[38;2;185;255;200m',
-  '\x1b[38;2;180;255;208m',
-  '\x1b[38;2;178;255;216m', '\x1b[38;2;176;255;224m', '\x1b[38;2;174;255;232m',
-  '\x1b[38;2;172;255;240m', '\x1b[38;2;172;252;248m', '\x1b[38;2;172;248;252m',
-  '\x1b[38;2;172;244;255m', '\x1b[38;2;172;238;255m', '\x1b[38;2;174;232;255m',
-  '\x1b[38;2;176;226;255m',
-  '\x1b[38;2;178;220;255m', '\x1b[38;2;180;214;255m', '\x1b[38;2;182;208;255m',
-  '\x1b[38;2;184;202;255m', '\x1b[38;2;186;196;255m', '\x1b[38;2;188;192;255m',
-  '\x1b[38;2;190;188;255m', '\x1b[38;2;192;185;255m',
+  '\x1b[38;2;255;0;128m',   '\x1b[38;2;255;50;128m',  '\x1b[38;2;255;100;128m',
+  '\x1b[38;2;255;150;128m', '\x1b[38;2;255;200;128m', '\x1b[38;2;255;255;128m',
+  '\x1b[38;2;255;255;100m', '\x1b[38;2;255;255;50m',  '\x1b[38;2;255;255;0m',
+  '\x1b[38;2;200;255;0m',
+  '\x1b[38;2;150;255;0m',   '\x1b[38;2;100;255;0m',  '\x1b[38;2;50;255;0m',
+  '\x1b[38;2;0;255;0m',     '\x1b[38;2;0;255;50m',   '\x1b[38;2;0;255;100m',
+  '\x1b[38;2;0;255;150m',   '\x1b[38;2;0;255;200m',  '\x1b[38;2;0;255;255m',
+  '\x1b[38;2;0;200;255m',
+  '\x1b[38;2;0;150;255m',   '\x1b[38;2;0;100;255m',  '\x1b[38;2;0;50;255m',
+  '\x1b[38;2;0;0;255m',     '\x1b[38;2;50;0;255m',   '\x1b[38;2;100;0;255m',
+  '\x1b[38;2;150;0;255m',   '\x1b[38;2;200;0;255m',  '\x1b[38;2;255;0;255m',
+  '\x1b[38;2;255;0;200m',
+  '\x1b[38;2;255;0;150m',   '\x1b[38;2;255;0;100m',  '\x1b[38;2;255;0;50m',
+  '\x1b[38;2;255;0;0m',     '\x1b[38;2;255;50;0m',   '\x1b[38;2;255;100;0m',
+  '\x1b[38;2;255;150;0m',   '\x1b[38;2;255;200;0m',  '\x1b[38;2;255;255;0m',
+  '\x1b[38;2;200;255;0m',
+  '\x1b[38;2;150;255;0m',   '\x1b[38;2;100;255;0m',  '\x1b[38;2;50;255;0m',
+  '\x1b[38;2;0;255;0m',     '\x1b[38;2;0;255;50m',   '\x1b[38;2;0;255;100m',
+  '\x1b[38;2;0;255;150m',   '\x1b[38;2;0;255;200m',  '\x1b[38;2;0;255;255m',
+  '\x1b[38;2;0;200;255m',
 ];
 
 /** Apply the pastel rainbow gradient across a line of text, left to right. */
@@ -185,22 +186,16 @@ function formatTime(): string {
 export function createLogger(name: string) {
   // Pre-build per-level prefix strings (constant after construction — avoid per-log alloc)
   const consolePrefix: Record<LogLevel, string> = {
-    debug: `${LEVEL_COLORS.debug}[`,
-    info:  `${LEVEL_COLORS.info}[`,
-    warn:  `${LEVEL_COLORS.warn}[`,
-    error: `${LEVEL_COLORS.error}[`,
-  };
-  const consoleSuffix: Record<LogLevel, string> = {
-    debug: `] [${LEVEL_TAGS.debug}] [${name}]${RESET} `,
-    info:  `] [${LEVEL_TAGS.info}] [${name}]${RESET} `,
-    warn:  `] [${LEVEL_TAGS.warn}] [${name}]${RESET} `,
-    error: `] [${LEVEL_TAGS.error}] [${name}]${RESET} `,
+    debug: `${LEVEL_COLORS.debug}[${name}]${RESET} `,
+    info:  `${LEVEL_COLORS.info}[${name}]${RESET} `,
+    warn:  `${LEVEL_COLORS.warn}[${name}]${RESET} `,
+    error: `${LEVEL_COLORS.error}[${name}]${RESET} `,
   };
   const fileTag: Record<LogLevel, string> = {
-    debug: `] [${LEVEL_TAGS.debug}] [${name}] `,
-    info:  `] [${LEVEL_TAGS.info}] [${name}] `,
-    warn:  `] [${LEVEL_TAGS.warn}] [${name}] `,
-    error: `] [${LEVEL_TAGS.error}] [${name}] `,
+    debug: `[${name}] `,
+    info:  `[${name}] `,
+    warn:  `[${name}] `,
+    error: `[${name}] `,
   };
 
   const emit = (level: LogLevel, msg: string) => {
@@ -208,10 +203,10 @@ export function createLogger(name: string) {
 
     const ts = formatTime();
 
-    // Console (colored) — only 3 concats instead of a template literal
-    process.stdout.write(consolePrefix[level] + ts + consoleSuffix[level] + msg + '\n');
+    // Console (colored, minimal format)
+    process.stdout.write(consolePrefix[level] + msg + '\n');
 
-    // File (buffered)
+    // File (buffered, with timestamp)
     if (logFileStream) {
       logBuffer += '[' + ts + fileTag[level] + msg + '\n';
       if (logBuffer.length >= LOG_FLUSH_THRESHOLD) flushLogBuffer();
