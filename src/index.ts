@@ -8,7 +8,7 @@
 import path from 'node:path';
 import { exec } from 'node:child_process';
 import { config as loadEnv } from 'dotenv';
-import { initLogFile, setLogLevel, createLogger, flushAndClose, writeRainbow, writeBigRainbow } from './core/logger.js';
+import { initLogFile, setLogLevel, createLogger, flushAndClose, writeRainbow, writeBigRainbow, writePlain } from './core/logger.js';
 import { flushTranslationCache } from './core/translate.js';
 import { VybecordBackend } from './backend.js';
 import { WebServer } from './web/server.js';
@@ -29,9 +29,9 @@ initLogFile(path.join(baseDir, 'logs'));
 
 // ── Banner ──
 writeBigRainbow('VYBECORD');
-writeRainbow('  Discord Rich Presence with Synced Lyrics');
-writeRainbow('  v1.0.0');
-writeRainbow('');
+writePlain('  Discord Rich Presence with Synced Lyrics');
+writePlain('  v1.0.0');
+writePlain('');
 
 // ── Global error safety net ──
 process.on('uncaughtException', (err) => {

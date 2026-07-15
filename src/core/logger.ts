@@ -67,6 +67,16 @@ export function writeRainbow(text: string): void {
   }
 }
 
+/** Write a plain white/light-gray line to stdout (for subtitle text under banner). */
+export function writePlain(text: string): void {
+  const WHITE = '\x1b[38;2;220;220;220m';
+  process.stdout.write(WHITE + text + RESET + '\n');
+  if (logFileStream) {
+    logBuffer += text + '\n';
+    if (logBuffer.length >= LOG_FLUSH_THRESHOLD) flushLogBuffer();
+  }
+}
+
 // ── Big block-letter font (5x7 dot matrix, uppercase A-Z subset) ──
 // Used for the startup logo, in the same spirit as "PC Gaming Redists"'s
 // big ASCII-art title. Add more letters here if the logo text changes.
