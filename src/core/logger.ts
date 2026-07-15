@@ -11,10 +11,10 @@ const LEVEL_PRIORITY: Record<LogLevel, number> = {
 };
 
 const LEVEL_COLORS: Record<LogLevel, string> = {
-  debug: '\x1b[90m',  // gray
-  info: '\x1b[36m',   // cyan
+  debug: '\x1b[37m',  // white
+  info: '\x1b[32m',   // light green
   warn: '\x1b[33m',   // yellow
-  error: '\x1b[31m',  // red
+  error: '\x1b[34m',  // light blue
 };
 
 const RESET = '\x1b[0m';
@@ -138,6 +138,13 @@ export function createLogger(name: string) {
     info: (msg: string) => emit('info', msg),
     warn: (msg: string) => emit('warn', msg),
     error: (msg: string) => emit('error', msg),
+    raw: (msg: string) => {
+      process.stdout.write(msg + '\n');
+      if (logFileStream) {
+        logBuffer += msg + '\n';
+        if (logBuffer.length >= LOG_FLUSH_THRESHOLD) flushLogBuffer();
+      }
+    },
   };
 }
 

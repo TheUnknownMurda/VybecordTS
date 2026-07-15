@@ -32,9 +32,9 @@ const RECALIB_COOLDOWN_MS = 120_000;  // Max 1 recalibration per 2 minutes (SMTC
 const CC_RECALIB_COOLDOWN_MS = 10_000; // Push sources (YouTube CC): precise data, allow faster recalib
 const MIN_UPDATE_INTERVAL_MS = 800;  // Discord rate-limit protection (~6 updates/5s)
 const CC_UPDATE_INTERVAL_MS = 250;   // Fast updates for YouTube CC (lines change every 200-500ms)
-const RPC_HEARTBEAT_MS = 5_000;      // Force RPC push every 5s even if text unchanged (keeps Discord UI fresh)
+const RPC_HEARTBEAT_MS = 5_000;       // Force RPC push every 5s even if text unchanged (keeps Discord UI fresh)
 const EMA_ALPHA = 0.3;            // Exponential moving average weight for latency
-const LYRIC_GAP_MS = 10_000;      // Switch to no-lyrics RPC display during gaps longer than this
+const LYRIC_GAP_MS = 25_000;      // Switch to no-lyrics RPC display during gaps longer than this
 
 // ── Default album art (animated GIF) ──
 const DEFAULT_ART = 'https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/zkR9FspOnC79sb6532RdH.gif';
@@ -123,6 +123,7 @@ export class LyricsEngine {
   private lastLargeText = '';
   private lastRpcIdx = -1;
   private lastRpcPushTime = 0; // Monotonic timestamp of last RPC push (for heartbeat)
+  private lineChangeCount = 0; // Count line changes for Discord refresh every 2 lines
 
   // Per-track cached constants (avoid re-computing on every lyric line change)
   private cachedSpotifySearch = '';
@@ -181,6 +182,7 @@ export class LyricsEngine {
   private groupStart: Int32Array = new Int32Array(0);  // groupStart[i] = first index of the group containing i
   private groupEnd: Int32Array = new Int32Array(0);    // groupEnd[i] = last index of the group containing i
   private groupDisplay: string[] = [];                 // groupDisplay[i] = display text for line i (with xN suffix)
+  private groupMultiplier: number[] = [];               // groupMultiplier[i] = multiplier value for line i (0 = no multiplier)
 
   // Romanization cache: avoids re-computing romanize() for the same lyric text
   private romanizeCache = new Map<string, string>();
@@ -261,16 +263,8 @@ export class LyricsEngine {
 
   /** Show "Fetching Lyrics..." in RPC state while lyrics are loading. */
   setFetchingLyrics(fetching: boolean): void {
-    if (fetching) {
-      if (!this.cfgShowLyrics) return; // Don't show when lyrics are disabled
-      this.setStatusMessage('fetching', '🔍 Fetching Lyrics...', 10, 30000); // 30s max timeout
-    } else {
-      // Only clear if we're still showing fetching
-      if (this.statusMessage?.type === 'fetching') {
-        this.clearStatusMessage();
-      }
-      this.fetchingLyrics = false;
-    }
+    // Disabled - do not show "Fetching Lyrics..." message
+    return;
   }
 
   /** Flash "🚩 Lyrics Not Matching" for 5s when the user flags bad lyrics. */
@@ -294,8 +288,8 @@ export class LyricsEngine {
 
   /** Flash "Lyrics Found" for 5 seconds. */
   private setLyricsFound(): void {
-    if (!this.cfgShowLyrics) return; // Don't show when lyrics are disabled
-    this.setStatusMessage('found', '✅ Lyrics Found', 20, 5000);
+    // Disabled - do not show "Lyrics Found" message
+    return;
   }
 
   /**
@@ -333,6 +327,7 @@ export class LyricsEngine {
     this.nextFireTimeMs = -1;
     this.inLyricGap = false;
     this.romanizeCache.clear();
+    this.lineChangeCount = 0;
 
     // Pick random icon for this track (if random mode is on)
     if ((rpcConfig.random_icon_mode as boolean) === true) {
@@ -349,6 +344,9 @@ export class LyricsEngine {
     const baseMs = this.isCC ? 50 : BASE_OFFSET_MS;
     const offset = baseMs + this.measuredLatencyMs + this.getTotalOffsetMs();
     this.currentIdx = findLyricIndex(lyrics, trackData.progress_ms + offset);
+
+    // Don't force display of first line if before its timestamp
+    // Let it display naturally when its time comes to avoid showing it too early
 
     log.info(`[START] Track "${trackData.track_name}" | ${lyrics.length} lyrics | progress=${trackData.progress_ms}ms | idx=${this.currentIdx} | autoOffset=${this.autoOffsetMs}ms`);
 
@@ -395,6 +393,9 @@ export class LyricsEngine {
     const offset = baseMs + this.measuredLatencyMs + this.getTotalOffsetMs();
     this.currentIdx = findLyricIndex(lyrics, this.getElapsedMs() + offset);
 
+    // Don't force display of first line if before its timestamp
+    // Let it display naturally when its time comes
+
     // If lyrics haven't started yet, flash "Lyrics Found" for 5 seconds
     // If lyrics are already in progress, skip the message entirely
     // Don't show when lyrics are disabled
@@ -409,6 +410,7 @@ export class LyricsEngine {
     this.lastRpcIdx = -1;
     this.lastUpdateTime = 0;
     this.lastEmittedIdx = -1;
+    this.lineChangeCount = 0;
 
     log.info(`[INJECT] ${lyrics.length} lyrics injected at idx=${this.currentIdx}`);
     this.emitUpdate();
@@ -692,15 +694,13 @@ export class LyricsEngine {
       if (remaining > 0) {
         this.cancelTimer();
         this.nextFireTimeMs = -1;
-        // If >10s until track ends, switch to no-lyrics display during the outro
-        if (remaining > LYRIC_GAP_MS) {
-          this.gapTimer = setTimeout(() => {
-            if (!this.running) return;
-            this.inLyricGap = true;
-            this.resetDedup();
-            this.emitUpdate();
-          }, LYRIC_GAP_MS);
-        }
+        // Always schedule song title display 5 seconds after last line
+        this.gapTimer = setTimeout(() => {
+          if (!this.running) return;
+          this.inLyricGap = true;
+          this.resetDedup();
+          this.emitUpdate();
+        }, 5000);
         this.timer = setTimeout(() => {
           log.info('[END] Track duration reached');
           this.stop();
@@ -750,11 +750,70 @@ export class LyricsEngine {
       this.groupStart = new Int32Array(0);
       this.groupEnd = new Int32Array(0);
       this.groupDisplay = [];
+      this.groupMultiplier = [];
       return;
     }
     const gs = new Int32Array(n);
     const ge = new Int32Array(n);
     const gd: string[] = new Array(n);
+    const gm: number[] = new Array(n); // Multiplier values (0 = no multiplier)
+
+    // Detect 2-line consecutive repeats (A, B, A, B pattern) - ONLY consecutive repeats
+    // Mark second line of each occurrence with decreasing multiplier (x3, x2, then none)
+    // NEVER show multiplier on first line of any pair
+    // IGNORE pairs where both lines are identical (handled by consecutive repeat logic)
+    const pairRepeatMultipliers = new Map<number, number>(); // index -> multiplier value
+    const pairRepeatFirstLines = new Set<number>(); // First lines of pairs to exclude from consecutive logic
+    const processedIndices = new Set<number>(); // Indices already part of a detected pair
+    let pairIdx = 0;
+    while (pairIdx < n - 1) {
+      // Skip if this index is already part of a detected pair
+      if (processedIndices.has(pairIdx)) {
+        pairIdx++;
+        continue;
+      }
+
+      const text1 = this.lyrics[pairIdx].text;
+      const text2 = this.lyrics[pairIdx + 1].text;
+
+      // Skip if both lines are identical (handled by consecutive repeat logic)
+      if (text1 === text2) {
+        pairIdx++;
+        continue;
+      }
+
+      // Find only CONSECUTIVE occurrences of this pair (i+2, i+4, i+6, etc.)
+      const occurrences: number[] = [pairIdx]; // Start with first occurrence
+      let j = pairIdx + 2;
+      while (j < n - 1) {
+        if (this.lyrics[j].text === text1 && this.lyrics[j + 1].text === text2) {
+          occurrences.push(j);
+          j += 2; // Check next consecutive pair
+        } else {
+          break; // Stop if pattern breaks
+        }
+      }
+
+      // If we have multiple consecutive occurrences, assign decreasing multipliers
+      if (occurrences.length > 1) {
+        for (let occ = 0; occ < occurrences.length; occ++) {
+          const idx = occurrences[occ];
+          const remaining = occurrences.length - occ;
+          // Mark both lines of each occurrence as processed to avoid overlapping pairs
+          processedIndices.add(idx);
+          processedIndices.add(idx + 1);
+          // Mark first line to exclude from consecutive repeat logic
+          pairRepeatFirstLines.add(idx);
+          // Only show multiplier on second line if more than 1 remaining (skip last occurrence)
+          if (remaining > 1) {
+            pairRepeatMultipliers.set(idx + 1, remaining); // Mark second line of pair
+          }
+        }
+      }
+
+      // Move to next line
+      pairIdx++;
+    }
 
     let i = 0;
     while (i < n) {
@@ -766,13 +825,32 @@ export class LyricsEngine {
         gs[k] = i;
         ge[k] = j - 1;
         const remaining = j - k;
-        gd[k] = !text ? '♪♪' : (count > 1 && remaining > 1 ? `${text} (x${remaining})` : text);
+        const lineText = this.lyrics[k].text;
+        // Check if this line has a pair repeat multiplier
+        const pairMultiplier = pairRepeatMultipliers.get(k);
+        // Check if this line is a first line of a pair (exclude from consecutive logic)
+        const isFirstLineOfPair = pairRepeatFirstLines.has(k);
+        // For pair repeat, use the assigned multiplier
+        // For consecutive repeats, use total remaining count (like pair style)
+        // BUT exclude first line if it's part of a pair repeat
+        let shouldShowMultiplier = false;
+        let multiplier = count - k + i; // Total remaining from current position
+        if (pairMultiplier !== undefined) {
+          shouldShowMultiplier = true;
+          multiplier = pairMultiplier;
+        } else if (count > 1 && multiplier > 1 && !isFirstLineOfPair) {
+          shouldShowMultiplier = true;
+        }
+        // Store multiplier separately, don't include in text
+        gm[k] = shouldShowMultiplier ? multiplier : 0;
+        gd[k] = !lineText ? '♪♪' : lineText;
       }
       i = j;
     }
     this.groupStart = gs;
     this.groupEnd = ge;
     this.groupDisplay = gd;
+    this.groupMultiplier = gm;
   }
 
   // ── Consecutive repeat helpers (O(1) via pre-computed table) ──
@@ -812,25 +890,12 @@ export class LyricsEngine {
       prev = '';
     } else {
       current = this.getDisplayText(this.currentIdx);
-      const nextGroupIdx = this.getNextGroupStart(this.currentIdx);
-      next = nextGroupIdx >= 0 ? this.getDisplayText(nextGroupIdx) : '';
+      // Use currentIdx + 1 for next line to show even if in same group (identical lines)
+      const nextIdx = this.currentIdx + 1;
+      next = nextIdx < this.lyrics.length ? this.getDisplayText(nextIdx) : '';
       const prevGroupIdx = this.getPrevGroupEnd(this.currentIdx);
       prev = prevGroupIdx >= 0 ? this.getDisplayText(prevGroupIdx) : '';
 
-      // Add music notes for Spotify and SoundCloud
-      const source = this.trackData?.media_source || '';
-      if (source === 'spotify' || source === 'soundcloud') {
-        if (current && current !== '♪♪') {
-          current = '♪ ' + current;
-        }
-        if (next && next !== '♪♪') {
-          next = next + ' ♪';
-        }
-        // Add music note at the end of the last lyric line
-        if (this.currentIdx === this.lyrics.length - 1 && current && current !== '♪♪') {
-          current = current + ' ♪';
-        }
-      }
     }
 
     // Rate limiting: protect Discord from too-frequent updates.
@@ -852,14 +917,35 @@ export class LyricsEngine {
     this.lastCurrentText = current;
     this.lastUpdateTime = now;
 
-    // CRITICAL ORDER: RPC first (latency-sensitive), then SSE (latency-tolerant).
-    // Build and emit full RPC activity before onLyricChange triggers EventEmitter + SSE.
-    const activity = this.buildActivity(current, next);
-    if (activity) {
-      this.callbacks.onRpcUpdate(activity);
+    // Beautiful lyrics log display
+    if (current && current !== '♪♪' && idxChanged) {
+      const LIGHT_GREEN = '\x1b[32m';
+      const RESET = '\x1b[0m';
+      log.raw(`[Lyrics] ${LIGHT_GREEN}${current}${RESET}`);
     }
 
-    // SSE broadcast + dashboard update (non-blocking, latency-tolerant)
+    // Discord RPC: only update every 2 lines, but always show first line
+    if (idxChanged) {
+      this.lineChangeCount++;
+    }
+    const isFirstLine = this.lineChangeCount === 1;
+    const shouldUpdateRpc = idxChanged && (isFirstLine || this.lineChangeCount % 2 === 0);
+
+    // Heartbeat only applies when NOT showing lyrics (keeps Discord UI fresh during gaps/no-lyrics)
+    const isShowingLyrics = current && current !== '♪♪' && !this.inLyricGap;
+    const shouldHeartbeat = heartbeatDue && !isShowingLyrics;
+
+    // CRITICAL ORDER: RPC first (latency-sensitive), then SSE (latency-tolerant).
+    // Build and emit full RPC activity before onLyricChange triggers EventEmitter + SSE.
+    if (shouldUpdateRpc || shouldHeartbeat) {
+      const activity = this.buildActivity(current, next);
+      if (activity) {
+        this.callbacks.onRpcUpdate(activity);
+      }
+    }
+
+    // SSE broadcast + dashboard update (always update, regardless of line parity)
+    // Dashboard gets lyrics WITHOUT music notes (clean display)
     const latencyMs = this.callbacks.onLyricChange(current, next, prev);
     if (latencyMs > 0 && latencyMs < 500) {
       this.measuredLatencyMs = EMA_ALPHA * latencyMs + (1 - EMA_ALPHA) * this.measuredLatencyMs;
@@ -1020,6 +1106,20 @@ export class LyricsEngine {
       // Lyrics mode: details = current lyric, state = → next lyric
       let cur = this.cfgRomanize ? this.cachedRomanize(currentText) : currentText;
       let nxt = this.cfgRomanize && nextText ? this.cachedRomanize(nextText) : nextText;
+
+      // Add music notes for Spotify and SoundCloud (Discord RPC only)
+      const source = this.trackData?.media_source || '';
+      if (source === 'spotify' || source === 'soundcloud') {
+        if (cur && cur !== '♪♪') {
+          cur = '♪ ' + cur;
+        }
+        if (nxt && nxt !== '♪♪') {
+          // Add multiplier after music note on next line only
+          const nextIdx = this.currentIdx + 1;
+          const nextMultiplier = this.groupMultiplier[nextIdx] || 0;
+          nxt = nxt + ' ♪' + (nextMultiplier > 0 ? ` (x${nextMultiplier})` : '');
+        }
+      }
 
       // RPC translate mode: use cached translations, fire async for misses
       if (this.cfgRpcTranslate && this.cfgTranslateLang) {
