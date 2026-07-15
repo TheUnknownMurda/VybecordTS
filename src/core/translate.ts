@@ -29,6 +29,11 @@ function loadDiskCache(): void {
   } catch { /* ignore corrupt cache */ }
 }
 
+/** Load the on-disk translation cache. Call once, early in startup — after the banner. */
+export function initTranslateCache(): void {
+  loadDiskCache();
+}
+
 function flushDiskCache(): void {
   if (!cacheDirty) return;
   initCachePath();
@@ -47,8 +52,8 @@ function scheduleCacheFlush(): void {
   flushTimer = setTimeout(() => { flushTimer = null; flushDiskCache(); }, 10_000);
 }
 
-// Load cache on module init
-loadDiskCache();
+// Cache is loaded via initTranslateCache(), called explicitly from index.ts
+// (not at module-import time — that ran before the startup banner could print).
 
 // ── Concurrency limiter (async semaphore — zero polling) ──
 let activeRequests = 0;

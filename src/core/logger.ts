@@ -10,16 +10,20 @@ const LEVEL_PRIORITY: Record<LogLevel, number> = {
   error: 3,
 };
 
-const LEVEL_COLORS: Record<LogLevel, string> = {
-  debug: '\x1b[38;2;190;188;255m', // pastel lavender
-  info:  '\x1b[38;2;172;244;255m', // pastel cyan
-  warn:  '\x1b[38;2;255;246;170m', // pastel gold
-  error: '\x1b[38;2;255;140;140m', // pastel coral-red
-};
-
 const TS_COLOR = '\x1b[38;2;120;128;145m';     // dim slate — timestamp fades into the background
 const MODULE_COLOR = '\x1b[38;2;178;186;204m'; // neutral slate-blue — module name, same weight at every level
 const MODULE_NAME_WIDTH = 14; // fits all current module names except one or two long outliers, which just overflow slightly
+
+// Level "pill" badges — soft pastel background + dark foreground, like a modern
+// CLI status chip, instead of plain colored brackets.
+const LEVEL_BADGE_BG: Record<LogLevel, string> = {
+  debug: '\x1b[48;2;190;188;255m',
+  info:  '\x1b[48;2;172;244;255m',
+  warn:  '\x1b[48;2;255;246;170m',
+  error: '\x1b[48;2;255;140;140m',
+};
+const BADGE_TEXT = '\x1b[38;2;24;24;36m';   // near-black — stays readable on every pastel background
+const SEP_COLOR = '\x1b[38;2;70;76;90m';    // faint column divider, recedes behind the content it separates
 
 const RESET = '\x1b[0m';
 
@@ -73,7 +77,9 @@ export function writeRainbow(text: string): void {
 // ── Big block-letter font (5x7 dot matrix, uppercase A-Z subset) ──
 // Used for the startup logo, in the same spirit as "PC Gaming Redists"'s
 // big ASCII-art title: solid fill ('#'), light-shade anti-aliasing on curves
-// ('.'), and a light-shade drop-shadow row underneath each letter.
+// ('.'). A dark, offset silhouette copy is composited behind each letter as
+// a proper drop shadow (see renderBigText) — light source top-left, shadow
+// falls bottom-right, like a beveled/extruded logo rather than a flat fill.
 // Add more letters here if the logo text changes.
 const BLOCK_FONT: Record<string, string[]> = {
   V: ['#   #', '#   #', '#   #', '#   #', '#   #', '.# #.', '  #  '],
@@ -87,37 +93,73 @@ const BLOCK_FONT: Record<string, string[]> = {
   ' ': ['     ', '     ', '     ', '     ', '     ', '     ', '     '],
 };
 
+const SHADOW_CHAR = '▒'; // marks a shadow-only cell in the plain (uncolored) grid
+const SHADOW_COLOR = '\x1b[38;2;40;43;54m'; // dark slate — reads as depth, not noise
+
 /**
- * Render text as big 5x7 block-letter ASCII art with a light-shade drop
- * shadow underneath. Returns one string per row (8 rows: 7 letter + shadow).
+ * Render text as big 5x7 block-letter ASCII art with a proper offset drop
+ * shadow: a solid dark silhouette of the same letters, shifted down-right,
+ * composited *behind* the front layer. Returns one plain-text string per row.
  */
-export function renderBigText(text: string, scaleX = 2): string[] {
+export function renderBigText(text: string, scaleX = 2, shadowDy = 1, shadowDx = 2): string[] {
   const rows = 7;
-  const lines = new Array(rows + 1).fill('');
-  const shadowSegments: string[] = [];
+  const frontLines = new Array(rows).fill('');
   for (const ch of text.toUpperCase()) {
     const glyph = BLOCK_FONT[ch];
     if (!glyph) continue; // skip characters we don't have a glyph for
-    let letterWidth = 0;
     for (let r = 0; r < rows; r++) {
       let seg = '';
       for (const px of glyph[r]) {
         const c = px === '#' ? '█' : px === '.' ? '░' : ' ';
         seg += c.repeat(scaleX);
       }
-      letterWidth = seg.length;
-      lines[r] += seg + ' '; // 1-column gap between letters
+      frontLines[r] += seg + ' '; // 1-column gap between letters
     }
-    shadowSegments.push('░'.repeat(letterWidth) + ' ');
   }
-  lines[rows] = shadowSegments.join('');
-  return lines.map(l => l.trimEnd());
+  const totalWidth = Math.max(...frontLines.map(l => l.length));
+  const front = frontLines.map(l => l.padEnd(totalWidth, ' '));
+
+  const outRows = rows + shadowDy;
+  const outCols = totalWidth + shadowDx;
+  const out: string[] = [];
+  for (let r = 0; r < outRows; r++) {
+    let line = '';
+    for (let c = 0; c < outCols; c++) {
+      const frontCh = (r < rows && c < totalWidth) ? front[r][c] : ' ';
+      if (frontCh !== ' ') { line += frontCh; continue; }
+      const sr = r - shadowDy, sc = c - shadowDx;
+      const shadowSrc = (sr >= 0 && sr < rows && sc >= 0 && sc < totalWidth) ? front[sr][sc] : ' ';
+      line += shadowSrc !== ' ' ? SHADOW_CHAR : ' ';
+    }
+    out.push(line.trimEnd());
+  }
+  return out;
 }
 
-/** Write big block-letter text to stdout, rainbow-gradient applied per row. */
+/**
+ * Write the big block-letter logo: front layer gets the rainbow gradient
+ * (by column position), the offset shadow layer gets a flat dark color —
+ * composited together per line since a single writeRainbow() pass can't
+ * mix two different color rules on the same row.
+ */
 export function writeBigRainbow(text: string, scaleX = 2): void {
-  for (const line of renderBigText(text, scaleX)) {
-    writeRainbow(line);
+  const lines = renderBigText(text, scaleX);
+  const width = Math.max(...lines.map(l => l.length));
+  for (const line of lines) {
+    let colored = '';
+    for (let c = 0; c < line.length; c++) {
+      const ch = line[c];
+      if (ch === ' ') { colored += ' '; continue; }
+      if (ch === SHADOW_CHAR) { colored += SHADOW_COLOR + '█' + RESET; continue; }
+      let idx = Math.floor((c / width) * RAINBOW.length);
+      if (idx >= RAINBOW.length) idx = RAINBOW.length - 1;
+      colored += RAINBOW[idx] + ch + RESET;
+    }
+    process.stdout.write(colored + '\n');
+    if (logFileStream) {
+      logBuffer += line + '\n'; // plain text (no ANSI) in the log file
+      if (logBuffer.length >= LOG_FLUSH_THRESHOLD) flushLogBuffer();
+    }
   }
 }
 
@@ -125,6 +167,18 @@ export function writeBigRainbow(text: string, scaleX = 2): void {
 export function centerText(text: string, width: number): string {
   if (text.length >= width) return text;
   return ' '.repeat(Math.floor((width - text.length) / 2)) + text;
+}
+
+/**
+ * Print a thin rainbow-gradient divider with a centered label, e.g. to mark
+ * the start of a new phase ("Startup", "Shutting down") in a busy log.
+ */
+export function writeSection(title: string, width = 70): void {
+  const label = ` ${title} `;
+  if (label.length >= width) { writeRainbow(label); return; }
+  const leftLen = Math.floor((width - label.length) / 2);
+  const rightLen = width - label.length - leftLen;
+  writeRainbow('─'.repeat(leftLen) + label + '─'.repeat(rightLen));
 }
 
 let globalLevel: LogLevel = 'info';
@@ -210,20 +264,21 @@ export function createLogger(name: string) {
   // at the same column, regardless of whether the name is "Main" or
   // "SoundCloudSource". Names longer than the budget are left as-is.
   const paddedName = name.length < MODULE_NAME_WIDTH ? name.padEnd(MODULE_NAME_WIDTH, ' ') : name;
+  const sep = `${SEP_COLOR}│${RESET}`;
 
-  // Pre-build the level-badge + module-tag chunk per level (constant after
-  // construction — avoids rebuilding it on every single log call).
+  // Pre-build the badge + separator + module-tag chunk per level (constant
+  // after construction — avoids rebuilding it on every single log call).
   const mid: Record<LogLevel, string> = {
-    debug: `${LEVEL_COLORS.debug}[${LEVEL_TAGS.debug}]${RESET} ${MODULE_COLOR}[${paddedName}]${RESET} `,
-    info:  `${LEVEL_COLORS.info}[${LEVEL_TAGS.info}]${RESET} ${MODULE_COLOR}[${paddedName}]${RESET} `,
-    warn:  `${LEVEL_COLORS.warn}[${LEVEL_TAGS.warn}]${RESET} ${MODULE_COLOR}[${paddedName}]${RESET} `,
-    error: `${LEVEL_COLORS.error}[${LEVEL_TAGS.error}]${RESET} ${MODULE_COLOR}[${paddedName}]${RESET} `,
+    debug: `${LEVEL_BADGE_BG.debug}${BADGE_TEXT} ${LEVEL_TAGS.debug} ${RESET} ${sep} ${MODULE_COLOR}${paddedName}${RESET} ${sep} `,
+    info:  `${LEVEL_BADGE_BG.info}${BADGE_TEXT} ${LEVEL_TAGS.info} ${RESET} ${sep} ${MODULE_COLOR}${paddedName}${RESET} ${sep} `,
+    warn:  `${LEVEL_BADGE_BG.warn}${BADGE_TEXT} ${LEVEL_TAGS.warn} ${RESET} ${sep} ${MODULE_COLOR}${paddedName}${RESET} ${sep} `,
+    error: `${LEVEL_BADGE_BG.error}${BADGE_TEXT} ${LEVEL_TAGS.error} ${RESET} ${sep} ${MODULE_COLOR}${paddedName}${RESET} ${sep} `,
   };
   const fileMid: Record<LogLevel, string> = {
-    debug: `[${LEVEL_TAGS.debug}] [${paddedName}] `,
-    info:  `[${LEVEL_TAGS.info}] [${paddedName}] `,
-    warn:  `[${LEVEL_TAGS.warn}] [${paddedName}] `,
-    error: `[${LEVEL_TAGS.error}] [${paddedName}] `,
+    debug: `${LEVEL_TAGS.debug} | ${paddedName} | `,
+    info:  `${LEVEL_TAGS.info} | ${paddedName} | `,
+    warn:  `${LEVEL_TAGS.warn} | ${paddedName} | `,
+    error: `${LEVEL_TAGS.error} | ${paddedName} | `,
   };
 
   const emit = (level: LogLevel, msg: string) => {
@@ -231,12 +286,12 @@ export function createLogger(name: string) {
 
     const ts = formatTime();
 
-    // Console: dim timestamp, colored level badge, neutral module tag, plain message
-    process.stdout.write(TS_COLOR + '[' + ts + ']' + RESET + ' ' + mid[level] + msg + '\n');
+    // Console: dim timestamp, pastel badge chip, faint separators, neutral module tag, plain message
+    process.stdout.write(TS_COLOR + ts + RESET + ' ' + mid[level] + msg + '\n');
 
-    // File (buffered, uncolored, same column alignment)
+    // File (buffered, uncolored, pipe-separated so it's still easy to scan or grep)
     if (logFileStream) {
-      logBuffer += '[' + ts + '] ' + fileMid[level] + msg + '\n';
+      logBuffer += ts + ' | ' + fileMid[level] + msg + '\n';
       if (logBuffer.length >= LOG_FLUSH_THRESHOLD) flushLogBuffer();
     }
   };

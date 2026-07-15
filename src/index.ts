@@ -8,8 +8,8 @@
 import path from 'node:path';
 import { exec } from 'node:child_process';
 import { config as loadEnv } from 'dotenv';
-import { initLogFile, setLogLevel, createLogger, flushAndClose, writeRainbow, writeBigRainbow, renderBigText, centerText } from './core/logger.js';
-import { flushTranslationCache } from './core/translate.js';
+import { initLogFile, setLogLevel, createLogger, flushAndClose, writeRainbow, writeBigRainbow, renderBigText, centerText, writeSection } from './core/logger.js';
+import { flushTranslationCache, initTranslateCache } from './core/translate.js';
 import { VybecordBackend } from './backend.js';
 import { WebServer } from './web/server.js';
 
@@ -34,6 +34,11 @@ writeRainbow('');
 writeRainbow(centerText('Discord Rich Presence  •  Synced Lyrics', logoWidth));
 writeRainbow(centerText('v1.0.0 — starting up, please wait...', logoWidth));
 writeRainbow('');
+writeSection('Startup', logoWidth);
+
+// Deferred to here (was module-import side effect before) so its log line
+// can't ever print above the banner.
+initTranslateCache();
 
 // ── Global error safety net ──
 process.on('uncaughtException', (err) => {
