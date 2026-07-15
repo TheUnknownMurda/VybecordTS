@@ -17,6 +17,10 @@ const LEVEL_COLORS: Record<LogLevel, string> = {
   error: '\x1b[38;2;255;140;140m', // pastel coral-red
 };
 
+const TS_COLOR = '\x1b[38;2;120;128;145m';     // dim slate — timestamp fades into the background
+const MODULE_COLOR = '\x1b[38;2;178;186;204m'; // neutral slate-blue — module name, same weight at every level
+const MODULE_NAME_WIDTH = 14; // fits all current module names except one or two long outliers, which just overflow slightly
+
 const RESET = '\x1b[0m';
 
 // ── Rainbow gradient (pastel pink → yellow → green → cyan → blue) ──
@@ -202,24 +206,24 @@ function formatTime(): string {
 }
 
 export function createLogger(name: string) {
-  // Pre-build per-level prefix strings (constant after construction — avoid per-log alloc)
-  const consolePrefix: Record<LogLevel, string> = {
-    debug: `${LEVEL_COLORS.debug}[`,
-    info:  `${LEVEL_COLORS.info}[`,
-    warn:  `${LEVEL_COLORS.warn}[`,
-    error: `${LEVEL_COLORS.error}[`,
+  // Pad every module name to the same width so the message always starts
+  // at the same column, regardless of whether the name is "Main" or
+  // "SoundCloudSource". Names longer than the budget are left as-is.
+  const paddedName = name.length < MODULE_NAME_WIDTH ? name.padEnd(MODULE_NAME_WIDTH, ' ') : name;
+
+  // Pre-build the level-badge + module-tag chunk per level (constant after
+  // construction — avoids rebuilding it on every single log call).
+  const mid: Record<LogLevel, string> = {
+    debug: `${LEVEL_COLORS.debug}[${LEVEL_TAGS.debug}]${RESET} ${MODULE_COLOR}[${paddedName}]${RESET} `,
+    info:  `${LEVEL_COLORS.info}[${LEVEL_TAGS.info}]${RESET} ${MODULE_COLOR}[${paddedName}]${RESET} `,
+    warn:  `${LEVEL_COLORS.warn}[${LEVEL_TAGS.warn}]${RESET} ${MODULE_COLOR}[${paddedName}]${RESET} `,
+    error: `${LEVEL_COLORS.error}[${LEVEL_TAGS.error}]${RESET} ${MODULE_COLOR}[${paddedName}]${RESET} `,
   };
-  const consoleSuffix: Record<LogLevel, string> = {
-    debug: `] [${LEVEL_TAGS.debug}] [${name}]${RESET} `,
-    info:  `] [${LEVEL_TAGS.info}] [${name}]${RESET} `,
-    warn:  `] [${LEVEL_TAGS.warn}] [${name}]${RESET} `,
-    error: `] [${LEVEL_TAGS.error}] [${name}]${RESET} `,
-  };
-  const fileTag: Record<LogLevel, string> = {
-    debug: `] [${LEVEL_TAGS.debug}] [${name}] `,
-    info:  `] [${LEVEL_TAGS.info}] [${name}] `,
-    warn:  `] [${LEVEL_TAGS.warn}] [${name}] `,
-    error: `] [${LEVEL_TAGS.error}] [${name}] `,
+  const fileMid: Record<LogLevel, string> = {
+    debug: `[${LEVEL_TAGS.debug}] [${paddedName}] `,
+    info:  `[${LEVEL_TAGS.info}] [${paddedName}] `,
+    warn:  `[${LEVEL_TAGS.warn}] [${paddedName}] `,
+    error: `[${LEVEL_TAGS.error}] [${paddedName}] `,
   };
 
   const emit = (level: LogLevel, msg: string) => {
@@ -227,12 +231,12 @@ export function createLogger(name: string) {
 
     const ts = formatTime();
 
-    // Console (colored) — only 3 concats instead of a template literal
-    process.stdout.write(consolePrefix[level] + ts + consoleSuffix[level] + msg + '\n');
+    // Console: dim timestamp, colored level badge, neutral module tag, plain message
+    process.stdout.write(TS_COLOR + '[' + ts + ']' + RESET + ' ' + mid[level] + msg + '\n');
 
-    // File (buffered)
+    // File (buffered, uncolored, same column alignment)
     if (logFileStream) {
-      logBuffer += '[' + ts + fileTag[level] + msg + '\n';
+      logBuffer += '[' + ts + '] ' + fileMid[level] + msg + '\n';
       if (logBuffer.length >= LOG_FLUSH_THRESHOLD) flushLogBuffer();
     }
   };
