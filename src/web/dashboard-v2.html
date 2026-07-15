@@ -1747,7 +1747,7 @@
             <p class="track-artist" id="npArtist"></p>
             <p class="track-album" id="npAlbum"></p>
           </div>
-          <div class="lyric-inline" id="npLyricInline"><p id="lyricInlineText">♪♪</p></div>
+          <div class="lyric-inline" id="npLyricInline"><p id="lyricInlineText"></p></div>
           <div class="np-controls">
             <span class="time-display">
               <span id="npTime">0:00</span>
@@ -3023,7 +3023,7 @@
           subtitle: "Synced Lyrics &bull; Discord RPC",
           idle_title: "Waiting for music…",
           idle_sub: "Play a track to see lyrics here",
-          listening: "♪ Listening…",
+          listening: "Listening…",
           click_all_lyrics: "▼ click to see all lyrics",
           all_lyrics: "All Lyrics",
           timing: "⏱ Timing",
@@ -3145,7 +3145,7 @@
           subtitle: "Paroles synchronisées &bull; Discord RPC",
           idle_title: "En attente de musique…",
           idle_sub: "Lancez un titre pour voir les paroles",
-          listening: "♪ Écoute…",
+          listening: "Écoute…",
           click_all_lyrics: "▼ cliquer pour toutes les paroles",
           all_lyrics: "Toutes les paroles",
           timing: "⏱ Timing",
@@ -4123,7 +4123,7 @@
         // Lyrics status badge
         const showLyrics = msg.showLyrics !== false;
         $("badgeLyrics").className = `badge ${showLyrics ? "badge-green" : "badge-red"}`;
-        $("badgeLyrics").textContent = showLyrics ? "🎵 Lyrics" : "🚫 Lyrics";
+        $("badgeLyrics").textContent = showLyrics ? "Lyrics" : "No Lyrics";
       }
       // HELPERS
       function formatMs(ms) {
@@ -4571,7 +4571,7 @@
       }
       function renderExpandedLyrics() {
         $("lyricsExpandedBody").innerHTML = _fullLyrics
-          .map((text, i) => `<div class="lx-line" data-idx="${i}">${text ? escHtml(text) : "\u266a"}</div>`)
+          .map((text, i) => `<div class="lx-line" data-idx="${i}">${text ? escHtml(text) : ""}</div>`)
           .join("");
       }
       /** Parse LRC timestamps to ms for each line */
