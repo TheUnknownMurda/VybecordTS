@@ -3,7 +3,7 @@
  *
  * Discord RPC large_image requires a publicly accessible HTTPS URL.
  * When album art comes from a local source (Apple Music via SMTC), we
- * upload the thumbnail to catbox.moe (free, no API key, no auth).
+ * upload the thumbnail to litterbox.catbox.moe (free, no API key, no auth).
  *
  * Results are cached per track key within the session to avoid re-uploads.
  */
@@ -16,7 +16,7 @@ import { createLogger } from './logger.js';
 const log = createLogger('ImageUpload');
 
 const THUMB_PATH = path.join(process.env.TEMP || os.tmpdir(), 'vybecord_thumb.jpg');
-const CATBOX_API = 'https://catbox.moe/user/api.php';
+const CATBOX_API = 'https://litterbox.catbox.moe/resources/internals/api.php';
 
 // Per-session cache: trackKey → public URL
 const cache = new Map<string, string>();
@@ -41,6 +41,7 @@ export async function uploadThumbForRpc(trackKey: string, signal?: AbortSignal):
 
     const form = new FormData();
     form.append('reqtype', 'fileupload');
+    form.append('time', '24h');
     form.append('fileToUpload', new Blob([buf], { type: mime }), `thumb.${ext}`);
 
     const res = await fetch(CATBOX_API, {
