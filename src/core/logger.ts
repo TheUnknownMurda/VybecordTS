@@ -11,6 +11,7 @@ const LEVEL_PRIORITY: Record<LogLevel, number> = {
 };
 
 const TS_COLOR = '\x1b[38;2;120;128;145m';     // dim slate — timestamp fades into the background
+const TS_WIDTH = 12; // "HH:MM:SS.mmm" — used to compute indent width for multi-line messages
 const MODULE_COLOR = '\x1b[38;2;178;186;204m'; // neutral slate-blue — module name, same weight at every level
 const MODULE_NAME_WIDTH = 14; // fits all current module names except one or two long outliers, which just overflow slightly
 
@@ -22,10 +23,38 @@ const LEVEL_BADGE_BG: Record<LogLevel, string> = {
   warn:  '\x1b[48;2;255;246;170m',
   error: '\x1b[48;2;255;140;140m',
 };
+// A small glyph inside each badge, for scanning a busy log at a glance
+// without reading the text — same idea as npm/vite/yarn's status symbols.
+const LEVEL_ICONS: Record<LogLevel, string> = {
+  debug: '·',
+  info:  '●',
+  warn:  '▲',
+  error: '✕',
+};
 const BADGE_TEXT = '\x1b[38;2;24;24;36m';   // near-black — stays readable on every pastel background
 const SEP_COLOR = '\x1b[38;2;70;76;90m';    // faint column divider, recedes behind the content it separates
 
+// Dedicated badge for the live synced-lyric line — same pill shape as the
+// log-level badges, but its own color and not part of LogLevel/priority
+// filtering, so it always prints. Sits alongside real logs instead of
+// floating as an unformatted raw line that looks "cut off" between them.
+const LYRICS_BADGE_BG = '\x1b[48;2;255;180;220m'; // pastel pink — echoes the rainbow's starting hue
+const LYRICS_TAG = 'LYRIC';
+const LYRICS_ICON = '♪';
+
 const RESET = '\x1b[0m';
+
+// A ✓ or ✗ already shows up throughout the app's own log messages (e.g.
+// "Discord RPC connected ✓"). Auto-color just that glyph — cheap fast-path
+// check means messages without one pay ~nothing extra.
+const SUCCESS_MARK_COLOR = '\x1b[38;2;150;255;180m';
+const FAIL_MARK_COLOR = '\x1b[38;2;255;140;140m';
+const MARK_RE = /[✓✗✖]/;
+function highlightMarks(msg: string): string {
+  if (!MARK_RE.test(msg)) return msg;
+  return msg.replace(/✓/g, SUCCESS_MARK_COLOR + '✓' + RESET)
+             .replace(/[✗✖]/g, m => FAIL_MARK_COLOR + m + RESET);
+}
 
 // ── Rainbow gradient (pastel pink → yellow → green → cyan → blue) ──
 // Same left-to-right per-character gradient used by "PC Gaming Redists" style
@@ -259,6 +288,13 @@ function formatTime(): string {
   return `${h < 10 ? '0' : ''}${h}:${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}.${ms < 10 ? '00' : ms < 100 ? '0' : ''}${ms}`;
 }
 
+// Strips ANSI escape codes to measure the real on-screen width of a string —
+// used once per logger (not per log call) to size the multi-line indent.
+const ANSI_RE = /\x1b\[[0-9;]*m/g;
+function visibleLength(s: string): number {
+  return s.replace(ANSI_RE, '').length;
+}
+
 export function createLogger(name: string) {
   // Pad every module name to the same width so the message always starts
   // at the same column, regardless of whether the name is "Main" or
@@ -269,10 +305,10 @@ export function createLogger(name: string) {
   // Pre-build the badge + separator + module-tag chunk per level (constant
   // after construction — avoids rebuilding it on every single log call).
   const mid: Record<LogLevel, string> = {
-    debug: `${LEVEL_BADGE_BG.debug}${BADGE_TEXT} ${LEVEL_TAGS.debug} ${RESET} ${sep} ${MODULE_COLOR}${paddedName}${RESET} ${sep} `,
-    info:  `${LEVEL_BADGE_BG.info}${BADGE_TEXT} ${LEVEL_TAGS.info} ${RESET} ${sep} ${MODULE_COLOR}${paddedName}${RESET} ${sep} `,
-    warn:  `${LEVEL_BADGE_BG.warn}${BADGE_TEXT} ${LEVEL_TAGS.warn} ${RESET} ${sep} ${MODULE_COLOR}${paddedName}${RESET} ${sep} `,
-    error: `${LEVEL_BADGE_BG.error}${BADGE_TEXT} ${LEVEL_TAGS.error} ${RESET} ${sep} ${MODULE_COLOR}${paddedName}${RESET} ${sep} `,
+    debug: `${LEVEL_BADGE_BG.debug}${BADGE_TEXT} ${LEVEL_ICONS.debug} ${LEVEL_TAGS.debug} ${RESET} ${sep} ${MODULE_COLOR}${paddedName}${RESET} ${sep} `,
+    info:  `${LEVEL_BADGE_BG.info}${BADGE_TEXT} ${LEVEL_ICONS.info} ${LEVEL_TAGS.info} ${RESET} ${sep} ${MODULE_COLOR}${paddedName}${RESET} ${sep} `,
+    warn:  `${LEVEL_BADGE_BG.warn}${BADGE_TEXT} ${LEVEL_ICONS.warn} ${LEVEL_TAGS.warn} ${RESET} ${sep} ${MODULE_COLOR}${paddedName}${RESET} ${sep} `,
+    error: `${LEVEL_BADGE_BG.error}${BADGE_TEXT} ${LEVEL_ICONS.error} ${LEVEL_TAGS.error} ${RESET} ${sep} ${MODULE_COLOR}${paddedName}${RESET} ${sep} `,
   };
   const fileMid: Record<LogLevel, string> = {
     debug: `${LEVEL_TAGS.debug} | ${paddedName} | `,
@@ -280,18 +316,39 @@ export function createLogger(name: string) {
     warn:  `${LEVEL_TAGS.warn} | ${paddedName} | `,
     error: `${LEVEL_TAGS.error} | ${paddedName} | `,
   };
+  const lyricsMid = `${LYRICS_BADGE_BG}${BADGE_TEXT} ${LYRICS_ICON} ${LYRICS_TAG} ${RESET} ${sep} ${MODULE_COLOR}${paddedName}${RESET} ${sep} `;
+
+  // Visible (non-ANSI) width of "{ts} {badge...module...}" measured once,
+  // so a message with embedded newlines can have its continuation lines
+  // indented to the same column instead of breaking the layout.
+  const consoleIndent = ' '.repeat(TS_WIDTH + 1 + visibleLength(mid.info));
+  const fileIndent = ' '.repeat(TS_WIDTH + 3 + fileMid.info.length);
 
   const emit = (level: LogLevel, msg: string) => {
     if (LEVEL_PRIORITY[level] < LEVEL_PRIORITY[globalLevel]) return;
 
     const ts = formatTime();
+    const marked = highlightMarks(msg);
 
     // Console: dim timestamp, pastel badge chip, faint separators, neutral module tag, plain message
-    process.stdout.write(TS_COLOR + ts + RESET + ' ' + mid[level] + msg + '\n');
+    if (marked.indexOf('\n') === -1) {
+      process.stdout.write(TS_COLOR + ts + RESET + ' ' + mid[level] + marked + '\n');
+    } else {
+      const msgLines = marked.split('\n');
+      let out = TS_COLOR + ts + RESET + ' ' + mid[level] + msgLines[0] + '\n';
+      for (let i = 1; i < msgLines.length; i++) out += consoleIndent + msgLines[i] + '\n';
+      process.stdout.write(out);
+    }
 
     // File (buffered, uncolored, pipe-separated so it's still easy to scan or grep)
     if (logFileStream) {
-      logBuffer += ts + ' | ' + fileMid[level] + msg + '\n';
+      if (msg.indexOf('\n') === -1) {
+        logBuffer += ts + ' | ' + fileMid[level] + msg + '\n';
+      } else {
+        const msgLines = msg.split('\n');
+        logBuffer += ts + ' | ' + fileMid[level] + msgLines[0] + '\n';
+        for (let i = 1; i < msgLines.length; i++) logBuffer += fileIndent + msgLines[i] + '\n';
+      }
       if (logBuffer.length >= LOG_FLUSH_THRESHOLD) flushLogBuffer();
     }
   };
@@ -305,6 +362,18 @@ export function createLogger(name: string) {
       process.stdout.write(msg + '\n');
       if (logFileStream) {
         logBuffer += msg + '\n';
+        if (logBuffer.length >= LOG_FLUSH_THRESHOLD) flushLogBuffer();
+      }
+    },
+    // Live synced-lyric line: same timestamp/badge/module columns as a real
+    // log line (so it never looks like a stray line dropped between two
+    // logs), but the message itself keeps the rainbow gradient. Always
+    // prints — bypasses level filtering, like raw().
+    lyrics: (msg: string) => {
+      const ts = formatTime();
+      process.stdout.write(TS_COLOR + ts + RESET + ' ' + lyricsMid + rainbowText(msg) + '\n');
+      if (logFileStream) {
+        logBuffer += ts + ' | ' + LYRICS_TAG + ' | ' + paddedName + ' | ' + msg + '\n';
         if (logBuffer.length >= LOG_FLUSH_THRESHOLD) flushLogBuffer();
       }
     },

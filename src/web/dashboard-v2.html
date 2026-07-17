@@ -11,6 +11,14 @@
     </script>
     <style>
       @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap");
+      /* Any element combining a plain "hidden" class with an id-scoped rule
+         that sets its own `display` (e.g. #banner { display: flex }) would
+         otherwise win over .hidden — id selectors beat class selectors on
+         specificity regardless of source order. This guarantees .hidden
+         always actually hides the element. */
+      .hidden {
+        display: none !important;
+      }
       :root {
         --accent: 16, 185, 129;
         --accent-hex: #10b981;
@@ -1053,6 +1061,95 @@
         font-size: 14px;
         border-radius: var(--r-md);
       }
+      /* LRC editor: a transparent-text textarea sits on top of a colored
+         <pre>, both sharing a grid cell so they always match size exactly.
+         The textarea keeps native cursor/selection/typing; the <pre> underneath
+         supplies the actual visible (syntax-highlighted) text. */
+      .lrc-editor-wrap {
+        position: relative;
+        display: grid;
+        border-radius: var(--r-sm);
+        transition: outline-color 0.15s;
+        outline: 2px dashed transparent;
+        outline-offset: 2px;
+      }
+      .lrc-editor-wrap.drag-over {
+        outline-color: var(--accent-hex);
+      }
+      .lrc-editor-wrap > * {
+        grid-area: 1 / 1;
+        margin: 0;
+        padding: 9px 12px;
+        font-size: 13px;
+        line-height: 1.55;
+        font-family: "Courier New", monospace;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        box-sizing: border-box;
+      }
+      .lrc-highlight {
+        pointer-events: none;
+        overflow: hidden;
+        color: var(--text-primary);
+        background: var(--bg-surface);
+        border: 1px solid var(--border-d);
+        border-radius: var(--r-sm);
+      }
+      .lrc-textarea {
+        background: transparent !important;
+        color: transparent !important;
+        caret-color: var(--text-primary);
+        resize: vertical;
+      }
+      .lrc-textarea::selection {
+        background: rgba(var(--accent), 0.35);
+      }
+      .lrc-ts {
+        color: var(--accent-hex);
+        opacity: 0.8;
+      }
+      .lrc-line-missing {
+        background: rgba(248, 113, 113, 0.1);
+        border-radius: 3px;
+      }
+      #stampPrompter {
+        margin-bottom: 8px;
+        padding: 10px 14px;
+        border-radius: var(--r-sm);
+        background: var(--bg-surface);
+        border: 1px solid var(--border-d);
+        text-align: center;
+      }
+      #promptPrev,
+      #promptNext {
+        font-size: 11px;
+        color: var(--text-dim);
+        min-height: 14px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      #promptNext {
+        color: var(--text-faint);
+      }
+      #promptCurrent {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--accent-hex);
+        padding: 4px 0;
+        min-height: 20px;
+      }
+      #draftBanner {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        margin-bottom: 12px;
+        border-radius: var(--r-sm);
+        background: rgba(var(--accent), 0.08);
+        border: 1px solid var(--border-a);
+        font-size: 12px;
+      }
       input[type="range"] {
         -webkit-appearance: none;
         appearance: none;
@@ -1195,12 +1292,14 @@
         letter-spacing: 0.04em;
         margin-bottom: 6px;
       }
-      .setup-step .setup-hint {
+      .setup-step .setup-hint,
+      .setup-hint {
         font-size: 11px;
         color: var(--text-faint);
         margin-top: 4px;
       }
-      .setup-step .setup-hint a {
+      .setup-step .setup-hint a,
+      .setup-hint a {
         color: var(--accent-hex);
         text-decoration: underline;
       }
@@ -1264,6 +1363,146 @@
         width: min(560px, 90vw);
         max-height: 85vh;
         overflow-y: auto;
+      }
+      .btn-danger {
+        background: linear-gradient(135deg, #f87171, color-mix(in srgb, #f87171 72%, black));
+        color: #1a0000;
+        box-shadow:
+          0 2px 12px rgba(248, 113, 113, 0.3),
+          inset 0 1px 0 rgba(255, 255, 255, 0.12);
+      }
+      .btn-danger:hover {
+        box-shadow: 0 6px 28px rgba(248, 113, 113, 0.4);
+        transform: translateY(-1px);
+      }
+      /* Keyboard focus — visible ring on anything made focusable at runtime
+         (sidebar items, tier picker, etc.) without adding a ring on mouse clicks */
+      .nav-item:focus-visible,
+      .toolbar-btn:focus-visible,
+      .stamp-btn:focus-visible,
+      .setup-tier-btn:focus-visible,
+      [tabindex]:focus-visible {
+        outline: 2px solid var(--accent-hex);
+        outline-offset: 2px;
+      }
+      .btn:focus-visible,
+      input:focus-visible,
+      select:focus-visible,
+      textarea:focus-visible {
+        outline: 2px solid var(--accent-hex);
+        outline-offset: 1px;
+      }
+      /* Compact empty state for stat/history lists inside a card (lighter
+         than .idle-state, which is sized for a whole page) */
+      .mini-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        padding: 24px 8px;
+        color: var(--text-dim);
+        text-align: center;
+      }
+      .mini-empty .mini-empty-icon {
+        font-size: 22px;
+        opacity: 0.35;
+      }
+      .mini-empty p {
+        font-size: 11px;
+      }
+      /* Loading skeleton — shown briefly while a card's data is still in flight */
+      .skeleton-line {
+        height: 12px;
+        border-radius: 4px;
+        background: linear-gradient(
+          90deg,
+          var(--bg-surface) 25%,
+          var(--bg-hover) 37%,
+          var(--bg-surface) 63%
+        );
+        background-size: 400% 100%;
+        animation: skeleton-pulse 1.4s ease infinite;
+      }
+      @keyframes skeleton-pulse {
+        0% {
+          background-position: 100% 50%;
+        }
+        100% {
+          background-position: 0% 50%;
+        }
+      }
+      /* Collapsible section (Advanced settings) */
+      .collapsible-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        user-select: none;
+      }
+      .collapsible-chevron {
+        transition: transform 0.25s var(--ease-out);
+        font-size: 11px;
+        color: var(--text-muted);
+      }
+      .collapsible-body {
+        display: grid;
+        grid-template-rows: 1fr;
+        transition: grid-template-rows 0.25s var(--ease-out);
+      }
+      .collapsible.collapsed .collapsible-body {
+        grid-template-rows: 0fr;
+      }
+      .collapsible-body > div {
+        overflow: hidden;
+      }
+      .collapsible.collapsed .collapsible-chevron {
+        transform: rotate(-90deg);
+      }
+      /* Unsaved-changes banner on Settings */
+      #settingsDirtyBanner {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 14px;
+        margin: -8px 0 16px;
+        border-radius: var(--r-sm);
+        background: rgba(255, 193, 7, 0.08);
+        border: 1px solid rgba(255, 193, 7, 0.25);
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+      #reconnectBanner {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 6px;
+        font-size: 11px;
+        font-weight: 500;
+        color: #f87171;
+        background: rgba(248, 113, 113, 0.08);
+        border-bottom: 1px solid rgba(248, 113, 113, 0.2);
+      }
+      .reconnect-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #f87171;
+        animation: reconnect-pulse 1.2s ease-in-out infinite;
+      }
+      @keyframes reconnect-pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.25;
+        }
+      }
+      .status-stale-wrap .badge {
+        opacity: 0.45;
+        filter: grayscale(0.6);
+        transition: opacity 0.3s, filter 0.3s;
       }
       .page-title {
         font-size: 20px;
@@ -1597,6 +1836,16 @@
         </div>
       </div>
     </div>
+    <!-- Themed confirm dialog — replaces window.confirm() everywhere -->
+    <div id="confirmModal" class="modal-overlay hidden" role="alertdialog" aria-modal="true" aria-labelledby="confirmModalMsg">
+      <div class="modal-card" style="width: min(420px, 90vw); padding: 20px">
+        <p id="confirmModalMsg" style="font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 18px; white-space: pre-line"></p>
+        <div style="display: flex; justify-content: flex-end; gap: 8px">
+          <button type="button" class="btn btn-ghost" id="confirmModalCancel" onclick="_resolveConfirm(false)"></button>
+          <button type="button" class="btn btn-accent" id="confirmModalOk" onclick="_resolveConfirm(true)"></button>
+        </div>
+      </div>
+    </div>
     <!-- SIDEBAR -->
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-logo">
@@ -1689,6 +1938,10 @@
     </aside>
     <!-- MAIN -->
     <div class="main-wrap" id="mainWrap">
+      <div id="reconnectBanner" class="hidden">
+        <span class="reconnect-dot"></span>
+        <span data-i18n="reconnecting">Reconnecting to VybecordTS…</span>
+      </div>
       <div class="np-bar" id="npBar">
         <button
           class="mobile-menu-btn"
@@ -1959,6 +2212,10 @@
           <p style="font-size: 11px; color: var(--text-dim); margin: -12px 0 20px" data-i18n="save_hint">
             Changes won't take effect until you save.
           </p>
+          <div id="settingsDirtyBanner" class="hidden">
+            <span>⚠</span>
+            <span style="flex: 1" data-i18n="unsaved_changes">You have unsaved changes.</span>
+          </div>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px">
             <div class="card" style="display: flex; flex-direction: column; gap: 10px">
               <div class="card-title">
@@ -2389,111 +2646,124 @@
                 ></p>
               </div>
             </div>
-            <div class="card" style="grid-column: 1/-1">
-              <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px">
-                <div style="display: flex; flex-direction: column; gap: 10px">
-                  <div class="card-title">
-                    <span class="icon">⚡</span>
-                    <span data-i18n="advanced">Advanced</span>
-                  </div>
-                  <div>
-                    <label
-                      style="
-                        font-size: 11px;
-                        color: var(--text-muted);
-                        font-weight: 500;
-                        display: block;
-                        margin-bottom: 4px;
-                      "
-                      data-i18n="user_tier"
-                    >
-                      Tier
-                    </label>
-                    <select id="cfgUserTier">
-                      <option value="auto">Auto</option>
-                      <option value="premium">Premium</option>
-                      <option value="free">Free</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label
-                      style="
-                        font-size: 11px;
-                        color: var(--text-muted);
-                        font-weight: 500;
-                        display: block;
-                        margin-bottom: 4px;
-                      "
-                      data-i18n="poll_interval"
-                    >
-                      Poll (ms)
-                    </label>
-                    <input type="number" id="cfgPollInterval" min="1000" max="30000" step="500" value="3000" />
-                  </div>
+            <div class="card collapsible collapsed" id="advancedSettingsCard" style="grid-column: 1/-1">
+              <div
+                class="collapsible-header"
+                role="button"
+                tabindex="0"
+                onclick="toggleAdvancedSettings()"
+                onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleAdvancedSettings();}"
+              >
+                <span class="collapsible-chevron">▼</span>
+                <div class="card-title" style="margin: 0">
+                  <span class="icon">⚡</span>
+                  <span data-i18n="advanced_settings">Advanced</span>
                 </div>
-                <div style="display: flex; flex-direction: column; gap: 10px">
-                  <div class="card-title">
-                    <span class="icon">⏱</span>
-                    <span>Timing</span>
-                  </div>
-                  <div>
-                    <label
-                      style="
-                        font-size: 11px;
-                        color: var(--text-muted);
-                        font-weight: 500;
-                        display: block;
-                        margin-bottom: 4px;
-                      "
-                    >
-                      Offset
-                    </label>
-                    <div style="display: flex; align-items: center; gap: 8px">
-                      <input
-                        type="range"
-                        id="lyricsOffset2"
-                        min="-2000"
-                        max="2000"
-                        step="50"
-                        value="0"
-                        style="flex: 1"
-                        oninput="
-                          onOffsetChange(this.value);
-                          $('lyricsOffset').value = this.value;
-                        "
-                        ondblclick="
-                          resetOffset();
-                          this.value = 0;
-                        "
-                      />
-                      <span
-                        id="offsetLabel2"
-                        style="
-                          color: var(--text-muted);
-                          font-size: 11px;
-                          font-family: monospace;
-                          width: 50px;
-                          text-align: right;
-                        "
+              </div>
+              <div class="collapsible-body">
+                <div style="padding-top: 16px">
+                  <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px">
+                    <div style="display: flex; flex-direction: column; gap: 10px">
+                      <div>
+                        <label
+                          style="
+                            font-size: 11px;
+                            color: var(--text-muted);
+                            font-weight: 500;
+                            display: block;
+                            margin-bottom: 4px;
+                          "
+                          data-i18n="user_tier"
+                        >
+                          Tier
+                        </label>
+                        <select id="cfgUserTier">
+                          <option value="auto">Auto</option>
+                          <option value="premium">Premium</option>
+                          <option value="free">Free</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label
+                          style="
+                            font-size: 11px;
+                            color: var(--text-muted);
+                            font-weight: 500;
+                            display: block;
+                            margin-bottom: 4px;
+                          "
+                          data-i18n="poll_interval"
+                        >
+                          Poll (ms)
+                        </label>
+                        <input type="number" id="cfgPollInterval" min="1000" max="30000" step="500" value="3000" />
+                      </div>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 10px">
+                      <div class="card-title">
+                        <span class="icon">⏱</span>
+                        <span>Timing</span>
+                      </div>
+                      <div>
+                        <label
+                          style="
+                            font-size: 11px;
+                            color: var(--text-muted);
+                            font-weight: 500;
+                            display: block;
+                            margin-bottom: 4px;
+                          "
+                        >
+                          Offset
+                        </label>
+                        <div style="display: flex; align-items: center; gap: 8px">
+                          <input
+                            type="range"
+                            id="lyricsOffset2"
+                            min="-2000"
+                            max="2000"
+                            step="50"
+                            value="0"
+                            style="flex: 1"
+                            oninput="
+                              onOffsetChange(this.value);
+                              $('lyricsOffset').value = this.value;
+                            "
+                            ondblclick="
+                              resetOffset();
+                              this.value = 0;
+                            "
+                          />
+                          <span
+                            id="offsetLabel2"
+                            style="
+                              color: var(--text-muted);
+                              font-size: 11px;
+                              font-family: monospace;
+                              width: 50px;
+                              text-align: right;
+                            "
+                          >
+                            0ms
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 10px">
+                      <div class="card-title">
+                        <span class="icon">🔧</span>
+                        <span>Actions</span>
+                      </div>
+                      <button
+                        class="btn btn-ghost"
+                        style="width: 100%; font-size: 12px; padding: 8px"
+                        onclick="clearLyricsCache()"
+                        data-i18n="clear_cache"
                       >
-                        0ms
-                      </span>
+                        Clear Cache
+                      </button>
                     </div>
                   </div>
-                </div>
-                <div style="display: flex; flex-direction: column; gap: 10px">
-                  <div class="card-title">
-                    <span class="icon">🔧</span>
-                    <span>Actions</span>
-                  </div>
-                  <button
-                    class="btn btn-ghost"
-                    style="width: 100%; font-size: 12px; padding: 8px"
-                    onclick="clearLyricsCache()"
-                    data-i18n="clear_cache"
-                  >
-                    Clear Cache
-                  </button>
                 </div>
               </div>
             </div>
@@ -2511,14 +2781,46 @@
                 <span class="icon">🎶</span>
                 <span data-i18n="import_custom_lyrics">Import LRC</span>
               </div>
+              <div style="display: flex; gap: 8px">
+                <button
+                  type="button"
+                  onclick="prefillImport()"
+                  class="btn btn-ghost"
+                  style="font-size: 12px; padding: 6px 12px"
+                  data-i18n="fill_from_current"
+                >
+                  📥 Fill from track
+                </button>
+                <button
+                  type="button"
+                  onclick="clearImportForm()"
+                  class="btn btn-ghost"
+                  style="font-size: 12px; padding: 6px 12px"
+                  data-i18n="clear_form_btn"
+                >
+                  🗑 Clear
+                </button>
+              </div>
+            </div>
+            <div id="draftBanner" class="hidden">
+              <span style="flex: 1" id="draftBannerText"></span>
               <button
                 type="button"
-                onclick="prefillImport()"
-                class="btn btn-ghost"
-                style="font-size: 12px; padding: 6px 12px"
-                data-i18n="fill_from_current"
+                class="btn btn-accent"
+                style="font-size: 11px; padding: 4px 10px"
+                onclick="restoreDraft()"
+                data-i18n="draft_restore"
               >
-                📥 Fill from track
+                Restore
+              </button>
+              <button
+                type="button"
+                class="btn btn-ghost"
+                style="font-size: 11px; padding: 4px 10px"
+                onclick="discardDraft()"
+                data-i18n="draft_discard"
+              >
+                Discard
               </button>
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px">
@@ -2534,7 +2836,7 @@
                 >
                   Track *
                 </label>
-                <input type="text" id="import_track" />
+                <input type="text" id="import_track" oninput="scheduleDraftSave()" />
               </div>
               <div>
                 <label
@@ -2548,7 +2850,7 @@
                 >
                   Artist *
                 </label>
-                <input type="text" id="import_artist" />
+                <input type="text" id="import_artist" oninput="scheduleDraftSave()" />
               </div>
               <div>
                 <label
@@ -2562,7 +2864,7 @@
                 >
                   Album
                 </label>
-                <input type="text" id="import_album" />
+                <input type="text" id="import_album" oninput="scheduleDraftSave()" />
               </div>
               <div>
                 <label
@@ -2576,12 +2878,27 @@
                 >
                   Duration (s)
                 </label>
-                <input type="number" id="import_duration" />
+                <input type="number" id="import_duration" oninput="scheduleDraftSave()" />
               </div>
+            </div>
+            <div id="stampPrompter" class="hidden">
+              <div id="promptPrev"></div>
+              <div id="promptCurrent"></div>
+              <div id="promptNext"></div>
             </div>
             <div style="display: flex; align-items: center; gap: 6px; padding: 2px 0 6px">
               <label style="font-size: 11px; color: var(--text-muted); font-weight: 500">LRC *</label>
+              <span id="lrcStats" style="font-size: 11px; color: var(--text-dim)"></span>
               <div style="flex: 1"></div>
+              <button
+                type="button"
+                onclick="$('lrcFileInput').click()"
+                class="stamp-btn"
+                data-i18n="upload_lrc_btn"
+              >
+                📁 Upload
+              </button>
+              <input type="file" id="lrcFileInput" accept=".lrc,.txt" class="hidden" onchange="handleLrcFileSelect(event)" />
               <span id="stampTime" class="stamp-time">00:00.00</span>
               <span
                 id="stampInfo"
@@ -2589,18 +2906,23 @@
               >
                 Line 1
               </span>
+              <button type="button" onclick="unstampLine()" class="stamp-btn" data-i18n-title="undo_stamp_title" title="Undo last stamp">↶</button>
               <button type="button" onclick="stampLine()" class="stamp-btn stamp-btn-accent stamp-btn-big">
                 ⏱ Stamp
               </button>
               <button type="button" onclick="resetStamp()" class="stamp-btn">↺</button>
             </div>
-            <textarea
-              id="import_lrc"
-              class="font-mono"
-              style="font-size: 13px"
-              rows="10"
-              placeholder="Paste lyrics here…"
-            ></textarea>
+            <div id="lrcEditorWrap" class="lrc-editor-wrap">
+              <pre id="import_lrc_highlight" class="lrc-highlight" aria-hidden="true"></pre>
+              <textarea
+                id="import_lrc"
+                class="lrc-textarea"
+                rows="10"
+                placeholder="Paste lyrics here…"
+                oninput="onLrcInput()"
+                onscroll="syncLrcScroll()"
+              ></textarea>
+            </div>
             <p style="font-size: 10px; color: var(--text-dim); margin-top: 4px" data-i18n-html="stamp_hint"></p>
             <div style="display: flex; align-items: center; gap: 8px; margin-top: 12px">
               <button id="btnImportLyrics" class="btn btn-accent" data-i18n="import_btn">Import</button>
@@ -2828,6 +3150,7 @@
                 <span class="icon">🟢</span>
                 <span>Spotify</span>
               </div>
+              <p class="setup-hint" data-i18n-html="setup_spotify_hint" style="margin: -4px 0 0"></p>
               <div>
                 <label
                   style="
@@ -2880,6 +3203,7 @@
                 >
                   Discord App ID
                 </label>
+                <p class="setup-hint" data-i18n-html="setup_discord_hint" style="margin: 0 0 4px"></p>
                 <div class="cred-wrap">
                   <input type="password" id="cfgDiscordId" spellcheck="false" autocomplete="off" />
                   <button class="cred-toggle" onclick="toggleCred(this)">👁</button>
@@ -2897,6 +3221,7 @@
                 >
                   Last.fm API Key
                 </label>
+                <p class="setup-hint" data-i18n-html="creds_lastfm_hint" style="margin: 0 0 4px"></p>
                 <div class="cred-wrap">
                   <input type="password" id="cfgLastfmKey" spellcheck="false" autocomplete="off" />
                   <button class="cred-toggle" onclick="toggleCred(this)">👁</button>
@@ -3043,6 +3368,8 @@
           prev_sessions: "Previous Sessions",
           no_history: "No previous sessions",
           play_some_music: "Play some music",
+          no_data_yet: "No data yet",
+          no_history_yet: "No listening history yet",
           visibility: "Visibility",
           discord_activity: "Discord activity",
           only_when_playing: "Only when playing",
@@ -3094,7 +3421,12 @@
           footer_desc: "Synced Lyrics & Discord RPC",
           footer_discord: "💬 Discord",
           confirm_shutdown: "Shut down VybecordTS?",
+          confirm_ok: "Confirm",
+          confirm_cancel: "Cancel",
+          unsaved_changes: "You have unsaved changes.",
+          advanced_settings: "Advanced",
           app_stopped: "VybecordTS stopped.",
+          reconnecting: "Reconnecting to VybecordTS…",
           saved: "✓ Saved",
           error: "✗ Error",
           flagged: "✓ Flagged",
@@ -3104,6 +3436,16 @@
           no_lyrics_yet: "No lyrics yet — paste your own LRC",
           fields_required: "✗ Title, Artist and LRC required",
           lrc_placeholder: "Paste lyrics here, then use Stamp to add timestamps line by line",
+          clear_form_btn: "🗑 Clear",
+          clear_form_confirm: "Clear the whole form? This can't be undone.",
+          upload_lrc_btn: "📁 Upload",
+          undo_stamp_title: "Undo last stamp",
+          lrc_file_loaded: "✓ File loaded",
+          lrc_file_error: "✗ Couldn't read file",
+          overwrite_confirm: "This will overwrite an existing entry ({lines} lines, last updated {date}). Continue?",
+          draft_found: "Draft found from {n}m ago ({track})",
+          draft_restore: "Restore",
+          draft_discard: "Discard",
           setup_title: "Welcome to VybecordTS",
           setup_sub: "Quick setup in 30 seconds.",
           setup_discord_label: "Discord Application ID",
@@ -3121,6 +3463,8 @@
             'Using Spicetify or modified Spotify clients (ad blockers, etc.) may violate Spotify\'s Terms of Service and could result in account suspension. <b>We are not responsible</b> for any bans or issues caused by using third-party modifications. Use at your own risk.',
           setup_go: "Start VybecordTS",
           setup_skip: "Skip — I'll configure later",
+          creds_lastfm_hint:
+            'Get a free key at <a href="https://www.last.fm/api/account/create" target="_blank">last.fm/api/account/create</a>',
           bug_title: "Report a Bug",
           bug_summary_label: "Summary",
           bug_category_label: "Category",
@@ -3166,6 +3510,8 @@
           session_top3: "Top 3 de la session",
           prev_sessions: "Sessions précédentes",
           play_some_music: "Jouez de la musique",
+          no_data_yet: "Pas encore de données",
+          no_history_yet: "Aucun historique d'écoute pour le moment",
           visibility: "Visibilité",
           discord_activity: "Activité Discord",
           only_when_playing: "Uniquement en lecture",
@@ -3222,7 +3568,12 @@
           copy_url: "📋 Copier URL",
           url_copied: "✓ Copié",
           confirm_shutdown: "Arrêter VybecordTS?",
+          confirm_ok: "Confirmer",
+          confirm_cancel: "Annuler",
+          unsaved_changes: "Modifications non sauvegardées.",
+          advanced_settings: "Avancé",
           app_stopped: "VybecordTS arrêté.",
+          reconnecting: "Reconnexion à VybecordTS…",
           saved: "✓ Sauvegardé",
           error: "✗ Erreur",
           flagged: "✓ Signalé",
@@ -3231,6 +3582,16 @@
           no_lyrics_yet: "Pas de paroles — collez votre LRC",
           fields_required: "✗ Titre, Artiste et LRC requis",
           lrc_placeholder: "Collez les paroles ici",
+          clear_form_btn: "🗑 Vider",
+          clear_form_confirm: "Vider tout le formulaire ? Cette action est irréversible.",
+          upload_lrc_btn: "📁 Importer un fichier",
+          undo_stamp_title: "Annuler le dernier stamp",
+          lrc_file_loaded: "✓ Fichier chargé",
+          lrc_file_error: "✗ Impossible de lire le fichier",
+          overwrite_confirm: "Ceci va écraser une entrée existante ({lines} lignes, modifiée le {date}). Continuer ?",
+          draft_found: "Brouillon trouvé il y a {n}min ({track})",
+          draft_restore: "Restaurer",
+          draft_discard: "Ignorer",
           setup_title: "Bienvenue sur VybecordTS",
           setup_sub: "Configuration rapide en 30 secondes.",
           setup_discord_label: "ID d'Application Discord",
@@ -3248,6 +3609,8 @@
             'L\'utilisation de Spicetify ou de clients Spotify modifiés (bloqueurs de pub, etc.) peut enfreindre les Conditions d\'utilisation de Spotify et entraîner une suspension de compte. <b>Nous ne sommes pas responsables</b> des bannissements ou problèmes causés par l\'utilisation de modifications tierces. Utilisez à vos propres risques.',
           setup_go: "Lancer VybecordTS",
           setup_skip: "Passer",
+          creds_lastfm_hint:
+            'Obtenez une clé gratuite sur <a href="https://www.last.fm/api/account/create" target="_blank">last.fm/api/account/create</a>',
           bug_title: "Signaler un bug",
           bug_summary_label: "Résumé",
           bug_category_label: "Catégorie",
@@ -3472,9 +3835,27 @@
       function toggleOffset() {
         $("offsetControl").classList.toggle("hidden");
       }
+      function toggleAdvancedSettings() {
+        const card = $("advancedSettingsCard");
+        const collapsed = card.classList.toggle("collapsed");
+        try {
+          localStorage.setItem("vybecord_advanced_collapsed", collapsed ? "1" : "0");
+        } catch {}
+      }
+      (function () {
+        try {
+          if (localStorage.getItem("vybecord_advanced_collapsed") === "0") {
+            $("advancedSettingsCard").classList.remove("collapsed");
+          }
+        } catch {}
+      })();
       // SSE
       function connectSSE() {
         const es = new EventSource("/api/events");
+        es.onopen = () => {
+          $("reconnectBanner").classList.add("hidden");
+          $("mainWrap").classList.remove("status-stale-wrap");
+        };
         es.onmessage = (e) => {
           const msg = JSON.parse(e.data);
           switch (msg.type) {
@@ -3529,6 +3910,8 @@
         };
         es.onerror = () => {
           es.close();
+          $("reconnectBanner").classList.remove("hidden");
+          $("mainWrap").classList.add("status-stale-wrap");
           setTimeout(connectSSE, 3000);
         };
       }
@@ -3950,6 +4333,25 @@
         return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
       }
       // CONFIG
+      // SETTINGS DIRTY TRACKING
+      let _settingsDirty = false;
+      function markSettingsDirty() {
+        if (_settingsDirty) return;
+        _settingsDirty = true;
+        $("settingsDirtyBanner").classList.remove("hidden");
+      }
+      function clearSettingsDirty() {
+        _settingsDirty = false;
+        $("settingsDirtyBanner").classList.add("hidden");
+      }
+      $("page-settings").addEventListener("input", markSettingsDirty);
+      $("page-settings").addEventListener("change", markSettingsDirty);
+      window.addEventListener("beforeunload", (e) => {
+        if (_settingsDirty) {
+          e.preventDefault();
+          e.returnValue = "";
+        }
+      });
       function loadConfig(c) {
         $("cfgRpcEnabled").checked = c.rpc_enabled !== false;
         $("cfgOnlyWhenPlaying").checked = c.rpc_only_when_playing === true;
@@ -4092,6 +4494,7 @@
           });
           const r = await resp.json();
           showSaveStatus(r.ok ? t("saved") : t("error"), r.ok ? "color:var(--accent-hex)" : "color:#f87171");
+          if (r.ok) clearSettingsDirty();
         } catch (e) {
           showSaveStatus("✗ " + e.message, "color:#f87171");
         }
@@ -4135,9 +4538,19 @@
         el.textContent = s;
         return el.innerHTML;
       }
+      function emptyState(icon, text) {
+        return `<div class="mini-empty"><div class="mini-empty-icon">${icon}</div><p>${esc(text)}</p></div>`;
+      }
+      function skeletonLines(n, height) {
+        let out = '<div style="display:flex;flex-direction:column;gap:8px;padding:4px 0">';
+        for (let i = 0; i < n; i++) {
+          out += `<div class="skeleton-line" style="width:${70 + ((i * 13) % 25)}%;height:${height || 12}px"></div>`;
+        }
+        return out + "</div>";
+      }
       // ACTIONS
       async function shutdownApp() {
-        if (!confirm(t("confirm_shutdown"))) return;
+        if (!(await themedConfirm(t("confirm_shutdown"), { danger: true }))) return;
         $("btnShutdown").style.pointerEvents = "none";
         try {
           await fetch("/api/shutdown", { method: "POST" });
@@ -4287,11 +4700,7 @@
       const RANK_CLS = ["rank-1", "rank-2", "rank-3"];
       function renderStats(stats) {
         const tt = $("topTracks");
-        if (!stats.topTracks?.length)
-          tt.innerHTML =
-            '<p style="font-size:11px;color:var(--text-dim);text-align:center;padding:16px 0">' +
-            t("play_some_music") +
-            "</p>";
+        if (!stats.topTracks?.length) tt.innerHTML = emptyState("♫", t("play_some_music"));
         else
           tt.innerHTML = stats.topTracks
             .map(
@@ -4300,11 +4709,7 @@
             )
             .join("");
         const a = $("topArtists");
-        if (!stats.topArtists?.length)
-          a.innerHTML =
-            '<p style="font-size:11px;color:var(--text-dim);text-align:center;padding:16px 0">' +
-            t("play_some_music") +
-            "</p>";
+        if (!stats.topArtists?.length) a.innerHTML = emptyState("🎤", t("play_some_music"));
         else
           a.innerHTML = stats.topArtists
             .map((x, i) => {
@@ -4362,6 +4767,23 @@
           st.classList.remove("hidden");
           return;
         }
+        // Warn before silently overwriting an existing entry (only possible
+        // when a duration is given — see findExistingCustomLyrics on the backend)
+        if (durVal) {
+          try {
+            const q = new URLSearchParams({ track, artist, album, duration: durVal });
+            const check = await (await fetch("/api/lyrics/check-existing?" + q.toString())).json();
+            if (check.exists && check.match) {
+              const when = new Date(check.match.updatedAt).toLocaleDateString();
+              const msg = t("overwrite_confirm")
+                .replace("{lines}", check.match.lineCount)
+                .replace("{date}", when);
+              if (!(await themedConfirm(msg, { danger: true }))) return;
+            }
+          } catch {
+            /* if the check itself fails, don't block the import on it */
+          }
+        }
         const btn = $("btnImportLyrics");
         btn.disabled = true;
         btn.textContent = t("importing");
@@ -4377,6 +4799,8 @@
             st.textContent = `✓ Imported #${r.trackId}`;
             st.style.color = "var(--accent-hex)";
             $("import_lrc").value = "";
+            refreshLrcHighlight();
+            discardDraft();
             loadCustomLyrics();
           } else {
             st.textContent = "✗ " + (r.error || "Failed");
@@ -4390,6 +4814,145 @@
           btn.disabled = false;
           btn.textContent = t("import_btn");
         }
+      }
+      async function clearImportForm() {
+        const hasContent =
+          $("import_track").value || $("import_artist").value || $("import_album").value ||
+          $("import_duration").value || $("import_lrc").value;
+        if (hasContent && !(await themedConfirm(t("clear_form_confirm")))) return;
+        $("import_track").value = "";
+        $("import_artist").value = "";
+        $("import_album").value = "";
+        $("import_duration").value = "";
+        $("import_lrc").value = "";
+        _stampLine = 0;
+        refreshLrcHighlight();
+        updateStampInfo();
+        discardDraft();
+        $("importStatus").classList.add("hidden");
+      }
+      // LRC SYNTAX HIGHLIGHT (overlay <pre> behind a transparent-text textarea)
+      const LRC_LINE_RE = /^((?:\[\d+:\d+(?:\.\d+)?\])+)(.*)$/;
+      function escapeHtml(s) {
+        return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      }
+      function highlightLrcLine(line) {
+        if (!line.trim()) return "\u200b";
+        const m = LRC_LINE_RE.exec(line);
+        if (m) return `<span class="lrc-ts">${escapeHtml(m[1])}</span>${escapeHtml(m[2])}`;
+        return `<span class="lrc-line-missing">${escapeHtml(line)}</span>`;
+      }
+      function refreshLrcHighlight() {
+        const ta = $("import_lrc"),
+          hl = $("import_lrc_highlight");
+        if (!ta || !hl) return;
+        const lines = ta.value.split("\n");
+        hl.innerHTML = lines.map(highlightLrcLine).join("\n");
+        syncLrcScroll();
+        const synced = lines.filter((l) => LRC_LINE_RE.test(l)).length;
+        const total = lines.filter((l) => l.trim()).length;
+        $("lrcStats").textContent = total ? `${synced}/${total}` : "";
+      }
+      function syncLrcScroll() {
+        const ta = $("import_lrc"),
+          hl = $("import_lrc_highlight");
+        if (!ta || !hl) return;
+        hl.scrollTop = ta.scrollTop;
+        hl.scrollLeft = ta.scrollLeft;
+      }
+      function onLrcInput() {
+        refreshLrcHighlight();
+        scheduleDraftSave();
+      }
+      // FILE UPLOAD / DRAG & DROP
+      function setLrcContent(text) {
+        $("import_lrc").value = text;
+        refreshLrcHighlight();
+        scheduleDraftSave();
+      }
+      function readLrcFile(file) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          setLrcContent(reader.result);
+          const base = file.name.replace(/\.(lrc|txt)$/i, "");
+          const m = /^(.+?)\s*-\s*(.+)$/.exec(base);
+          if (m) {
+            if (!$("import_artist").value.trim()) $("import_artist").value = m[1].trim();
+            if (!$("import_track").value.trim()) $("import_track").value = m[2].trim();
+            scheduleDraftSave();
+          }
+          showSaveStatus(t("lrc_file_loaded"), "color:var(--accent-hex)");
+        };
+        reader.onerror = () => showSaveStatus(t("lrc_file_error"), "color:#f87171");
+        reader.readAsText(file);
+      }
+      function handleLrcFileSelect(e) {
+        const file = e.target.files && e.target.files[0];
+        if (file) readLrcFile(file);
+        e.target.value = "";
+      }
+      // DRAFT AUTOSAVE
+      const DRAFT_KEY = "vybecord_import_draft_v1";
+      let _draftSaveTimer = null,
+        _pendingDraft = null;
+      function scheduleDraftSave() {
+        clearTimeout(_draftSaveTimer);
+        _draftSaveTimer = setTimeout(saveDraftNow, 800);
+      }
+      function saveDraftNow() {
+        try {
+          const track = $("import_track").value,
+            artist = $("import_artist").value,
+            album = $("import_album").value,
+            duration = $("import_duration").value,
+            lrc = $("import_lrc").value;
+          if (!track && !artist && !lrc) {
+            localStorage.removeItem(DRAFT_KEY);
+            return;
+          }
+          localStorage.setItem(
+            DRAFT_KEY,
+            JSON.stringify({ track, artist, album, duration, lrc, stampLine: _stampLine, savedAt: Date.now() }),
+          );
+        } catch {
+          /* storage unavailable — draft just won't persist */
+        }
+      }
+      function loadDraftIfAny() {
+        let draft;
+        try {
+          draft = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null");
+        } catch {
+          draft = null;
+        }
+        if (!draft || !draft.savedAt || Date.now() - draft.savedAt > 86_400_000) return;
+        if (!draft.track && !draft.artist && !draft.lrc) return;
+        _pendingDraft = draft;
+        const mins = Math.max(1, Math.round((Date.now() - draft.savedAt) / 60000));
+        $("draftBannerText").textContent = t("draft_found")
+          .replace("{n}", mins)
+          .replace("{track}", draft.track || draft.artist || "?");
+        $("draftBanner").classList.remove("hidden");
+      }
+      function restoreDraft() {
+        if (!_pendingDraft) return;
+        $("import_track").value = _pendingDraft.track || "";
+        $("import_artist").value = _pendingDraft.artist || "";
+        $("import_album").value = _pendingDraft.album || "";
+        $("import_duration").value = _pendingDraft.duration || "";
+        $("import_lrc").value = _pendingDraft.lrc || "";
+        _stampLine = _pendingDraft.stampLine || 0;
+        refreshLrcHighlight();
+        updateStampInfo();
+        $("draftBanner").classList.add("hidden");
+        switchPage("import");
+      }
+      function discardDraft() {
+        try {
+          localStorage.removeItem(DRAFT_KEY);
+        } catch {}
+        $("draftBanner").classList.add("hidden");
+        _pendingDraft = null;
       }
       // DB MANAGER
       let _dbPage = 0,
@@ -4458,6 +5021,34 @@
       function closeEditModal() {
         $("editModal").classList.add("hidden");
       }
+      // THEMED CONFIRM — Promise-based replacement for window.confirm()
+      let _confirmResolve = null;
+      function themedConfirm(message, opts) {
+        opts = opts || {};
+        return new Promise((resolve) => {
+          _confirmResolve = resolve;
+          $("confirmModalMsg").textContent = message;
+          $("confirmModalOk").textContent = opts.okText || t("confirm_ok") || "OK";
+          $("confirmModalCancel").textContent = opts.cancelText || t("confirm_cancel") || "Cancel";
+          $("confirmModalOk").className = "btn " + (opts.danger ? "btn-danger" : "btn-accent");
+          $("confirmModal").classList.remove("hidden");
+          $("confirmModalOk").focus();
+        });
+      }
+      function _resolveConfirm(value) {
+        $("confirmModal").classList.add("hidden");
+        if (_confirmResolve) {
+          const r = _confirmResolve;
+          _confirmResolve = null;
+          r(value);
+        }
+      }
+      $("confirmModal").addEventListener("click", (e) => {
+        if (e.target.id === "confirmModal") _resolveConfirm(false);
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && !$("confirmModal").classList.contains("hidden")) _resolveConfirm(false);
+      });
       async function saveEditModal() {
         const id = parseInt($("editId").value);
         const data = {
@@ -4495,7 +5086,7 @@
         }
       }
       async function deleteCustomEntry(trackId, name) {
-        if (!confirm((t("db_confirm_delete") || "Delete") + ` "${name}"?`)) return;
+        if (!(await themedConfirm((t("db_confirm_delete") || "Delete") + ` "${name}"?`, { danger: true }))) return;
         try {
           const r = await (await fetch(`/api/lyrics/custom/${trackId}`, { method: "DELETE" })).json();
           if (r.ok) loadCustomLyrics();
@@ -4703,6 +5294,8 @@
               $("import_lrc").focus();
               showSaveStatus(t("no_lyrics_yet"), "color:var(--text-muted)");
             }
+            refreshLrcHighlight();
+            scheduleDraftSave();
           })
           .catch(() => {});
       }
@@ -4729,8 +5322,22 @@
         lines[_stampLine] = ts + " " + lines[_stampLine].replace(/^\[\d+:\d+\.\d+\]\s?/, "");
         ta.value = lines.join("\n");
         _stampLine++;
+        refreshLrcHighlight();
         updateStampInfo();
         selectStampLine();
+        scheduleDraftSave();
+      }
+      function unstampLine() {
+        if (_stampLine <= 0) return;
+        _stampLine--;
+        const ta = $("import_lrc"),
+          lines = ta.value.split("\n");
+        lines[_stampLine] = lines[_stampLine].replace(/^\[\d+:\d+\.\d+\]\s?/, "");
+        ta.value = lines.join("\n");
+        refreshLrcHighlight();
+        updateStampInfo();
+        selectStampLine();
+        scheduleDraftSave();
       }
       function selectStampLine() {
         const ta = $("import_lrc"),
@@ -4742,6 +5349,7 @@
         ta.focus();
         const lineHeight = parseInt(getComputedStyle(ta).lineHeight) || 20;
         ta.scrollTop = Math.max(0, _stampLine * lineHeight - ta.clientHeight / 2);
+        syncLrcScroll();
       }
       function updateStampInfo() {
         $("stampInfo").textContent = `Line ${_stampLine + 1}`;
@@ -4750,6 +5358,20 @@
           m = Math.floor(sec / 60),
           s = sec % 60;
         $("stampTime").textContent = `${String(m).padStart(2, "0")}:${s.toFixed(2).padStart(5, "0")}`;
+        updateStampPrompter();
+      }
+      function updateStampPrompter() {
+        const panel = $("stampPrompter"),
+          ta = $("import_lrc");
+        if (!panel || !ta) return;
+        const rawLines = ta.value.split("\n");
+        const active = !!currentTrack && !!progressBaseTime && rawLines.length > 1 && rawLines.some((l) => l.trim());
+        panel.classList.toggle("hidden", !active);
+        if (!active) return;
+        const clean = rawLines.map((l) => l.replace(/^(?:\[[\d:.]+\]\s*)+/, ""));
+        $("promptPrev").textContent = _stampLine > 0 ? clean[_stampLine - 1] || "" : "";
+        $("promptCurrent").textContent = clean[_stampLine] || "";
+        $("promptNext").textContent = clean[_stampLine + 1] || "";
       }
       function resetStamp() {
         _stampLine = 0;
@@ -4758,7 +5380,9 @@
           .split("\n")
           .map((l) => l.replace(/^\[[\d:.]+\]\s*/, ""))
           .join("\n");
+        refreshLrcHighlight();
         updateStampInfo();
+        scheduleDraftSave();
       }
       setInterval(() => {
         if (progressBaseTime) updateStampInfo();
@@ -4778,6 +5402,30 @@
           }
         }
       });
+      // LRC drag & drop onto the editor
+      (function () {
+        const wrap = $("lrcEditorWrap");
+        if (!wrap) return;
+        ["dragenter", "dragover"].forEach((evt) =>
+          wrap.addEventListener(evt, (e) => {
+            e.preventDefault();
+            wrap.classList.add("drag-over");
+          }),
+        );
+        ["dragleave", "drop"].forEach((evt) =>
+          wrap.addEventListener(evt, (e) => {
+            e.preventDefault();
+            wrap.classList.remove("drag-over");
+          }),
+        );
+        wrap.addEventListener("drop", (e) => {
+          const file = e.dataTransfer.files && e.dataTransfer.files[0];
+          if (file) readLrcFile(file);
+        });
+      })();
+      // Initial paint of the LRC highlight overlay + restore any autosaved draft
+      refreshLrcHighlight();
+      loadDraftIfAny();
       // THEME
       const _themeMq = window.matchMedia("(prefers-color-scheme: light)");
       function applyThemeMode(mode) {
@@ -4911,6 +5559,8 @@
       async function loadWrapped() {
         const days = $("wrappedPeriod").value;
         const params = days ? `?days=${days}` : "";
+        $("wrTopTracks").innerHTML = skeletonLines(3);
+        $("wrTopArtists").innerHTML = skeletonLines(3);
         try {
           const r = await (await fetch("/api/history/wrapped" + params)).json();
           const hrs = (r.totalListenedMs / 3_600_000).toFixed(1);
@@ -4930,7 +5580,7 @@
               )
               .join("");
           else
-            tt.innerHTML = '<p style="font-size:11px;color:var(--text-dim);text-align:center;padding:8px">No data</p>';
+            tt.innerHTML = emptyState("♫", t("no_data_yet") || "No data");
           const ta = $("wrTopArtists");
           if (r.topArtists?.length)
             ta.innerHTML = r.topArtists
@@ -4943,12 +5593,16 @@
               )
               .join("");
           else
-            ta.innerHTML = '<p style="font-size:11px;color:var(--text-dim);text-align:center;padding:8px">No data</p>';
-        } catch {}
+            ta.innerHTML = emptyState("🎤", t("no_data_yet") || "No data");
+        } catch {
+          $("wrTopTracks").innerHTML = emptyState("⚠", t("error") || "Error");
+          $("wrTopArtists").innerHTML = emptyState("⚠", t("error") || "Error");
+        }
       }
       async function loadHistory(append) {
         const limit = 50;
         const params = new URLSearchParams({ limit: String(limit), offset: String(_historyOffset) });
+        if (!append) $("historyTimeline").innerHTML = skeletonLines(5, 34);
         try {
           const r = await (await fetch("/api/history?" + params)).json();
           $("historyTotal").textContent = `${r.total || 0} tracks`;
@@ -4967,8 +5621,11 @@
             $("btnLoadMore").classList.toggle("hidden", _historyOffset >= (r.total || 0));
           } else {
             $("btnLoadMore").classList.add("hidden");
+            if (!append) el.innerHTML = emptyState("📜", t("no_history_yet") || "No listening history yet");
           }
-        } catch {}
+        } catch {
+          if (!append) $("historyTimeline").innerHTML = emptyState("⚠", t("error") || "Error");
+        }
       }
       function loadMoreHistory() {
         loadHistory(true);
@@ -4980,6 +5637,22 @@
       initTheme();
       applyLang();
       connectSSE();
+      // ACCESSIBILITY: any element with onclick that isn't natively focusable
+      // (button, a, input, select, textarea) becomes keyboard-operable too —
+      // covers the sidebar nav, theme/lang/shutdown items, tier picker, and
+      // the click-to-expand lyrics panel.
+      document.querySelectorAll("[onclick]").forEach((el) => {
+        const tag = el.tagName;
+        if (tag === "BUTTON" || tag === "A" || tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+        if (!el.hasAttribute("tabindex")) el.setAttribute("tabindex", "0");
+        if (!el.hasAttribute("role")) el.setAttribute("role", "button");
+        el.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            el.click();
+          }
+        });
+      });
       // User scroll detection for expanded lyrics
       $("contentArea").addEventListener(
         "scroll",

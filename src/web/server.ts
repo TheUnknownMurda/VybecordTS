@@ -177,11 +177,9 @@ export class WebServer {
 
     this.server.on('error', (err: NodeJS.ErrnoException) => {
       if (err.code === 'EADDRINUSE') {
-        console.error(`Port ${this.port} is already in use. Another instance may be running.`);
-        console.error('Close the other instance or run: taskkill /F /IM node.exe (Windows)');
-        console.error('Or use: netstat -ano | findstr :8888 to find the process ID');
+        log.error(`Port ${this.port} is already in use. Another instance may be running.\nClose the other instance or run: taskkill /F /IM node.exe (Windows)\nOr use: netstat -ano | findstr :8888 to find the process ID`);
       } else {
-        console.error(`Server error: ${err.message}`);
+        log.error(`Server error: ${err.message}`);
       }
     });
 
@@ -286,6 +284,16 @@ export class WebServer {
       }
       if (url.pathname === '/api/lyrics/import' && method === 'POST') {
         return await this.handleLyricsImport(req, res);
+      }
+      if (url.pathname === '/api/lyrics/check-existing' && method === 'GET') {
+        const track = url.searchParams.get('track') || '';
+        const artist = url.searchParams.get('artist') || '';
+        const album = url.searchParams.get('album') || '';
+        const durationParam = url.searchParams.get('duration');
+        const duration = durationParam ? parseInt(durationParam) : undefined;
+        if (!track || !artist) return this.jsonResponse(res, { error: 'Missing track or artist' }, 400);
+        const match = this.backend.checkExistingCustomLyrics(track, artist, album, duration);
+        return this.jsonResponse(res, { exists: !!match, match });
       }
       if (url.pathname === '/api/lyrics/offset' && method === 'POST') {
         return await this.handleLyricsOffset(req, res);
@@ -452,7 +460,7 @@ export class WebServer {
       res.writeHead(404, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Not found' }));
     } catch (e) {
-      console.error(`Request error: ${e}`);
+      log.error(`Request error: ${e}`);
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Internal server error' }));
     }
@@ -665,7 +673,7 @@ export class WebServer {
       }
       // Webhook URL validation (prevent SSRF)
       if (!VALID_WEBHOOK_REGEX.test(webhookUrl)) {
-        console.error(`Invalid webhook URL configured: ${webhookUrl.slice(0, 30)}...`);
+        log.error(`Invalid webhook URL configured: ${webhookUrl.slice(0, 30)}...`);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: false, error: 'Invalid webhook configuration' }));
         return;
@@ -734,7 +742,7 @@ export class WebServer {
       });
       this.jsonResponse(res, { ok: true });
     } catch (e) {
-      console.error(`Bug report failed: ${e}`);
+      log.error(`Bug report failed: ${e}`);
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: false, error: `${e}` }));
     }

@@ -14,6 +14,7 @@ import { VybecordBackend } from './backend.js';
 import { WebServer } from './web/server.js';
 
 const log = createLogger('Main');
+const startTime = Date.now();
 
 // ── Resolve working directory ──
 // When packaged with pkg, use the exe's directory so config/db are found next to it
@@ -60,12 +61,14 @@ async function main() {
   const onExit = async () => {
     if (shuttingDown) return; // Prevent double-shutdown
     shuttingDown = true;
-    log.info('Shutting down...');
+    writeSection('Shutting down', logoWidth);
+    log.info('Stopping background services...');
     flushTranslationCache();
     web.stop();
     await backend.shutdown();
     // Brief delay to let the IPC socket flush clearActivity before exit
     await new Promise(r => setTimeout(r, 300));
+    writeRainbow(centerText('VybecordTS stopped — see you next time', logoWidth));
     flushAndClose();
     process.exit(0);
   };
@@ -76,7 +79,7 @@ async function main() {
   try {
     await backend.start();
     web.start();
-    log.info('VybecordTS is running. Press Ctrl+C to stop.');
+    log.info(`VybecordTS ready in ${Date.now() - startTime}ms ✓ — press Ctrl+C to stop`);
 
     // Auto-open dashboard in default browser
     const url = 'http://127.0.0.1:8888';

@@ -13,7 +13,7 @@
 
 import { performance } from 'node:perf_hooks';
 import { findLyricIndex } from '../core/lrc-parser.js';
-import { createLogger, rainbowText } from '../core/logger.js';
+import { createLogger } from '../core/logger.js';
 import { romanize } from '../core/romanize.js';
 import { getCachedTranslation, translateText } from '../core/translate.js';
 import { evictOldest } from '../core/utils.js';
@@ -917,9 +917,10 @@ export class LyricsEngine {
     this.lastCurrentText = current;
     this.lastUpdateTime = now;
 
-    // Beautiful lyrics log display
+    // Beautiful lyrics log display — same columns as a real log line, so it
+    // never looks like a stray/cut-off line between real log messages.
     if (current && current !== '♪♪' && idxChanged) {
-      log.raw(`[Lyrics] ${rainbowText(current)}`);
+      log.lyrics(current);
     }
 
     // Discord RPC: only update every 2 lines, but always show first line
