@@ -38,7 +38,7 @@ import { LyricsEngine } from './sync/lyrics-engine.js';
 import { fetchLyrics, fetchTrackMetadata, fetchPlainLyrics } from './core/provider.js';
 import { fetchYouTubeCaptions, clearCCCache, type CCResult } from './core/youtube-captions.js';
 import { similarity } from './core/similarity.js';
-import { initLocalDb, closeLocalDb, insertCustomLyrics, listCustomLyrics, getCustomLyrics, updateCustomLyrics, deleteCustomLyrics } from './core/local-lyrics-db.js';
+import { initLocalDb, closeLocalDb, insertCustomLyrics, listCustomLyrics, getCustomLyrics, updateCustomLyrics, deleteCustomLyrics, findExistingCustomLyrics } from './core/local-lyrics-db.js';
 import { initLastFm, scrobbleTrackStart, checkAndScrobble, scrobbleTrackEnd, isScrobbleEnabled, getAuthUrl, completeAuth, disconnectScrobble, canAuth } from './core/lastfm.js';
 import { uploadThumbForRpc } from './core/image-upload.js';
 import { extractLocalArt, extractArtFromPath } from './core/local-art.js';
@@ -1450,6 +1450,11 @@ export class VybecordBackend extends EventEmitter {
     return count;
   }
   /** Import custom lyrics into the local SQLite database. */
+  /** Check whether importing this track would overwrite an existing custom-lyrics entry. */
+  checkExistingCustomLyrics(track: string, artist: string, album: string, duration?: number) {
+    return findExistingCustomLyrics(track, artist, album, duration);
+  }
+
   importCustomLyrics(data: { track: string; artist: string; album: string; duration?: number; lrc: string }): number {
     const trackId = insertCustomLyrics(data.track, data.artist, data.album, data.duration, data.lrc);
     // Clear any flags for this track (user is providing correct lyrics)

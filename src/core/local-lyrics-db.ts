@@ -374,6 +374,34 @@ function pickBestRow(rows: LocalRow[], durationSec: number | undefined): LyricLi
  * Creates a track + lyrics row and updates the FTS index.
  * Returns the new track ID, or throws on error.
  */
+export interface ExistingLyricsMatch {
+  id: number;
+  updatedAt: string;
+  lineCount: number;
+}
+
+/**
+ * Check whether an import would overwrite an existing entry — same matching
+ * rule as insertCustomLyrics' upsert (name+artist+album+duration, exact,
+ * case-insensitive). Note: SQL NULL never equals NULL, so an import with no
+ * duration can never match here — it always inserts a new row, exactly like
+ * insertCustomLyrics itself does in that case.
+ */
+export function findExistingCustomLyrics(
+  trackName: string, artistName: string, albumName: string, durationSec?: number,
+): ExistingLyricsMatch | null {
+  if (!db || durationSec === undefined || durationSec === null) return null;
+  const row = db.prepare(`
+    SELECT t.id as id, t.updated_at as updatedAt, l.synced_lyrics as syncedLyrics
+    FROM tracks t
+    JOIN lyrics l ON l.id = t.last_lyrics_id
+    WHERE t.name_lower = lower(?) AND t.artist_name_lower = lower(?) AND t.album_name_lower = lower(?) AND t.duration = ?
+  `).get(trackName, artistName, albumName, durationSec) as { id: number; updatedAt: string; syncedLyrics: string } | undefined;
+  if (!row) return null;
+  const lineCount = row.syncedLyrics ? row.syncedLyrics.split('\n').filter(l => l.trim()).length : 0;
+  return { id: row.id, updatedAt: row.updatedAt, lineCount };
+}
+
 export function insertCustomLyrics(
   trackName: string,
   artistName: string,
