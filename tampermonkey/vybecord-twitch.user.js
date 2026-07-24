@@ -148,7 +148,7 @@
         info.stream_title = streamTitle;
 
         // Detect if stream is live
-        info.is_live = !!document.querySelector('[class*="live"], [class*="online"], [data-a-target="live-status"]') ||
+        info.is_live = !!document.querySelector('[class*="live"], [class*="online"], [data-a-target="live-status"], [data-a-target="channel-status-text"]') ||
                        !document.querySelector('[class*="offline"], [data-a-target="offline-status"]');
 
         // Set stream start time when stream goes live

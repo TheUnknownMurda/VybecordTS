@@ -209,31 +209,48 @@ while ($true) {
                     $cachedArtist = "$mainArtist, $albumArtist"
                 }
 
-                # Extract SMTC thumbnail on title change (YouTube, browsers, etc.)
-                if ($cachedTitle -ne $lastThumbTitle) {
-                    $lastThumbTitle = $cachedTitle
-                    try {
-                        $thumbRef = $info.Thumbnail
-                        if ($null -ne $thumbRef) {
-                            $stream = $null
-                            $reader = $null
-                            try {
-                                $stream = AwaitFast ($thumbRef.OpenReadAsync()) $asTaskStream
-                                $sz = [uint32]$stream.Size
-                                if ($sz -gt 0 -and $sz -lt 5000000) {
-                                    $reader = [Windows.Storage.Streams.DataReader]::new($stream.GetInputStreamAt(0))
-                                    AwaitFast ($reader.LoadAsync($sz)) $asTaskUInt32
-                                    $buf = [byte[]]::new($sz)
-                                    $reader.ReadBytes($buf)
-                                    [System.IO.File]::WriteAllBytes($thumbPath, $buf)
-                                    $thumbExtracted = $true
-                                }
-                            } finally {
-                                if ($null -ne $reader) { try { $reader.Dispose() } catch {} }
-                                if ($null -ne $stream) { try { $stream.Dispose() } catch {} }
+                # Check if thumbnail file exists (may have been extracted by local-art.ts)
+                $thumbFileExists = Test-Path $thumbPath
+                $thumbFileAge = if ($thumbFileExists) { [int]((Get-Date) - (Get-Item $thumbPath).LastWriteTime).TotalSeconds } else { 9999 }
+
+                # Reset thumb cache only when title changes AND thumb file is old or missing
+                if ($cachedTitle -ne $lastThumbTitle -and $thumbFileAge -gt 5) {
+                    $lastThumbTitle = ''
+                }
+
+                # Extract SMTC thumbnail on track change (YouTube, browsers, etc.)
+                # Don't overwrite existing thumbnail file if SMTC doesn't have one (preserves local-art.ts extraction)
+                try {
+                    $thumbRef = $info.Thumbnail
+                    if ($null -ne $thumbRef) {
+                        $stream = $null
+                        $reader = $null
+                        try {
+                            $stream = AwaitFast ($thumbRef.OpenReadAsync()) $asTaskStream
+                            $sz = [uint32]$stream.Size
+                            if ($sz -gt 0 -and $sz -lt 5000000) {
+                                $reader = [Windows.Storage.Streams.DataReader]::new($stream.GetInputStreamAt(0))
+                                AwaitFast ($reader.LoadAsync($sz)) $asTaskUInt32
+                                $buf = [byte[]]::new($sz)
+                                $reader.ReadBytes($buf)
+                                [System.IO.File]::WriteAllBytes($thumbPath, $buf)
+                                $lastThumbTitle = $cachedTitle
+                                $thumbExtracted = $true
                             }
+                        } finally {
+                            if ($null -ne $reader) { try { $reader.Dispose() } catch {} }
+                            if ($null -ne $stream) { try { $stream.Dispose() } catch {} }
                         }
-                    } catch {}
+                    } elseif (Test-Path $thumbPath) {
+                        # SMTC has no thumbnail but file exists (likely from local-art.ts)
+                        # Keep the existing file and set thumb flag
+                        $thumbExtracted = $true
+                    }
+                } catch {}
+            } else {
+                # Track didn't change — keep thumb flag if we have a cached thumbnail
+                if ($lastThumbTitle -ne '') {
+                    $thumbExtracted = $true
                 }
             }
 

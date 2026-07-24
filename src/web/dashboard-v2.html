@@ -2613,38 +2613,6 @@
                 </label>
                 <input type="text" id="cfgBtn1Url" placeholder="https://..." />
               </div>
-              <div
-                class="section-label"
-                style="border-top: 1px solid var(--border-s); padding-top: 8px"
-                data-i18n="button_2"
-              >
-                Button 2
-              </div>
-              <div>
-                <label
-                  style="
-                    font-size: 11px;
-                    color: var(--text-muted);
-                    font-weight: 500;
-                    display: block;
-                    margin-bottom: 4px;
-                  "
-                >
-                  Label
-                  <code style="color: var(--text-muted); font-size: 10px">{platform}</code>
-                </label>
-                <input
-                  type="text"
-                  id="cfgBtn2Label"
-                  placeholder="🎵 Listen on {platform}"
-                  oninput="updateBtn2Preview()"
-                />
-                <p
-                  id="btn2Preview"
-                  class="hidden"
-                  style="font-size: 11px; color: var(--accent-hex); margin-top: 4px"
-                ></p>
-              </div>
             </div>
             <div class="card collapsible collapsed" id="advancedSettingsCard" style="grid-column: 1/-1">
               <div
@@ -3402,7 +3370,6 @@
           activity_type: "Activity type",
           click_targets: "Click targets",
           button_1: "Button 1",
-          button_2: "Button 2",
           advanced: "Advanced",
           user_tier: "User tier",
           poll_interval: "Poll interval (ms)",
@@ -3544,7 +3511,6 @@
           activity_type: "Type d'activité",
           click_targets: "Cibles de clic",
           button_1: "Bouton 1",
-          button_2: "Bouton 2",
           advanced: "Avancé",
           user_tier: "Niveau",
           poll_interval: "Intervalle (ms)",
@@ -4122,7 +4088,6 @@
         artEl.classList.remove("hidden");
         artEl.style.display = "";
         startProgress(d.progress_ms, d.duration_ms, performance.now());
-        updateBtn2Preview();
         if (_lyricsExpanded) {
           _fullLyrics = [];
           _expandedActiveIdx = -1;
@@ -4407,11 +4372,9 @@
         $("cfgDetailsUrl").value = c.rpc_details_url || "auto";
         $("cfgStateUrl").value = c.rpc_state_url || "auto";
         $("cfgLargeUrl").value = c.rpc_large_url || "auto";
-        $("cfgActivityType").value = String(c.rpc_activity_type ?? 2);
+        $("cfgActivityType").value = [0, 2, 3, 5].includes(c.rpc_activity_type) ? String(c.rpc_activity_type) : "2";
         $("cfgBtn1Label").value = c.rpc_button1_label || "";
         $("cfgBtn1Url").value = c.rpc_button1_url || "";
-        $("cfgBtn2Label").value = c.rpc_button2_label || "";
-        updateBtn2Preview();
         $("cfgSpotifyId").value = c.spotify_client_id || "";
         $("cfgSpotifySecret").value = c.spotify_client_secret || "";
         $("cfgDiscordId").value = c.discord_app_id || "";
@@ -4431,17 +4394,6 @@
           if (row) row.style.opacity = master ? "1" : ".35";
           $(id).disabled = !master;
         });
-      }
-      function updateBtn2Preview() {
-        const label = $("cfgBtn2Label").value,
-          preview = $("btn2Preview");
-        if (!label.includes("{platform}")) {
-          preview.classList.add("hidden");
-          return;
-        }
-        const src = currentTrack ? currentTrack.media_source || "spotify" : "spotify";
-        preview.textContent = "Preview: " + label.replace("{platform}", PLATFORM_DISPLAY[src] || src);
-        preview.classList.remove("hidden");
       }
       async function saveConfig() {
         const u = {
@@ -4480,7 +4432,6 @@
           rpc_activity_type: parseInt($("cfgActivityType").value),
           rpc_button1_label: $("cfgBtn1Label").value,
           rpc_button1_url: $("cfgBtn1Url").value,
-          rpc_button2_label: $("cfgBtn2Label").value,
           spotify_client_id: $("cfgSpotifyId").value,
           spotify_client_secret: $("cfgSpotifySecret").value,
           discord_app_id: $("cfgDiscordId").value,

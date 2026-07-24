@@ -12,6 +12,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { createLogger } from './logger.js';
+import FormData from 'form-data';
 
 const log = createLogger('ImageUpload');
 
@@ -42,12 +43,18 @@ export async function uploadThumbForRpc(trackKey: string, signal?: AbortSignal):
     const form = new FormData();
     form.append('reqtype', 'fileupload');
     form.append('time', '24h');
-    form.append('fileToUpload', new Blob([buf], { type: mime }), `thumb.${ext}`);
+    form.append('fileToUpload', buf, {
+      filename: `thumb.${ext}`,
+      contentType: mime,
+    });
+
+    const formBuffer = form.getBuffer();
 
     const res = await fetch(CATBOX_API, {
       method: 'POST',
-      body: form,
+      body: formBuffer,
       signal,
+      headers: form.getHeaders(),
     });
 
     if (!res.ok) {

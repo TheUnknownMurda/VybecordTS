@@ -118,8 +118,17 @@
         for (const selector of categorySelectors) {
             const el = document.querySelector(selector);
             if (el && el.textContent.trim()) {
-                category = el.textContent.trim();
-                break;
+                const text = el.textContent.trim();
+                // Filter out cookie/consent banner text
+                if (!text.toLowerCase().includes('cookie') && 
+                    !text.toLowerCase().includes('consent') &&
+                    !text.toLowerCase().includes('necessary') &&
+                    !text.toLowerCase().includes('functionality') &&
+                    !text.toLowerCase().includes('these cookies') &&
+                    text.length < 50) { // Categories are usually short
+                    category = text;
+                    break;
+                }
             }
         }
         info.category = category;
@@ -214,29 +223,55 @@
         // Try to get profile picture - target the main streamer's avatar specifically
         let profilePicUrl = '';
         
-        // First, try to find the avatar within the main streamer section (not in sidebar/lists)
-        const mainStreamerSelectors = [
-            // Avatar in the main channel header/section
-            '[class*="channel-header"] img[class*="avatar"]',
-            '[class*="streamer-header"] img[class*="avatar"]',
-            '[class*="profile-header"] img[class*="avatar"]',
-            // Avatar in the main stream card
-            '[class*="stream-card"][class*="main"] img[class*="avatar"]',
-            '[class*="streamer-card"][class*="main"] img[class*="avatar"]',
-            // Avatar near the streamer name in the main content area
-            'main img[class*="avatar"]',
-            '[class*="channel-info"] img[class*="avatar"]',
-            '[class*="streamer-info"] img[class*="avatar"]',
-        ];
+        // Try to get profile picture from page metadata first
+        const metaImage = document.querySelector('meta[property="og:image"]') || 
+                         document.querySelector('meta[name="twitter:image"]');
+        if (metaImage && metaImage.getAttribute('content')) {
+            const metaSrc = metaImage.getAttribute('content');
+            if (metaSrc && !metaSrc.includes('logo') && !metaSrc.includes('kick-logo')) {
+                profilePicUrl = metaSrc.startsWith('//') ? `https:${metaSrc}` : metaSrc;
+                console.log('[VybecordTS Kick] Profile picture from meta tag:', profilePicUrl);
+            }
+        }
         
-        for (const selector of mainStreamerSelectors) {
-            const el = document.querySelector(selector);
-            if (el && el.getAttribute('src')) {
-                const src = el.getAttribute('src');
-                // Only use if it looks like a real profile picture
-                if (src && !src.includes('thumbnail') && !src.includes('preview') && !src.includes('placeholder')) {
-                    profilePicUrl = src.startsWith('//') ? `https:${src}` : src;
-                    break;
+        // If not from meta, try to find the avatar within the main streamer section
+        if (!profilePicUrl) {
+            const mainStreamerSelectors = [
+                // Avatar in the main channel header/section
+                '[class*="channel-header"] img[class*="avatar"]',
+                '[class*="streamer-header"] img[class*="avatar"]',
+                '[class*="profile-header"] img[class*="avatar"]',
+                // Avatar in the main stream card
+                '[class*="stream-card"][class*="main"] img[class*="avatar"]',
+                '[class*="streamer-card"][class*="main"] img[class*="avatar"]',
+                // Avatar near the streamer name in the main content area
+                'main img[class*="avatar"]',
+                '[class*="channel-info"] img[class*="avatar"]',
+                '[class*="streamer-info"] img[class*="avatar"]',
+                // Kick-specific selectors for profile pictures
+                'img[src*="cdn.kick.com"][alt*="avatar"]',
+                'img[src*="cdn.kick.com"][class*="user"]',
+                '[data-testid*="avatar"] img',
+                '[class*="user-avatar"] img',
+                '[class*="profile-picture"] img',
+                '[class*="streamer-avatar"] img',
+                // More specific Kick selectors
+                'img[src*="cdn.kick.com"][class*="profile"]',
+                'img[src*="cdn.kick.com"][class*="channel"]',
+                'img.rounded-full',
+                'img[class*="rounded"]',
+            ];
+            
+            for (const selector of mainStreamerSelectors) {
+                const el = document.querySelector(selector);
+                if (el && el.getAttribute('src')) {
+                    const src = el.getAttribute('src');
+                    // Only use if it looks like a real profile picture
+                    if (src && !src.includes('thumbnail') && !src.includes('preview') && !src.includes('placeholder') && !src.includes('logo')) {
+                        profilePicUrl = src.startsWith('//') ? `https:${src}` : src;
+                        console.log('[VybecordTS Kick] Profile picture from selector:', selector, profilePicUrl);
+                        break;
+                    }
                 }
             }
         }
@@ -254,11 +289,12 @@
                 const els = document.querySelectorAll(selector);
                 for (const el of els) {
                     const src = el.getAttribute('src');
-                    if (src && !src.includes('thumbnail') && !src.includes('preview') && !src.includes('placeholder')) {
+                    if (src && !src.includes('thumbnail') && !src.includes('preview') && !src.includes('placeholder') && !src.includes('logo')) {
                         // Check if this avatar is in a main content area (not sidebar/footer)
                         const parent = el.closest('aside, footer, [class*="sidebar"], [class*="recommended"], [class*="sidebar"]');
                         if (!parent) {
                             profilePicUrl = src.startsWith('//') ? `https:${src}` : src;
+                            console.log('[VybecordTS Kick] Profile picture from general selector:', selector, profilePicUrl);
                             break;
                         }
                     }
@@ -267,15 +303,16 @@
             }
         }
         
-        // Final fallback: any image from cdn.kick.com that's not a thumbnail
+        // Final fallback: any image from cdn.kick.com that's not a thumbnail or logo
         if (!profilePicUrl) {
             const allImages = document.querySelectorAll('img[src*="cdn.kick.com"]');
             for (const img of allImages) {
                 const src = img.getAttribute('src');
-                if (src && !src.includes('thumbnail') && !src.includes('preview')) {
+                if (src && !src.includes('thumbnail') && !src.includes('preview') && !src.includes('logo')) {
                     const parent = img.closest('aside, footer, [class*="sidebar"], [class*="recommended"], [class*="sidebar"]');
                     if (!parent) {
                         profilePicUrl = src.startsWith('//') ? `https:${src}` : src;
+                        console.log('[VybecordTS Kick] Profile picture from fallback:', profilePicUrl);
                         break;
                     }
                 }
@@ -283,6 +320,7 @@
         }
         
         info.profile_picture_url = profilePicUrl;
+        console.log('[VybecordTS Kick] Final profile picture URL:', profilePicUrl);
 
         console.log('[VybecordTS Kick] Extracted info:', info);
         return info;
@@ -312,9 +350,139 @@
         }
     }
 
+    // ── Hide cookie banner ──
+    let cookieObserver = null;
+
+    function hideCookieBanner() {
+        // Inject CSS to hide cookie banners immediately
+        const style = document.createElement('style');
+        style.textContent = `
+            /* Hide cookie consent banners */
+            [id*="cookie"], [class*="cookie"], [id*="consent"], [class*="consent"],
+            [id*="banner"], [class*="banner"], .cookie-banner, .consent-banner,
+            .cookie-notice, .consent-notice, #onetrust-consent-sdk, #cookie-banner,
+            [data-testid*="cookie"], [data-testid*="consent"],
+            div[id*="onetrust"], div[class*="onetrust"],
+            #ot-sdk-btn-floating, #onetrust-banner-sdk,
+            .ot-sdk-container, .ot-floating-button,
+            [role="dialog"][aria-label*="cookie"], [role="dialog"][aria-label*="consent"] {
+                display: none !important;
+                visibility: hidden !important;
+                opacity: 0 !important;
+                height: 0 !important;
+                width: 0 !important;
+                position: absolute !important;
+                left: -9999px !important;
+                pointer-events: none !important;
+                z-index: -9999 !important;
+            }
+        `;
+        (document.head || document.documentElement).appendChild(style);
+        console.log('[VybecordTS Kick] Cookie banner CSS injected');
+
+        // Try to remove existing elements immediately
+        removeCookieElements();
+
+        // Set up observer when DOM is ready
+        if (document.body) {
+            startCookieObserver();
+        } else {
+            document.addEventListener('DOMContentLoaded', startCookieObserver);
+        }
+
+        // Also run periodically as fallback
+        setInterval(removeCookieElements, 2000);
+    }
+
+    function startCookieObserver() {
+        if (cookieObserver) return;
+        
+        cookieObserver = new MutationObserver(() => {
+            removeCookieElements();
+        });
+        cookieObserver.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+        console.log('[VybecordTS Kick] Cookie banner observer started');
+    }
+
+    function removeCookieElements() {
+        const selectors = [
+            '[id*="cookie"]',
+            '[class*="cookie"]',
+            '[id*="consent"]',
+            '[class*="consent"]',
+            '#onetrust-consent-sdk',
+            '#cookie-banner',
+            '#ot-sdk-btn-floating',
+            '#onetrust-banner-sdk',
+            '.ot-sdk-container',
+            '.ot-floating-button',
+            '[role="dialog"][aria-label*="cookie"]',
+            '[role="dialog"][aria-label*="consent"]',
+            'div[id*="onetrust"]',
+            'div[class*="onetrust"]',
+            // Kick specific selectors
+            '[class*="Cookie"]',
+            '[class*="cookie-banner"]',
+            '[class*="consent-banner"]',
+            '[id*="Cookie"]',
+            '[id*="cookie-banner"]',
+            '[id*="consent-banner"]'
+        ];
+
+        selectors.forEach(selector => {
+            try {
+                const elements = document.querySelectorAll(selector);
+                elements.forEach(el => {
+                    // Check if element is actually a cookie/consent banner by looking at text content
+                    const text = el.textContent?.toLowerCase() || '';
+                    if (text.includes('cookie') || text.includes('consent') || 
+                        text.includes('necessary') || text.includes('functionality') ||
+                        text.includes('these cookies') ||
+                        selector.includes('cookie') || selector.includes('consent') ||
+                        selector.includes('onetrust')) {
+                        el.remove();
+                        console.log('[VybecordTS Kick] Removed cookie element:', selector);
+                    }
+                });
+            } catch (e) {
+                // Ignore errors during DOM manipulation
+            }
+        });
+
+        // Also check iframes for cookie banners
+        try {
+            const iframes = document.querySelectorAll('iframe');
+            iframes.forEach(iframe => {
+                try {
+                    const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+                    if (iframeDoc) {
+                        const iframeElements = iframeDoc.querySelectorAll('[id*="cookie"], [class*="cookie"], [id*="consent"], [class*="consent"]');
+                        iframeElements.forEach(el => {
+                            const text = el.textContent?.toLowerCase() || '';
+                            if (text.includes('cookie') || text.includes('consent')) {
+                                el.remove();
+                                console.log('[VybecordTS Kick] Removed cookie element from iframe');
+                            }
+                        });
+                    }
+                } catch (e) {
+                    // Cross-origin iframe access blocked - ignore
+                }
+            });
+        } catch (e) {
+            // Ignore errors
+        }
+    }
+
     function init() {
         reschedule(BASE_INTERVAL_MS);
         console.log('[VybecordTS] Kick integration initialized ✓');
+
+        // Hide cookie banner immediately
+        hideCookieBanner();
 
         setTimeout(() => {
             onStateChange();

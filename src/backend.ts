@@ -588,7 +588,7 @@ export class VybecordBackend extends EventEmitter {
   handleTwitchPush(data: TwitchPayload): void {
     this.twitchSource.update(data);
 
-    if (this.config.get('detect_other_apps') === false) return;
+    if (this.config.get('detect_twitch') === false) return;
 
     if (!data.is_live) {
       if (this.currentTrackKey.startsWith('twitch:')) this.onTrackStopped();
@@ -732,7 +732,7 @@ export class VybecordBackend extends EventEmitter {
             return;
           }
         }
-        if (this.kickSource.isActive && this.config.get('detect_other_apps') !== false) {
+        if (this.kickSource.isActive && this.config.get('detect_kick') !== false) {
           const kickTrack = this.kickSource.getCurrentTrack();
           if (kickTrack) {
             const trackKey = this.buildTrackKey(kickTrack);
@@ -857,7 +857,7 @@ export class VybecordBackend extends EventEmitter {
           }
         }
         // Priority 3e: Kick userscript — before SMTC
-        if (this.kickSource.isActive && this.config.get('detect_other_apps') !== false) {
+        if (this.kickSource.isActive && this.config.get('detect_kick') !== false) {
           const kickTrack = this.kickSource.getCurrentTrack();
           if (kickTrack) {
             const trackKey = this.buildTrackKey(kickTrack);
@@ -874,14 +874,26 @@ export class VybecordBackend extends EventEmitter {
           }
         }
         // Priority 3f: Twitch userscript — before SMTC
-        if (this.twitchSource.isActive && this.config.get('detect_other_apps') !== false) {
+        if (this.twitchSource.isActive && this.config.get('detect_twitch') !== false) {
           const twitchTrack = this.twitchSource.getCurrentTrack();
           if (twitchTrack) {
             const trackKey = this.buildTrackKey(twitchTrack);
             if (trackKey === this.currentTrackKey) {
-              // Same stream — no progress sync needed for live streams
+              // Same stream — update track to ensure stream_start_time_ms is passed to lyrics-engine
+              this.currentTrack = twitchTrack;
+              // Force syncProgress to update trackData in lyrics-engine (even for live streams)
+              this.lyricsEngine.syncProgress(twitchTrack.progress_ms, twitchTrack);
               return;
             }
+            // New stream detected
+            this.prefetchedKey = '';
+            this.currentTrackKey = trackKey;
+            this.currentTrack = twitchTrack;
+            this.cachedIsWebSource = true; // Twitch is a web source
+            log.info(`[NEW TRACK] ${twitchTrack.track_name} — ${twitchTrack.artist_name} (twitch-userscript)`);
+            this.recordPlay(twitchTrack);
+            this.emit('trackUpdate', twitchTrack);
+            this.onNewTrack(twitchTrack).catch(e => log.error(`[NEW TRACK] Error: ${e}`));
             return;
           }
           // Twitch active but not live — stop if current track is Twitch
@@ -1375,8 +1387,10 @@ export class VybecordBackend extends EventEmitter {
     // Persist enriched track + re-emit to dashboard
     // Restore original album_art_url to prevent losing local art during lyrics search
     // But preserve uploaded public URL if uploadLocalThumbForRpc completed during lyrics search
+    // Also preserve /api/thumbnail (local art extracted by local-art.ts)
     const uploadedUrl = this.currentTrack?.album_art_url?.startsWith('https://') ? this.currentTrack.album_art_url : null;
-    trackData.album_art_url = uploadedUrl || originalAlbumArtUrl;
+    const localArtUrl = this.currentTrack?.album_art_url === '/api/thumbnail' ? '/api/thumbnail' : null;
+    trackData.album_art_url = uploadedUrl || localArtUrl || originalAlbumArtUrl;
     this.currentTrack = trackData;
     this.emit('trackUpdate', trackData);
 
@@ -1811,7 +1825,7 @@ export class VybecordBackend extends EventEmitter {
       rpc_large_url: cfg.rpc_large_url,
       rpc_button1_label: cfg.rpc_button1_label,
       rpc_button1_url: cfg.rpc_button1_url,
-      rpc_button2_label: cfg.rpc_button2_label,
+      rpc_button2_label: '🎵 Listen on {platform}',
       rpc_activity_type: cfg.rpc_activity_type,
       dance_mode: cfg.dance_mode,
       radiate_mode: cfg.radiate_mode,

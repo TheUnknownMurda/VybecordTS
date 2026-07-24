@@ -7,6 +7,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createLogger } from './logger.js';
+import { existsSync } from 'node:fs';
 import type { TrackData } from './types.js';
 
 const log = createLogger('DesktopSource');
@@ -49,7 +50,7 @@ export class DesktopSource {
   private lastStderrMsg = '';
   // Cached getCurrentTrack result — avoids re-creating an identical object every 400ms
   private _cachedTrack: TrackData | null = null;
-  private _cachedDataRef: SmtcData | null = null; // reference equality check
+  private _cachedTrackKey = ''; // Use track key instead of object reference
 
   constructor(onTrack?: (track: TrackData | null) => void) {
     this.onTrack = onTrack;
@@ -136,8 +137,22 @@ export class DesktopSource {
     const d = this.latestData;
     if (!d || !d.is_playing || !d.title) return null;
 
-    // Fast path: same SmtcData reference → return cached TrackData (avoids object alloc every 400ms)
-    if (d === this._cachedDataRef && this._cachedTrack) {
+    // Build track key for cache comparison
+    const trackKey = `${d.source}:${d.title}:${d.artist}`;
+
+    // Fast path: same track → return cached TrackData (avoids object alloc every 400ms)
+    if (trackKey === this._cachedTrackKey && this._cachedTrack) {
+      // For Apple Music, always check thumbnail file and update album_art_url if needed
+      if (this._cachedTrack.media_source === 'apple_music') {
+        const thumbPath = path.join(process.env.TEMP || require('os').tmpdir(), 'vybecord_thumb.jpg');
+        const hasThumbFile = existsSync(thumbPath);
+        const shouldHaveThumb = hasThumbFile;
+        const currentHasThumb = this._cachedTrack.album_art_url === '/api/thumbnail';
+        if (shouldHaveThumb !== currentHasThumb) {
+          // Thumbnail file status changed — update album_art_url
+          this._cachedTrack.album_art_url = shouldHaveThumb ? '/api/thumbnail' : '';
+        }
+      }
       // Update only the progress field (it's interpolated from performance.now())
       const rawPos = d.is_live ? 0 : this.getCompensatedPosition(d);
       const durMs = this._cachedTrack.duration_ms;
@@ -185,6 +200,10 @@ export class DesktopSource {
     // Clamp position to duration (SMTC browser data can overshoot)
     const posMs = durMs > 0 ? Math.min(rawPos, durMs) : rawPos;
 
+    // Check if thumbnail file exists (local-art.ts may have extracted it after SMTC reported no thumb)
+    const thumbPath = path.join(process.env.TEMP || require('os').tmpdir(), 'vybecord_thumb.jpg');
+    const hasThumbFile = d.thumb || (existsSync(thumbPath) && source === 'apple_music');
+
     const track: TrackData = {
       track_id: `desktop:${trackName}:${artistName}`,
       track_name: trackName,
@@ -194,14 +213,14 @@ export class DesktopSource {
       progress_ms: posMs,
       is_playing: true,
       is_live: d.is_live ?? false,
-      album_art_url: d.thumb ? '/api/thumbnail' : '',  // Use SMTC thumbnail if available, else enriched by provider
+      album_art_url: hasThumbFile ? '/api/thumbnail' : '',  // Use SMTC thumbnail if available, else enriched by provider
       spotify_url: '',
       artist_url: '',
       media_source: source,
       is_local: source === 'apple_music' && !d.source_id?.includes('music.apple'),  // Apple Music local files don't have music.apple URLs
       _received_at: performance.now(),
     };
-    this._cachedDataRef = d;
+    this._cachedTrackKey = trackKey;
     this._cachedTrack = track;
     return track;
   }

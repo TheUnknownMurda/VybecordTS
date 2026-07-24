@@ -61,6 +61,7 @@ const PLATFORM_ICONS: Record<string, [string, string]> = {
   bandcamp: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/VVjYzmfdMIF5hHA8SUnbi.gif', 'Bandcamp'],
   youtube_music: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/2Fhe7kDaQIQjvCtdlhlmo.png', 'YouTube Music'],
   youtube: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/2Fhe7kDaQIQjvCtdlhlmo.png', 'YouTube'],
+  kick: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/MUt6rne1YSKthqduqQF4N.jpg', 'Kick'],
   twitch: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/VGmX6BMle1xqCoM7LDX4w.png', 'Twitch'],
   // Browsers (YouTube / web player)
   browser_chrome: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/2Fhe7kDaQIQjvCtdlhlmo.png', 'YouTube'],
@@ -966,9 +967,11 @@ export class LyricsEngine {
     const art = d.album_art_url && d.album_art_url !== '/api/thumbnail' && !isLocalFileImage
       ? d.album_art_url
       : '';
-    // Use platform-specific large image if available (e.g., Kick uses kicklogo.png asset)
+    // Use platform-specific large image if available, but prioritize actual album art for Kick/Twitch
+    // Kick/Twitch use streamer profile pictures as album art, so don't override with platform logo
     const platformLargeImage = PLATFORM_LARGE_IMAGES[source];
-    this.cachedLargeImage = platformLargeImage || art || DEFAULT_ART;
+    const usePlatformLogo = !art && platformLargeImage;
+    this.cachedLargeImage = art || platformLargeImage || DEFAULT_ART;
 
     this.cachedSpotifySearch = platformSearchUrl(source, `${d.artist_name} ${d.track_name}`);
     this.cachedArtistSearch = platformSearchUrl(source, d.artist_name);
@@ -1071,7 +1074,9 @@ export class LyricsEngine {
   private buildActivity(currentText: string, nextText: string): DiscordActivity | null {
     const d = this.trackData!;
     const hasLyrics = this.cfgShowLyrics && this.lyrics.length > 0;
-    const activityType = this.cfgActivityType;
+    // Force Twitch and Kick to always use Listening (type 2)
+    const source = d.media_source || '';
+    const activityType = (source === 'twitch' || source === 'kick') ? 2 : this.cfgActivityType;
 
     // Timestamps (elapsed timer on Discord) — clamp to duration to avoid overflowing the bar
     const nowUnix = Math.floor(Date.now() / 1000);

@@ -16,7 +16,8 @@ import { createLogger } from './logger.js';
 
 const log = createLogger('LocalArt');
 
-const THUMB_PATH = path.join(process.env.TEMP || os.tmpdir(), 'vybecord_thumb.jpg');
+const THUMB_PATH = path.join(process.env.TEMP || os.tmpdir(), 'vybecord_local_art.jpg');
+const SMTC_THUMB_PATH = path.join(process.env.TEMP || os.tmpdir(), 'vybecord_thumb.jpg');
 const AUDIO_EXTS = new Set(['.m4a', '.mp3', '.flac', '.aac', '.alac', '.wav', '.ogg', '.wma', '.aiff']);
 
 // Cache: trackKey → true (art found) / false (no art) / 'pending'
@@ -48,6 +49,7 @@ export async function extractArtFromPath(filePath: string): Promise<boolean> {
     if (pictures && pictures.length > 0) {
       const pic = pictures[0];
       await fs.writeFile(THUMB_PATH, pic.data);
+      await fs.writeFile(SMTC_THUMB_PATH, pic.data);
       log.info(`Extracted art from path: ${path.basename(filePath)} (${pic.data.length} bytes)`);
       return true;
     }
@@ -68,12 +70,13 @@ export async function extractLocalArt(
   albumName: string,
   trackKey: string,
 ): Promise<boolean> {
-  // Check cache
+  // Check cache for negative results (no art found)
   const cached = artCache.get(trackKey);
-  if (cached === true) return true;
   if (cached === false) return false;
   if (cached === 'pending') return false;
 
+  // Always re-extract art (no positive cache) since temp file is shared across tracks
+  // This ensures the temp file always contains the correct art for the current track
   artCache.set(trackKey, 'pending');
 
   try {
@@ -96,6 +99,7 @@ export async function extractLocalArt(
           // Use the first (usually front cover) picture
           const pic = pictures[0];
           await fs.writeFile(THUMB_PATH, pic.data);
+          await fs.writeFile(SMTC_THUMB_PATH, pic.data);
           artCache.set(trackKey, true);
           log.info(`Extracted art from: ${path.basename(filePath)} (${pic.data.length} bytes)`);
           return true;
@@ -119,6 +123,7 @@ export async function extractLocalArt(
           const pictures = metadata.common.picture;
           if (pictures && pictures.length > 0) {
             await fs.writeFile(THUMB_PATH, pictures[0].data);
+            await fs.writeFile(SMTC_THUMB_PATH, pictures[0].data);
             artCache.set(trackKey, true);
             log.info(`Extracted art (retry) from: ${path.basename(filePath)}`);
             return true;

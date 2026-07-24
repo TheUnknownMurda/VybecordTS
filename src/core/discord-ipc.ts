@@ -55,6 +55,10 @@ export class DiscordIPC {
   // Rate limiting: prevent rapid successive SET_ACTIVITY calls (Discord rate limit ~5 calls/5s)
   private lastSetActivityTime = 0;
   private readonly SET_ACTIVITY_COOLDOWN_MS = 200; // Max 5 calls per second
+  // Activity types Discord's IPC actually accepts for third-party Rich
+  // Presence — Streaming(1) and Custom(4) are hard-rejected (error code 4000).
+  private static readonly VALID_ACTIVITY_TYPES = new Set([0, 2, 3, 5]);
+  private loggedInvalidActivityType = false;
 
   constructor(clientId: string) {
     this.clientId = clientId;
@@ -363,7 +367,21 @@ export class DiscordIPC {
 
     // Build the RPC activity object (Discord IPC SET_ACTIVITY format)
     const rpcActivity: Record<string, unknown> = {};
-    if (activity.type != null) rpcActivity.type = activity.type;
+    if (activity.type != null) {
+      let type = activity.type;
+      if (!DiscordIPC.VALID_ACTIVITY_TYPES.has(type)) {
+        // Discord's IPC hard-rejects Streaming(1) and Custom(4) for third-party
+        // Rich Presence (confirmed via error code 4000: "type must be one of
+        // [0, 2, 3, 5]"). Retrying with the same value would just fail forever
+        // and spam the log every ~5s — fall back once, silently after that.
+        if (!this.loggedInvalidActivityType) {
+          log.warn(`Activity type ${type} is rejected by Discord for third-party Rich Presence (only Playing/Listening/Watching/Competing are allowed) — falling back to Listening.`);
+          this.loggedInvalidActivityType = true;
+        }
+        type = 2; // Listening
+      }
+      rpcActivity.type = type;
+    }
     // Discord requires details/state to be at least 2 characters — pad if needed
     if (activity.details) rpcActivity.details = padMin2(sanitize(activity.details));
     if (activity.state) rpcActivity.state = padMin2(sanitize(activity.state));
