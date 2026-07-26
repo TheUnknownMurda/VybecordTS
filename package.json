@@ -30,14 +30,18 @@
     "targets": [
       "node20-win-x64"
     ],
-    "outputPath": "build/VybecordTS"
+    "outputPath": "build/VybecordTS",
+    "win": {
+      "icon": "build/icon.ico"
+    }
   },
   "dependencies": {
     "better-sqlite3": "^12.9.0",
     "dotenv": "^16.4.7",
     "form-data": "^4.0.6",
     "music-metadata": "^11.12.3",
-    "pinyin-pro": "^3.28.1"
+    "pinyin-pro": "^3.28.1",
+    "systray2": "^2.1.4"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

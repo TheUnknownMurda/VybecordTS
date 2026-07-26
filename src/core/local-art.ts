@@ -70,10 +70,18 @@ export async function extractLocalArt(
   albumName: string,
   trackKey: string,
 ): Promise<boolean> {
+  log.info(`[ART] Searching for art: track="${trackName}", artist="${artistName}", album="${albumName}"`);
+
   // Check cache for negative results (no art found)
   const cached = artCache.get(trackKey);
-  if (cached === false) return false;
-  if (cached === 'pending') return false;
+  if (cached === false) {
+    log.debug(`[ART] Cache miss (no art): ${trackKey}`);
+    return false;
+  }
+  if (cached === 'pending') {
+    log.debug(`[ART] Cache pending: ${trackKey}`);
+    return false;
+  }
 
   // Always re-extract art (no positive cache) since temp file is shared across tracks
   // This ensures the temp file always contains the correct art for the current track
@@ -81,6 +89,8 @@ export async function extractLocalArt(
 
   try {
     const musicDirs = getMusicDirs();
+    log.debug(`[ART] Music directories: ${musicDirs.join(', ')}`);
+
     if (!fileIndex) {
       await buildFileIndex(musicDirs);
     }
@@ -89,9 +99,11 @@ export async function extractLocalArt(
     // 1. Exact match on filename containing track name
     // 2. Fuzzy match using artist + track name
     const candidates = findCandidates(trackName, artistName, albumName);
+    log.info(`[ART] Found ${candidates.length} candidate files: ${candidates.map(p => path.basename(p)).join(', ')}`);
 
     for (const filePath of candidates) {
       try {
+        log.debug(`[ART] Trying to extract from: ${path.basename(filePath)}`);
         const parser = await getParseFile();
         const metadata = await parser(filePath, { skipCovers: false });
         const pictures = metadata.common.picture;
@@ -104,8 +116,9 @@ export async function extractLocalArt(
           log.info(`Extracted art from: ${path.basename(filePath)} (${pic.data.length} bytes)`);
           return true;
         }
-      } catch {
+      } catch (e) {
         // File might be locked or corrupt — skip
+        log.debug(`[ART] Failed to extract from ${path.basename(filePath)}: ${e}`);
         continue;
       }
     }
@@ -216,24 +229,53 @@ function findCandidates(track: string, artist: string, album: string): string[] 
 
   const normTrack = normalize(track);
   const normArtist = normalize(artist);
+  const normAlbum = normalize(album);
 
-  // Strategy 1: Direct match on track name
+  // Strategy 1: Exact match on track name (highest priority)
   for (const [key, paths] of fileIndex) {
-    if (key.includes(normTrack) || normTrack.includes(key)) {
+    if (key === normTrack) {
       results.push(...paths);
     }
   }
 
-  // Strategy 2: If too many results, filter by artist in path
-  if (results.length > 5 && normArtist) {
+  // Strategy 2: If no exact match, try contains match on track name
+  if (results.length === 0) {
+    for (const [key, paths] of fileIndex) {
+      if (key.includes(normTrack) || normTrack.includes(key)) {
+        results.push(...paths);
+      }
+    }
+  }
+
+  // Strategy 3: Filter by artist in path (if we have results)
+  if (results.length > 0 && normArtist) {
     const filtered = results.filter(p => {
       const normPath = normalize(p);
       return normPath.includes(normArtist);
     });
-    if (filtered.length > 0) return filtered.slice(0, 5);
+    if (filtered.length > 0) {
+      // If filtering by artist gives results, use them
+      return filtered.slice(0, 5);
+    }
   }
 
-  // Strategy 3: If no results, try matching artist + track combination
+  // Strategy 4: Filter by album in path (if we have results and album name)
+  if (results.length > 0 && normAlbum && normAlbum.length > 3) {
+    const filtered = results.filter(p => {
+      const normPath = normalize(p);
+      return normPath.includes(normAlbum);
+    });
+    if (filtered.length > 0) {
+      return filtered.slice(0, 5);
+    }
+  }
+
+  // Strategy 5: If too many results without artist/album filter, limit to 5
+  if (results.length > 5) {
+    return results.slice(0, 5);
+  }
+
+  // Strategy 6: If still no results, try matching artist + track combination
   if (results.length === 0) {
     for (const [key, paths] of fileIndex) {
       // Check if key contains significant parts of the track name

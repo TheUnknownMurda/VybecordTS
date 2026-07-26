@@ -142,16 +142,14 @@ export class DesktopSource {
 
     // Fast path: same track → return cached TrackData (avoids object alloc every 400ms)
     if (trackKey === this._cachedTrackKey && this._cachedTrack) {
-      // For Apple Music, always check thumbnail file and update album_art_url if needed
-      if (this._cachedTrack.media_source === 'apple_music') {
-        const thumbPath = path.join(process.env.TEMP || require('os').tmpdir(), 'vybecord_thumb.jpg');
-        const hasThumbFile = existsSync(thumbPath);
-        const shouldHaveThumb = hasThumbFile;
-        const currentHasThumb = this._cachedTrack.album_art_url === '/api/thumbnail';
-        if (shouldHaveThumb !== currentHasThumb) {
-          // Thumbnail file status changed — update album_art_url
-          this._cachedTrack.album_art_url = shouldHaveThumb ? '/api/thumbnail' : '';
-        }
+      // Check thumbnail file and update album_art_url if needed (for local music apps)
+      const thumbPath = path.join(process.env.TEMP || require('os').tmpdir(), 'vybecord_thumb.jpg');
+      const hasThumbFile = existsSync(thumbPath);
+      const shouldHaveThumb = hasThumbFile;
+      const currentHasThumb = this._cachedTrack.album_art_url === '/api/thumbnail';
+      if (shouldHaveThumb !== currentHasThumb) {
+        // Thumbnail file status changed — update album_art_url
+        this._cachedTrack.album_art_url = shouldHaveThumb ? '/api/thumbnail' : '';
       }
       // Update only the progress field (it's interpolated from performance.now())
       const rawPos = d.is_live ? 0 : this.getCompensatedPosition(d);
@@ -202,7 +200,7 @@ export class DesktopSource {
 
     // Check if thumbnail file exists (local-art.ts may have extracted it after SMTC reported no thumb)
     const thumbPath = path.join(process.env.TEMP || require('os').tmpdir(), 'vybecord_thumb.jpg');
-    const hasThumbFile = d.thumb || (existsSync(thumbPath) && source === 'apple_music');
+    const hasThumbFile = d.thumb || existsSync(thumbPath);
 
     const track: TrackData = {
       track_id: `desktop:${trackName}:${artistName}`,

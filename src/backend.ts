@@ -70,6 +70,7 @@ const PLATFORM_DISCORD_APP_IDS: Record<string, string> = {
   youtube: '1513868157897412759',
   youtube_music: '1513868157897412759',
   soundcloud: '1513868059948093501',
+  apple_music: '1530715817334018189',
   kick: '1519781115144044636',
   twitch: '1489626057588998164',
   // Default falls back to config discord_app_id or env DISCORD_CLIENT_ID
@@ -1174,6 +1175,8 @@ export class VybecordBackend extends EventEmitter {
   private async onNewTrack(trackData: TrackData): Promise<void> {
     const rpcConfig = this.getRpcConfig();
 
+    log.info(`[NEW TRACK] media_source: ${trackData.media_source}, track: ${trackData.track_name}`);
+
     // Switch Discord App ID based on media source (changes app name in Discord)
     await this.reconnectDiscordForSource(trackData.media_source || '');
 
@@ -1183,11 +1186,13 @@ export class VybecordBackend extends EventEmitter {
     const { signal } = this.fetchAbort;
 
     // Phase 0: Extract embedded album art from local files (Apple Music, Spotify local files, etc.)
-    // SMTC often doesn't provide thumbnails for local music files.
+    // SMTC often doesn't provide thumbnails for local music files, or provides incorrect ones.
     // Spotify local files have spotify:localfileimage: URIs that Discord can't access.
     const isLocalMusicApp = trackData.media_source === 'apple_music' || trackData.media_source === 'groove_music';
     const isSpotifyLocalUrl = trackData.album_art_url?.startsWith('spotify:localfileimage:');
-    const needsLocalArtExtraction = (isLocalMusicApp && !trackData.album_art_url) || isSpotifyLocalUrl;
+    // For Apple Music, always try local art extraction even if SMTC provides a thumbnail
+    // (SMTC thumbnails are often incorrect for local files)
+    const needsLocalArtExtraction = isLocalMusicApp || isSpotifyLocalUrl;
 
     if (needsLocalArtExtraction) {
       let artFound = false;
@@ -1204,7 +1209,7 @@ export class VybecordBackend extends EventEmitter {
         }
       }
 
-      // Fallback: search in Music directories
+      // Fallback: search in Music directories (for Apple Music local files)
       if (!artFound) {
         artFound = await extractLocalArt(
           trackData.track_name, trackData.artist_name,
@@ -1214,9 +1219,11 @@ export class VybecordBackend extends EventEmitter {
 
       if (artFound) {
         trackData.album_art_url = '/api/thumbnail';
-        log.info(`[ART] Extracted local art for: ${trackData.track_name}`);
+        log.info(`[ART] Extracted local art for: ${trackData.track_name} (replacing SMTC thumbnail)`);
       } else if (isSpotifyLocalUrl) {
         log.debug(`[ART] No local art found for Spotify local file: ${trackData.track_name}`);
+      } else {
+        log.debug(`[ART] No local art found, will use SMTC thumbnail if available`);
       }
     }
 
@@ -1715,10 +1722,16 @@ export class VybecordBackend extends EventEmitter {
   private async reconnectDiscordForSource(source: string): Promise<void> {
     const platformAppId = PLATFORM_DISCORD_APP_IDS[source];
     const defaultAppId = this.config.get('discord_app_id') || process.env.DISCORD_CLIENT_ID || '';
+    // Always prefer platform-specific AppID over default
     const targetAppId = platformAppId || defaultAppId;
 
+    log.debug(`[DISCORD] Source: ${source}, Platform AppID: ${platformAppId || 'none'}, Target AppID: ${targetAppId}, Current AppID: ${this.currentDiscordAppId}`);
+
     // No change needed
-    if (targetAppId === this.currentDiscordAppId) return;
+    if (targetAppId === this.currentDiscordAppId) {
+      log.debug(`[DISCORD] No AppID change needed for ${source}`);
+      return;
+    }
 
     log.info(`[DISCORD] Switching App ID for ${source}: ${this.currentDiscordAppId || 'default'} → ${targetAppId}`);
 

@@ -16,6 +16,38 @@ import { WebServer } from './web/server.js';
 const log = createLogger('Main');
 const startTime = Date.now();
 
+// ── System Tray Setup ──
+async function setupTray(): Promise<void> {
+  try {
+    // Only hide console if VYBECORD_TRAY_MODE is set (for start-hidden mode)
+    // The tray icon is now launched by run.bat separately
+    if (process.platform === 'win32' && process.env.VYBECORD_TRAY_MODE === '1') {
+      try {
+        const psScript = `
+          Add-Type -Name Window -Namespace Console -MemberDefinition '
+            [DllImport("user32.dll")]
+            public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+            [DllImport("kernel32.dll")]
+            public static extern IntPtr GetConsoleWindow();
+          '
+          $consoleWindow = [Console.Window]::GetConsoleWindow()
+          if ($consoleWindow -ne [IntPtr]::Zero) {
+            [Console.Window]::ShowWindow($consoleWindow, 0) # 0 = SW_HIDE
+          }
+        `;
+        exec(`powershell.exe -WindowStyle Hidden -Command "${psScript.replace(/\n/g, ' ')}"`, (err) => {
+          if (err) log.debug(`Could not hide console: ${err.message}`);
+        });
+        log.info('Console hidden - app running in background ✓');
+      } catch (e) {
+        log.debug(`Could not hide console: ${e}`);
+      }
+    }
+  } catch (e) {
+    log.warn(`Could not setup system tray: ${e}`);
+  }
+}
+
 // ── Resolve working directory ──
 // When packaged with pkg, use the exe's directory so config/db are found next to it
 const IS_PKG = !!(process as unknown as { pkg?: unknown }).pkg;
@@ -77,6 +109,9 @@ async function main() {
   backend.on('shutdownRequested', onExit);
 
   try {
+    // Setup system tray/console hiding before starting backend
+    await setupTray();
+    
     await backend.start();
     web.start();
     log.info(`VybecordTS ready in ${Date.now() - startTime}ms ✓ — press Ctrl+C to stop`);
