@@ -767,6 +767,11 @@ export class VybecordBackend extends EventEmitter {
         if (this.spicetify.isPaused && !this.currentTrack) {
           this.onTrackStopped();
         }
+        // Spicetify is paused — ensure Discord presence stays cleared
+        // This prevents other sources from re-establishing presence during pause
+        if (this.spicetify.isPaused && this.config.get('rpc_only_when_playing')) {
+          this.setIdlePresence();
+        }
         return;
       }
 
@@ -1125,6 +1130,10 @@ export class VybecordBackend extends EventEmitter {
       this.emit('trackUpdate', null);
       this.lastLyricsState = null;
       this.emit('lyricsUpdate', { current: '', next: '', prev: '' });
+    } else {
+      // Even if no current track, ensure Discord presence is cleared
+      // This handles cases where pause was detected but track was already null
+      this.setIdlePresence();
     }
   }
 

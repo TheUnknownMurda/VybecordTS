@@ -9,8 +9,9 @@
  *
  * Setup:
  *   1. Download the latest .sqlite3 dump from https://lrclib.net/db-dumps
- *   2. Place it in the project root (any lrclib*.sqlite3 filename is auto-detected)
+ *   2. Place it in "LRCLIB Dump/db.sqlite3" folder
  *   3. The module auto-detects and opens it on startup
+ *   4. Custom lyrics are stored in a separate database for persistence
  */
 
 import Database from 'better-sqlite3';
@@ -28,10 +29,16 @@ const log = createLogger('LocalDB');
 
 const DB_FILENAMES = ['lrclib.db', 'lrclib.sqlite3', 'lrclib-db-dump.sqlite3'];
 const GZ_PATTERN = /^lrclib.*\.sqlite3\.gz$/i;
+const LRCLIB_DUMP_FOLDER = 'LRCLIB Dump';
+const LRCLIB_DUMP_FILE = 'db.sqlite3';
 
-let db: Database.Database | null = null;
+// LRCLIB dump database (read-only, large database)
+let lrclibDb: Database.Database | null = null;
 let stmtExact: Database.Statement | null = null;
 let stmtFuzzy: Database.Statement | null = null;
+
+// Custom lyrics database (read-write, user-imported lyrics)
+let customDb: Database.Database | null = null;
 let stmtCustomExact: Database.Statement | null = null;
 let stmtInsertLyrics: Database.Statement | null = null;
 let stmtInsertTrack: Database.Statement | null = null;
@@ -42,71 +49,67 @@ let stmtFindTrackByUnique: Database.Statement | null = null;
 
 /**
  * Initialize the local lyrics database.
- * Scans for known filenames in `baseDir`.
- * If only a .gz compressed dump is found, decompresses it first.
- * Returns true if a database was found and opened.
+ * Loads two databases:
+ * 1. LRCLIB dump from "LRCLIB Dump/db.sqlite3" (read-only, large database)
+ * 2. Custom lyrics database from config directory (read-write, user-imported lyrics)
+ * Returns true if at least one database was successfully opened.
  */
 export async function initLocalDb(baseDir: string): Promise<boolean> {
-  log.debug('initLocalDb: Checking for existing .sqlite3 files...');
-  // Check for ready-to-use .sqlite3 files first
-  for (const name of DB_FILENAMES) {
-    const dbPath = path.join(baseDir, name);
-    log.debug(`initLocalDb: Checking ${dbPath}...`);
-    if (fs.existsSync(dbPath)) {
-      log.debug(`initLocalDb: Found existing DB: ${dbPath}`);
-      return openDb(dbPath);
+  let lrclibLoaded = false;
+  let customLoaded = false;
+
+  // Try to load LRCLIB dump from specific folder
+  const lrclibDumpPath = path.join(baseDir, LRCLIB_DUMP_FOLDER, LRCLIB_DUMP_FILE);
+  log.debug(`initLocalDb: Checking for LRCLIB dump at ${lrclibDumpPath}...`);
+  
+  if (fs.existsSync(lrclibDumpPath)) {
+    log.debug(`initLocalDb: Found LRCLIB dump: ${lrclibDumpPath}`);
+    lrclibLoaded = openLrclibDb(lrclibDumpPath);
+  } else {
+    log.debug(`initLocalDb: LRCLIB dump not found at ${lrclibDumpPath}`);
+    // Fallback: check for lrclib files in root directory (backward compatibility)
+    for (const name of DB_FILENAMES) {
+      const dbPath = path.join(baseDir, name);
+      if (fs.existsSync(dbPath)) {
+        log.debug(`initLocalDb: Found legacy LRCLIB file: ${dbPath}`);
+        lrclibLoaded = openLrclibDb(dbPath);
+        break;
+      }
+    }
+    
+    if (!lrclibLoaded) {
+      // Check for any lrclib*.sqlite3 file
+      try {
+        const files = fs.readdirSync(baseDir);
+        const sqliteFile = files.find(f => /^lrclib.*\.sqlite3$/i.test(f) && !f.endsWith('.gz'));
+        if (sqliteFile) {
+          log.debug(`initLocalDb: Found lrclib*.sqlite3 file: ${sqliteFile}`);
+          lrclibLoaded = openLrclibDb(path.join(baseDir, sqliteFile));
+        }
+      } catch (e) {
+        log.debug(`initLocalDb: Error scanning for sqlite files: ${e}`);
+      }
     }
   }
 
-  log.debug('initLocalDb: Scanning for any lrclib*.sqlite3 files...');
-  // No exact-name match — scan for any lrclib*.sqlite3 file (e.g. dated dumps)
-  try {
-    const files = fs.readdirSync(baseDir);
-    log.debug(`initLocalDb: Found ${files.length} files in directory`);
-    const sqliteFile = files.find(f => /^lrclib.*\.sqlite3$/i.test(f) && !f.endsWith('.gz'));
-    if (sqliteFile) {
-      log.debug(`initLocalDb: Found lrclib*.sqlite3 file: ${sqliteFile}`);
-      return openDb(path.join(baseDir, sqliteFile));
-    }
-  } catch (e) {
-    log.debug(`initLocalDb: Error scanning for sqlite files: ${e}`);
+  // Always create/load custom lyrics database
+  const customDbPath = path.join(baseDir, 'lrclib-custom.sqlite3');
+  if (fs.existsSync(customDbPath)) {
+    log.debug(`initLocalDb: Found existing custom DB: ${customDbPath}`);
+    customLoaded = openCustomDb(customDbPath);
+  } else {
+    log.info('Creating new custom lyrics database for user imports');
+    customLoaded = createEmptyCustomDb(customDbPath);
   }
 
-  log.debug('initLocalDb: Looking for .gz dumps to decompress...');
-  // Still nothing — look for .gz dumps to decompress
-  try {
-    const files = fs.readdirSync(baseDir);
-    const gzFile = files.find(f => GZ_PATTERN.test(f));
-    if (gzFile) {
-      log.debug(`initLocalDb: Found .gz file: ${gzFile}`);
-      const gzPath = path.join(baseDir, gzFile);
-      const outName = gzFile.replace(/\.gz$/i, '');
-      const outPath = path.join(baseDir, outName);
-
-      log.info(`Decompressing ${gzFile} → ${outName} (this may take a few minutes on first run)...`);
-      await Promise.race([
-        pipeline(
-          createReadStream(gzPath),
-          createGunzip(),
-          createWriteStream(outPath),
-        ),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Decompression timeout (60s)')), 60000))
-      ]);
-      log.info(`Decompression complete: ${outName}`);
-      return openDb(outPath);
-    }
-  } catch (e) {
-    log.warn(`Failed to decompress .gz dump: ${e}`);
-  }
-
-  // No LRCLib dump found — create a minimal empty DB so custom lyrics import still works
-  log.info('No LRCLib dump found — creating empty local DB for custom lyrics');
-  const emptyPath = path.join(baseDir, 'lrclib-custom.sqlite3');
-  return createEmptyDb(emptyPath);
+  const totalLoaded = (lrclibLoaded ? 1 : 0) + (customLoaded ? 1 : 0);
+  log.info(`Database initialization complete: LRCLIB dump (${lrclibLoaded ? 'loaded' : 'not found'}), Custom DB (${customLoaded ? 'loaded' : 'failed'})`);
+  
+  return totalLoaded > 0;
 }
 
-/** Create a minimal empty database with the LRCLib-compatible schema. */
-function createEmptyDb(dbPath: string): boolean {
+/** Create a minimal empty database for custom lyrics with the LRCLib-compatible schema. */
+function createEmptyCustomDb(dbPath: string): boolean {
   try {
     const newDb = new Database(dbPath);
     newDb.exec(`
@@ -140,41 +143,26 @@ function createEmptyDb(dbPath: string): boolean {
       );
     `);
     newDb.close();
-    log.info(`Created empty local DB: ${dbPath}`);
-    return openDb(dbPath);
+    log.info(`Created empty custom DB: ${dbPath}`);
+    return openCustomDb(dbPath);
   } catch (e) {
-    log.warn(`Failed to create empty DB: ${e}`);
+    log.warn(`Failed to create empty custom DB: ${e}`);
     return false;
   }
 }
 
-/** Open and prepare the SQLite database. */
-function openDb(dbPath: string): boolean {
-  log.debug(`openDb: Opening database at ${dbPath}...`);
+/** Open and prepare the LRCLIB dump database (read-only). */
+function openLrclibDb(dbPath: string): boolean {
+  log.debug(`openLrclibDb: Opening LRCLIB dump at ${dbPath}...`);
   try {
-    db = new Database(dbPath, { readonly: false, fileMustExist: true });
-    log.debug('openDb: Database opened, setting pragmas...');
+    lrclibDb = new Database(dbPath, { readonly: true, fileMustExist: true });
+    log.debug('openLrclibDb: LRCLIB dump opened, setting pragmas...');
     
-    // Disable foreign key constraints to allow deletion of custom lyrics
-    db.pragma('foreign_keys = OFF');
-    
-    // Set pragmas with timeout to prevent hanging on large databases
-    try {
-      db.pragma('journal_mode = WAL', { simple: true });  // Allow concurrent reads + writes (custom lyrics import)
-    } catch (e) {
-      log.warn(`Failed to set journal_mode to WAL: ${e}. Continuing without WAL mode.`);
-    }
-    db.pragma('cache_size = -64000'); // 64MB page cache for fast reads
+    // Set pragmas for read-only performance
+    lrclibDb.pragma('cache_size = -64000'); // 64MB page cache for fast reads
 
-    // Migrate: add source column if the LRCLIB dump predates custom-lyrics support
-    try { db.exec(`ALTER TABLE lyrics ADD COLUMN source TEXT DEFAULT 'lrclib'`); } catch { /* already exists */ }
-    try { db.exec(`ALTER TABLE lyrics ADD COLUMN created_at TEXT`); } catch { /* already exists */ }
-    try { db.exec(`ALTER TABLE lyrics ADD COLUMN updated_at TEXT`); } catch { /* already exists */ }
-
-    // Prepare reusable statements (much faster than ad-hoc queries)
-    // Actual schema: tracks(name, name_lower, artist_name, artist_name_lower, duration, last_lyrics_id)
-    //                lyrics(id, synced_lyrics, has_synced_lyrics, track_id)
-    stmtExact = db.prepare(`
+    // Prepare reusable statements for LRCLIB dump queries
+    stmtExact = lrclibDb.prepare(`
       SELECT l.synced_lyrics, t.duration
       FROM tracks t
       JOIN lyrics l ON l.id = t.last_lyrics_id
@@ -189,7 +177,7 @@ function openDb(dbPath: string): boolean {
       LIMIT 5
     `);
 
-    stmtFuzzy = db.prepare(`
+    stmtFuzzy = lrclibDb.prepare(`
       SELECT t.name AS track_name, t.artist_name, t.album_name, t.duration, l.synced_lyrics
       FROM tracks_fts fts
       JOIN tracks t ON t.id = fts.rowid
@@ -201,7 +189,41 @@ function openDb(dbPath: string): boolean {
       LIMIT 20
     `);
 
-    stmtCustomExact = db.prepare(`
+    const count = (lrclibDb.prepare('SELECT COUNT(*) as c FROM tracks').get() as { c: number })?.c ?? 0;
+    log.info(`Opened LRCLIB dump: ${dbPath} (${(count / 1_000_000).toFixed(1)}M tracks)`);
+    return true;
+  } catch (e) {
+    log.warn(`Failed to open LRCLIB dump ${dbPath}: ${e}`);
+    lrclibDb = null;
+    return false;
+  }
+}
+
+/** Open and prepare the custom lyrics database (read-write). */
+function openCustomDb(dbPath: string): boolean {
+  log.debug(`openCustomDb: Opening custom DB at ${dbPath}...`);
+  try {
+    customDb = new Database(dbPath, { readonly: false, fileMustExist: true });
+    log.debug('openCustomDb: Custom DB opened, setting pragmas...');
+    
+    // Disable foreign key constraints to allow deletion of custom lyrics
+    customDb.pragma('foreign_keys = OFF');
+    
+    // Set pragmas with timeout to prevent hanging on large databases
+    try {
+      customDb.pragma('journal_mode = WAL', { simple: true });  // Allow concurrent reads + writes (custom lyrics import)
+    } catch (e) {
+      log.warn(`Failed to set journal_mode to WAL: ${e}. Continuing without WAL mode.`);
+    }
+    customDb.pragma('cache_size = -64000'); // 64MB page cache for fast reads
+
+    // Migrate: add source column if the database predates custom-lyrics support
+    try { customDb.exec(`ALTER TABLE lyrics ADD COLUMN source TEXT DEFAULT 'custom'`); } catch { /* already exists */ }
+    try { customDb.exec(`ALTER TABLE lyrics ADD COLUMN created_at TEXT`); } catch { /* already exists */ }
+    try { customDb.exec(`ALTER TABLE lyrics ADD COLUMN updated_at TEXT`); } catch { /* already exists */ }
+
+    // Prepare reusable statements for custom lyrics queries
+    stmtCustomExact = customDb.prepare(`
       SELECT l.synced_lyrics, t.duration
       FROM tracks t
       JOIN lyrics l ON l.id = t.last_lyrics_id
@@ -220,41 +242,41 @@ function openDb(dbPath: string): boolean {
     `);
 
     // Prepare write statements for insertCustomLyrics (reusable)
-    stmtInsertLyrics = db.prepare(`
+    stmtInsertLyrics = customDb.prepare(`
       INSERT INTO lyrics (plain_lyrics, synced_lyrics, track_id, has_plain_lyrics, has_synced_lyrics, instrumental, source, created_at, updated_at)
       VALUES (NULL, ?, NULL, 0, 1, 0, 'custom', ?, ?)
     `);
-    stmtInsertTrack = db.prepare(`
+    stmtInsertTrack = customDb.prepare(`
       INSERT INTO tracks (name, name_lower, artist_name, artist_name_lower, album_name, album_name_lower, duration, last_lyrics_id, created_at, updated_at)
       VALUES (?, lower(?), ?, lower(?), ?, lower(?), ?, ?, ?, ?)
     `);
-    stmtUpdateTrack = db.prepare(`
+    stmtUpdateTrack = customDb.prepare(`
       UPDATE tracks SET last_lyrics_id = ?, updated_at = ?
       WHERE name_lower = lower(?) AND artist_name_lower = lower(?) AND album_name_lower = lower(?) AND duration = ?
     `);
-    stmtFindTrackByUnique = db.prepare(`
+    stmtFindTrackByUnique = customDb.prepare(`
       SELECT id FROM tracks
       WHERE name_lower = lower(?) AND artist_name_lower = lower(?) AND album_name_lower = lower(?) AND duration = ?
     `);
-    stmtInsertFts = db.prepare(`
+    stmtInsertFts = customDb.prepare(`
       INSERT INTO tracks_fts (rowid, name_lower, album_name_lower, artist_name_lower)
       VALUES (?, lower(?), lower(?), lower(?))
     `);
-    stmtBacklinkLyrics = db.prepare('UPDATE lyrics SET track_id = ? WHERE id = ?');
+    stmtBacklinkLyrics = customDb.prepare('UPDATE lyrics SET track_id = ? WHERE id = ?');
 
-    const count = (db.prepare('SELECT COUNT(*) as c FROM tracks').get() as { c: number })?.c ?? 0;
-    log.info(`Opened local LRCLib database: ${dbPath} (${(count / 1_000_000).toFixed(1)}M tracks)`);
+    const count = (customDb.prepare('SELECT COUNT(*) as c FROM tracks').get() as { c: number })?.c ?? 0;
+    log.info(`Opened custom lyrics DB: ${dbPath} (${count} custom tracks)`);
     return true;
   } catch (e) {
-    log.warn(`Failed to open local DB ${dbPath}: ${e}`);
-    db = null;
+    log.warn(`Failed to open custom DB ${dbPath}: ${e}`);
+    customDb = null;
     return false;
   }
 }
 
-/** Check if local DB is available. */
+/** Check if local DB is available (either LRCLIB dump or custom DB). */
 export function hasLocalDb(): boolean {
-  return db !== null;
+  return lrclibDb !== null || customDb !== null;
 }
 
 interface LocalRow {
@@ -267,8 +289,9 @@ interface LocalRow {
 
 /**
  * Search the local LRCLib database for synced lyrics.
- * Phase 1: exact match on track_name + artist_name.
- * Phase 2: LIKE fuzzy on track_name if exact fails.
+ * Phase 0: Custom-imported lyrics (highest priority)
+ * Phase 1: Exact match on track_name + artist_name from LRCLIB dump
+ * Phase 2: LIKE fuzzy on track name if exact fails
  * Returns parsed LyricLine[] or null.
  */
 export function searchLocalDb(
@@ -276,11 +299,9 @@ export function searchLocalDb(
   artistName: string,
   durationSec: number | undefined,
 ): LyricLine[] | null {
-  if (!db || !stmtExact || !stmtFuzzy) return null;
-
   try {
     // Phase 0: Custom-imported lyrics always take priority (no duration filtering)
-    if (stmtCustomExact) {
+    if (customDb && stmtCustomExact) {
       const customRows = stmtCustomExact.all(trackName, artistName, artistName, artistName) as LocalRow[];
       if (customRows.length > 0) {
         const lines = parseLrc(customRows[0].synced_lyrics);
@@ -291,44 +312,48 @@ export function searchLocalDb(
       }
     }
 
-    // Phase 1: Exact match (artist + track)
-    const exactRows = stmtExact.all(trackName, artistName) as LocalRow[];
-    log.debug(`[LOCAL] Exact query returned ${exactRows.length} rows for "${trackName}" by "${artistName}"`);
-    const exactResult = pickBestRow(exactRows, durationSec);
-    if (exactResult) {
-      log.info(`[LOCAL] Exact match for "${trackName}" (${exactResult.length} lines)`);
-      return exactResult;
+    // Phase 1: Exact match (artist + track) from LRCLIB dump
+    if (lrclibDb && stmtExact) {
+      const exactRows = stmtExact.all(trackName, artistName) as LocalRow[];
+      log.debug(`[LOCAL] Exact query returned ${exactRows.length} rows for "${trackName}" by "${artistName}"`);
+      const exactResult = pickBestRow(exactRows, durationSec);
+      if (exactResult) {
+        log.info(`[LOCAL] Exact match for "${trackName}" (${exactResult.length} lines)`);
+        return exactResult;
+      }
     }
 
-    // Phase 2: FTS5 fuzzy on track name (handles slight name differences)
-    // Escape double quotes in track name and wrap as FTS5 phrase
-    const ftsQuery = '"' + trackName.replace(/"/g, '""') + '"';
-    const fuzzyRows = stmtFuzzy.all(ftsQuery) as LocalRow[];
-    log.debug(`[LOCAL] FTS query returned ${fuzzyRows.length} rows for "${trackName}"`);
-    if (fuzzyRows.length > 0) {
-      // Filter by artist similarity using proper string similarity scoring
-      const MIN_ARTIST_SIM = 0.50;
-      const artistLow = artistName.toLowerCase();
-      const artistFiltered = fuzzyRows.filter(r => {
-        const candArtist = (r.artist_name ?? '').toLowerCase();
-        // Check full similarity + primary artist (before comma/&)
-        const primaryCand = candArtist.split(/[,]/)[0].trim();
-        const sim = Math.max(
-          similarity(artistLow, candArtist),
-          similarity(artistLow, primaryCand),
-        );
-        return sim >= MIN_ARTIST_SIM;
-      });
+    // Phase 2: FTS5 fuzzy on track name (handles slight name differences) from LRCLIB dump
+    if (lrclibDb && stmtFuzzy) {
+      // Escape double quotes in track name and wrap as FTS5 phrase
+      const ftsQuery = '"' + trackName.replace(/"/g, '""') + '"';
+      const fuzzyRows = stmtFuzzy.all(ftsQuery) as LocalRow[];
+      log.debug(`[LOCAL] FTS query returned ${fuzzyRows.length} rows for "${trackName}"`);
+      if (fuzzyRows.length > 0) {
+        // Filter by artist similarity using proper string similarity scoring
+        const MIN_ARTIST_SIM = 0.50;
+        const artistLow = artistName.toLowerCase();
+        const artistFiltered = fuzzyRows.filter(r => {
+          const candArtist = (r.artist_name ?? '').toLowerCase();
+          // Check full similarity + primary artist (before comma/&)
+          const primaryCand = candArtist.split(/[,]/)[0].trim();
+          const sim = Math.max(
+            similarity(artistLow, candArtist),
+            similarity(artistLow, primaryCand),
+          );
+          return sim >= MIN_ARTIST_SIM;
+        });
 
-      // Never fall back to unfiltered results — wrong artist = wrong lyrics
-      if (artistFiltered.length > 0) {
-        const fuzzyResult = pickBestRow(artistFiltered, durationSec);
-        if (fuzzyResult) {
-          log.info(`[LOCAL] Fuzzy match for "${trackName}" by "${artistName}" (${fuzzyResult.length} lines)`);
-          return fuzzyResult;
+        // Never fall back to unfiltered results — wrong artist = wrong lyrics
+        if (artistFiltered.length > 0) {
+          const fuzzyResult = pickBestRow(artistFiltered, durationSec);
+          if (fuzzyResult) {
+            log.info(`[LOCAL] Fuzzy match for "${trackName}" by "${artistName}" (${fuzzyResult.length} lines)`);
+            return fuzzyResult;
+          }
+        } else if (fuzzyRows.length > 0) {
+          log.debug(`[LOCAL] Fuzzy candidates found for "${trackName}" but no artist match (need ≥${MIN_ARTIST_SIM})`);
         }
-      } else if (fuzzyRows.length > 0) {
-        log.debug(`[LOCAL] Fuzzy candidates found for "${trackName}" but no artist match (need ≥${MIN_ARTIST_SIM})`);
       }
     }
   } catch (e) {
@@ -390,8 +415,8 @@ export interface ExistingLyricsMatch {
 export function findExistingCustomLyrics(
   trackName: string, artistName: string, albumName: string, durationSec?: number,
 ): ExistingLyricsMatch | null {
-  if (!db || durationSec === undefined || durationSec === null) return null;
-  const row = db.prepare(`
+  if (!customDb || durationSec === undefined || durationSec === null) return null;
+  const row = customDb.prepare(`
     SELECT t.id as id, t.updated_at as updatedAt, l.synced_lyrics as syncedLyrics
     FROM tracks t
     JOIN lyrics l ON l.id = t.last_lyrics_id
@@ -409,13 +434,13 @@ export function insertCustomLyrics(
   durationSec: number | undefined,
   syncedLyrics: string,
 ): number {
-  if (!db || !stmtInsertLyrics || !stmtInsertTrack || !stmtUpdateTrack || !stmtFindTrackByUnique || !stmtInsertFts || !stmtBacklinkLyrics) {
-    throw new Error('Local DB not initialized');
+  if (!customDb || !stmtInsertLyrics || !stmtInsertTrack || !stmtUpdateTrack || !stmtFindTrackByUnique || !stmtInsertFts || !stmtBacklinkLyrics) {
+    throw new Error('Custom DB not initialized');
   }
 
   const now = new Date().toISOString();
 
-  const tx = db.transaction(() => {
+  const tx = customDb.transaction(() => {
     // Check if track already exists
     const existingTrack = stmtFindTrackByUnique!.get(
       trackName, artistName, albumName, durationSec ?? null
@@ -472,7 +497,7 @@ export interface CustomLyricsEntry {
  * Only returns entries with source = 'custom'.
  */
 export function listCustomLyrics(limit = 100, offset = 0, search?: string): { entries: CustomLyricsEntry[]; total: number } {
-  if (!db) return { entries: [], total: 0 };
+  if (!customDb) return { entries: [], total: 0 };
 
   try {
     let countSql = `SELECT COUNT(*) as c FROM lyrics l JOIN tracks t ON t.last_lyrics_id = l.id WHERE l.source = 'custom'`;
@@ -493,8 +518,8 @@ export function listCustomLyrics(limit = 100, offset = 0, search?: string): { en
 
     querySql += ` ORDER BY l.created_at DESC LIMIT ? OFFSET ?`;
 
-    const total = (db.prepare(countSql).get(...params) as { c: number })?.c ?? 0;
-    const rows = db.prepare(querySql).all(...params, limit, offset) as CustomLyricsEntry[];
+    const total = (customDb.prepare(countSql).get(...params) as { c: number })?.c ?? 0;
+    const rows = customDb.prepare(querySql).all(...params, limit, offset) as CustomLyricsEntry[];
     return { entries: rows, total };
   } catch (e) {
     log.warn(`[LOCAL] listCustomLyrics error: ${e}`);
@@ -506,9 +531,9 @@ export function listCustomLyrics(limit = 100, offset = 0, search?: string): { en
  * Get a single custom lyrics entry by track ID.
  */
 export function getCustomLyrics(trackId: number): CustomLyricsEntry | null {
-  if (!db) return null;
+  if (!customDb) return null;
   try {
-    const row = db.prepare(`
+    const row = customDb.prepare(`
       SELECT t.id AS track_id, l.id AS lyrics_id, t.name AS track_name, t.artist_name, t.album_name, t.duration, l.synced_lyrics, l.created_at
       FROM tracks t
       JOIN lyrics l ON l.id = t.last_lyrics_id
@@ -525,12 +550,12 @@ export function getCustomLyrics(trackId: number): CustomLyricsEntry | null {
  * Update an existing custom lyrics entry.
  */
 export function updateCustomLyrics(trackId: number, data: { track_name?: string; artist_name?: string; album_name?: string; duration?: number | null; synced_lyrics?: string }): boolean {
-  if (!db) return false;
+  if (!customDb) return false;
   try {
     const now = new Date().toISOString();
-    const tx = db.transaction(() => {
+    const tx = customDb.transaction(() => {
       // Get current lyrics ID
-      const row = db!.prepare('SELECT last_lyrics_id FROM tracks WHERE id = ?').get(trackId) as { last_lyrics_id: number } | undefined;
+      const row = customDb!.prepare('SELECT last_lyrics_id FROM tracks WHERE id = ?').get(trackId) as { last_lyrics_id: number } | undefined;
       if (!row) return false;
 
       // Update track metadata
@@ -543,19 +568,19 @@ export function updateCustomLyrics(trackId: number, data: { track_name?: string;
         if (data.duration !== undefined) { sets.push('duration = ?'); vals.push(data.duration); }
         sets.push('updated_at = ?'); vals.push(now);
         vals.push(trackId);
-        db!.prepare(`UPDATE tracks SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
+        customDb!.prepare(`UPDATE tracks SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
 
         // Update FTS index
         try {
-          db!.prepare('DELETE FROM tracks_fts WHERE rowid = ?').run(trackId);
-          const t = db!.prepare('SELECT name, album_name, artist_name FROM tracks WHERE id = ?').get(trackId) as { name: string; album_name: string; artist_name: string };
-          if (t) db!.prepare('INSERT INTO tracks_fts (rowid, name_lower, album_name_lower, artist_name_lower) VALUES (?, lower(?), lower(?), lower(?))').run(trackId, t.name, t.album_name, t.artist_name);
+          customDb!.prepare('DELETE FROM tracks_fts WHERE rowid = ?').run(trackId);
+          const t = customDb!.prepare('SELECT name, album_name, artist_name FROM tracks WHERE id = ?').get(trackId) as { name: string; album_name: string; artist_name: string };
+          if (t) customDb!.prepare('INSERT INTO tracks_fts (rowid, name_lower, album_name_lower, artist_name_lower) VALUES (?, lower(?), lower(?), lower(?))').run(trackId, t.name, t.album_name, t.artist_name);
         } catch { /* FTS update is best-effort */ }
       }
 
       // Update lyrics content
       if (data.synced_lyrics !== undefined) {
-        db!.prepare('UPDATE lyrics SET synced_lyrics = ?, updated_at = ? WHERE id = ?').run(data.synced_lyrics, now, row.last_lyrics_id);
+        customDb!.prepare('UPDATE lyrics SET synced_lyrics = ?, updated_at = ? WHERE id = ?').run(data.synced_lyrics, now, row.last_lyrics_id);
       }
 
       return true;
@@ -573,11 +598,11 @@ export function updateCustomLyrics(trackId: number, data: { track_name?: string;
  * Delete a custom lyrics entry by track ID.
  */
 export function deleteCustomLyrics(trackId: number): boolean {
-  if (!db) return false;
+  if (!customDb) return false;
   try {
     log.info(`[LOCAL] Attempting to delete custom lyrics track #${trackId}`);
     
-    const row = db.prepare(`
+    const row = customDb.prepare(`
       SELECT t.last_lyrics_id, l.source 
       FROM tracks t
       JOIN lyrics l ON l.id = t.last_lyrics_id
@@ -599,21 +624,21 @@ export function deleteCustomLyrics(trackId: number): boolean {
     
     // Step-by-step deletion with logging
     log.info(`[LOCAL] Step 1: Clearing last_lyrics_id reference`);
-    db.prepare('UPDATE tracks SET last_lyrics_id = NULL WHERE id = ?').run(trackId);
+    customDb.prepare('UPDATE tracks SET last_lyrics_id = NULL WHERE id = ?').run(trackId);
     
     log.info(`[LOCAL] Step 2: Clearing track_id in lyrics`);
-    db.prepare('UPDATE lyrics SET track_id = NULL WHERE id = ?').run(row.last_lyrics_id);
+    customDb.prepare('UPDATE lyrics SET track_id = NULL WHERE id = ?').run(row.last_lyrics_id);
     
     log.info(`[LOCAL] Step 3: Deleting FTS entry`);
-    try { db.prepare('DELETE FROM tracks_fts WHERE rowid = ?').run(trackId); } catch (e) { 
+    try { customDb.prepare('DELETE FROM tracks_fts WHERE rowid = ?').run(trackId); } catch (e) { 
       log.debug(`[LOCAL] FTS deletion failed (non-critical): ${e}`); 
     }
     
     log.info(`[LOCAL] Step 4: Deleting lyrics`);
-    db.prepare('DELETE FROM lyrics WHERE id = ?').run(row.last_lyrics_id);
+    customDb.prepare('DELETE FROM lyrics WHERE id = ?').run(row.last_lyrics_id);
     
     log.info(`[LOCAL] Step 5: Deleting track`);
-    db.prepare('DELETE FROM tracks WHERE id = ?').run(trackId);
+    customDb.prepare('DELETE FROM tracks WHERE id = ?').run(trackId);
     
     log.info(`[LOCAL] Successfully deleted custom lyrics track #${trackId}`);
     return true;
@@ -623,20 +648,30 @@ export function deleteCustomLyrics(trackId: number): boolean {
   }
 }
 
-/** Close the database connection. */
+/** Close the database connections. */
 export function closeLocalDb(): void {
-  if (db) {
-    try { db.close(); } catch { /* ignore */ }
-    db = null;
-    stmtExact = null;
-    stmtFuzzy = null;
-    stmtCustomExact = null;
-    stmtInsertLyrics = null;
-    stmtInsertTrack = null;
-    stmtUpdateTrack = null;
-    stmtInsertFts = null;
-    stmtBacklinkLyrics = null;
-    stmtFindTrackByUnique = null;
-    log.info('Local LRCLib database closed');
+  if (lrclibDb) {
+    try { lrclibDb.close(); } catch { /* ignore */ }
+    lrclibDb = null;
+    log.info('LRCLIB dump database closed');
   }
+  
+  if (customDb) {
+    try { customDb.close(); } catch { /* ignore */ }
+    customDb = null;
+    log.info('Custom lyrics database closed');
+  }
+  
+  // Clear all prepared statements
+  stmtExact = null;
+  stmtFuzzy = null;
+  stmtCustomExact = null;
+  stmtInsertLyrics = null;
+  stmtInsertTrack = null;
+  stmtUpdateTrack = null;
+  stmtInsertFts = null;
+  stmtBacklinkLyrics = null;
+  stmtFindTrackByUnique = null;
+  
+  log.info('All local database connections closed');
 }

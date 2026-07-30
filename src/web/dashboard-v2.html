@@ -5414,9 +5414,8 @@
       });
       // SETUP
       function checkFirstRun(cfg) {
-        if (!cfg.discord_app_id) {
-          showSetupWizard();
-        }
+        // Setup wizard disabled
+        return;
       }
       function showSetupWizard() {
         $("setupOverlay").classList.remove("hidden");
