@@ -124,22 +124,21 @@
         }
         info.category = category;
 
-        // Try to get stream title - more specific selectors to avoid picking up category
+        // Try to get stream title - more specific selectors to avoid picking up category or "For You"
         let streamTitle = '';
         const titleSelectors = [
+            '[data-a-target="channel-stream-title"]',
+            '[data-a-target="stream-title"]',
             '[class*="stream-title"]',
             '[class*="broadcast-title"]',
-            'h2',
             '.stream-title',
-            '[data-a-target="stream-title"]',
-            '[data-a-target="channel-stream-title"]',
         ];
         for (const selector of titleSelectors) {
             const el = document.querySelector(selector);
             if (el && el.textContent.trim()) {
-                // Avoid picking up category text
+                // Avoid picking up category text or "For You"
                 const text = el.textContent.trim();
-                if (text && text !== info.category) {
+                if (text && text !== info.category && text !== 'For You' && text.length > 5) {
                     streamTitle = text;
                     break;
                 }
