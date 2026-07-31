@@ -50,44 +50,61 @@ let stmtFindTrackByUnique: Database.Statement | null = null;
 /**
  * Initialize the local lyrics database.
  * Loads two databases:
- * 1. LRCLIB dump from "LRCLIB Dump/db.sqlite3" (read-only, large database)
+ * 1. LRCLIB dump — either from a configured absolute path (dumpPathOverride,
+ *    for a dump kept outside the app folder, e.g. because it's too large to
+ *    bundle), or auto-detected under "LRCLIB Dump/db.sqlite3" (read-only,
+ *    large database)
  * 2. Custom lyrics database from config directory (read-write, user-imported lyrics)
  * Returns true if at least one database was successfully opened.
  */
-export async function initLocalDb(baseDir: string): Promise<boolean> {
+export async function initLocalDb(baseDir: string, dumpPathOverride?: string): Promise<boolean> {
   let lrclibLoaded = false;
   let customLoaded = false;
 
-  // Try to load LRCLIB dump from specific folder
-  const lrclibDumpPath = path.join(baseDir, LRCLIB_DUMP_FOLDER, LRCLIB_DUMP_FILE);
-  log.debug(`initLocalDb: Checking for LRCLIB dump at ${lrclibDumpPath}...`);
-  
-  if (fs.existsSync(lrclibDumpPath)) {
-    log.debug(`initLocalDb: Found LRCLIB dump: ${lrclibDumpPath}`);
-    lrclibLoaded = openLrclibDb(lrclibDumpPath);
-  } else {
-    log.debug(`initLocalDb: LRCLIB dump not found at ${lrclibDumpPath}`);
-    // Fallback: check for lrclib files in root directory (backward compatibility)
-    for (const name of DB_FILENAMES) {
-      const dbPath = path.join(baseDir, name);
-      if (fs.existsSync(dbPath)) {
-        log.debug(`initLocalDb: Found legacy LRCLIB file: ${dbPath}`);
-        lrclibLoaded = openLrclibDb(dbPath);
-        break;
-      }
+  // A configured absolute path takes priority over auto-detection — falls
+  // through to the normal search if it's unset, or points to a file that
+  // no longer exists (moved drive, typo, etc.) rather than failing outright.
+  if (dumpPathOverride && dumpPathOverride.trim()) {
+    if (fs.existsSync(dumpPathOverride)) {
+      log.debug(`initLocalDb: Using configured LRCLIB dump path: ${dumpPathOverride}`);
+      lrclibLoaded = openLrclibDb(dumpPathOverride);
+    } else {
+      log.warn(`Configured LRCLIB dump path not found: ${dumpPathOverride} — falling back to auto-detection`);
     }
-    
-    if (!lrclibLoaded) {
-      // Check for any lrclib*.sqlite3 file
-      try {
-        const files = fs.readdirSync(baseDir);
-        const sqliteFile = files.find(f => /^lrclib.*\.sqlite3$/i.test(f) && !f.endsWith('.gz'));
-        if (sqliteFile) {
-          log.debug(`initLocalDb: Found lrclib*.sqlite3 file: ${sqliteFile}`);
-          lrclibLoaded = openLrclibDb(path.join(baseDir, sqliteFile));
+  }
+
+  if (!lrclibLoaded) {
+    // Try to load LRCLIB dump from specific folder
+    const lrclibDumpPath = path.join(baseDir, LRCLIB_DUMP_FOLDER, LRCLIB_DUMP_FILE);
+    log.debug(`initLocalDb: Checking for LRCLIB dump at ${lrclibDumpPath}...`);
+
+    if (fs.existsSync(lrclibDumpPath)) {
+      log.debug(`initLocalDb: Found LRCLIB dump: ${lrclibDumpPath}`);
+      lrclibLoaded = openLrclibDb(lrclibDumpPath);
+    } else {
+      log.debug(`initLocalDb: LRCLIB dump not found at ${lrclibDumpPath}`);
+      // Fallback: check for lrclib files in root directory (backward compatibility)
+      for (const name of DB_FILENAMES) {
+        const dbPath = path.join(baseDir, name);
+        if (fs.existsSync(dbPath)) {
+          log.debug(`initLocalDb: Found legacy LRCLIB file: ${dbPath}`);
+          lrclibLoaded = openLrclibDb(dbPath);
+          break;
         }
-      } catch (e) {
-        log.debug(`initLocalDb: Error scanning for sqlite files: ${e}`);
+      }
+
+      if (!lrclibLoaded) {
+        // Check for any lrclib*.sqlite3 file
+        try {
+          const files = fs.readdirSync(baseDir);
+          const sqliteFile = files.find(f => /^lrclib.*\.sqlite3$/i.test(f) && !f.endsWith('.gz'));
+          if (sqliteFile) {
+            log.debug(`initLocalDb: Found lrclib*.sqlite3 file: ${sqliteFile}`);
+            lrclibLoaded = openLrclibDb(path.join(baseDir, sqliteFile));
+          }
+        } catch (e) {
+          log.debug(`initLocalDb: Error scanning for sqlite files: ${e}`);
+        }
       }
     }
   }

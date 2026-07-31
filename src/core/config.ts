@@ -46,6 +46,7 @@ const DEFAULTS: VybecordConfig = {
   rpc_translate_lyrics: false,
   translate_target_lang: 'en',
   poll_interval_ms: 3000,
+  lrclib_dump_path: '',
 };
 
 export class ConfigManager {

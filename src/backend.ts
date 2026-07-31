@@ -235,7 +235,7 @@ export class VybecordBackend extends EventEmitter {
     let localDbInitialized = false;
     try {
       localDbInitialized = await Promise.race([
-        initLocalDb(this.configDir),
+        initLocalDb(this.configDir, this.config.get('lrclib_dump_path')),
         new Promise<boolean>((_, reject) => setTimeout(() => reject(new Error('Database initialization timeout (30s)')), 30000))
       ]);
     } catch (e) {

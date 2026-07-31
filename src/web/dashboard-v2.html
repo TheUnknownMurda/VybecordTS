@@ -2732,6 +2732,28 @@
                       </button>
                     </div>
                   </div>
+                  <div style="margin-top: 16px">
+                    <label
+                      style="
+                        font-size: 11px;
+                        color: var(--text-muted);
+                        font-weight: 500;
+                        display: block;
+                        margin-bottom: 4px;
+                      "
+                      data-i18n="lrclib_dump_path"
+                    >
+                      LRCLIB dump path (optional)
+                    </label>
+                    <input
+                      type="text"
+                      id="cfgLrclibDumpPath"
+                      spellcheck="false"
+                      autocomplete="off"
+                      placeholder="C:\path\to\db.sqlite3"
+                    />
+                    <p class="setup-hint" data-i18n-html="lrclib_dump_path_hint" style="margin-top: 4px"></p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -3379,6 +3401,9 @@
           save_hint: "Changes won't take effect until you save.",
           save_settings: "Save",
           clear_cache: "Clear cache",
+          lrclib_dump_path: "LRCLIB dump path (optional)",
+          lrclib_dump_path_hint:
+            "Point this at a local LRCLIB .sqlite3 dump kept outside the app folder (e.g. too large for git). Leave blank to use \"LRCLIB Dump/db.sqlite3\" next to the app instead. Requires a restart to take effect.",
           import_custom_lyrics: "Import Custom Lyrics (LRC)",
           fill_from_current: "📥 Fill from track",
           stamp_hint:
@@ -3520,6 +3545,9 @@
           save_hint: "Les changements prendront effet après sauvegarde.",
           save_settings: "Sauvegarder",
           clear_cache: "Vider le cache",
+          lrclib_dump_path: "Chemin du dump LRCLIB (optionnel)",
+          lrclib_dump_path_hint:
+            "Pointe vers un dump LRCLIB .sqlite3 local conservé hors du dossier de l'app (ex: trop volumineux pour git). Laisse vide pour utiliser \"LRCLIB Dump/db.sqlite3\" à côté de l'app. Nécessite un redémarrage pour prendre effet.",
           import_custom_lyrics: "Importer des paroles (LRC)",
           fill_from_current: "📥 Remplir depuis le titre",
           stamp_hint:
@@ -4369,6 +4397,7 @@
         $("cfgCcLang").style.opacity = $("cfgCcEnabled").checked ? 1 : 0.4;
         $("cfgUserTier").value = c.user_tier || "auto";
         $("cfgPollInterval").value = c.poll_interval_ms || 3000;
+        $("cfgLrclibDumpPath").value = c.lrclib_dump_path || "";
         $("cfgDetailsUrl").value = c.rpc_details_url || "auto";
         $("cfgStateUrl").value = c.rpc_state_url || "auto";
         $("cfgLargeUrl").value = c.rpc_large_url || "auto";
@@ -4426,6 +4455,7 @@
           cc_lang: $("cfgCcLang").value,
           user_tier: $("cfgUserTier").value,
           poll_interval_ms: parseInt($("cfgPollInterval").value) || 3000,
+          lrclib_dump_path: $("cfgLrclibDumpPath").value.trim(),
           rpc_details_url: $("cfgDetailsUrl").value,
           rpc_state_url: $("cfgStateUrl").value,
           rpc_large_url: $("cfgLargeUrl").value,

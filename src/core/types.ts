@@ -164,6 +164,10 @@ export interface VybecordConfig {
   translate_target_lang: string;
   // Polling
   poll_interval_ms: number;
+  /** Absolute path to a local LRCLIB dump .sqlite3 file (too large to bundle
+   *  with the app). If set and the file exists, it's used instead of the
+   *  default "<app dir>/LRCLIB Dump/db.sqlite3" auto-detection. */
+  lrclib_dump_path: string;
   /** Discord webhook URL for bug reports (optional) */
   bug_report_webhook?: string;
   [key: string]: unknown;
