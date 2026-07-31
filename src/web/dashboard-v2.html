@@ -717,7 +717,7 @@
       .lx-line {
         padding: 10px 20px;
         font-size: clamp(14px, 2.5vw, 17px);
-        color: var(--text-ghost);
+        color: var(--text-secondary);
         text-align: center;
         transition: all 0.4s var(--ease-out);
         border-radius: var(--r-sm);
@@ -726,7 +726,7 @@
         cursor: default;
       }
       .lx-line:hover {
-        color: var(--text-faint);
+        color: var(--text-primary);
       }
       .lx-line.active {
         font-size: clamp(20px, 4vw, 28px);
@@ -2922,6 +2922,25 @@
           <div class="card" style="margin-bottom: 16px">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px">
               <div class="card-title" style="margin: 0">
+                <span class="icon">🔍</span>
+                <span data-i18n="lrclib_search_title">Search LRCLIB</span>
+              </div>
+              <span id="lrclibSearchCount" style="font-size: 11px; color: var(--text-muted)"></span>
+            </div>
+            <input
+              type="text"
+              id="lrclibSearchInput"
+              spellcheck="false"
+              autocomplete="off"
+              data-i18n-placeholder="lrclib_search_placeholder"
+              placeholder="Search track or artist..."
+              oninput="onLrclibSearchInput()"
+            />
+            <div id="lrclibSearchResults" style="margin-top: 10px"></div>
+          </div>
+          <div class="card" style="margin-bottom: 16px">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px">
+              <div class="card-title" style="margin: 0">
                 <span class="icon">🗃</span>
                 <span data-i18n="db_manager_title">Database</span>
               </div>
@@ -3359,6 +3378,12 @@
           no_history: "No previous sessions",
           play_some_music: "Play some music",
           no_data_yet: "No data yet",
+          lrclib_search_title: "Search LRCLIB",
+          lrclib_search_placeholder: "Search track or artist...",
+          no_results: "No results",
+          badge_synced: "Synced",
+          badge_plain: "Plain",
+          lrclib_loaded: "✓ Loaded into import form",
           no_history_yet: "No listening history yet",
           visibility: "Visibility",
           discord_activity: "Discord activity",
@@ -3503,6 +3528,12 @@
           prev_sessions: "Sessions précédentes",
           play_some_music: "Jouez de la musique",
           no_data_yet: "Pas encore de données",
+          lrclib_search_title: "Rechercher dans LRCLIB",
+          lrclib_search_placeholder: "Chercher un titre ou un artiste...",
+          no_results: "Aucun résultat",
+          badge_synced: "Synchro",
+          badge_plain: "Brut",
+          lrclib_loaded: "✓ Chargé dans le formulaire d'import",
           no_history_yet: "Aucun historique d'écoute pour le moment",
           visibility: "Visibilité",
           discord_activity: "Activité Discord",
@@ -3768,6 +3799,10 @@
         document.querySelectorAll("[data-i18n-title]").forEach((el) => {
           const v = t(el.getAttribute("data-i18n-title"));
           if (v) el.title = v;
+        });
+        document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
+          const v = t(el.getAttribute("data-i18n-placeholder"));
+          if (v) el.placeholder = v;
         });
         const lrcTa = $("import_lrc");
         if (lrcTa) lrcTa.placeholder = t("lrc_placeholder");
@@ -5257,6 +5292,70 @@
         }
       }
       // PREFILL IMPORT
+      // LRCLIB SEARCH
+      let _lrclibSearchTimer = null;
+      function onLrclibSearchInput() {
+        clearTimeout(_lrclibSearchTimer);
+        const q = $("lrclibSearchInput").value.trim();
+        if (!q) {
+          $("lrclibSearchResults").innerHTML = "";
+          $("lrclibSearchCount").textContent = "";
+          return;
+        }
+        _lrclibSearchTimer = setTimeout(() => runLrclibSearch(q), 300);
+      }
+      async function runLrclibSearch(q) {
+        try {
+          const r = await (await fetch("/api/lyrics/lrclib-search?q=" + encodeURIComponent(q) + "&limit=25")).json();
+          renderLrclibResults(r.results || []);
+        } catch {
+          $("lrclibSearchResults").innerHTML = emptyState("⚠", t("error") || "Error");
+        }
+      }
+      function renderLrclibResults(results) {
+        const el = $("lrclibSearchResults");
+        $("lrclibSearchCount").textContent = results.length ? `${results.length} result${results.length > 1 ? "s" : ""}` : "";
+        if (!results.length) {
+          el.innerHTML = emptyState("🔍", t("no_results") || "No results");
+          return;
+        }
+        el.innerHTML = results
+          .map((r) => {
+            const mins = r.duration ? `${Math.floor(r.duration / 60)}:${String(Math.round(r.duration % 60)).padStart(2, "0")}` : "";
+            const badge = r.hasSynced
+              ? `<span style="font-size:9px;padding:2px 6px;border-radius:999px;background:rgba(172,244,255,.15);color:#8fd8ea;flex-shrink:0">${t("badge_synced") || "Synced"}</span>`
+              : `<span style="font-size:9px;padding:2px 6px;border-radius:999px;background:rgba(255,255,255,.08);color:var(--text-faint);flex-shrink:0">${t("badge_plain") || "Plain"}</span>`;
+            return `<div class="stat-item" style="padding:6px;cursor:pointer" onclick="loadLrclibResult(${r.id})" role="button" tabindex="0" onkeydown="if(event.key==='Enter'){loadLrclibResult(${r.id})}">
+              <div style="flex:1;min-width:0">
+                <p style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary)">${esc(r.track)}</p>
+                <p style="font-size:10px;color:var(--text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.artist)}${r.album ? " &middot; " + esc(r.album) : ""}</p>
+              </div>
+              ${badge}
+              <span style="font-size:10px;color:var(--text-dim);font-family:monospace;margin-left:8px;flex-shrink:0">${mins}</span>
+            </div>`;
+          })
+          .join("");
+      }
+      async function loadLrclibResult(id) {
+        try {
+          const entry = await (await fetch("/api/lyrics/lrclib-track?id=" + id)).json();
+          if (entry.error) {
+            showSaveStatus("✗ " + entry.error, "color:#f87171");
+            return;
+          }
+          $("import_track").value = entry.track || "";
+          $("import_artist").value = entry.artist || "";
+          $("import_album").value = entry.album || "";
+          if (entry.duration) $("import_duration").value = Math.round(entry.duration);
+          $("import_lrc").value = entry.syncedLyrics || entry.plainLyrics || "";
+          refreshLrcHighlight();
+          scheduleDraftSave();
+          $("import_lrc").scrollIntoView({ behavior: "smooth", block: "center" });
+          showSaveStatus(t("lrclib_loaded") || "✓ Loaded into import form", "color:var(--accent-hex)");
+        } catch (e) {
+          showSaveStatus("✗ " + e.message, "color:#f87171");
+        }
+      }
       function prefillImport() {
         if (!currentTrack) return;
         $("import_track").value = currentTrack.track_name || "";

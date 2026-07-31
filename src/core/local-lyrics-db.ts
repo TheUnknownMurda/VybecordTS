@@ -296,6 +296,86 @@ export function hasLocalDb(): boolean {
   return lrclibDb !== null || customDb !== null;
 }
 
+export interface LrclibSearchResult {
+  id: number;
+  track: string;
+  artist: string;
+  album: string;
+  duration: number | null;
+  hasSynced: boolean;
+  hasPlain: boolean;
+}
+
+const MAX_LRCLIB_SEARCH_RESULTS = 50;
+
+/**
+ * Build an order-independent, prefix-friendly FTS5 MATCH query from free
+ * text: each word becomes its own quoted term (so punctuation like "don't"
+ * or "AC/DC" can't break the query), all ANDed together, with the last
+ * term prefix-matched so results appear while the user is still typing.
+ * Returns null for an empty/whitespace-only query.
+ */
+function buildFtsQuery(userQuery: string): string | null {
+  const words = userQuery.trim().split(/\s+/).filter(Boolean).map(w => w.replace(/"/g, ''));
+  if (words.length === 0) return null;
+  return words.map((w, i) => `"${w}"${i === words.length - 1 ? '*' : ''}`).join(' ');
+}
+
+/** Free-text search across the LRCLIB dump (track/artist/album) for the dashboard's search UI. */
+export function searchLrclibDump(query: string, limit = 30): LrclibSearchResult[] {
+  if (!lrclibDb) return [];
+  const ftsQuery = buildFtsQuery(query);
+  if (!ftsQuery) return [];
+  const capped = Math.min(Math.max(1, limit), MAX_LRCLIB_SEARCH_RESULTS);
+  try {
+    const rows = lrclibDb.prepare(`
+      SELECT t.id AS id, t.name AS track, t.artist_name AS artist, t.album_name AS album,
+             t.duration AS duration, l.has_synced_lyrics AS hasSynced, l.has_plain_lyrics AS hasPlain
+      FROM tracks_fts fts
+      JOIN tracks t ON t.id = fts.rowid
+      JOIN lyrics l ON l.id = t.last_lyrics_id
+      WHERE tracks_fts MATCH ?
+        AND (l.has_synced_lyrics = 1 OR l.has_plain_lyrics = 1)
+      ORDER BY l.has_synced_lyrics DESC, t.id DESC
+      LIMIT ?
+    `).all(ftsQuery, capped) as {
+      id: number; track: string; artist: string; album: string;
+      duration: number | null; hasSynced: number; hasPlain: number;
+    }[];
+    return rows.map(r => ({
+      id: r.id, track: r.track, artist: r.artist, album: r.album, duration: r.duration,
+      hasSynced: !!r.hasSynced, hasPlain: !!r.hasPlain,
+    }));
+  } catch (e) {
+    log.debug(`searchLrclibDump: query failed for "${query}": ${e}`);
+    return [];
+  }
+}
+
+/** Fetch the full lyrics content for one LRCLIB track (to preview or load into the import form). */
+export function getLrclibTrackLyrics(trackId: number): {
+  track: string; artist: string; album: string; duration: number | null;
+  syncedLyrics: string | null; plainLyrics: string | null;
+} | null {
+  if (!lrclibDb) return null;
+  try {
+    const row = lrclibDb.prepare(`
+      SELECT t.name AS track, t.artist_name AS artist, t.album_name AS album, t.duration AS duration,
+             l.synced_lyrics AS syncedLyrics, l.plain_lyrics AS plainLyrics
+      FROM tracks t
+      JOIN lyrics l ON l.id = t.last_lyrics_id
+      WHERE t.id = ?
+    `).get(trackId) as {
+      track: string; artist: string; album: string; duration: number | null;
+      syncedLyrics: string | null; plainLyrics: string | null;
+    } | undefined;
+    return row ?? null;
+  } catch (e) {
+    log.debug(`getLrclibTrackLyrics: query failed for id=${trackId}: ${e}`);
+    return null;
+  }
+}
+
 interface LocalRow {
   synced_lyrics: string;
   duration: number | null;

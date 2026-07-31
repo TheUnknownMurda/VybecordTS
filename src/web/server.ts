@@ -295,6 +295,22 @@ export class WebServer {
         const match = this.backend.checkExistingCustomLyrics(track, artist, album, duration);
         return this.jsonResponse(res, { exists: !!match, match });
       }
+      if (url.pathname === '/api/lyrics/lrclib-search' && method === 'GET') {
+        const q = url.searchParams.get('q') || '';
+        const limitParam = url.searchParams.get('limit');
+        const limit = limitParam ? parseInt(limitParam) : undefined;
+        if (!q.trim()) return this.jsonResponse(res, { results: [] });
+        const results = this.backend.searchLrclibDump(q, limit);
+        return this.jsonResponse(res, { results });
+      }
+      if (url.pathname === '/api/lyrics/lrclib-track' && method === 'GET') {
+        const idParam = url.searchParams.get('id');
+        const id = idParam ? parseInt(idParam) : NaN;
+        if (!Number.isFinite(id)) return this.jsonResponse(res, { error: 'Missing or invalid id' }, 400);
+        const entry = this.backend.getLrclibTrackLyrics(id);
+        if (!entry) return this.jsonResponse(res, { error: 'Not found' }, 404);
+        return this.jsonResponse(res, entry);
+      }
       if (url.pathname === '/api/lyrics/offset' && method === 'POST') {
         return await this.handleLyricsOffset(req, res);
       }

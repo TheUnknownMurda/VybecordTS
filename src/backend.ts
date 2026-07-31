@@ -38,7 +38,7 @@ import { LyricsEngine } from './sync/lyrics-engine.js';
 import { fetchLyrics, fetchTrackMetadata, fetchPlainLyrics } from './core/provider.js';
 import { fetchYouTubeCaptions, clearCCCache, type CCResult } from './core/youtube-captions.js';
 import { similarity } from './core/similarity.js';
-import { initLocalDb, closeLocalDb, insertCustomLyrics, listCustomLyrics, getCustomLyrics, updateCustomLyrics, deleteCustomLyrics, findExistingCustomLyrics } from './core/local-lyrics-db.js';
+import { initLocalDb, closeLocalDb, insertCustomLyrics, listCustomLyrics, getCustomLyrics, updateCustomLyrics, deleteCustomLyrics, findExistingCustomLyrics, searchLrclibDump as searchLrclibDumpDb, getLrclibTrackLyrics as getLrclibTrackLyricsDb } from './core/local-lyrics-db.js';
 import { initLastFm, scrobbleTrackStart, checkAndScrobble, scrobbleTrackEnd, isScrobbleEnabled, getAuthUrl, completeAuth, disconnectScrobble, canAuth } from './core/lastfm.js';
 import { uploadThumbForRpc } from './core/image-upload.js';
 import { extractLocalArt, extractArtFromPath } from './core/local-art.js';
@@ -1483,6 +1483,16 @@ export class VybecordBackend extends EventEmitter {
   /** Check whether importing this track would overwrite an existing custom-lyrics entry. */
   checkExistingCustomLyrics(track: string, artist: string, album: string, duration?: number) {
     return findExistingCustomLyrics(track, artist, album, duration);
+  }
+
+  /** Free-text search across the local LRCLIB dump, for the dashboard's search UI. */
+  searchLrclibDump(query: string, limit?: number) {
+    return searchLrclibDumpDb(query, limit);
+  }
+
+  /** Fetch full lyrics for one LRCLIB search result, to preview or load into the import form. */
+  getLrclibTrackLyrics(trackId: number) {
+    return getLrclibTrackLyricsDb(trackId);
   }
 
   importCustomLyrics(data: { track: string; artist: string; album: string; duration?: number; lrc: string }): number {
