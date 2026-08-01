@@ -6,7 +6,10 @@
 // @author       VybecordTS
 // @match        https://www.twitch.tv/*
 // @grant        GM_xmlhttpRequest
+// @grant        GM_setValue
+// @grant        GM_getValue
 // @connect      127.0.0.1
+// @connect      gql.twitch.tv
 // @run-at       document-start
 // ==/UserScript==
 
@@ -24,8 +27,93 @@
     let currentInterval = BASE_INTERVAL_MS;
     let consecutiveFails = 0;
     let streamStartTime = 0; // Track when stream started
+    const STREAM_START_KEY = 'vybecord_twitch_stream_start';
 
     // ── Helpers ──
+
+    /**
+     * Recover a persisted stream start time for `username`, if one was saved
+     * earlier in this browser (Twitch is a single-page app, so navigating
+     * between pages — or a manual reload — would otherwise reset the
+     * in-memory streamStartTime and make the Discord elapsed timer jump
+     * back to 0 even though the stream never stopped).
+     */
+    function getPersistedStreamStart(username) {
+        try {
+            const raw = GM_getValue(STREAM_START_KEY, '');
+            if (!raw) return 0;
+            const saved = JSON.parse(raw);
+            if (saved && saved.username === username && saved.start) {
+                return saved.start;
+            }
+        } catch (e) { /* ignore malformed storage */ }
+        return 0;
+    }
+
+    function setPersistedStreamStart(username, start) {
+        try {
+            GM_setValue(STREAM_START_KEY, JSON.stringify({ username, start }));
+        } catch (e) { /* ignore */ }
+    }
+
+    function clearPersistedStreamStart() {
+        try {
+            GM_setValue(STREAM_START_KEY, '');
+        } catch (e) { /* ignore */ }
+    }
+
+    let fetchingStartFor = ''; // guards against duplicate concurrent fetches
+    let activeStreamer = ''; // guards a stale API response from overwriting a newer session
+
+    // Client-ID Twitch's own website (www.twitch.tv) bakes into its page
+    // HTML and sends with every request to gql.twitch.tv — it's the public
+    // identifier for unauthenticated, read-only queries (the same one used
+    // by tools like Streamlink), not a private credential.
+    const TWITCH_WEB_CLIENT_ID = 'kimne78kx3ncx6brgo4mv6wki5h1ko';
+
+    /**
+     * Ask Twitch's own public GraphQL API for the stream's real `createdAt`
+     * so the Discord elapsed timer is accurate even if the tab was opened
+     * mid-stream — not just "time since this tab first noticed it's live".
+     * Uses GM_xmlhttpRequest to avoid CORS friction, same as the push to
+     * the local VybecordTS server.
+     */
+    function fetchTwitchStreamStart(username) {
+        if (!username || fetchingStartFor === username) return;
+        fetchingStartFor = username;
+        GM_xmlhttpRequest({
+            method: 'POST',
+            url: 'https://gql.twitch.tv/gql',
+            headers: {
+                'Content-Type': 'application/json',
+                'Client-Id': TWITCH_WEB_CLIENT_ID,
+            },
+            data: JSON.stringify({
+                query: `query { user(login: "${username}") { stream { createdAt } } }`,
+            }),
+            timeout: 4000,
+            onload: function (res) {
+                if (fetchingStartFor === username) fetchingStartFor = '';
+                try {
+                    const body = JSON.parse(res.responseText);
+                    const createdAt = body && body.data && body.data.user && body.data.user.stream && body.data.user.stream.createdAt;
+                    if (!createdAt) return;
+                    if (username !== activeStreamer) return; // session moved on, discard
+                    const realStart = Date.parse(createdAt);
+                    if (!realStart || isNaN(realStart)) return;
+                    const now = Date.now();
+                    // Sanity check — must be in the past and not absurdly old,
+                    // in case the API ever returns stale/unexpected data.
+                    if (realStart > now + 60000 || realStart < now - 30 * 24 * 60 * 60 * 1000) return;
+                    streamStartTime = realStart;
+                    setPersistedStreamStart(username, streamStartTime);
+                    console.log('[VybecordTS Twitch] Corrected stream start time from API ✓', new Date(realStart).toISOString());
+                } catch (e) { /* silently keep the estimated start time */ }
+            },
+            onerror: function () { if (fetchingStartFor === username) fetchingStartFor = ''; },
+            ontimeout: function () { if (fetchingStartFor === username) fetchingStartFor = ''; },
+        });
+    }
 
     function pushToVybecord(data) {
         if (!data) return;
@@ -150,13 +238,30 @@
         info.is_live = !!document.querySelector('[class*="live"], [class*="online"], [data-a-target="live-status"], [data-a-target="channel-status-text"]') ||
                        !document.querySelector('[class*="offline"], [data-a-target="offline-status"]');
 
-        // Set stream start time when stream goes live
-        if (info.is_live && streamStartTime === 0) {
-            streamStartTime = Date.now();
-        }
-        // Reset when stream goes offline
-        if (!info.is_live) {
+        // Set stream start time when stream goes live — recover it from
+        // persistent storage first so a reload/navigation doesn't reset
+        // Discord's "time since stream started" display back to 0. On a
+        // genuinely new detection, use Date.now() as an immediate
+        // provisional value, then correct it from Twitch's own API in the
+        // background so it's accurate even if the tab was opened mid-stream.
+        if (info.is_live) {
+            activeStreamer = info.username;
+            if (streamStartTime === 0) {
+                const persisted = getPersistedStreamStart(info.username);
+                if (persisted) {
+                    streamStartTime = persisted;
+                } else {
+                    streamStartTime = Date.now();
+                    fetchTwitchStreamStart(info.username);
+                }
+                setPersistedStreamStart(info.username, streamStartTime);
+            }
+        } else {
+            // Reset when stream goes offline
             streamStartTime = 0;
+            clearPersistedStreamStart();
+            fetchingStartFor = '';
+            activeStreamer = '';
         }
         info.stream_start_time_ms = streamStartTime;
 

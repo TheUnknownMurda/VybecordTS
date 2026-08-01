@@ -7,6 +7,8 @@
 // @match        https://www.youtube.com/*
 // @match        https://music.youtube.com/*
 // @grant        GM_xmlhttpRequest
+// @grant        GM_setValue
+// @grant        GM_getValue
 // @connect      127.0.0.1
 // @run-at       document-start
 // ==/UserScript==
@@ -27,8 +29,66 @@
   let currentInterval = BASE_INTERVAL_MS;
   let consecutiveFails = 0;
   let streamStartTime = 0; // Track when live stream started
+  const STREAM_START_KEY = 'vybecord_yt_stream_start';
 
   // ── Helpers ──
+
+  /**
+   * Recover a persisted stream start time for `videoId`, if one was saved
+   * earlier (YouTube is a single-page app, so navigating between videos —
+   * or a manual reload of the same live video — would otherwise reset the
+   * in-memory streamStartTime and make the Discord elapsed timer jump back
+   * to 0 even though the stream never stopped).
+   */
+  function getPersistedStreamStart(videoId) {
+    try {
+      const raw = GM_getValue(STREAM_START_KEY, '');
+      if (!raw) return 0;
+      const saved = JSON.parse(raw);
+      if (saved && saved.videoId === videoId && saved.start) {
+        return saved.start;
+      }
+    } catch (e) { /* ignore malformed storage */ }
+    return 0;
+  }
+
+  function setPersistedStreamStart(videoId, start) {
+    try {
+      GM_setValue(STREAM_START_KEY, JSON.stringify({ videoId, start }));
+    } catch (e) { /* ignore */ }
+  }
+
+  function clearPersistedStreamStart() {
+    try {
+      GM_setValue(STREAM_START_KEY, '');
+    } catch (e) { /* ignore */ }
+  }
+
+  /**
+   * Estimate the real broadcast start time from the live video's own
+   * playback position, instead of guessing "now" — for a live stream,
+   * `currentTime` counts up from 0 at the moment the broadcast began, so
+   * as long as we're near the live edge (not rewound into the DVR buffer),
+   * `Date.now() - currentTime` is the actual start time. This is accurate
+   * even if the tab is opened well after the stream started, and needs no
+   * network request.
+   */
+  function estimateLiveStartFromVideo(vid) {
+    try {
+      if (!vid || !isFinite(vid.currentTime) || vid.currentTime <= 0) return 0;
+      const seekable = vid.seekable;
+      if (seekable && seekable.length > 0) {
+        const liveEdge = seekable.end(seekable.length - 1);
+        const behindLiveMs = Math.max(0, (liveEdge - vid.currentTime) * 1000);
+        // If we're watching delayed/DVR content, currentTime no longer
+        // reflects true elapsed broadcast time — don't trust it.
+        if (behindLiveMs > 10000) return 0;
+      }
+      return Date.now() - Math.round(vid.currentTime * 1000);
+    } catch (e) {
+      return 0;
+    }
+  }
 
   function getVideoId() {
     const params = new URLSearchParams(window.location.search);
@@ -101,13 +161,21 @@
                    (vid.duration === Infinity) ||
                    !!document.querySelector('.badge-style-type-live-now');
 
-    // Set stream start time when stream goes live
-    if (isLive && streamStartTime === 0) {
-      streamStartTime = Date.now();
-    }
-    // Reset when stream goes offline or when switching to non-live content
-    if (!isLive) {
+    // Set stream start time when stream goes live — recover it from
+    // persistent storage first so a reload/navigation doesn't reset
+    // Discord's "time since stream started" display back to 0. On a
+    // genuinely new detection, derive the real start from the video's own
+    // playback position so it's accurate even if the tab was opened
+    // mid-stream, falling back to Date.now() only if that's not possible.
+    if (isLive) {
+      if (streamStartTime === 0) {
+        streamStartTime = getPersistedStreamStart(videoId) || estimateLiveStartFromVideo(vid) || Date.now();
+        setPersistedStreamStart(videoId, streamStartTime);
+      }
+    } else {
+      // Reset when stream goes offline or when switching to non-live content
       streamStartTime = 0;
+      clearPersistedStreamStart();
     }
 
     return {

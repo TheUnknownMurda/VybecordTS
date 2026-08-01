@@ -6,6 +6,8 @@
 // @author       VybecordTS
 // @match        https://kick.com/*
 // @grant        GM_xmlhttpRequest
+// @grant        GM_setValue
+// @grant        GM_getValue
 // @connect      127.0.0.1
 // @run-at       document-start
 // ==/UserScript==
@@ -24,8 +26,80 @@
     let currentInterval = BASE_INTERVAL_MS;
     let consecutiveFails = 0;
     let streamStartTime = 0; // Track when stream started
+    const STREAM_START_KEY = 'vybecord_kick_stream_start';
 
     // ── Helpers ──
+
+    /**
+     * Recover a persisted stream start time for `username`, if one was saved
+     * earlier in this browser (Kick is a single-page app, so navigating
+     * between pages — or a manual reload — would otherwise reset the
+     * in-memory streamStartTime and make the Discord elapsed timer jump
+     * back to 0 even though the stream never stopped).
+     */
+    function getPersistedStreamStart(username) {
+        try {
+            const raw = GM_getValue(STREAM_START_KEY, '');
+            if (!raw) return 0;
+            const saved = JSON.parse(raw);
+            if (saved && saved.username === username && saved.start) {
+                return saved.start;
+            }
+        } catch (e) { /* ignore malformed storage */ }
+        return 0;
+    }
+
+    function setPersistedStreamStart(username, start) {
+        try {
+            GM_setValue(STREAM_START_KEY, JSON.stringify({ username, start }));
+        } catch (e) { /* ignore */ }
+    }
+
+    function clearPersistedStreamStart() {
+        try {
+            GM_setValue(STREAM_START_KEY, '');
+        } catch (e) { /* ignore */ }
+    }
+
+    let fetchingStartFor = ''; // guards against duplicate concurrent fetches
+    let activeStreamer = ''; // guards a stale API response from overwriting a newer session
+
+    /**
+     * Ask Kick's own channel API for the livestream's real `created_at` so
+     * the Discord elapsed timer is accurate even if the tab was opened
+     * mid-stream — not just "time since this tab first noticed it's live".
+     * Same-origin request: uses the browser's normal fetch() and the
+     * user's existing Kick session, exactly like the page itself does,
+     * so no extra permissions are needed for it.
+     */
+    function fetchKickStreamStart(username) {
+        if (!username || fetchingStartFor === username) return;
+        fetchingStartFor = username;
+        fetch(`/api/v1/channels/${encodeURIComponent(username)}`, {
+            headers: { Accept: 'application/json' },
+            credentials: 'same-origin',
+        })
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => {
+                const createdAt = data && data.livestream && data.livestream.created_at;
+                if (!createdAt) return;
+                if (username !== activeStreamer) return; // session moved on, discard
+                // Kick returns "YYYY-MM-DD HH:MM:SS" in UTC.
+                const realStart = Date.parse(`${createdAt.replace(' ', 'T')}Z`);
+                if (!realStart || isNaN(realStart)) return;
+                const now = Date.now();
+                // Sanity check — must be in the past and not absurdly old,
+                // in case the API ever returns stale/unexpected data.
+                if (realStart > now + 60000 || realStart < now - 30 * 24 * 60 * 60 * 1000) return;
+                streamStartTime = realStart;
+                setPersistedStreamStart(username, streamStartTime);
+                console.log('[VybecordTS Kick] Corrected stream start time from API ✓', new Date(realStart).toISOString());
+            })
+            .catch(() => { /* silently keep the estimated start time */ })
+            .finally(() => {
+                if (fetchingStartFor === username) fetchingStartFor = '';
+            });
+    }
 
     function pushToVybecord(data) {
         if (!data) return;
@@ -198,13 +272,30 @@
         info.is_live = !!document.querySelector('[class*="live"], [class*="online"]') ||
                        !document.querySelector('[class*="offline"]');
 
-        // Set stream start time when stream goes live
-        if (info.is_live && streamStartTime === 0) {
-            streamStartTime = Date.now();
-        }
-        // Reset when stream goes offline
-        if (!info.is_live) {
+        // Set stream start time when stream goes live — recover it from
+        // persistent storage first so a reload/navigation doesn't reset
+        // Discord's "time since stream started" display back to 0. On a
+        // genuinely new detection, use Date.now() as an immediate
+        // provisional value, then correct it from Kick's own API in the
+        // background so it's accurate even if the tab was opened mid-stream.
+        if (info.is_live) {
+            activeStreamer = info.username;
+            if (streamStartTime === 0) {
+                const persisted = getPersistedStreamStart(info.username);
+                if (persisted) {
+                    streamStartTime = persisted;
+                } else {
+                    streamStartTime = Date.now();
+                    fetchKickStreamStart(info.username);
+                }
+                setPersistedStreamStart(info.username, streamStartTime);
+            }
+        } else {
+            // Reset when stream goes offline
             streamStartTime = 0;
+            clearPersistedStreamStart();
+            fetchingStartFor = '';
+            activeStreamer = '';
         }
         info.stream_start_time_ms = streamStartTime;
 
