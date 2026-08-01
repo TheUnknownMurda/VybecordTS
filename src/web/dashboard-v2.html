@@ -942,11 +942,6 @@
         color: #5865f2;
         border: 1px solid rgba(88, 101, 242, 0.15);
       }
-      .badge-spotify {
-        background: rgba(30, 215, 96, 0.08);
-        color: #1ed760;
-        border: 1px solid rgba(30, 215, 96, 0.15);
-      }
       .badge-white {
         background: rgba(255, 255, 255, 0.06);
         color: var(--text-secondary);
@@ -1328,18 +1323,6 @@
         background: rgba(var(--accent), 0.08);
         color: var(--accent-hex);
       }
-      .setup-spotify-fields {
-        max-height: 0;
-        overflow: hidden;
-        transition:
-          max-height 0.3s ease,
-          opacity 0.3s;
-        opacity: 0;
-      }
-      .setup-spotify-fields.open {
-        max-height: 200px;
-        opacity: 1;
-      }
       /* Modal */
       .modal-overlay {
         position: fixed;
@@ -1700,17 +1683,6 @@
         <h2 class="gradient-text" data-i18n="setup_title">Welcome to VybecordTS</h2>
         <p class="setup-sub" data-i18n="setup_sub">Quick setup in 30 seconds.</p>
         <div class="setup-step">
-          <label data-i18n="setup_discord_label">Discord Application ID</label>
-          <input
-            id="setupDiscordId"
-            type="text"
-            placeholder="e.g. 1234567890123456789"
-            spellcheck="false"
-            autocomplete="off"
-          />
-          <p class="setup-hint" data-i18n-html="setup_discord_hint"></p>
-        </div>
-        <div class="setup-step">
           <label data-i18n="setup_tier_label">Mode</label>
           <div class="setup-tier-btns">
             <div class="setup-tier-btn active" data-tier="free" onclick="setupSelectTier(this)">
@@ -1738,17 +1710,7 @@
             <div data-i18n-html="setup_spicetify_warning_text"></div>
           </div>
         </div>
-        <div id="setupSpotifyFields" class="setup-spotify-fields">
-          <div class="setup-step">
-            <label>Spotify Client ID</label>
-            <input id="setupSpotifyId" type="text" spellcheck="false" autocomplete="off" />
-          </div>
-          <div class="setup-step">
-            <label>Spotify Client Secret</label>
-            <input id="setupSpotifySecret" type="text" spellcheck="false" autocomplete="off" />
-            <p class="setup-hint" data-i18n-html="setup_spotify_hint"></p>
-          </div>
-        </div>
+
         <button
           style="
             width: 100%;
@@ -1888,10 +1850,6 @@
           <span id="badgeDiscord" class="badge badge-red">
             <span class="dot">●</span>
             Discord
-          </span>
-          <span id="badgeSpotify" class="badge badge-red">
-            <span class="dot">●</span>
-            Spotify
           </span>
           <span id="badgeMode" class="badge badge-white">FREE</span>
           <span id="badgeLyrics" class="badge badge-green">🎵 Lyrics</span>
@@ -3153,70 +3111,11 @@
           <p style="font-size: 11px; color: var(--text-dim); margin: -12px 0 20px" data-i18n="requires_restart">
             Requires restart after changing.
           </p>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px">
-            <div class="card" style="display: flex; flex-direction: column; gap: 12px">
-              <div class="card-title">
-                <span class="icon">🟢</span>
-                <span>Spotify</span>
-              </div>
-              <p class="setup-hint" data-i18n-html="setup_spotify_hint" style="margin: -4px 0 0"></p>
-              <div>
-                <label
-                  style="
-                    font-size: 11px;
-                    color: var(--text-muted);
-                    font-weight: 500;
-                    display: block;
-                    margin-bottom: 4px;
-                  "
-                >
-                  Client ID
-                </label>
-                <div class="cred-wrap">
-                  <input type="password" id="cfgSpotifyId" spellcheck="false" autocomplete="off" />
-                  <button class="cred-toggle" onclick="toggleCred(this)">👁</button>
-                </div>
-              </div>
-              <div>
-                <label
-                  style="
-                    font-size: 11px;
-                    color: var(--text-muted);
-                    font-weight: 500;
-                    display: block;
-                    margin-bottom: 4px;
-                  "
-                >
-                  Client Secret
-                </label>
-                <div class="cred-wrap">
-                  <input type="password" id="cfgSpotifySecret" spellcheck="false" autocomplete="off" />
-                  <button class="cred-toggle" onclick="toggleCred(this)">👁</button>
-                </div>
-              </div>
-            </div>
+          <div style="display: grid; grid-template-columns: 1fr; gap: 16px">
             <div class="card" style="display: flex; flex-direction: column; gap: 12px">
               <div class="card-title">
                 <span class="icon">🔵</span>
-                <span>Discord & Last.fm</span>
-              </div>
-              <div>
-                <label
-                  style="
-                    font-size: 11px;
-                    color: var(--text-muted);
-                    font-weight: 500;
-                    display: block;
-                    margin-bottom: 4px;
-                  "
-                >
-                  Discord App ID
-                </label>
-                <p class="setup-hint" data-i18n-html="setup_discord_hint" style="margin: 0 0 4px"></p>
-                <div class="cred-wrap">
-                  <input type="password" id="cfgDiscordId" spellcheck="false" autocomplete="off" />
-                  <button class="cred-toggle" onclick="toggleCred(this)">👁</button>
-                </div>
+                <span>Last.fm</span>
               </div>
               <div>
                 <label
@@ -3465,16 +3364,11 @@
           draft_discard: "Discard",
           setup_title: "Welcome to VybecordTS",
           setup_sub: "Quick setup in 30 seconds.",
-          setup_discord_label: "Discord Application ID",
-          setup_discord_hint:
-            'Create one at <a href="https://discord.com/developers/applications" target="_blank">discord.com/developers</a> → New Application → copy Application ID',
           setup_tier_label: "Mode",
           setup_tier_free: "Free",
           setup_tier_free_desc: "Any music player",
           setup_tier_premium: "Premium",
           setup_tier_premium_desc: "Spotify API",
-          setup_spotify_hint:
-            'Get credentials at <a href="https://developer.spotify.com/dashboard" target="_blank">developer.spotify.com</a> → Create App → redirect URI: <code style="font-size:10px;background:rgba(255,255,255,.06);padding:1px 4px;border-radius:4px">http://127.0.0.1:8888/callback</code>',
           setup_spicetify_warning_title: "Spicetify / Modded Spotify",
           setup_spicetify_warning_text:
             'Using Spicetify or modified Spotify clients (ad blockers, etc.) may violate Spotify\'s Terms of Service and could result in account suspension. <b>We are not responsible</b> for any bans or issues caused by using third-party modifications. Use at your own risk.',
@@ -3619,16 +3513,11 @@
           draft_discard: "Ignorer",
           setup_title: "Bienvenue sur VybecordTS",
           setup_sub: "Configuration rapide en 30 secondes.",
-          setup_discord_label: "ID d'Application Discord",
-          setup_discord_hint:
-            'Créez-en une sur <a href="https://discord.com/developers/applications" target="_blank">discord.com/developers</a>',
           setup_tier_label: "Mode",
           setup_tier_free: "Gratuit",
           setup_tier_free_desc: "Tout lecteur",
           setup_tier_premium: "Premium",
           setup_tier_premium_desc: "API Spotify",
-          setup_spotify_hint:
-            'Obtenez les identifiants sur <a href="https://developer.spotify.com/dashboard" target="_blank">developer.spotify.com</a>',
           setup_spicetify_warning_title: "Spicetify / Spotify modifié",
           setup_spicetify_warning_text:
             'L\'utilisation de Spicetify ou de clients Spotify modifiés (bloqueurs de pub, etc.) peut enfreindre les Conditions d\'utilisation de Spotify et entraîner une suspension de compte. <b>Nous ne sommes pas responsables</b> des bannissements ou problèmes causés par l\'utilisation de modifications tierces. Utilisez à vos propres risques.',
@@ -4439,9 +4328,6 @@
         $("cfgActivityType").value = [0, 2, 3, 5].includes(c.rpc_activity_type) ? String(c.rpc_activity_type) : "2";
         $("cfgBtn1Label").value = c.rpc_button1_label || "";
         $("cfgBtn1Url").value = c.rpc_button1_url || "";
-        $("cfgSpotifyId").value = c.spotify_client_id || "";
-        $("cfgSpotifySecret").value = c.spotify_client_secret || "";
-        $("cfgDiscordId").value = c.discord_app_id || "";
         $("cfgLastfmKey").value = c.lastfm_api_key || "";
         const offsetMs = c.lyrics_offset_ms || 0;
         $("lyricsOffset").value = offsetMs;
@@ -4497,9 +4383,6 @@
           rpc_activity_type: parseInt($("cfgActivityType").value),
           rpc_button1_label: $("cfgBtn1Label").value,
           rpc_button1_url: $("cfgBtn1Url").value,
-          spotify_client_id: $("cfgSpotifyId").value,
-          spotify_client_secret: $("cfgSpotifySecret").value,
-          discord_app_id: $("cfgDiscordId").value,
           lastfm_api_key: $("cfgLastfmKey").value,
         };
         try {
@@ -4531,14 +4414,11 @@
       // STATUS
       function updateStatus(msg) {
         const dc = msg.discordConnected,
-          sp = msg.spotifyConnected,
           mode = (msg.sourceMode || "free").toUpperCase();
         $("badgeDiscord").className = `badge ${dc ? "badge-discord" : "badge-red"}`;
         $("badgeDiscord").innerHTML = `<span class="dot">●</span> Discord`;
-        $("badgeSpotify").className = `badge ${sp ? "badge-spotify" : "badge-red"}`;
-        $("badgeSpotify").innerHTML = `<span class="dot">●</span> Spotify`;
         $("badgeMode").textContent = mode;
-        $("badgeMode").className = `badge ${mode === "PREMIUM" ? "badge-spotify" : "badge-white"}`;
+        $("badgeMode").className = `badge ${mode === "PREMIUM" ? "badge-discord" : "badge-white"}`;
         // Lyrics status badge
         const showLyrics = msg.showLyrics !== false;
         $("badgeLyrics").className = `badge ${showLyrics ? "badge-green" : "badge-red"}`;
@@ -5558,16 +5438,12 @@
         document.querySelectorAll(".setup-tier-btn").forEach((b) => b.classList.remove("active"));
         el.classList.add("active");
         const tier = el.getAttribute("data-tier");
-        $("setupSpotifyFields").classList.toggle("open", tier === "premium");
         $("setupSpicetifyWarning").style.display = tier === "premium" ? "block" : "none";
       }
       async function setupSave() {
-        const discordId = $("setupDiscordId").value.trim(),
-          tier = document.querySelector(".setup-tier-btn.active")?.getAttribute("data-tier") || "free";
-        const cfg = { discord_app_id: discordId };
+        const tier = document.querySelector(".setup-tier-btn.active")?.getAttribute("data-tier") || "free";
+        const cfg = {};
         if (tier === "premium") {
-          cfg.spotify_client_id = $("setupSpotifyId").value.trim();
-          cfg.spotify_client_secret = $("setupSpotifySecret").value.trim();
           cfg.user_tier = "premium";
         } else {
           cfg.user_tier = "free";
