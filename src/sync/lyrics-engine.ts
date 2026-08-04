@@ -1343,11 +1343,24 @@ export class LyricsEngine {
 // ── Helpers ──
 
 function truncate(text: string, max: number): string {
-  if (text.length <= max) return text;
+  // Discord's RPC text fields (details/state/largeText/button labels) render
+  // on a single line — raw newlines (e.g. from a multi-line Kick/Twitch
+  // stream title) don't display well there. Turn line breaks into the same
+  // ' | ' single-line separator used elsewhere in this file, dropping empty
+  // lines so blank-line runs don't produce repeated separators, and collapse
+  // any other run of whitespace down to a single space.
+  const normalized = text
+    .split(/\r\n|\r|\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(' | ')
+    .replace(/[ \t\f\v]+/g, ' ')
+    .trim();
+  if (normalized.length <= max) return normalized;
   // For very short limits, just cut and add ellipsis
-  if (max <= 10) return text.slice(0, max - 3) + '...';
+  if (max <= 10) return normalized.slice(0, max - 3) + '...';
   // For longer limits, try to preserve whole words
-  const cut = text.slice(0, max - 3);
+  const cut = normalized.slice(0, max - 3);
   const lastSpace = cut.lastIndexOf(' ');
   const lastPunct = Math.max(cut.lastIndexOf('.'), cut.lastIndexOf(','), cut.lastIndexOf(';'), cut.lastIndexOf(':'), cut.lastIndexOf('!'), cut.lastIndexOf('?'));
   const boundary = Math.max(lastSpace, lastPunct);

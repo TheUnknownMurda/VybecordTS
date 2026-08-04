@@ -19,6 +19,7 @@
     const VYBECORD_URL = 'http://127.0.0.1:8888/api/kick';
     const BASE_INTERVAL_MS = 2500;
     const MAX_INTERVAL_MS = 15000;
+    const REVERIFY_INTERVAL_MS = 5 * 60 * 1000; // periodically re-confirm the start time against Kick's API
 
     // ── State ──
     let lastStreamerKey = '';
@@ -63,6 +64,9 @@
 
     let fetchingStartFor = ''; // guards against duplicate concurrent fetches
     let activeStreamer = ''; // guards a stale API response from overwriting a newer session
+    let startVerified = false; // true once Kick's API has confirmed/corrected the current start time
+    let verifyAttempts = 0;
+    let verifiedAt = 0;
 
     /**
      * Ask Kick's own channel API for the livestream's real `created_at` so
@@ -74,6 +78,8 @@
      */
     function fetchKickStreamStart(username) {
         if (!username || fetchingStartFor === username) return;
+        if (verifyAttempts >= 8) { startVerified = true; return; } // stop retrying forever on persistent failure
+        verifyAttempts++;
         fetchingStartFor = username;
         fetch(`/api/v1/channels/${encodeURIComponent(username)}`, {
             headers: { Accept: 'application/json' },
@@ -93,6 +99,8 @@
                 if (realStart > now + 60000 || realStart < now - 30 * 24 * 60 * 60 * 1000) return;
                 streamStartTime = realStart;
                 setPersistedStreamStart(username, streamStartTime);
+                startVerified = true;
+                verifiedAt = Date.now();
                 console.log('[VybecordTS Kick] Corrected stream start time from API ✓', new Date(realStart).toISOString());
             })
             .catch(() => { /* silently keep the estimated start time */ })
@@ -207,7 +215,13 @@
         }
         info.category = category;
 
-        // Try to get stream title - more specific selectors to avoid picking up category or pin messages
+        // Try to get stream title - more specific selectors to avoid picking up category or pin messages.
+        // Kick doesn't expose one single reliable data-attribute for the title (unlike Twitch's
+        // data-a-target="channel-stream-title"), so instead of stopping at the first element that
+        // matches ANY selector — which can grab a shorter preview/echo of the title elsewhere on the
+        // page (e.g. a recommended-channel card) — check every match across every selector and keep
+        // the longest plausible one. Also check the `title`/`aria-label` attribute, since a
+        // CSS-truncated (ellipsis) element still has the full text there even when textContent doesn't.
         let streamTitle = '';
         const titleSelectors = [
             '[class*="stream-title"]',
@@ -219,53 +233,45 @@
             'h1[class*="title"]',
             'h2[class*="title"]',
         ];
-        
+
         // Also try to find title in specific container structures
         const containerSelectors = [
             '[class*="stream-info"]',
             '[class*="streamer-info"]',
             '[class*="broadcast-info"]',
         ];
-        
-        for (const selector of titleSelectors) {
-            const el = document.querySelector(selector);
-            if (el && el.textContent.trim()) {
-                const text = el.textContent.trim();
-                // Avoid picking up category text, pin messages, or login prompts
-                if (text && 
-                    text !== info.category && 
-                    !text.toLowerCase().includes('log in') &&
-                    !text.toLowerCase().includes('pin') &&
-                    !text.toLowerCase().includes('earn') &&
-                    !text.toLowerCase().includes('jungle') &&
-                    text.length > 5) {
-                    streamTitle = text;
-                    break;
-                }
+
+        function isPlausibleTitle(text) {
+            return !!text &&
+                text !== info.category &&
+                !text.toLowerCase().includes('log in') &&
+                !text.toLowerCase().includes('pin') &&
+                !text.toLowerCase().includes('earn') &&
+                !text.toLowerCase().includes('jungle') &&
+                text.length > 5;
+        }
+
+        function considerTitleCandidate(el) {
+            const text = (el.getAttribute('title') || el.getAttribute('aria-label') || el.textContent || '').trim();
+            if (isPlausibleTitle(text) && text.length > streamTitle.length) {
+                streamTitle = text;
             }
         }
-        
+
+        for (const selector of titleSelectors) {
+            document.querySelectorAll(selector).forEach(considerTitleCandidate);
+        }
+
         // Fallback: try to find title within stream info containers
         if (!streamTitle) {
             for (const containerSel of containerSelectors) {
                 const container = document.querySelector(containerSel);
                 if (container) {
-                    const titleEl = container.querySelector('h1, h2, [class*="title"]');
-                    if (titleEl && titleEl.textContent.trim()) {
-                        const text = titleEl.textContent.trim();
-                        if (text && 
-                            text !== info.category && 
-                            !text.toLowerCase().includes('log in') &&
-                            !text.toLowerCase().includes('pin') &&
-                            text.length > 5) {
-                            streamTitle = text;
-                            break;
-                        }
-                    }
+                    container.querySelectorAll('h1, h2, [class*="title"]').forEach(considerTitleCandidate);
                 }
             }
         }
-        
+
         info.stream_title = streamTitle;
 
         // Detect if stream is live
@@ -274,21 +280,31 @@
 
         // Set stream start time when stream goes live — recover it from
         // persistent storage first so a reload/navigation doesn't reset
-        // Discord's "time since stream started" display back to 0. On a
-        // genuinely new detection, use Date.now() as an immediate
-        // provisional value, then correct it from Kick's own API in the
-        // background so it's accurate even if the tab was opened mid-stream.
+        // Discord's "time since stream started" display back to 0. A
+        // persisted/provisional value is used immediately so the timer
+        // isn't blocked on a network round trip, but it's ALWAYS re-verified
+        // against Kick's own API (bounded retries) — a persisted value can
+        // be from a previous, already-ended stream if this tab was closed
+        // while the streamer went offline and later came back live, and we
+        // would otherwise never notice the stream actually restarted.
         if (info.is_live) {
             activeStreamer = info.username;
             if (streamStartTime === 0) {
-                const persisted = getPersistedStreamStart(info.username);
-                if (persisted) {
-                    streamStartTime = persisted;
-                } else {
-                    streamStartTime = Date.now();
-                    fetchKickStreamStart(info.username);
-                }
+                streamStartTime = getPersistedStreamStart(info.username) || Date.now();
                 setPersistedStreamStart(info.username, streamStartTime);
+                startVerified = false;
+                verifyAttempts = 0;
+            }
+            if (!startVerified) {
+                fetchKickStreamStart(info.username);
+            } else if (Date.now() - verifiedAt > REVERIFY_INTERVAL_MS) {
+                // Periodic safety re-check: DOM-based is_live detection can
+                // occasionally miss a real offline→online transition (e.g. if
+                // the tab wasn't open to see it), so re-confirm against the
+                // API every few minutes even once "verified".
+                startVerified = false;
+                verifyAttempts = 0;
+                fetchKickStreamStart(info.username);
             }
         } else {
             // Reset when stream goes offline
@@ -296,6 +312,8 @@
             clearPersistedStreamStart();
             fetchingStartFor = '';
             activeStreamer = '';
+            startVerified = false;
+            verifyAttempts = 0;
         }
         info.stream_start_time_ms = streamStartTime;
 

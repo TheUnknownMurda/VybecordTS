@@ -20,6 +20,7 @@
     const VYBECORD_URL = 'http://127.0.0.1:8888/api/twitch';
     const BASE_INTERVAL_MS = 2500;
     const MAX_INTERVAL_MS = 15000;
+    const REVERIFY_INTERVAL_MS = 5 * 60 * 1000; // periodically re-confirm the start time against Twitch's API
 
     // ── State ──
     let lastStreamerKey = '';
@@ -64,6 +65,9 @@
 
     let fetchingStartFor = ''; // guards against duplicate concurrent fetches
     let activeStreamer = ''; // guards a stale API response from overwriting a newer session
+    let startVerified = false; // true once Twitch's API has confirmed/corrected the current start time
+    let verifyAttempts = 0;
+    let verifiedAt = 0;
 
     // Client-ID Twitch's own website (www.twitch.tv) bakes into its page
     // HTML and sends with every request to gql.twitch.tv — it's the public
@@ -80,6 +84,8 @@
      */
     function fetchTwitchStreamStart(username) {
         if (!username || fetchingStartFor === username) return;
+        if (verifyAttempts >= 8) { startVerified = true; return; } // stop retrying forever on persistent failure
+        verifyAttempts++;
         fetchingStartFor = username;
         GM_xmlhttpRequest({
             method: 'POST',
@@ -107,6 +113,8 @@
                     if (realStart > now + 60000 || realStart < now - 30 * 24 * 60 * 60 * 1000) return;
                     streamStartTime = realStart;
                     setPersistedStreamStart(username, streamStartTime);
+                    startVerified = true;
+                    verifiedAt = Date.now();
                     console.log('[VybecordTS Twitch] Corrected stream start time from API ✓', new Date(realStart).toISOString());
                 } catch (e) { /* silently keep the estimated start time */ }
             },
@@ -238,23 +246,31 @@
         info.is_live = !!document.querySelector('[class*="live"], [class*="online"], [data-a-target="live-status"], [data-a-target="channel-status-text"]') ||
                        !document.querySelector('[class*="offline"], [data-a-target="offline-status"]');
 
-        // Set stream start time when stream goes live — recover it from
-        // persistent storage first so a reload/navigation doesn't reset
-        // Discord's "time since stream started" display back to 0. On a
-        // genuinely new detection, use Date.now() as an immediate
-        // provisional value, then correct it from Twitch's own API in the
-        // background so it's accurate even if the tab was opened mid-stream.
+        // Discord's "time since stream started" display back to 0. A
+        // persisted/provisional value is used immediately so the timer
+        // isn't blocked on a network round trip, but it's ALWAYS re-verified
+        // against Twitch's own API (bounded retries) — a persisted value can
+        // be from a previous, already-ended stream if this tab was closed
+        // while the streamer went offline and later came back live, and we
+        // would otherwise never notice the stream actually restarted.
         if (info.is_live) {
             activeStreamer = info.username;
             if (streamStartTime === 0) {
-                const persisted = getPersistedStreamStart(info.username);
-                if (persisted) {
-                    streamStartTime = persisted;
-                } else {
-                    streamStartTime = Date.now();
-                    fetchTwitchStreamStart(info.username);
-                }
+                streamStartTime = getPersistedStreamStart(info.username) || Date.now();
                 setPersistedStreamStart(info.username, streamStartTime);
+                startVerified = false;
+                verifyAttempts = 0;
+            }
+            if (!startVerified) {
+                fetchTwitchStreamStart(info.username);
+            } else if (Date.now() - verifiedAt > REVERIFY_INTERVAL_MS) {
+                // Periodic safety re-check: DOM-based is_live detection can
+                // occasionally miss a real offline→online transition (e.g. if
+                // the tab wasn't open to see it), so re-confirm against the
+                // API every few minutes even once "verified".
+                startVerified = false;
+                verifyAttempts = 0;
+                fetchTwitchStreamStart(info.username);
             }
         } else {
             // Reset when stream goes offline
@@ -262,6 +278,8 @@
             clearPersistedStreamStart();
             fetchingStartFor = '';
             activeStreamer = '';
+            startVerified = false;
+            verifyAttempts = 0;
         }
         info.stream_start_time_ms = streamStartTime;
 
