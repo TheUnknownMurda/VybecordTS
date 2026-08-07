@@ -34,6 +34,10 @@ LRCLIB DUMP/
 *.sqlite3.gz
 *.db
 
+# ── SQLite temporary files (WAL/SHM) ──
+*.sqlite3-shm
+*.sqlite3-wal
+
 # ── Test scripts / backups ──
 test-wizard.ps1
 config.json.*-backup

@@ -549,7 +549,7 @@ export class VybecordBackend extends EventEmitter {
   handleKickPush(data: KickPayload): void {
     this.kickSource.update(data);
 
-    if (this.config.get('detect_other_apps') === false) return;
+    if (this.config.get('detect_kick') === false) return;
 
     if (!data.is_live) {
       if (this.currentTrackKey.startsWith('kick:')) this.onTrackStopped();
