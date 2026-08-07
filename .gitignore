@@ -30,9 +30,7 @@ build/
 Thumbs.db
 
 # ── LRCLib SQLite database dumps (can be 100GB+) ──
-*.sqlite3
-*.sqlite3-shm
-*.sqlite3-wal
+LRCLIB DUMP/
 *.sqlite3.gz
 *.db
 
