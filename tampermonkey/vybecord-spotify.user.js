@@ -5,6 +5,7 @@
 // @description  Push real-time Spotify Web Player data + synced lyrics to VybecordTS
 // @author       VybecordTS
 // @match        https://open.spotify.com/*
+// @match        http://127.0.0.1:8888/setup*
 // @grant        GM_xmlhttpRequest
 // @connect      127.0.0.1
 // @connect      *.spotify.com
@@ -16,6 +17,19 @@
 
 (function () {
   'use strict';
+
+  // ── Setup-page handshake ──
+  // Announce ourselves to the VybecordTS setup page so it can confirm this
+  // script is installed without the user having to go play something first.
+  // None of the logic below applies to that page, so stop right here.
+  if (location.hostname === '127.0.0.1' && location.pathname === '/setup') {
+    const announce = () =>
+      document.documentElement.setAttribute('data-vybecord-spotify', '1.1.0');
+    // @run-at document-start can fire before <html> exists.
+    if (document.documentElement) announce();
+    else document.addEventListener('DOMContentLoaded', announce, { once: true });
+    return;
+  }
 
   // ── Config ──
   const VYBECORD_URL = 'http://127.0.0.1:8888/api/spicetify';

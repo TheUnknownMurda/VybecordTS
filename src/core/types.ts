@@ -170,6 +170,12 @@ export interface VybecordConfig {
   lrclib_dump_path: string;
   /** Discord webhook URL for bug reports (optional) */
   bug_report_webhook?: string;
+  /** False until the user has been through the /setup onboarding page once.
+   *  Drives whether startup opens /setup or the dashboard. */
+  first_run_completed: boolean;
+  /** Show a Windows notification-area icon (dashboard / setup / quit).
+   *  Windows-only; ignored elsewhere. */
+  tray_enabled: boolean;
   [key: string]: unknown;
 }
 

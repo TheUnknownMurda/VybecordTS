@@ -5,6 +5,7 @@
 // @description  Push real-time Kick stream data to VybecordTS for Discord RPC
 // @author       VybecordTS
 // @match        https://kick.com/*
+// @match        http://127.0.0.1:8888/setup*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
@@ -14,6 +15,19 @@
 
 (function() {
     'use strict';
+
+    // ── Setup-page handshake ──
+    // Announce ourselves to the VybecordTS setup page so it can confirm this
+    // script is installed without the user having to go open a stream first.
+    // None of the logic below applies to that page, so stop right here.
+    if (location.hostname === '127.0.0.1' && location.pathname === '/setup') {
+        const announce = () =>
+            document.documentElement.setAttribute('data-vybecord-kick', '1.0.0');
+        // @run-at document-start can fire before <html> exists.
+        if (document.documentElement) announce();
+        else document.addEventListener('DOMContentLoaded', announce, { once: true });
+        return;
+    }
 
     // ── Config ──
     const VYBECORD_URL = 'http://127.0.0.1:8888/api/kick';

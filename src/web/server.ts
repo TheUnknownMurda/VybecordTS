@@ -13,6 +13,7 @@ import { romanize, needsRomanization } from '../core/romanize.js';
 import { evictOldest } from '../core/utils.js';
 import { isScrobbleEnabled, canAuth, getAuthUrl, completeAuth, disconnectScrobble } from '../core/lastfm.js';
 import { translateText, translateBatch, TRANSLATE_LANGS, clearTranslationCache, getTranslationCacheSize, flushTranslationCache } from '../core/translate.js';
+import { redactConfig } from '../core/config.js';
 import type { VybecordBackend } from '../backend.js';
 
 const log = createLogger('WebServer');
@@ -28,6 +29,51 @@ function sseRomanizeCached(cache: Map<string, string>, text: string): string {
   }
   return r;
 }
+
+// ── Origin policy ──
+// The server listens on 127.0.0.1, which does NOT protect it from other pages:
+// any site the user visits can POST to http://127.0.0.1:8888 (classic CSRF).
+// Mutating requests are therefore only accepted from a known origin.
+//
+// - Dashboard origins: everything, including config writes and shutdown.
+// - Platform origins: media push endpoints only (the Spicetify extension uses
+//   plain fetch() and needs real CORS headers; the Tampermonkey scripts use
+//   GM_xmlhttpRequest, which sends no Origin at all).
+const DASHBOARD_ORIGIN_RE = /^https?:\/\/(?:127\.0\.0\.1|localhost|\[::1\])(?::\d+)?$/;
+const PLATFORM_ORIGIN_RE = /^https:\/\/(?:xpui\.app\.spotify\.com|open\.spotify\.com|(?:www\.|music\.)?youtube\.com|soundcloud\.com|(?:[a-z0-9-]+\.)*bandcamp\.com|kick\.com|(?:www\.)?twitch\.tv)$/;
+
+/** Endpoints a media platform page is allowed to write to. */
+const PLATFORM_PUSH_PATHS = new Set([
+  '/api/spicetify',
+  '/api/youtube',
+  '/api/soundcloud',
+  '/api/bandcamp',
+  '/api/kick',
+  '/api/twitch',
+  '/api/spotify-lyrics',
+]);
+
+type OriginKind = 'dashboard' | 'platform' | 'unknown';
+
+function classifyOrigin(origin: string | undefined): OriginKind {
+  if (!origin) return 'unknown';
+  if (DASHBOARD_ORIGIN_RE.test(origin)) return 'dashboard';
+  if (PLATFORM_ORIGIN_RE.test(origin)) return 'platform';
+  return 'unknown';
+}
+
+// ── Tampermonkey userscripts served for one-click install ──
+// Explicit allowlist rather than joining the URL onto a directory: the setup
+// page is the only caller, and a hardcoded set makes path traversal impossible
+// by construction.
+const USERSCRIPTS: readonly string[] = [
+  'vybecord-spotify.user.js',
+  'vybecord-youtube.user.js',
+  'vybecord-soundcloud.user.js',
+  'vybecord-bandcamp.user.js',
+  'vybecord-kick.user.js',
+  'vybecord-twitch.user.js',
+];
 
 const MIME: Record<string, string> = {
   '.html': 'text/html',
@@ -149,7 +195,7 @@ export class WebServer {
       this.broadcast('lyricsUpdate', data);
     });
     backend.on('configUpdate', (cfg) => {
-      this.broadcast('configUpdate', cfg);
+      this.broadcast('configUpdate', redactConfig(cfg));
     });
     let lastProgressBroadcast = 0;
     backend.on('progressUpdate', (data) => {
@@ -218,10 +264,17 @@ export class WebServer {
     const url = new URL(req.url ?? '/', `http://127.0.0.1:${this.port}`);
     const method = req.method ?? 'GET';
 
-    // CORS headers
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    // CORS — echo the origin back only when it is one we trust, so a random
+    // site can never read a response (config, listening history, ...).
+    const origin = req.headers.origin;
+    const originKind = classifyOrigin(origin);
+    if (origin && originKind !== 'unknown') {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Vary', 'Origin');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      res.setHeader('Access-Control-Max-Age', '86400'); // cache preflights (pushes run every ~2.5s)
+    }
 
     if (method === 'OPTIONS') {
       res.writeHead(204);
@@ -229,10 +282,22 @@ export class WebServer {
       return;
     }
 
+    // CSRF guard: a browser always sends Origin on cross-site writes. A missing
+    // Origin means a non-browser client (GM_xmlhttpRequest, curl) — allowed.
+    if (method !== 'GET' && originKind === 'unknown' && origin) {
+      log.warn(`Blocked ${method} ${url.pathname} from untrusted origin: ${origin}`);
+      return this.jsonResponse(res, { error: 'Origin not allowed' }, 403);
+    }
+    // Platform pages may only push media state — never touch settings.
+    if (method !== 'GET' && originKind === 'platform' && !PLATFORM_PUSH_PATHS.has(url.pathname)) {
+      log.warn(`Blocked ${method} ${url.pathname} from platform origin: ${origin}`);
+      return this.jsonResponse(res, { error: 'Origin not allowed for this endpoint' }, 403);
+    }
+
     try {
       // API routes
       if (url.pathname === '/api/config' && method === 'GET') {
-        return this.jsonResponse(res, this.backend.getConfig());
+        return this.jsonResponse(res, redactConfig(this.backend.getConfig()));
       }
       if (url.pathname === '/api/config' && method === 'POST') {
         return await this.handleConfigUpdate(req, res);
@@ -245,6 +310,8 @@ export class WebServer {
           spotifyConnected: this.backend.isSpotifyConnected(),
           spicetifyActive: this.backend.isSpicetifyActive(),
           youtubeActive: this.backend.isYouTubeSourceActive(),
+          soundcloudActive: this.backend.isSoundCloudSourceActive(),
+          bandcampActive: this.backend.isBandcampSourceActive(),
           kickActive: this.backend.isKickSourceActive(),
           twitchActive: this.backend.isTwitchSourceActive(),
         });
@@ -467,6 +534,17 @@ export class WebServer {
         return this.jsonResponse(res, { ok: true });
       }
 
+      // Onboarding page (Tampermonkey + Spicetify one-click setup)
+      if (url.pathname === '/setup' && method === 'GET') {
+        return await this.serveFile(res, 'setup.html');
+      }
+
+      // Userscripts — Tampermonkey intercepts these URLs and shows its install prompt
+      if (url.pathname.startsWith('/tampermonkey/') && method === 'GET') {
+        const name = url.pathname.slice('/tampermonkey/'.length);
+        return await this.serveUserscript(res, name);
+      }
+
       // Static file serving (dashboard)
       if (url.pathname === '/' || url.pathname === '/index.html' || url.pathname === '/v2') {
         return await this.serveFile(res, 'dashboard-v2.html');
@@ -494,7 +572,7 @@ export class WebServer {
       const body = await this.readBody(req);
       const updates = JSON.parse(body) as Record<string, unknown>;
       this.backend.updateConfig(updates);
-      this.jsonResponse(res, { ok: true, config: this.backend.getConfig() });
+      this.jsonResponse(res, { ok: true, config: redactConfig(this.backend.getConfig()) });
     } catch (e) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: `Invalid config: ${e}` }));
@@ -806,6 +884,39 @@ export class WebServer {
     }
   }
 
+  /**
+   * Serve a Tampermonkey userscript so the browser extension can install it in
+   * one click. Only names from USERSCRIPTS are accepted, so the request can
+   * never escape the scripts folder.
+   */
+  private async serveUserscript(res: http.ServerResponse, name: string): Promise<void> {
+    if (!USERSCRIPTS.includes(name)) {
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      res.end('Unknown userscript');
+      return;
+    }
+
+    // Packaged: <exe dir>/tampermonkey/. Dev: <repo root>/tampermonkey/.
+    const IS_PKG = !!(process as unknown as { pkg?: unknown }).pkg;
+    const baseDir = IS_PKG
+      ? path.dirname(process.execPath)
+      : path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+    const filePath = path.join(baseDir, 'tampermonkey', name);
+
+    try {
+      const content = await fsp.readFile(filePath, 'utf-8');
+      res.writeHead(200, {
+        'Content-Type': 'application/javascript; charset=utf-8',
+        'Cache-Control': 'no-cache, no-store',
+      });
+      res.end(content);
+    } catch {
+      log.warn(`Userscript not found on disk: ${filePath}`);
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      res.end('Userscript file missing');
+    }
+  }
+
   private async serveFile(res: http.ServerResponse, filename: string): Promise<void> {
     const IS_PKG = !!(process as unknown as { pkg?: unknown }).pkg;
     const dir = IS_PKG
@@ -838,7 +949,7 @@ export class WebServer {
     res.write(`data: ${JSON.stringify({
       type: 'init',
       track: this.backend.getCurrentTrack(),
-      config: this.backend.getConfig(),
+      config: redactConfig(this.backend.getConfig()),
       sourceMode: this.backend.getSourceMode(),
       discordConnected: this.backend.isDiscordConnected(),
       spotifyConnected: this.backend.isSpotifyConnected(),

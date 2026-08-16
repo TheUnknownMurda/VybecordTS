@@ -41,3 +41,6 @@ LRCLIB DUMP/
 # ── Test scripts / backups ──
 test-wizard.ps1
 config.json.*-backup
+
+# ── Atomic-write temp files ──
+*.tmp

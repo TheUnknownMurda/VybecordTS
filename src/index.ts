@@ -12,40 +12,28 @@ import { initLogFile, setLogLevel, createLogger, flushAndClose, writeRainbow, wr
 import { flushTranslationCache, initTranslateCache } from './core/translate.js';
 import { VybecordBackend } from './backend.js';
 import { WebServer } from './web/server.js';
+import { TrayIcon } from './core/tray.js';
+import type { TrackData } from './core/types.js';
 
 const log = createLogger('Main');
 const startTime = Date.now();
 
-// ── System Tray Setup ──
-async function setupTray(): Promise<void> {
-  try {
-    // Only hide console if VYBECORD_TRAY_MODE is set (for start-hidden mode)
-    // The tray icon is now launched by run.bat separately
-    if (process.platform === 'win32' && process.env.VYBECORD_TRAY_MODE === '1') {
-      try {
-        const psScript = `
-          Add-Type -Name Window -Namespace Console -MemberDefinition '
-            [DllImport("user32.dll")]
-            public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-            [DllImport("kernel32.dll")]
-            public static extern IntPtr GetConsoleWindow();
-          '
-          $consoleWindow = [Console.Window]::GetConsoleWindow()
-          if ($consoleWindow -ne [IntPtr]::Zero) {
-            [Console.Window]::ShowWindow($consoleWindow, 0) # 0 = SW_HIDE
-          }
-        `;
-        exec(`powershell.exe -WindowStyle Hidden -Command "${psScript.replace(/\n/g, ' ')}"`, (err) => {
-          if (err) log.debug(`Could not hide console: ${err.message}`);
-        });
-        log.info('Console hidden - app running in background ✓');
-      } catch (e) {
-        log.debug(`Could not hide console: ${e}`);
-      }
-    }
-  } catch (e) {
-    log.warn(`Could not setup system tray: ${e}`);
-  }
+const BASE_URL = 'http://127.0.0.1:8888';
+
+/** Open a URL in the user's default browser. Failure is never fatal. */
+function openInBrowser(url: string): void {
+  const cmd = process.platform === 'win32' ? `start "" "${url}"`
+    : process.platform === 'darwin' ? `open "${url}"`
+    : `xdg-open "${url}"`;
+  exec(cmd, (err) => { if (err) log.debug(`Could not open browser: ${err.message}`); });
+}
+
+/** Tray tooltip for the current track — "VybecordTS" when nothing is playing. */
+function trayTooltip(track: TrackData | null): string {
+  if (!track?.track_name) return 'VybecordTS';
+  return track.artist_name
+    ? `${track.artist_name} — ${track.track_name}`
+    : track.track_name;
 }
 
 // ── Resolve working directory ──
@@ -88,6 +76,8 @@ async function main() {
   const backend = new VybecordBackend(baseDir);
   const web = new WebServer(backend, 8888);
 
+  let tray: TrayIcon | null = null;
+
   // Graceful shutdown
   let shuttingDown = false;
   const onExit = async () => {
@@ -96,6 +86,7 @@ async function main() {
     writeSection('Shutting down', logoWidth);
     log.info('Stopping background services...');
     flushTranslationCache();
+    tray?.stop();
     web.stop();
     await backend.shutdown();
     // Brief delay to let the IPC socket flush clearActivity before exit
@@ -109,17 +100,30 @@ async function main() {
   backend.on('shutdownRequested', onExit);
 
   try {
-    // Setup system tray/console hiding before starting backend
-    await setupTray();
-    
     await backend.start();
     web.start();
     log.info(`VybecordTS ready in ${Date.now() - startTime}ms ✓ — press Ctrl+C to stop`);
 
-    // Auto-open dashboard in default browser
-    const url = 'http://127.0.0.1:8888';
-    const cmd = process.platform === 'win32' ? `start "" "${url}"` : process.platform === 'darwin' ? `open "${url}"` : `xdg-open "${url}"`;
-    exec(cmd, (err) => { if (err) log.debug(`Could not open browser: ${err.message}`); });
+    // System tray icon — opt-out via "tray_enabled": false in config.json.
+    if (backend.getConfig().tray_enabled !== false) {
+      tray = new TrayIcon((cmd) => {
+        switch (cmd) {
+          case 'quit': void onExit(); break;
+          case 'setup': openInBrowser(`${BASE_URL}/setup`); break;
+          case 'dashboard': openInBrowser(BASE_URL); break;
+        }
+      });
+      tray.start();
+      // Hovering the icon shows what's playing.
+      backend.on('trackUpdate', (track: TrackData | null) => {
+        tray?.setTooltip(trayTooltip(track));
+      });
+    }
+
+    // Auto-open in default browser: the onboarding page until it has been
+    // completed once, the dashboard afterwards.
+    const firstRun = backend.getConfig().first_run_completed !== true;
+    openInBrowser(firstRun ? `${BASE_URL}/setup` : BASE_URL);
   } catch (e) {
     log.error(`Fatal: ${e}`);
     flushAndClose();

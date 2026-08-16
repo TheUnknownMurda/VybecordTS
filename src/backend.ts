@@ -24,7 +24,7 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { EventEmitter } from 'node:events';
 import { createLogger } from './core/logger.js';
-import { ConfigManager } from './core/config.js';
+import { ConfigManager, sanitizeConfigUpdate } from './core/config.js';
 import { SpotifyClient } from './core/spotify.js';
 import { DesktopSource } from './core/desktop-source.js';
 import { SpicetifySource, type SpicetifyPayload } from './core/spicetify-source.js';
@@ -46,7 +46,7 @@ import { initBlacklist, flagLyrics, isLyricsFlagged, clearFlags, listFlaggedTrac
 import { initHistory, historyTrackStart, historyTrackEnd, getRecentHistory, getHistoryCount, getWrappedStats } from './core/listening-history.js';
 import { translateBatch } from './core/translate.js';
 import { evictOldest, evictUntil } from './core/utils.js';
-import type { TrackData, SpotifyPlayback, LyricLine } from './core/types.js';
+import type { TrackData, SpotifyPlayback, LyricLine, VybecordConfig } from './core/types.js';
 
 const log = createLogger('Backend');
 
@@ -63,6 +63,16 @@ const MUSIC_APPS = new Set(['spotify', 'apple_music', 'deezer', 'tidal', 'amazon
 const WEB_SOURCES = ['browser_', 'soundcloud', 'bandcamp', 'youtube'];
 const VIDEO_SOURCES = ['browser_', 'youtube'];
 const ARTIST_SPLIT_RE = /[,]/;  // Precompiled — used in recordPlay + artist key extraction
+
+/**
+ * Discord App ID used when the user has not configured one.
+ * A distributed .exe ships without an `.env`, so without this fallback the app
+ * could not start at all on someone else's machine. An application ID is public
+ * information (Discord sends it to every client that sees the presence), unlike
+ * a client secret — same reasoning as the platform IDs below.
+ * Override it with `discord_app_id` in config.json or DISCORD_CLIENT_ID in .env.
+ */
+const DEFAULT_DISCORD_APP_ID = '1396531182426128394';
 
 // Platform-specific Discord App IDs (changes the app name shown in Discord)
 const PLATFORM_DISCORD_APP_IDS: Record<string, string> = {
@@ -147,10 +157,9 @@ export class VybecordBackend extends EventEmitter {
       this.emit('configUpdate', cfg);
     });
 
-    const discordAppId = this.config.get('discord_app_id') || process.env.DISCORD_CLIENT_ID || '';
-    if (!discordAppId) {
-      throw new Error('Missing DISCORD_CLIENT_ID in config or .env');
-    }
+    const discordAppId = this.config.get('discord_app_id')
+      || process.env.DISCORD_CLIENT_ID
+      || DEFAULT_DISCORD_APP_ID;
 
     this.discord = new DiscordIPC(discordAppId);
     this.currentDiscordAppId = discordAppId; // Track current App ID for platform switching
@@ -163,30 +172,7 @@ export class VybecordBackend extends EventEmitter {
     this.twitchSource = new TwitchSource();
 
     // Wire lyrics engine callbacks
-    this.lyricsEngine.setCallbacks({
-      onLyricChange: (current, next, prev) => {
-        log.debug(`[LYRIC] ${current} → ${next}`);
-        const t = this.currentTrack;
-        const lyricsState = {
-          current,
-          next,
-          prev,
-          progress_ms: Math.round(this.lyricsEngine.getElapsed()),
-          duration_ms: t ? t.duration_ms : 0,
-          lyrics: this.lyricsEngine.getLyrics(),
-          currentIndex: this.lyricsEngine.getCurrentIndex(),
-        };
-        this.lastLyricsState = lyricsState;
-        this.emit('lyricsUpdate', lyricsState);
-        // Return measured IPC pipe write latency for EMA compensation
-        return this.discord.lastWriteLatencyMs;
-      },
-      onRpcUpdate: (activity) => {
-        if (this.config.get('rpc_enabled')) {
-          this.discord.setActivity(activity);
-        }
-      },
-    });
+    this.wireEngineCallbacks();
 
     // React to config toggles in real-time
     this.on('configUpdate', (cfg) => {
@@ -272,15 +258,7 @@ export class VybecordBackend extends EventEmitter {
     });
 
     // 2. Discord RPC connect (with retry)
-    this.discord.onReady(() => {
-      log.info('Discord RPC connected ✓');
-      this.setIdlePresence();
-      this.emitStatus();
-    });
-    this.discord.onDisconnect(() => {
-      log.warn('Discord disconnected — will retry');
-      this.emitStatus();
-    });
+    this.wireDiscordHandlers();
 
     // Connect in background (don't block startup)
     this.discord.connectWithRetry().catch(e => {
@@ -660,15 +638,74 @@ export class VybecordBackend extends EventEmitter {
 
   // ── Polling (supports Premium API, Spicetify, & Free SMTC) ──
 
+  /**
+   * Declarative source table used by poll() to iterate push-based sources.
+   * Each entry describes a single web source: how to detect it, how to get
+   * its track, the config gate, and the key-prefix for paused-stop detection.
+   * The order matters: higher-priority sources are checked first.
+   */
+  private readonly pollSources: {
+    source: { readonly isActive: boolean; readonly isPaused: boolean; getCurrentTrack(): TrackData | null };
+    configKey: keyof VybecordConfig;
+    keyPrefix: string;
+    isLive?: boolean;  // live-stream sources skip checkRepeatLoop
+    scrobble?: boolean; // track scrobble eligibility
+  }[] = [];
+
+  /** Initialised lazily because the sources are set in the constructor body. */
+  private ensurePollSources(): void {
+    if (this.pollSources.length) return;
+    this.pollSources.push(
+      { source: this.youtubeSource,    configKey: 'detect_youtube',     keyPrefix: 'yt:' },
+      { source: this.soundcloudSource, configKey: 'detect_soundcloud',  keyPrefix: 'sc:' },
+      { source: this.bandcampSource,   configKey: 'detect_other_apps',  keyPrefix: 'bc:',     scrobble: true },
+      { source: this.kickSource,       configKey: 'detect_kick',        keyPrefix: 'kick:',   isLive: true },
+      { source: this.twitchSource,     configKey: 'detect_twitch',      keyPrefix: 'twitch:', isLive: true },
+    );
+  }
+
+  /**
+   * Try each push-based web source in priority order.
+   * Returns `true` if a source claimed the poll tick (either because it's
+   * actively playing or because its paused state stopped the current track).
+   */
+  private pollWebSources(): boolean {
+    for (const { source, configKey, keyPrefix, isLive, scrobble } of this.pollSources) {
+      if (!source.isActive || this.config.get(configKey) === false) continue;
+      const track = source.getCurrentTrack();
+      if (track) {
+        const trackKey = this.buildTrackKey(track);
+        if (trackKey === this.currentTrackKey) {
+          if (isLive) {
+            // Live streams: update trackData (stream_start_time_ms) without checkRepeatLoop
+            this.currentTrack = track;
+            this.lyricsEngine.syncProgress(track.progress_ms, track);
+          } else if (!this.checkRepeatLoop(track)) {
+            this.syncTrackProgress(track, scrobble);
+          }
+        }
+        // Whether same or new track, this source claims the tick.
+        // New-track detection is handled by the push handler, not poll.
+        return true;
+      }
+      // Source active but paused — stop if current track belongs to it
+      if (source.isPaused && this.currentTrackKey.startsWith(keyPrefix)) {
+        this.onTrackStopped();
+        return true;
+      }
+    }
+    return false;
+  }
+
   private async poll(): Promise<void> {
     try {
+      this.ensurePollSources();
+
       // Priority 1: Spicetify extension (push-based, highest quality for Spotify)
-      // If active, skip API/SMTC for Spotify — but still run SMTC for non-Spotify media
       if (this.spicetify.isActive) {
         const spTrack = this.spicetify.getCurrentTrack();
         if (spTrack && this.config.get('detect_spotify') !== false) {
-          // Spicetify is playing Spotify — it handles everything via push.
-          // Only sync progress here as a safety net (push is the primary path).
+          // Spicetify is playing — sync progress as a safety net (push is primary)
           const trackKey = this.buildTrackKey(spTrack);
           if (trackKey === this.currentTrackKey) {
             if (!this.checkRepeatLoop(spTrack)) {
@@ -686,76 +723,14 @@ export class VybecordBackend extends EventEmitter {
           }
           return;
         }
-        // Spicetify disabled or paused — check other sources for non-Spotify media
-        if (this.youtubeSource.isActive && this.config.get('detect_youtube') !== false) {
-          const ytTrack = this.youtubeSource.getCurrentTrack();
-          if (ytTrack) {
-            const trackKey = this.buildTrackKey(ytTrack);
-            if (trackKey === this.currentTrackKey) {
-              if (!this.checkRepeatLoop(ytTrack)) {
-                this.syncTrackProgress(ytTrack);
-              }
-            }
-            return;
-          }
-        }
-        if (this.soundcloudSource.isActive && this.config.get('detect_soundcloud') !== false) {
-          const scTrack = this.soundcloudSource.getCurrentTrack();
-          if (scTrack) {
-            const trackKey = this.buildTrackKey(scTrack);
-            if (trackKey === this.currentTrackKey) {
-              if (!this.checkRepeatLoop(scTrack)) {
-                this.syncTrackProgress(scTrack);
-              }
-            }
-            return;
-          }
-          // SoundCloud active but paused — stop if current track is SoundCloud
-          if (this.soundcloudSource.isPaused && this.currentTrackKey.startsWith('sc:')) {
-            this.onTrackStopped();
-            return;
-          }
-        }
-        if (this.bandcampSource.isActive && this.config.get('detect_other_apps') !== false) {
-          const bcTrack = this.bandcampSource.getCurrentTrack();
-          if (bcTrack) {
-            const trackKey = this.buildTrackKey(bcTrack);
-            if (trackKey === this.currentTrackKey) {
-              if (!this.checkRepeatLoop(bcTrack)) {
-                this.syncTrackProgress(bcTrack, true);
-              }
-            }
-            return;
-          }
-          // Bandcamp active but paused — stop if current track is Bandcamp
-          if (this.bandcampSource.isPaused && this.currentTrackKey.startsWith('bc:')) {
-            this.onTrackStopped();
-            return;
-          }
-        }
-        if (this.kickSource.isActive && this.config.get('detect_kick') !== false) {
-          const kickTrack = this.kickSource.getCurrentTrack();
-          if (kickTrack) {
-            const trackKey = this.buildTrackKey(kickTrack);
-            if (trackKey === this.currentTrackKey) {
-              // Same stream — no progress sync needed for live streams
-              return;
-            }
-            return;
-          }
-          // Kick active but not live — stop if current track is Kick
-          if (this.kickSource.isPaused && this.currentTrackKey.startsWith('kick:')) {
-            this.onTrackStopped();
-            return;
-          }
-        }
+        // Spicetify disabled or paused — check web sources for non-Spotify media
+        if (this.pollWebSources()) return;
+
+        // Fall through to SMTC for desktop apps (non-browser)
         if (this.desktop) {
           const desktopTrack = this.desktop.getCurrentTrack();
           const dSrc = desktopTrack?.media_source || '';
           const isBrowserSrc = dSrc.startsWith('browser_') || dSrc === 'unknown';
-          // When Spicetify/TM is active but paused: allow SMTC Spotify desktop through
-          // (user is listening on the desktop app while browser tab with TM script is open)
-          // Only block browser sources (stale duplicates of the paused web player)
           const spicetifyPlaying = !this.spicetify.isPaused;
           const blocked = spicetifyPlaying ? (dSrc === 'spotify' || isBrowserSrc) : isBrowserSrc;
           if (desktopTrack && !blocked) {
@@ -763,29 +738,23 @@ export class VybecordBackend extends EventEmitter {
             return;
           }
         }
-        // Spicetify paused AND no other source found — check if truly idle
+        // Spicetify paused AND no other source found
         if (this.spicetify.isPaused && !this.currentTrack) {
           this.onTrackStopped();
         }
-        // Spicetify is paused — ensure Discord presence stays cleared
-        // This prevents other sources from re-establishing presence during pause
         if (this.spicetify.isPaused && this.config.get('rpc_only_when_playing')) {
           this.setIdlePresence();
         }
         return;
       }
 
-      // Priority 2: YouTube userscript (push-based, highest quality for YouTube)
+      // Priority 2: YouTube userscript (when no Spicetify)
       if (this.youtubeSource.isActive && this.config.get('detect_youtube') !== false) {
         const ytTrack = this.youtubeSource.getCurrentTrack();
         if (ytTrack) {
-          // YouTube userscript is playing — handles everything via push.
-          // Only sync progress here as a safety net.
           const trackKey = this.buildTrackKey(ytTrack);
-          if (trackKey === this.currentTrackKey) {
-            if (!this.checkRepeatLoop(ytTrack)) {
-              this.syncTrackProgress(ytTrack);
-            }
+          if (trackKey === this.currentTrackKey && !this.checkRepeatLoop(ytTrack)) {
+            this.syncTrackProgress(ytTrack);
           }
           return;
         }
@@ -794,13 +763,11 @@ export class VybecordBackend extends EventEmitter {
           const desktopTrack = this.desktop.getCurrentTrack();
           const src = desktopTrack?.media_source || '';
           const isYtSrc = src === 'youtube' || src === 'youtube_music' || src.startsWith('browser_');
-          // Only use SMTC if it's NOT a YouTube source (avoid double-handling)
           if (desktopTrack && !isYtSrc) {
             this.handleDesktopTrack(desktopTrack);
             return;
           }
         }
-        // Only stop if no other media source is playing
         if (this.youtubeSource.isPaused && !this.currentTrackKey) {
           this.onTrackStopped();
         }
@@ -812,102 +779,9 @@ export class VybecordBackend extends EventEmitter {
         const playback = await this.spotify.getCurrentPlayback();
         this.handleSpotifyPlayback(playback);
       } else {
-        // Priority 3b: YouTube userscript (Tampermonkey) — always before SMTC
-        if (this.youtubeSource.isActive && this.config.get('detect_youtube') !== false) {
-          const ytTrack = this.youtubeSource.getCurrentTrack();
-          if (ytTrack) {
-            const trackKey = this.buildTrackKey(ytTrack);
-            if (trackKey === this.currentTrackKey) {
-              if (!this.checkRepeatLoop(ytTrack)) {
-                this.syncTrackProgress(ytTrack);
-              }
-            }
-            return;
-          }
-        }
-        // Priority 3c: SoundCloud userscript — before SMTC
-        if (this.soundcloudSource.isActive && this.config.get('detect_soundcloud') !== false) {
-          const scTrack = this.soundcloudSource.getCurrentTrack();
-          if (scTrack) {
-            const trackKey = this.buildTrackKey(scTrack);
-            if (trackKey === this.currentTrackKey) {
-              if (!this.checkRepeatLoop(scTrack)) {
-                this.syncTrackProgress(scTrack);
-              }
-            }
-            return;
-          }
-          // SoundCloud active but paused — stop if current track is SoundCloud
-          if (this.soundcloudSource.isPaused && this.currentTrackKey.startsWith('sc:')) {
-            this.onTrackStopped();
-            return;
-          }
-          // SoundCloud paused but a non-SC track is playing — fall through to SMTC
-        }
-        // Priority 3d: Bandcamp userscript — before SMTC
-        if (this.bandcampSource.isActive && this.config.get('detect_other_apps') !== false) {
-          const bcTrack = this.bandcampSource.getCurrentTrack();
-          if (bcTrack) {
-            const trackKey = this.buildTrackKey(bcTrack);
-            if (trackKey === this.currentTrackKey) {
-              if (!this.checkRepeatLoop(bcTrack)) {
-                this.syncTrackProgress(bcTrack, true);
-              }
-            }
-            return;
-          }
-          // Bandcamp active but paused — stop if current track is Bandcamp
-          if (this.bandcampSource.isPaused && this.currentTrackKey.startsWith('bc:')) {
-            this.onTrackStopped();
-            return;
-          }
-        }
-        // Priority 3e: Kick userscript — before SMTC
-        if (this.kickSource.isActive && this.config.get('detect_kick') !== false) {
-          const kickTrack = this.kickSource.getCurrentTrack();
-          if (kickTrack) {
-            const trackKey = this.buildTrackKey(kickTrack);
-            if (trackKey === this.currentTrackKey) {
-              // Same stream — no progress sync needed for live streams
-              return;
-            }
-            return;
-          }
-          // Kick active but not live — stop if current track is Kick
-          if (this.kickSource.isPaused && this.currentTrackKey.startsWith('kick:')) {
-            this.onTrackStopped();
-            return;
-          }
-        }
-        // Priority 3f: Twitch userscript — before SMTC
-        if (this.twitchSource.isActive && this.config.get('detect_twitch') !== false) {
-          const twitchTrack = this.twitchSource.getCurrentTrack();
-          if (twitchTrack) {
-            const trackKey = this.buildTrackKey(twitchTrack);
-            if (trackKey === this.currentTrackKey) {
-              // Same stream — update track to ensure stream_start_time_ms is passed to lyrics-engine
-              this.currentTrack = twitchTrack;
-              // Force syncProgress to update trackData in lyrics-engine (even for live streams)
-              this.lyricsEngine.syncProgress(twitchTrack.progress_ms, twitchTrack);
-              return;
-            }
-            // New stream detected
-            this.prefetchedKey = '';
-            this.currentTrackKey = trackKey;
-            this.currentTrack = twitchTrack;
-            this.cachedIsWebSource = true; // Twitch is a web source
-            log.info(`[NEW TRACK] ${twitchTrack.track_name} — ${twitchTrack.artist_name} (twitch-userscript)`);
-            this.recordPlay(twitchTrack);
-            this.emit('trackUpdate', twitchTrack);
-            this.onNewTrack(twitchTrack).catch(e => log.error(`[NEW TRACK] Error: ${e}`));
-            return;
-          }
-          // Twitch active but not live — stop if current track is Twitch
-          if (this.twitchSource.isPaused && this.currentTrackKey.startsWith('twitch:')) {
-            this.onTrackStopped();
-            return;
-          }
-        }
+        // Priority 3b–3f: all push-based web sources (table-driven)
+        if (this.pollWebSources()) return;
+
         // Priority 4: Desktop SMTC (Free users)
         if (this.desktop) {
           const track = this.desktop.getCurrentTrack();
@@ -1625,7 +1499,14 @@ export class VybecordBackend extends EventEmitter {
 
   /** Batch-update config keys and emit configUpdate so toggles react immediately. */
   updateConfig(updates: Record<string, unknown>): void {
-    this.config.setMany(updates as any);
+    // Anything reaching this method comes from an HTTP client — only known keys
+    // holding a valid value are written to disk.
+    const { accepted, rejected } = sanitizeConfigUpdate(updates);
+    if (rejected.length) {
+      log.warn(`Ignored ${rejected.length} invalid config key(s): ${rejected.join(', ')}`);
+    }
+    if (!Object.keys(accepted).length) return;
+    this.config.setMany(accepted as Partial<VybecordConfig>);
     this.emit('configUpdate', this.config.getAll());
   }
   getCurrentTrack() { return this.currentTrack; }
@@ -1678,15 +1559,17 @@ export class VybecordBackend extends EventEmitter {
   }
 
   private saveStatsHistory(): void {
+    // Written once per session (during shutdown), so a synchronous atomic write
+    // is both safe and more reliable than async I/O racing process.exit():
+    // full content lands in a temp file, then a single rename swaps it in.
+    const tmpPath = `${this.statsHistoryPath}.${process.pid}.tmp`;
     try {
-      fs.mkdir(path.dirname(this.statsHistoryPath), { recursive: true }, (err) => {
-        if (err) return log.warn(`Failed to create stats history directory: ${err}`);
-        fs.writeFile(this.statsHistoryPath, JSON.stringify(this.statsHistory, null, 2), 'utf-8', (writeErr) => {
-          if (writeErr) log.warn(`Failed to save stats history: ${writeErr}`);
-        });
-      });
+      fs.mkdirSync(path.dirname(this.statsHistoryPath), { recursive: true });
+      fs.writeFileSync(tmpPath, JSON.stringify(this.statsHistory, null, 2), 'utf-8');
+      fs.renameSync(tmpPath, this.statsHistoryPath);
     } catch (e) {
       log.warn(`Failed to save stats history: ${e}`);
+      try { fs.unlinkSync(tmpPath); } catch { /* nothing to clean up */ }
     }
   }
 
@@ -1735,12 +1618,68 @@ export class VybecordBackend extends EventEmitter {
   }
 
   /**
+   * Wire the lyrics engine callbacks (SSE lyric state + Discord RPC push).
+   * Called once at construction and again after every Discord IPC swap, so the
+   * emitted payload stays identical in both cases (single source of truth).
+   */
+  private wireEngineCallbacks(): void {
+    this.lyricsEngine.setCallbacks({
+      onLyricChange: (current, next, prev) => {
+        log.debug(`[LYRIC] ${current} → ${next}`);
+        const t = this.currentTrack;
+        const lyricsState = {
+          current,
+          next,
+          prev,
+          progress_ms: Math.round(this.lyricsEngine.getElapsed()),
+          duration_ms: t ? t.duration_ms : 0,
+          lyrics: this.lyricsEngine.getLyrics(),
+          currentIndex: this.lyricsEngine.getCurrentIndex(),
+        };
+        this.lastLyricsState = lyricsState;
+        this.emit('lyricsUpdate', lyricsState);
+        // Return measured IPC pipe write latency for EMA compensation
+        return this.discord.lastWriteLatencyMs;
+      },
+      onRpcUpdate: (activity) => {
+        if (this.config.get('rpc_enabled')) {
+          this.discord.setActivity(activity);
+        }
+      },
+    });
+  }
+
+  /** Wire ready/disconnect handlers on the current Discord IPC instance. */
+  private wireDiscordHandlers(): void {
+    // Capture the instance: an App ID switch may replace `this.discord` while an
+    // in-flight connect() is still running on the old one. Its callbacks must
+    // not touch the presence of the new instance.
+    const ipc = this.discord;
+    ipc.onReady(() => {
+      if (this.discord !== ipc) {
+        ipc.close(); // stale connection from a previous App ID — drop it
+        return;
+      }
+      log.info('Discord RPC connected ✓');
+      this.setIdlePresence();
+      this.emitStatus();
+    });
+    ipc.onDisconnect(() => {
+      if (this.discord !== ipc) return;
+      log.warn('Discord disconnected — will retry');
+      this.emitStatus();
+    });
+  }
+
+  /**
    * Reconnect Discord with a different App ID based on media source.
    * This changes the application name shown in Discord.
    */
   private async reconnectDiscordForSource(source: string): Promise<void> {
     const platformAppId = PLATFORM_DISCORD_APP_IDS[source];
-    const defaultAppId = this.config.get('discord_app_id') || process.env.DISCORD_CLIENT_ID || '';
+    const defaultAppId = this.config.get('discord_app_id')
+      || process.env.DISCORD_CLIENT_ID
+      || DEFAULT_DISCORD_APP_ID;
     // Always prefer platform-specific AppID over default
     const targetAppId = platformAppId || defaultAppId;
 
@@ -1754,9 +1693,6 @@ export class VybecordBackend extends EventEmitter {
 
     log.info(`[DISCORD] Switching App ID for ${source}: ${this.currentDiscordAppId || 'default'} → ${targetAppId}`);
 
-    // Store current activity to restore after reconnect
-    const wasConnected = this.discord.isConnected;
-
     // Close current connection
     this.discord.close();
 
@@ -1764,45 +1700,17 @@ export class VybecordBackend extends EventEmitter {
     this.discord = new DiscordIPC(targetAppId);
     this.currentDiscordAppId = targetAppId;
 
-    // Re-wire callbacks
-    this.discord.onReady(() => {
-      log.info('Discord RPC connected ✓');
-      this.setIdlePresence();
-      this.emitStatus();
-    });
-    this.discord.onDisconnect(() => {
-      log.warn('Discord disconnected — will retry');
-      this.emitStatus();
-    });
+    // Re-wire callbacks (ready/disconnect + engine → new IPC instance)
+    this.wireDiscordHandlers();
+    this.wireEngineCallbacks();
 
-    // Re-wire lyrics engine callback for Discord
-    this.lyricsEngine.setCallbacks({
-      onLyricChange: (current, next, prev) => {
-        log.debug(`[LYRIC] ${current} → ${next}`);
-        const t = this.currentTrack;
-        const lyricsState = {
-          current,
-          next,
-          prev,
-          progress_ms: Math.round(this.lyricsEngine.getElapsed()),
-          duration_ms: t ? t.duration_ms : 0,
-        };
-        this.lastLyricsState = lyricsState;
-        this.emit('lyricsUpdate', lyricsState);
-        // Return measured IPC pipe write latency for EMA compensation
-        return this.discord.lastWriteLatencyMs;
-      },
-      onRpcUpdate: (activity) => {
-        if (this.config.get('rpc_enabled')) {
-          this.discord.setActivity(activity);
-        }
-      },
+    // Connect in background — always retry, even if the previous instance was
+    // not connected yet (otherwise a source switch during startup or while
+    // Discord is closed would leave us permanently without any presence).
+    if (this.shuttingDown) return;
+    this.discord.connectWithRetry().catch(e => {
+      log.error(`Discord reconnection failed: ${e}`);
     });
-
-    // Connect in background
-    if (wasConnected) {
-      this.discord.connect().catch(() => {});
-    }
   }
 
   /** Record a track play for session stats + scrobbling. */

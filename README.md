@@ -46,43 +46,34 @@ Installation Difficulty (Advanced)
 
 ## Quick Start (Users)
 
-**No coding required.** Download and run.
+**No coding required.**
 
-### Option A: Spotify Premium (Recommended)
-Official Spotify API integration — most reliable, full metadata, no third-party tools needed.
+1. **Download** `VybecordTS-Setup.exe` from [Releases](https://github.com/TheUnknownMurda/VybecordTS/releases)
+2. **Run it.** It installs to `%APPDATA%\VybecordTS` and needs no administrator rights.
+   You can pick another folder, as long as it's one you can write to — VybecordTS
+   keeps its config, logs and lyrics database next to the executable.
+3. **Optional, on the Spotify page of the wizard:** tick *Install Spicetify and the
+   Vybecord extension* if you use the Spotify **desktop app**. Close Spotify first.
+4. **VybecordTS starts** and opens the setup page in your browser.
+5. **On the setup page:** install Tampermonkey, then click *Install* for each platform
+   you actually use. Each button hands the script straight to Tampermonkey.
+6. **Play something** — your Discord status follows along, lyrics included.
 
-1. **Download** the latest release (`VybecordTS.zip`) from [Releases](https://github.com/TheUnknownMurda/VybecordTS/releases)
-2. **Extract** and run `VybecordTS.exe`
-3. **Setup Wizard** opens automatically:
-   - Create Discord app at [discord.com/developers](https://discord.com/developers/applications) → paste Application ID
-   - Select **Premium** mode
-   - Enter Spotify credentials (get them at [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) → Create App → Redirect URI: `http://127.0.0.1:8888/callback`)
-4. **Authorize** Spotify when prompted
-5. **Done** — play music and Discord shows synced lyrics
-
-### Option B: Spotify Free + Spicetify
-For Spotify Free users. Requires Spicetify (third-party Spotify modification).
-
-> ⚠️ **WARNING:** While using Spicetify is not against ToS, it is advised that you use it at your own risk. ONLY use Spicetify for the purpose of this app. DO NOT install any Spicetify plugins as it is not required. Some Spicetify plugins may violates Spotify's Terms of Service. Using thoses may result in account suspension. **We are not responsible** for any bans. Use at your own risk and follow Spicetify rules (no ad blocking, no premium feature unlocking).
-
-1. **Install Spicetify** following the [official guide](https://spicetify.app/) **without** ad-blocking extensions
-2. **Install VybecordTS** (download, extract, run)
-3. **Setup Wizard:**
-   - Enter Discord Application ID
-   - Select **Free** mode (SMTC will auto-detect Spicetify)
-   - Follow the [Spicetify Extension](#spicetify-extension-spotify) section below
-4. **Play music** — instant push-based sync via Spicetify
-
-### Option C: Other Music Sources
-Use with YouTube, YouTube Music, SoundCloud, Bandcamp, or any Windows media player.
-
-1. **Install VybecordTS**
-2. **Setup Wizard** → select **Free** mode
-3. **For YouTube:** Install [Tampermonkey userscript](#youtube-userscript-tampermonkey) (recommended for precise sync)
-4. **For SoundCloud/Bandcamp:** Install respective [Tampermonkey userscripts](#optional-integrations)
-5. **For any player:** Windows SMTC auto-detects most media players automatically
-
+> **Setup page:** http://127.0.0.1:8888/setup — re-openable at any time
 > **Dashboard:** http://127.0.0.1:8888 — settings, stats, custom lyrics import, theme editor
+
+It works out of the box: a default Discord application ID ships with the app, so
+there is nothing to create or paste to get started.
+
+### Going further
+
+| Goal | What to do |
+|---|---|
+| **Spotify desktop, instant sync** | Let the installer set up Spicetify, or see [Spicetify Extension](#spicetify-extension-spotify) |
+| **Spotify Premium, official API** | Dashboard → Settings → **Premium** tier, then add your credentials from [developer.spotify.com](https://developer.spotify.com/dashboard) with redirect URI `http://127.0.0.1:8888/callback` |
+| **Your own Discord app name** | Create one at [discord.com/developers](https://discord.com/developers/applications) and paste its Application ID in the dashboard settings |
+| **YouTube / SoundCloud / Bandcamp / Twitch / Kick** | Install the matching script from the setup page |
+| **Anything else on Windows** | Nothing to do — Windows SMTC detects most players automatically |
 
 ---
 
@@ -153,10 +144,8 @@ VybecordTS will:
 - Use **Tampermonkey userscripts** for YouTube/SoundCloud/Bandcamp (push-based, precise)
 - Fall back to **Windows SMTC** for any other media player (polling-based)
 
-**Recommended userscripts:**
-- [YouTube Userscript](#youtube-userscript-tampermonkey) — precise video sync, CC lyrics
-- [SoundCloud Userscript](#soundcloud-userscript-tampermonkey) — track metadata, artwork
-- [Bandcamp Userscript](#bandcamp-userscript-tampermonkey) — if available
+Install the userscripts in one click from the setup page — see
+[Tampermonkey Userscripts](#tampermonkey-userscripts).
 
 ### 4. Install yt-dlp (optional — YouTube CC lyrics)
 
@@ -183,11 +172,32 @@ npm run dev
 npm run build
 npm start
 
-# Build distributable .exe
+# Build the distributable .exe + the installer
 npm run build:exe
+
+# Recompile only the installer (reuses the existing build/VybecordTS/)
+npm run build:installer
 ```
 
 Dashboard: **http://127.0.0.1:8888** (auto-opens on startup)
+
+### 6. Building the installer
+
+`npm run build:exe` produces two things in `build/`:
+
+- `VybecordTS/` — the portable folder (exe + assets)
+- `VybecordTS-Setup.exe` — the Inno Setup installer, built from `installer/VybecordTS.iss`
+
+The installer step needs [Inno Setup 6](https://jrsoftware.org/isinfo.php):
+
+```bash
+winget install JRSoftware.InnoSetup
+```
+
+It's looked up in the usual Program Files locations and in
+`%LOCALAPPDATA%\Programs\Inno Setup 6` (where a non-elevated winget puts it).
+Set `ISCC_PATH` to override. **If Inno Setup is missing the build still
+succeeds** — it just skips the installer and prints how to install it.
 
 ---
 
@@ -204,7 +214,7 @@ Dashboard: **http://127.0.0.1:8888** (auto-opens on startup)
 
 - **Spotify Premium user** → Use **Option A** (Official API). Most reliable, no risks.
 - **Spotify Free user** → Consider **Option C** (Tampermonkey for web player) or accept the risk of **Option B** (Spicetify).
-- **YouTube/YouTube Music** → Use **Option C** with [YouTube Userscript](#youtube-userscript-tampermonkey).
+- **YouTube/YouTube Music** → Use **Option C** with the [YouTube userscript](#tampermonkey-userscripts).
 - **SoundCloud/Bandcamp** → Use **Option C** with respective userscripts.
 - **Mixed sources** → Use **Option C** (Free tier). VybecordTS auto-switches between push sources and SMTC.
 
@@ -222,6 +232,10 @@ Push-based integration — instant track changes, full metadata, no API polling.
 - Spicetify CLI installed (follow [official guide](https://spicetify.app/))
 - **NO ad-blocking extensions** installed (this will get you banned)
 
+**The installer can do all of this for you** — tick *Install Spicetify and the
+Vybecord extension* on the Spotify page of the setup wizard, with Spotify closed.
+The steps below are the manual equivalent.
+
 **Installation:**
 
 1. Copy the VybecordTS extension:
@@ -237,36 +251,34 @@ Push-based integration — instant track changes, full metadata, no API polling.
 
 **Why use this?** If you don't have Spotify Premium, this provides instant track updates without API polling. However, the **Tampermonkey Spotify userscript** is a safer alternative with no TOS violation.
 
-### YouTube Userscript (Tampermonkey)
+### Tampermonkey Userscripts
 
-Precise video sync — exact `currentTime`, direct video ID, instant seek detection.
+Push-based integration for everything that runs in a browser: exact playback
+position, real metadata and artwork, instant track changes and seek detection.
+
+**Install them from the app, not by hand:**
 
 1. Install [Tampermonkey](https://www.tampermonkey.net/) in your browser
-2. Open Tampermonkey Dashboard → **+** (new script)
-3. Paste the contents of `tampermonkey/vybecord-youtube.user.js`
-4. Save (**Ctrl+S**) — active immediately on YouTube & YouTube Music
+2. Open **http://127.0.0.1:8888/setup** (VybecordTS must be running)
+3. Click *Install* next to each platform you use — Tampermonkey takes it from there
 
-> When the userscript is active, VybecordTS automatically uses it instead of SMTC for YouTube sources. Falls back to SMTC if the userscript stops pushing (>10s).
+The status dot next to each entry turns green as soon as that source starts
+sending data, so you can confirm the script works without leaving the page.
 
-### Spotify Userscript (Tampermonkey)
+| Script | Covers | Notes |
+|---|---|---|
+| `vybecord-spotify.user.js` | `open.spotify.com` | Web player — no Spicetify, no ToS concern |
+| `vybecord-youtube.user.js` | YouTube + YouTube Music | Also enables CC-based lyrics |
+| `vybecord-soundcloud.user.js` | `soundcloud.com` | |
+| `vybecord-bandcamp.user.js` | `*.bandcamp.com` | |
+| `vybecord-twitch.user.js` | `twitch.tv` | Live stream presence |
+| `vybecord-kick.user.js` | `kick.com` | Live stream presence |
 
-Enhanced Spotify Web Player integration — artist images, precise progress, instant metadata.
-
-1. Open Tampermonkey Dashboard → **+** (new script)
-2. Paste the contents of `tampermonkey/vybecord-spotify.user.js`
-3. Save (**Ctrl+S**) — active on `open.spotify.com`
-
-> Provides richer metadata than SMTC alone (artist art, album art, Spotify URLs).
-
-### SoundCloud Userscript (Tampermonkey)
-
-Push-based SoundCloud integration — track metadata, artwork, and precise playback state.
-
-1. Open Tampermonkey Dashboard → **+** (new script)
-2. Paste the contents of `tampermonkey/vybecord-soundcloud.user.js`
-3. Save (**Ctrl+S**) — active on `soundcloud.com`
-
-> Overrides SMTC for SoundCloud with higher-quality metadata and instant track change detection.
+> A push source always takes priority over SMTC. If a script stops sending for
+> more than 10 s, VybecordTS falls back to SMTC on its own.
+>
+> The raw files live in `tampermonkey/` inside the install folder if you would
+> rather paste them into Tampermonkey manually.
 
 ---
 
@@ -274,7 +286,7 @@ Push-based SoundCloud integration — track metadata, artwork, and precise playb
 
 | Key | Default | Description |
 |---|---|---|
-| `discord_app_id` | — | **Required.** Discord Application ID |
+| `discord_app_id` | — | Discord Application ID. Optional — a built-in default is used when empty |
 | `rpc_enabled` | `true` | Enable/disable Discord Rich Presence |
 | `show_lyrics` | `true` | Show synced lyrics on Discord profile |
 | `detect_all_media` | `true` | Detect non-Spotify sources (YouTube, SoundCloud, etc.) |
@@ -290,6 +302,8 @@ Push-based SoundCloud integration — track metadata, artwork, and precise playb
 | `rpc_details_url` | `"auto"` | Clickable details field link target |
 | `rpc_state_url` | `"auto"` | Clickable state field link target |
 | `rpc_large_url` | `"auto"` | Clickable album art link target |
+| `first_run_completed` | `false` | Startup opens `/setup` while false, the dashboard afterwards. Set it back to `false` to see the setup page again |
+| `tray_enabled` | `true` | Show the Windows notification-area icon (dashboard / setup / quit). Windows only |
 
 ---
 

@@ -9,11 +9,14 @@
 ### Required (No Exceptions)
 - ✅ **Windows 10 or 11**
 - ✅ **Discord** (desktop app, NOT the web version)
-- ✅ **A Spotify account** (Premium OR Free)
 
 ### Optional
-- 🎵 **Spotify Premium** → Best experience, no additional tools needed
-- 🛠️ **Spotify Free** → Requires [Spicetify](https://spicetify.app/) (see warning below)
+- 🌐 **[Tampermonkey](https://www.tampermonkey.net/)** → for YouTube, SoundCloud, Bandcamp, Twitch, Kick
+- 🎵 **Spotify Premium** → richer Spotify data through the official API
+- 🛠️ **Spotify Free, desktop app** → [Spicetify](https://spicetify.app/) (see warning below)
+
+**You do not need a Discord developer account.** VybecordTS ships with a
+working application ID, so it displays your activity out of the box.
 
 ---
 
@@ -32,71 +35,87 @@
 
 ## 🚀 Installation - STEP BY STEP
 
-### Step 1: Create a Discord Application (2 minutes)
-
-1. Go to [discord.com/developers/applications](https://discord.com/developers/applications)
-2. Click **"New Application"** (blue button, top right)
-3. Name it (e.g., "Vybecord") → Click **Create**
-4. In the left menu, click **OAuth2** → **General**
-5. Copy the **Application ID** (numbers at the top, keep it safe)
-
-**📝 Note:** You do NOT need to create a bot or enable anything else.
-
----
-
-### Step 2: Download VybecordTS
+### Step 1: Download and run the installer
 
 1. Go to the [GitHub Releases page](https://github.com/TheUnknownMurda/VybecordTS/releases)
-2. Download **VybecordTS-v1.0.0.zip** (latest version)
-3. Extract the ZIP anywhere (Desktop, Documents, etc.)
+2. Download **VybecordTS-Setup.exe**
+3. Run it — no administrator rights needed
 
-**📁 Structure after extraction:**
-```
-VybecordTS/
-├── VybecordTS.exe    ← Run this!
-├── config.json       ← Auto-created
-└── ...
-```
+It installs to `%APPDATA%\VybecordTS` by default. You may pick another folder,
+but it has to be one you can write to: VybecordTS stores its settings, logs and
+lyrics database next to the program. The installer refuses protected locations
+like `C:\Program Files` and tells you why.
 
 ---
 
-### Step 3: Launch the Setup Wizard
+### Step 2: The Spotify page (optional)
 
-1. Double-click **VybecordTS.exe**
-2. Your browser opens automatically at `http://127.0.0.1:8888`
-3. The **Setup Wizard** appears:
+The wizard asks whether to install **Spicetify + the Vybecord extension**.
 
-#### Option A - Spotify Premium (Recommended)
+- **You use the Spotify desktop app** → tick it, and **close Spotify first**
+  (Spicetify cannot patch a running Spotify). Read the warning above.
+- **You listen to Spotify in your browser** → leave it unticked, the
+  Tampermonkey script at step 4 covers you.
+- **You don't use Spotify** → leave it unticked.
 
-1. Check **"Premium"**
-2. Paste your **Discord Application ID**
-3. Go to [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard)
-   - Create an app
-   - Copy **Client ID** and **Client Secret**
-   - In **Redirect URIs**, add: `http://127.0.0.1:8888/callback`
-4. Paste these details in the wizard
-5. Click **"Start"**
-
-#### Option B - Spotify Free
-
-1. Check **"Free"**
-2. Paste your **Discord Application ID**
-3. Install [Spicetify](https://spicetify.app/) (if not already done)
-4. Follow the instructions to install the VybecordTS extension in Spicetify
-5. Click **"Start"**
-
-**⚠️ See the Spicetify warning at the top of this guide**
+If anything goes wrong here, the installation carries on regardless: only the
+Spotify desktop integration is affected.
 
 ---
 
-### Step 4: Authorize Spotify
+### Step 3: First launch
 
-If you chose **Premium**:
+VybecordTS starts and opens **http://127.0.0.1:8888/setup** in your browser.
+This page only shows up on the first run; afterwards you land on the dashboard.
 
-1. A Spotify page opens asking for authorization
-2. Click **"Agree"**
-3. Redirect to `http://127.0.0.1:8888/callback`
-4. **Done!** ✅
+---
+
+### Step 4: Add the browser scripts
+
+On the setup page:
+
+1. **Install Tampermonkey** — pick your browser from the buttons in step 1
+2. **Click *Install*** next to each platform you actually use
+   (Spotify web, YouTube, SoundCloud, Bandcamp, Twitch, Kick)
+3. Tampermonkey shows its install screen → confirm
+
+Each entry has a status dot. It turns **green** as soon as VybecordTS receives
+data from that platform — play something to check.
+
+**📝 Nothing happens when you click?** Tampermonkey probably isn't installed yet,
+or your browser is showing the code instead of intercepting it. Redo step 1 and
+reload the page.
+
+---
+
+### Step 5: Play something
+
+That's it. Windows also detects most desktop players automatically, so many
+apps work with no script at all.
+
+---
+
+### Optional: Spotify Premium via the official API
+
+Richer Spotify data, no third-party tools:
+
+1. Open the dashboard → **Settings**
+2. Set the tier to **Premium**
+3. Create an app at [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard)
+   - Copy **Client ID** and **Client Secret** into the settings
+   - Add `http://127.0.0.1:8888/callback` to **Redirect URIs**
+4. Authorize Spotify when the page opens
+
+### Optional: your own Discord app name
+
+The activity name shown on Discord comes from the application ID. To use your
+own:
+
+1. Go to [discord.com/developers/applications](https://discord.com/developers/applications)
+2. **New Application** → name it → **Create**
+3. Copy the **Application ID** and paste it in the dashboard settings
+
+No bot, no extra permission required.
 
 ---
 
@@ -104,9 +123,9 @@ If you chose **Premium**:
 
 ### Starting VybecordTS
 
-1. Double-click `VybecordTS.exe`
+1. Use the **VybecordTS** shortcut (Desktop or Start Menu)
 2. Let it run in the background
-3. Open Spotify and play music
+3. Play music — Spotify, YouTube, or anything else
 4. **Your Discord displays:**
    - 🎵 Track + Artist
    - 📝 Synced lyrics (if available)
@@ -151,15 +170,21 @@ Access `http://127.0.0.1:8888` in your browser to:
 - Check that the VybecordTS extension is copied to the Extensions folder
 - Completely restart Spotify after installation
 
-### "Error: Missing DISCORD_CLIENT_ID"
+### "A browser script does nothing"
 
-- Relaunch the wizard from the Dashboard
-- Or manually edit `config.json`:
-  ```json
-  {
-    "discord_app_id": "YOUR_ID_HERE"
-  }
-  ```
+- Reopen **http://127.0.0.1:8888/setup** and check the status dot for that platform
+- The dot only turns green while something is actually playing on that site
+- Make sure Tampermonkey is enabled for the site (its toolbar icon shows the
+  active scripts)
+
+### "I want to see the setup page again"
+
+Open **http://127.0.0.1:8888/setup** directly — it stays available at all times.
+
+### "VybecordTS can't write its configuration"
+
+You installed it in a folder Windows protects. Reinstall into the suggested
+location (`%APPDATA%\VybecordTS`) or any folder you own.
 
 ---
 

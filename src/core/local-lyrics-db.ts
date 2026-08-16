@@ -17,6 +17,19 @@
 import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
+
+// ── Native binding resolution for pkg-packaged exe ──
+// When packaged with pkg, better-sqlite3's `bindings` module cannot locate
+// the .node file inside the virtual snapshot. We resolve it manually: the build
+// script places `better_sqlite3.node` in `<exe_dir>/build/Release/`.
+const IS_PKG = !!(process as unknown as { pkg?: unknown }).pkg;
+let nativeBinding: string | undefined;
+if (IS_PKG) {
+  const candidate = path.join(path.dirname(process.execPath), 'build', 'Release', 'better_sqlite3.node');
+  if (fs.existsSync(candidate)) {
+    nativeBinding = candidate;
+  }
+}
 import { createReadStream, createWriteStream } from 'node:fs';
 import { createGunzip } from 'node:zlib';
 import { pipeline } from 'node:stream/promises';
@@ -128,7 +141,7 @@ export async function initLocalDb(baseDir: string, dumpPathOverride?: string): P
 /** Create a minimal empty database for custom lyrics with the LRCLib-compatible schema. */
 function createEmptyCustomDb(dbPath: string): boolean {
   try {
-    const newDb = new Database(dbPath);
+    const newDb = new Database(dbPath, { nativeBinding });
     newDb.exec(`
       CREATE TABLE IF NOT EXISTS tracks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -172,7 +185,7 @@ function createEmptyCustomDb(dbPath: string): boolean {
 function openLrclibDb(dbPath: string): boolean {
   log.debug(`openLrclibDb: Opening LRCLIB dump at ${dbPath}...`);
   try {
-    lrclibDb = new Database(dbPath, { readonly: true, fileMustExist: true });
+    lrclibDb = new Database(dbPath, { readonly: true, fileMustExist: true, nativeBinding });
     log.debug('openLrclibDb: LRCLIB dump opened, setting pragmas...');
     
     // Set pragmas for read-only performance
@@ -220,7 +233,7 @@ function openLrclibDb(dbPath: string): boolean {
 function openCustomDb(dbPath: string): boolean {
   log.debug(`openCustomDb: Opening custom DB at ${dbPath}...`);
   try {
-    customDb = new Database(dbPath, { readonly: false, fileMustExist: true });
+    customDb = new Database(dbPath, { readonly: false, fileMustExist: true, nativeBinding });
     log.debug('openCustomDb: Custom DB opened, setting pragmas...');
     
     // Disable foreign key constraints to allow deletion of custom lyrics

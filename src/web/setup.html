@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VybecordTS — Configuration</title>
+<style>
+  :root {
+    --bg: #0d0b14;
+    --bg-card: #17141f;
+    --bg-card-hi: #1e1a29;
+    --border: #2c2739;
+    --text: #ece9f5;
+    --text-dim: #9a93ad;
+    --accent: #a855f7;
+    --accent-hi: #c084fc;
+    --ok: #22c55e;
+    --warn: #f59e0b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    line-height: 1.6;
+    padding: 48px 24px 96px;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; }
+
+  header { text-align: center; margin-bottom: 48px; }
+  h1 {
+    font-size: 36px; font-weight: 700; letter-spacing: -0.5px;
+    background: linear-gradient(100deg, var(--accent) 0%, #f472b6 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  header p { color: var(--text-dim); margin-top: 8px; }
+
+  .step { margin-bottom: 40px; }
+  .step-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .step-num {
+    flex: 0 0 30px; height: 30px; border-radius: 50%;
+    background: var(--accent); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 15px;
+  }
+  .step-head h2 { font-size: 20px; font-weight: 600; }
+  .step-desc { color: var(--text-dim); font-size: 15px; margin-bottom: 16px; }
+
+  .card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px;
+  }
+
+  .browsers { display: flex; flex-wrap: wrap; gap: 10px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--bg-card-hi); border: 1px solid var(--border);
+    color: var(--text); text-decoration: none;
+    padding: 10px 18px; border-radius: 8px; font-size: 14px; font-weight: 500;
+    cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  .btn:hover { border-color: var(--accent); background: #241f31; }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-hi); border-color: var(--accent-hi); }
+  .btn:disabled,
+  .btn[disabled] {
+    background: #221d2e; border-color: var(--border); color: #6b6480;
+    cursor: not-allowed;
+  }
+  .btn:disabled:hover { background: #221d2e; border-color: var(--border); }
+
+  /* Live state pills */
+  .pill {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 13px; font-weight: 600;
+    padding: 5px 12px; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--bg-card-hi);
+    color: var(--text-dim);
+  }
+  .pill.ok { color: var(--ok); border-color: #1e5132; background: #102318; }
+  .pill.pending { color: var(--warn); border-color: #5c4113; background: #241a08; }
+  .script-actions { display: flex; align-items: center; gap: 10px; }
+
+  .scripts { display: grid; gap: 10px; }
+  .script {
+    display: flex; align-items: center; gap: 14px;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 18px;
+  }
+  .script-info { flex: 1; min-width: 0; }
+  .script-name { font-weight: 600; font-size: 15px; }
+  .script-sub { color: var(--text-dim); font-size: 13px; }
+  .dot {
+    flex: 0 0 9px; height: 9px; border-radius: 50%;
+    background: #3f3a4d; transition: background .3s, box-shadow .3s;
+  }
+  .dot.on { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+  .script.installed { border-color: #1e5132; background: #121a15; }
+
+  .gate {
+    border: 1px solid var(--border); background: var(--bg-card);
+    border-radius: 12px; padding: 18px 20px; margin-bottom: 20px;
+    font-size: 14px; color: var(--text-dim); text-align: left;
+  }
+  .gate.blocked { border-color: #5c4113; background: #1d1608; }
+  .gate.ready { border-color: #1e5132; background: #102016; }
+  .gate ul { margin: 10px 0 0 20px; }
+  .gate li { margin-top: 4px; }
+  .gate strong { color: var(--text); }
+
+  code {
+    display: block; background: #0a0810; border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 14px; margin-top: 10px;
+    font-family: "Cascadia Code", Consolas, monospace; font-size: 13px;
+    color: #d8b4fe; overflow-x: auto; white-space: pre;
+  }
+
+  .note {
+    border-left: 3px solid var(--accent); background: #1a1526;
+    padding: 12px 16px; border-radius: 0 8px 8px 0;
+    font-size: 14px; color: var(--text-dim); margin-top: 14px;
+  }
+
+  footer { text-align: center; margin-top: 56px; }
+  footer p { color: var(--text-dim); font-size: 13px; margin-top: 12px; }
+  .btn-lg { padding: 14px 40px; font-size: 16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Bienvenue dans VybecordTS</h1>
+    <p>Deux minutes pour tout brancher. Vous pourrez revenir sur cette page à tout moment.</p>
+  </header>
+
+  <!-- Step 1 -->
+  <section class="step">
+    <div class="step-head">
+      <div class="step-num">1</div>
+      <h2>Installer Tampermonkey</h2>
+    </div>
+    <p class="step-desc">
+      Obligatoire. C'est l'extension navigateur qui permet à VybecordTS de lire ce que vous
+      écoutez sur Spotify Web, YouTube, SoundCloud, Bandcamp, Twitch et Kick.
+      Installez-la dans le navigateur que vous utilisez pour écouter de la musique.
+    </p>
+    <div class="card">
+      <div style="margin-bottom:16px">
+        <span class="pill pending" id="tm-pill">Détection en cours…</span>
+      </div>
+      <div class="browsers">
+        <a class="btn" href="https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo" target="_blank" rel="noopener">Chrome</a>
+        <a class="btn" href="https://addons.mozilla.org/firefox/addon/tampermonkey/" target="_blank" rel="noopener">Firefox</a>
+        <a class="btn" href="https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd" target="_blank" rel="noopener">Edge</a>
+        <a class="btn" href="https://apps.apple.com/app/tampermonkey/id1482490089" target="_blank" rel="noopener">Safari</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Step 2 -->
+  <section class="step">
+    <div class="step-head">
+      <div class="step-num">2</div>
+      <h2>Ajouter les scripts</h2>
+    </div>
+    <p class="step-desc">
+      Un clic par plateforme : Tampermonkey ouvre son écran d'installation, vous confirmez.
+      Installez au moins celles que vous utilisez — chaque script s'annonce ici une fois
+      en place, il faut donc <strong>revérifier</strong> après l'avoir ajouté.
+    </p>
+    <div class="scripts" id="scripts"></div>
+    <div class="card" style="margin-top:14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <button class="btn" id="recheck">Revérifier</button>
+      <span style="color:var(--text-dim);font-size:14px">
+        Recharge la page pour laisser les scripts fraîchement installés se signaler.
+      </span>
+    </div>
+    <div class="note">
+      Rien ne se passe au clic, ou le navigateur affiche du code au lieu de proposer
+      l'installation ? Tampermonkey n'est pas encore actif : reprenez l'étape 1, puis
+      revérifiez.
+    </div>
+  </section>
+
+  <!-- Step 3 -->
+  <section class="step">
+    <div class="step-head">
+      <div class="step-num">3</div>
+      <h2>Spotify via Spicetify</h2>
+    </div>
+    <p class="step-desc">
+      Pour l'application de bureau Spotify. L'installeur s'en est peut-être déjà chargé —
+      lancez Spotify et jouez un titre pour vérifier.
+    </p>
+    <div class="card">
+      <div class="script" style="border:none;padding:0;background:none">
+        <div class="dot" id="dot-spicetify"></div>
+        <div class="script-info">
+          <div class="script-name">Extension Spicetify</div>
+          <div class="script-sub" id="spicetify-status">Vérification…</div>
+        </div>
+      </div>
+      <div class="note" style="margin-top:16px">
+        Si la pastille reste grise alors que Spotify joue, installez l'extension à la main.
+        Fermez Spotify, puis dans PowerShell :
+        <code>spicetify config extensions vybecord.js
+spicetify apply</code>
+        Le fichier <strong>vybecord.js</strong> se trouve dans le sous-dossier
+        <strong>spicetify-extension</strong> de VybecordTS ; copiez-le d'abord dans
+        <strong>%APPDATA%\spicetify\Extensions\</strong>.
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <button class="btn btn-primary btn-lg" id="done">Terminer et ouvrir le dashboard</button>
+    <p>Le navigateur Web Spotify, lui, est couvert par le script « Spotify » de l'étape 2.</p>
+  </footer>
+
+</div>
+
+<script>
+const SCRIPTS = [
+  { file: 'vybecord-spotify.user.js',    name: 'Spotify',    sub: 'open.spotify.com (navigateur)', key: 'spicetifyActive' },
+  { file: 'vybecord-youtube.user.js',    name: 'YouTube',    sub: 'youtube.com + music.youtube.com', key: 'youtubeActive' },
+  { file: 'vybecord-soundcloud.user.js', name: 'SoundCloud', sub: 'soundcloud.com', key: 'soundcloudActive' },
+  { file: 'vybecord-bandcamp.user.js',   name: 'Bandcamp',   sub: 'bandcamp.com', key: 'bandcampActive' },
+  { file: 'vybecord-twitch.user.js',     name: 'Twitch',     sub: 'twitch.tv', key: 'twitchActive' },
+  { file: 'vybecord-kick.user.js',       name: 'Kick',       sub: 'kick.com', key: 'kickActive' },
+];
+
+// Build the list
+const host = document.getElementById('scripts');
+for (const s of SCRIPTS) {
+  const row = document.createElement('div');
+  row.className = 'script';
+  row.innerHTML = `
+    <div class="dot" data-key="${s.key}"></div>
+    <div class="script-info">
+      <div class="script-name">${s.name}</div>
+      <div class="script-sub">${s.sub}</div>
+    </div>
+    <a class="btn" href="/tampermonkey/${s.file}">Installer</a>`;
+  host.appendChild(row);
+}
+
+// Live source status
+async function refresh() {
+  try {
+    const r = await fetch('/api/status');
+    if (!r.ok) return;
+    const st = await r.json();
+    document.querySelectorAll('.dot[data-key]').forEach(d => {
+      d.classList.toggle('on', !!st[d.dataset.key]);
+    });
+    const sp = document.getElementById('dot-spicetify');
+    const label = document.getElementById('spicetify-status');
+    if (st.spicetifyActive) {
+      sp.classList.add('on');
+      label.textContent = 'Des données Spotify arrivent bien (Spicetify ou script navigateur).';
+    } else {
+      sp.classList.remove('on');
+      label.textContent = 'Pas encore de données reçues de Spotify.';
+    }
+  } catch { /* server not ready yet — retry on next tick */ }
+}
+refresh();
+setInterval(refresh, 2000);
+
+// Finish
+document.getElementById('done').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  btn.textContent = 'Enregistrement…';
+  try {
+    await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ first_run_completed: true }),
+    });
+  } catch { /* not fatal — the page still leads to the dashboard */ }
+  window.location.href = '/';
+});
+</script>
+</body>
+</html>
