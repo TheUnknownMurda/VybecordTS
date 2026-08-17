@@ -28,8 +28,9 @@ const log = createLogger('LyricsEngine');
 const BASE_OFFSET_MS = 100;       // Compensate for IPC + display delay (fire-and-forget ~10-30ms)
 const DRIFT_THRESHOLD_MS = 500;   // Recalibrate if drift > 500ms (tighter sync)
 const CC_DRIFT_THRESHOLD_MS = 800; // YouTube CC: tolerate poll jitter, only recalib on real desync
+// Push sources don't use a cooldown at all — they report exact player position,
+// so syncProgress() recalibrates on every drift above threshold (see syncProgress).
 const RECALIB_COOLDOWN_MS = 120_000;  // Max 1 recalibration per 2 minutes (SMTC/desktop)
-const CC_RECALIB_COOLDOWN_MS = 10_000; // Push sources (YouTube CC): precise data, allow faster recalib
 const MIN_UPDATE_INTERVAL_MS = 800;  // Discord rate-limit protection (~6 updates/5s)
 const CC_UPDATE_INTERVAL_MS = 250;   // Fast updates for YouTube CC (lines change every 200-500ms)
 const RPC_HEARTBEAT_MS = 5_000;       // Force RPC push every 5s even if text unchanged (keeps Discord UI fresh)
@@ -156,13 +157,6 @@ export class LyricsEngine {
   private statusMessageTimer: ReturnType<typeof setTimeout> | null = null;
   private statusMessageExpiry = 0; // timestamp when current message expires
 
-  // Legacy flags for backward compatibility during transition
-  private fetchingLyrics = false;
-  private noLyricsFound = false;
-  private lyricsFound = false;
-  private lyricsFlagged = false;
-  private lyricsDisabled = false;
-
   // Instrumental gap: switch RPC to no-lyrics display when gap between lines > LYRIC_GAP_MS
   private inLyricGap = false;
   private gapTimer: ReturnType<typeof setTimeout> | null = null;
@@ -181,7 +175,6 @@ export class LyricsEngine {
 
   // Pre-computed repeat group table (built once per lyrics load, O(1) lookups on emit)
   private groupStart: Int32Array = new Int32Array(0);  // groupStart[i] = first index of the group containing i
-  private groupEnd: Int32Array = new Int32Array(0);    // groupEnd[i] = last index of the group containing i
   private groupDisplay: string[] = [];                 // groupDisplay[i] = display text for line i (with xN suffix)
   private groupMultiplier: number[] = [];               // groupMultiplier[i] = multiplier value for line i (0 = no multiplier)
 
@@ -218,13 +211,6 @@ export class LyricsEngine {
     this.statusMessage = { type, text, priority };
     this.statusMessageExpiry = now + durationMs;
 
-    // Sync legacy flags for backward compatibility
-    this.fetchingLyrics = type === 'fetching';
-    this.noLyricsFound = type === 'noLyrics';
-    this.lyricsFound = type === 'found';
-    this.lyricsFlagged = type === 'flagged';
-    this.lyricsDisabled = type === 'disabled';
-
     // Clear existing timer
     if (this.statusMessageTimer) {
       clearTimeout(this.statusMessageTimer);
@@ -253,19 +239,7 @@ export class LyricsEngine {
       clearTimeout(this.statusMessageTimer);
       this.statusMessageTimer = null;
     }
-    // Reset legacy flags
-    this.fetchingLyrics = false;
-    this.noLyricsFound = false;
-    this.lyricsFound = false;
-    this.lyricsFlagged = false;
-    this.lyricsDisabled = false;
     this.emitUpdate();
-  }
-
-  /** Show "Fetching Lyrics..." in RPC state while lyrics are loading. */
-  setFetchingLyrics(fetching: boolean): void {
-    // Disabled - do not show "Fetching Lyrics..." message
-    return;
   }
 
   /** Flash "🚩 Lyrics Not Matching" for 5s when the user flags bad lyrics. */
@@ -276,21 +250,12 @@ export class LyricsEngine {
     this.setStatusMessage('flagged', '🚩 Lyrics Not Matching', 40, 5000);
   }
 
-  /** Flash "🚫 Lyrics Disabled" for 7s when lyrics are toggled off, then show normal metadata. */
+  /**
+   * Flash "🚫 Lyrics Disabled" for 7s when lyrics are toggled off.
+   * Currently unused — kept as the entry point for the `disabled` status type.
+   */
   setLyricsDisabled(): void {
     this.setStatusMessage('disabled', '🚫 Lyrics Disabled', 50, 7000);
-  }
-
-  /** Flash "No Lyrics Found" for 5 seconds, then revert to normal display. */
-  setNoLyricsFound(): void {
-    // Disabled - do not show "No Lyrics Found" message
-    return;
-  }
-
-  /** Flash "Lyrics Found" for 5 seconds. */
-  private setLyricsFound(): void {
-    // Disabled - do not show "Lyrics Found" message
-    return;
   }
 
   /**
@@ -382,7 +347,6 @@ export class LyricsEngine {
     this.isCC = lyrics.length > 0 && lyrics[0].source === 'cc';
     this.buildGroupTable();
     this.detectAutoOffset();
-    this.fetchingLyrics = false;
 
     // Rebuild buttons when CC state changed (e.g. "Listen on Spotify" → "Watch on YouTube")
     if (this.isCC !== wasCC && this.trackData) {
@@ -396,14 +360,6 @@ export class LyricsEngine {
 
     // Don't force display of first line if before its timestamp
     // Let it display naturally when its time comes
-
-    // If lyrics haven't started yet, flash "Lyrics Found" for 5 seconds
-    // If lyrics are already in progress, skip the message entirely
-    // Don't show when lyrics are disabled
-    const lyricsNotStarted = lyrics.length > 0 && (this.currentIdx < 0 || !this.lyrics[this.currentIdx]?.text);
-    if (lyricsNotStarted && this.cfgShowLyrics) {
-      this.setLyricsFound();
-    }
 
     // Reset dedup so the first lyric pushes immediately
     this.lastRpcDetails = '';
@@ -472,20 +428,24 @@ export class LyricsEngine {
   syncProgress(progressMs: number, trackData?: TrackData): void {
     if (!this.running) return;
 
-    // Detect album art change (enrichment arrived via poll merge)
-    const artChanged = trackData && this.trackData &&
-      trackData.album_art_url !== this.trackData.album_art_url;
-
-    // Detect shuffle/repeat mode change
-    const modeChanged = trackData && this.trackData &&
-      (trackData.is_shuffle !== this.trackData.is_shuffle ||
-       trackData.repeat_mode !== this.trackData.repeat_mode);
+    let artChanged = false;
+    let modeChanged = false;
 
     if (trackData) {
       // Preserve Catbox URL if current track has one and new trackData doesn't
       const currentCatboxUrl = this.trackData?.album_art_url?.includes('catbox.moe') ? this.trackData.album_art_url : null;
       if (currentCatboxUrl && !trackData.album_art_url?.includes('catbox.moe')) {
         trackData.album_art_url = currentCatboxUrl;
+      }
+
+      // Compare AFTER the Catbox restore, not before: SMTC hands us a fresh object
+      // every poll carrying the local '/api/thumbnail' placeholder, so comparing the
+      // raw incoming value would report a change on every tick and force a redundant
+      // RPC push. What matters is whether the *effective* art actually moved.
+      if (this.trackData) {
+        artChanged = trackData.album_art_url !== this.trackData.album_art_url;
+        modeChanged = trackData.is_shuffle !== this.trackData.is_shuffle ||
+                      trackData.repeat_mode !== this.trackData.repeat_mode;
       }
       this.trackData = trackData;
     }
@@ -749,13 +709,11 @@ export class LyricsEngine {
     const n = this.lyrics.length;
     if (n === 0) {
       this.groupStart = new Int32Array(0);
-      this.groupEnd = new Int32Array(0);
       this.groupDisplay = [];
       this.groupMultiplier = [];
       return;
     }
     const gs = new Int32Array(n);
-    const ge = new Int32Array(n);
     const gd: string[] = new Array(n);
     const gm: number[] = new Array(n); // Multiplier values (0 = no multiplier)
 
@@ -824,8 +782,6 @@ export class LyricsEngine {
       const count = j - i;
       for (let k = i; k < j; k++) {
         gs[k] = i;
-        ge[k] = j - 1;
-        const remaining = j - k;
         const lineText = this.lyrics[k].text;
         // Check if this line has a pair repeat multiplier
         const pairMultiplier = pairRepeatMultipliers.get(k);
@@ -849,7 +805,6 @@ export class LyricsEngine {
       i = j;
     }
     this.groupStart = gs;
-    this.groupEnd = ge;
     this.groupDisplay = gd;
     this.groupMultiplier = gm;
   }
@@ -865,12 +820,6 @@ export class LyricsEngine {
     if (idx <= 0 || idx >= this.groupStart.length) return -1;
     const start = this.groupStart[idx];
     return start > 0 ? start - 1 : -1;
-  }
-
-  private getNextGroupStart(idx: number): number {
-    if (idx < 0 || idx >= this.groupEnd.length) return -1;
-    const end = this.groupEnd[idx] + 1;
-    return end < this.lyrics.length ? end : -1;
   }
 
   /** Emit the current lyric state to callbacks. */
@@ -970,7 +919,6 @@ export class LyricsEngine {
     // Use platform-specific large image if available, but prioritize actual album art for Kick/Twitch
     // Kick/Twitch use streamer profile pictures as album art, so don't override with platform logo
     const platformLargeImage = PLATFORM_LARGE_IMAGES[source];
-    const usePlatformLogo = !art && platformLargeImage;
     this.cachedLargeImage = art || platformLargeImage || DEFAULT_ART;
 
     this.cachedSpotifySearch = platformSearchUrl(source, `${d.artist_name} ${d.track_name}`);

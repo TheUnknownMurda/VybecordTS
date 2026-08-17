@@ -38,7 +38,6 @@ Installation Difficulty (Advanced)
 | **Discord** | Desktop app | ✅ Yes | Must be running for RPC |
 | **Windows** | 10/11 | ✅ Yes | SMTC requires Windows |
 | **yt-dlp** | Latest | ⬜ Optional | For YouTube CC lyrics — [github.com/yt-dlp/yt-dlp](https://github.com/yt-dlp/yt-dlp) |
-| **Spotify Developer App** | — | ⬜ Optional | Only for Spotify API mode (Premium users) |
 | **Tampermonkey** | Latest | ⬜ Optional | For YouTube userscript integration |
 | **Spicetify** | Latest | ⬜ Optional | For push-based Spotify integration |
 
@@ -70,7 +69,6 @@ there is nothing to create or paste to get started.
 | Goal | What to do |
 |---|---|
 | **Spotify desktop, instant sync** | Let the installer set up Spicetify, or see [Spicetify Extension](#spicetify-extension-spotify) |
-| **Spotify Premium, official API** | Dashboard → Settings → **Premium** tier, then add your credentials from [developer.spotify.com](https://developer.spotify.com/dashboard) with redirect URI `http://127.0.0.1:8888/callback` |
 | **Your own Discord app name** | Create one at [discord.com/developers](https://discord.com/developers/applications) and paste its Application ID in the dashboard settings |
 | **YouTube / SoundCloud / Bandcamp / Twitch / Kick** | Install the matching script from the setup page |
 | **Anything else on Windows** | Nothing to do — Windows SMTC detects most players automatically |
@@ -95,32 +93,16 @@ Required for all users:
 2. Click **New Application** → name it (e.g. "Vybecord")
 3. Copy the **Application ID** — paste it in the setup wizard or `config.json`
 
-### 3. Choose Your Setup Mode
+### 3. Pick Your Sources
 
-#### A. Spotify Premium (Official API) — Recommended
+There is nothing to choose up front — VybecordTS detects whatever is playing.
+Installing an integration only makes a given platform more precise.
 
-Best experience: full metadata, OAuth refresh tokens, no third-party tools.
+**No Spotify Developer App is needed.** VybecordTS does not use the Spotify Web
+API: there is no client ID, no client secret and no OAuth round-trip anywhere in
+the app.
 
-**First run wizard** (auto-opens at http://127.0.0.1:8888):
-- Select **Premium** tier
-- Enter Spotify credentials from [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard)
-- Set redirect URI to `http://127.0.0.1:8888/callback`
-
-**Or manual `config.json`:**
-```json
-{
-  "discord_app_id": "YOUR_DISCORD_APP_ID",
-  "user_tier": "premium",
-  "spotify_client_id": "YOUR_SPOTIFY_CLIENT_ID",
-  "spotify_client_secret": "YOUR_SPOTIFY_CLIENT_SECRET",
-  "rpc_enabled": true,
-  "show_lyrics": true
-}
-```
-
-#### B. Spotify Free + Spicetify
-
-For users without Spotify Premium. Uses Spicetify extension for push-based data.
+#### A. Spotify — Spicetify extension
 
 > ⚠️ **CRITICAL WARNING:** Spicetify modifies Spotify's client and **violates Spotify's Terms of Service**. Using it, especially with ad blockers or premium feature unlocks, **will likely result in account suspension**. We are **not responsible** for any bans or account issues.
 >
@@ -129,23 +111,25 @@ For users without Spotify Premium. Uses Spicetify extension for push-based data.
 **Setup:**
 1. Install Spicetify CLI following [official docs](https://spicetify.app/) (DO NOT install ad-blocking extensions)
 2. Install the [VybecordTS Spicetify Extension](#spicetify-extension-spotify) below
-3. Run VybecordTS setup wizard → select **Free** tier
-4. Spicetify will auto-connect via WebSocket on port 5134
 
-**Why Free tier with Spicetify?** Spicetify pushes data directly to VybecordTS (bypassing need for Spotify API). The app detects this as a push source and prioritizes it over SMTC.
+The extension pushes data straight to VybecordTS, which prioritises it over SMTC
+the moment the first push arrives. It carries more than the Web API ever did:
+playlist context name, shuffle and repeat state, album art CDN URLs and exact
+progress.
 
-#### C. YouTube / SoundCloud / Bandcamp / Any Player
+A safer alternative with no TOS risk: use the **Spotify web player** with the
+Tampermonkey userscript instead.
 
-For non-Spotify sources or mixed usage.
+#### B. YouTube / SoundCloud / Bandcamp / Twitch / Kick
 
-**First run wizard** → select **Free** tier.
+Install the matching userscript in one click from the setup page — see
+[Tampermonkey Userscripts](#tampermonkey-userscripts). Push-based and precise,
+plus YouTube CC lyrics when yt-dlp is available.
 
-VybecordTS will:
-- Use **Tampermonkey userscripts** for YouTube/SoundCloud/Bandcamp (push-based, precise)
-- Fall back to **Windows SMTC** for any other media player (polling-based)
+#### C. Everything else
 
-Install the userscripts in one click from the setup page — see
-[Tampermonkey Userscripts](#tampermonkey-userscripts).
+Nothing to install. **Windows SMTC** picks up any player that publishes a media
+session (Apple Music, VLC, foobar2000, browsers, …).
 
 ### 4. Install yt-dlp (optional — YouTube CC lyrics)
 
@@ -205,18 +189,17 @@ succeeds** — it just skips the installer and prints how to install it.
 
 | Setup | Best For | Requirements | Pros | Cons |
 |-------|----------|--------------|------|------|
-| **Spotify Premium** | Spotify users with Premium subscription | Spotify Premium + Developer App | Official API, reliable, full metadata | Requires Premium subscription |
-| **Spicetify** | Spotify Free users who want instant sync | Spicetify CLI (TOS violation risk) | Push-based, instant changes, no API limits | **Account ban risk** if misused |
-| **Tampermonkey** | YouTube/SoundCloud/Bandcamp users | Browser extension | Precise sync, CC lyrics for YouTube | Browser-only, requires extension |
-| **SMTC** | Any Windows media player | Windows 10/11 | Works with everything (Groove, iTunes, etc.) | Polling-based, less precise |
+| **Spicetify** | Spotify desktop app | Spicetify CLI (TOS violation risk) | Push-based, instant changes, playlist context, shuffle/repeat | **Account ban risk** if misused |
+| **Tampermonkey** | YouTube / SoundCloud / Bandcamp / Twitch / Kick, and the Spotify web player | Browser extension | Precise sync, CC lyrics for YouTube, no TOS risk | Browser-only, requires extension |
+| **SMTC** | Any Windows media player | Windows 10/11 | Works with everything (Apple Music, VLC, foobar2000, …), zero setup | Polling-based, less precise metadata |
 
 ### Recommendation by Use Case
 
-- **Spotify Premium user** → Use **Option A** (Official API). Most reliable, no risks.
-- **Spotify Free user** → Consider **Option C** (Tampermonkey for web player) or accept the risk of **Option B** (Spicetify).
-- **YouTube/YouTube Music** → Use **Option C** with the [YouTube userscript](#tampermonkey-userscripts).
-- **SoundCloud/Bandcamp** → Use **Option C** with respective userscripts.
-- **Mixed sources** → Use **Option C** (Free tier). VybecordTS auto-switches between push sources and SMTC.
+- **Spotify desktop app** → **Option A** (Spicetify), accepting the TOS risk.
+- **Spotify, no risk appetite** → **Option B** with the Spotify web-player userscript.
+- **YouTube / YouTube Music** → **Option B** with the [YouTube userscript](#tampermonkey-userscripts).
+- **SoundCloud / Bandcamp / Twitch / Kick** → **Option B** with the matching userscript.
+- **Mixed sources** → install whichever scripts apply; VybecordTS switches between push sources and SMTC on its own.
 
 ---
 
@@ -226,7 +209,9 @@ succeeds** — it just skips the installer and prints how to install it.
 
 > ⚠️ **WARNING:** Spicetify violates Spotify's Terms of Service. Using it may result in account suspension. **We are not responsible** for any bans. Use at your own risk and follow Spicetify rules (no ad blocking, no premium feature unlocking).
 
-Push-based integration — instant track changes, full metadata, no API polling. **Only for Spotify Free users who cannot use the official API.**
+Push-based integration — instant track changes, full metadata, no polling. This is
+the **only** Spotify desktop integration: VybecordTS does not use the Spotify Web
+API, so no developer application or client secret is involved.
 
 **Prerequisites:**
 - Spicetify CLI installed (follow [official guide](https://spicetify.app/))
@@ -249,7 +234,23 @@ The steps below are the manual equivalent.
 
 3. In VybecordTS, use **Free tier** mode. The app will auto-detect Spicetify as a push source.
 
-**Why use this?** If you don't have Spotify Premium, this provides instant track updates without API polling. However, the **Tampermonkey Spotify userscript** is a safer alternative with no TOS violation.
+**Showing it in the Marketplace "Installed" tab (optional):**
+
+`spicetify config extensions` enables the extension but does not list it in
+Marketplace → Installed — the Marketplace only tracks what it installed itself.
+Two ways to get the card there:
+
+- **Locally:** paste [`spicetify-extension/marketplace-register.js`](spicetify-extension/marketplace-register.js)
+  into Spotify's DevTools console (`spicetify enable-devtools`, then `Ctrl+Shift+I`),
+  and reload Spotify.
+- **Publicly:** add the `spicetify-extensions` topic to this GitHub repo. The
+  root [`manifest.json`](manifest.json) already describes the extension, so the
+  Marketplace will index it and anyone can install it from the Extensions tab.
+
+The extension refuses to initialise twice, so the native install and the
+Marketplace copy can coexist without sending duplicate updates.
+
+**Why use this?** It gives instant track updates with richer metadata than SMTC can provide. However, the **Tampermonkey Spotify userscript** is a safer alternative with no TOS violation.
 
 ### Tampermonkey Userscripts
 
@@ -290,7 +291,6 @@ sending data, so you can confirm the script works without leaving the page.
 | `rpc_enabled` | `true` | Enable/disable Discord Rich Presence |
 | `show_lyrics` | `true` | Show synced lyrics on Discord profile |
 | `detect_all_media` | `true` | Detect non-Spotify sources (YouTube, SoundCloud, etc.) |
-| `user_tier` | `"auto"` | `"auto"` / `"premium"` / `"free"` |
 | `rpc_only_when_playing` | `false` | Clear presence when music stops |
 | `dance_mode` | `false` | Animated GIF icon for Spotify |
 | `lyrics_offset_ms` | `0` | Manual lyrics timing offset (negative = earlier) |
@@ -315,7 +315,7 @@ VybecordTS uses multiple data sources with automatic priority:
 |---|---|---|
 | 1 | **Spicetify** (push) | Spicetify extension active + Spotify playing |
 | 2 | **YouTube Userscript** (push) | Tampermonkey userscript active + YouTube playing |
-| 3 | **Spotify API** (poll) | Premium user without Spicetify |
+| 3 | **Other userscripts** (push) | SoundCloud, Bandcamp, Twitch, Kick |
 | 4 | **Desktop SMTC** (poll) | Fallback — any Windows media player |
 
 Higher-priority sources override lower ones automatically. If a push source goes stale (>10s), it falls back to the next available source.
@@ -370,16 +370,14 @@ src/
 
 ### Common Issues by Setup Mode
 
-#### Spotify Premium (Official API)
+#### General
 
 | Problem | Solution |
 |---------|----------|
-| "Missing DISCORD_CLIENT_ID" | Add `discord_app_id` to `config.json` or use setup wizard |
-| Spotify auth fails / "Invalid client" | Check `spotify_client_id` and `spotify_client_secret` match your [Spotify Dashboard](https://developer.spotify.com/dashboard). Ensure redirect URI is exactly `http://127.0.0.1:8888/callback` |
-| "User not registered in the Developer Dashboard" | Your Spotify account must be added as a test user in your Spotify app's settings until the app is approved for general use |
-| Auth works but no track detected | Ensure Spotify is playing music. Check `user_tier` is set to `"premium"` |
+| "Missing DISCORD_CLIENT_ID" | Add `discord_app_id` to `config.json` or use the setup page. Optional — a built-in default is used when empty |
+| Nothing detected at all | Check Discord is running, then confirm the player is publishing a Windows media session (it should appear in the Win+K / volume flyout) |
 
-#### Spotify Free + Spicetify
+#### Spotify + Spicetify
 
 | Problem | Solution |
 |---------|----------|

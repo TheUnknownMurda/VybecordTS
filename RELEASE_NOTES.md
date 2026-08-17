@@ -15,14 +15,13 @@
 
 ### Spotify Integration (Two Options)
 
-#### 🌟 Option 1: Spotify Premium (Official API) — **RECOMMENDED**
-- No third-party tools required
-- Full metadata via official Spotify API
-- Most reliable and safe
-- OAuth-based authentication
+#### 🌟 Option 1: Spotify web player + Tampermonkey — **RECOMMENDED**
+- No client modification, no Terms of Service risk
+- Precise progress and metadata pushed straight from the page
+- Nothing to create: no Spotify developer app, client secret or OAuth
 
-#### ⚠️ Option 2: Spotify Free + Spicetify
-- For users without Spotify Premium
+#### ⚠️ Option 2: Spotify desktop app + Spicetify
+- Richer still (playlist context, shuffle/repeat), but modifies the client
 - **WARNING:** Spicetify violates Spotify's Terms of Service
 - Using it incorrectly (ad blockers, etc.) may result in account suspension
 - We are **NOT responsible** for any account bans
@@ -67,7 +66,6 @@ VybecordTS/
 ### Prerequisites
 - ✅ Windows 10/11
 - ✅ Discord Desktop App (not web version)
-- ✅ Spotify account (Premium recommended)
 
 ### Installation Steps
 
@@ -84,10 +82,10 @@ VybecordTS/
    - Browser opens automatically to setup wizard
    - Follow the on-screen instructions
 
-4. **For Spotify Premium Users**
-   - Select "Premium" in the wizard
-   - Get Spotify credentials from [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard)
-   - Add redirect URI: `http://127.0.0.1:8888/callback`
+4. **Install the integrations you need**
+   - Browser platforms: install Tampermonkey, then click *Install* per platform
+   - Spotify desktop app: let the installer set up Spicetify, or install the extension manually
+   - Everything else is picked up automatically via Windows media controls
 
 5. **Enjoy!**
    - Play music on Spotify
@@ -127,9 +125,10 @@ VybecordTS/
 - Some songs don't have synced lyrics available
 - You can import custom `.lrc` files via the dashboard
 
-### Spotify auth fails?
-- Premium users: Make sure your app is created at [Spotify Dashboard](https://developer.spotify.com/dashboard)
-- Check that redirect URI is exactly: `http://127.0.0.1:8888/callback`
+### Spotify not detected?
+- Desktop app: check the Spicetify extension is installed and Spotify was restarted
+- Web player: check the Tampermonkey userscript is installed and enabled
+- Without either, Spotify still shows up through Windows media controls, just with less metadata
 
 ### More help?
 - See `GUIDE_UTILISATEUR.md` for detailed troubleshooting

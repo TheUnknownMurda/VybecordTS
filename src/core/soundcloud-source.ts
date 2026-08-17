@@ -19,7 +19,6 @@ const log = createLogger('SoundCloudSource');
 
 // Regex for cleaning track titles
 const RE_PROD = /\s*[\[(](?:prod\.?|produced\s+by)\s*.+[\])]\s*$/i;
-const RE_FEAT = /\s*[\[(](?:feat\.?|ft\.?|featuring)\s+.+[\])]\s*$/i;
 
 /** Shape of JSON pushed by the Tampermonkey userscript. */
 export interface SoundCloudPayload {

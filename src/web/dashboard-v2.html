@@ -1677,75 +1677,6 @@
       <div class="orb orb-2"></div>
     </div>
     <canvas id="noiseCanvas"></canvas>
-    <!-- Setup Wizard -->
-    <div id="setupOverlay" class="setup-overlay hidden">
-      <div class="setup-card">
-        <h2 class="gradient-text" data-i18n="setup_title">Welcome to VybecordTS</h2>
-        <p class="setup-sub" data-i18n="setup_sub">Quick setup in 30 seconds.</p>
-        <div class="setup-step">
-          <label data-i18n="setup_tier_label">Mode</label>
-          <div class="setup-tier-btns">
-            <div class="setup-tier-btn active" data-tier="free" onclick="setupSelectTier(this)">
-              <div style="font-size: 18px; margin-bottom: 4px">🆓</div>
-              <div data-i18n="setup_tier_free">Free</div>
-              <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px" data-i18n="setup_tier_free_desc">
-                Any player
-              </div>
-            </div>
-            <div class="setup-tier-btn" data-tier="premium" onclick="setupSelectTier(this)">
-              <div style="font-size: 18px; margin-bottom: 4px">💎</div>
-              <div data-i18n="setup_tier_premium">Premium</div>
-              <div
-                style="font-size: 10px; color: var(--text-muted); margin-top: 2px"
-                data-i18n="setup_tier_premium_desc"
-              >
-                Spotify API
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="setup-step" id="setupSpicetifyWarning" style="display:none">
-          <div style="background:rgba(255,193,7,0.1);border:1px solid rgba(255,193,7,0.3);border-radius:var(--r-md);padding:12px;font-size:12px;color:var(--text-muted)">
-            <div style="font-weight:600;color:#ffc107;margin-bottom:6px">⚠️ <span data-i18n="setup_spicetify_warning_title">Spicetify / Modded Spotify</span></div>
-            <div data-i18n-html="setup_spicetify_warning_text"></div>
-          </div>
-        </div>
-
-        <button
-          style="
-            width: 100%;
-            padding: 12px;
-            border-radius: var(--r-md);
-            border: none;
-            background: var(--accent-hex);
-            color: #fff;
-            font-size: 14px;
-            font-weight: 700;
-            cursor: pointer;
-            font-family: inherit;
-          "
-          id="setupGoBtn"
-          onclick="setupSave()"
-          data-i18n="setup_go"
-        >
-          Start VybecordTS
-        </button>
-        <span
-          style="
-            display: block;
-            text-align: center;
-            margin-top: 12px;
-            font-size: 12px;
-            color: var(--text-muted);
-            cursor: pointer;
-          "
-          onclick="setupDismiss()"
-          data-i18n="setup_skip"
-        >
-          Skip
-        </span>
-      </div>
-    </div>
     <!-- Edit Modal -->
     <div id="editModal" class="modal-overlay hidden">
       <div class="modal-card">
@@ -1847,11 +1778,11 @@
       </nav>
       <div class="sidebar-bottom">
         <div class="status-badges">
+          <span id="badgeMode" class="badge badge-white">SMTC</span>
           <span id="badgeDiscord" class="badge badge-red">
             <span class="dot">●</span>
             Discord
           </span>
-          <span id="badgeMode" class="badge badge-white">FREE</span>
           <span id="badgeLyrics" class="badge badge-green">🎵 Lyrics</span>
         </div>
         <div class="nav-item" onclick="toggleTheme()">
@@ -2599,25 +2530,6 @@
                             display: block;
                             margin-bottom: 4px;
                           "
-                          data-i18n="user_tier"
-                        >
-                          Tier
-                        </label>
-                        <select id="cfgUserTier">
-                          <option value="auto">Auto</option>
-                          <option value="premium">Premium</option>
-                          <option value="free">Free</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label
-                          style="
-                            font-size: 11px;
-                            color: var(--text-muted);
-                            font-weight: 500;
-                            display: block;
-                            margin-bottom: 4px;
-                          "
                           data-i18n="poll_interval"
                         >
                           Poll (ms)
@@ -3317,7 +3229,6 @@
           click_targets: "Click targets",
           button_1: "Button 1",
           advanced: "Advanced",
-          user_tier: "User tier",
           poll_interval: "Poll interval (ms)",
           listening_time: "Listening time",
           tracks_played: "Tracks",
@@ -3362,18 +3273,6 @@
           draft_found: "Draft found from {n}m ago ({track})",
           draft_restore: "Restore",
           draft_discard: "Discard",
-          setup_title: "Welcome to VybecordTS",
-          setup_sub: "Quick setup in 30 seconds.",
-          setup_tier_label: "Mode",
-          setup_tier_free: "Free",
-          setup_tier_free_desc: "Any music player",
-          setup_tier_premium: "Premium",
-          setup_tier_premium_desc: "Spotify API",
-          setup_spicetify_warning_title: "Spicetify / Modded Spotify",
-          setup_spicetify_warning_text:
-            'Using Spicetify or modified Spotify clients (ad blockers, etc.) may violate Spotify\'s Terms of Service and could result in account suspension. <b>We are not responsible</b> for any bans or issues caused by using third-party modifications. Use at your own risk.',
-          setup_go: "Start VybecordTS",
-          setup_skip: "Skip — I'll configure later",
           creds_lastfm_hint:
             'Get a free key at <a href="https://www.last.fm/api/account/create" target="_blank">last.fm/api/account/create</a>',
           bug_title: "Report a Bug",
@@ -3462,7 +3361,6 @@
           click_targets: "Cibles de clic",
           button_1: "Bouton 1",
           advanced: "Avancé",
-          user_tier: "Niveau",
           poll_interval: "Intervalle (ms)",
           listening_time: "Temps d'écoute",
           tracks_played: "Titres",
@@ -3511,18 +3409,6 @@
           draft_found: "Brouillon trouvé il y a {n}min ({track})",
           draft_restore: "Restaurer",
           draft_discard: "Ignorer",
-          setup_title: "Bienvenue sur VybecordTS",
-          setup_sub: "Configuration rapide en 30 secondes.",
-          setup_tier_label: "Mode",
-          setup_tier_free: "Gratuit",
-          setup_tier_free_desc: "Tout lecteur",
-          setup_tier_premium: "Premium",
-          setup_tier_premium_desc: "API Spotify",
-          setup_spicetify_warning_title: "Spicetify / Spotify modifié",
-          setup_spicetify_warning_text:
-            'L\'utilisation de Spicetify ou de clients Spotify modifiés (bloqueurs de pub, etc.) peut enfreindre les Conditions d\'utilisation de Spotify et entraîner une suspension de compte. <b>Nous ne sommes pas responsables</b> des bannissements ou problèmes causés par l\'utilisation de modifications tierces. Utilisez à vos propres risques.',
-          setup_go: "Lancer VybecordTS",
-          setup_skip: "Passer",
           creds_lastfm_hint:
             'Obtenez une clé gratuite sur <a href="https://www.last.fm/api/account/create" target="_blank">last.fm/api/account/create</a>',
           bug_title: "Signaler un bug",
@@ -3559,9 +3445,6 @@
           confirm_shutdown: "¿Detener VybecordTS?",
           saved: "✓ Guardado",
           error: "✗ Error",
-          setup_title: "Bienvenido a VybecordTS",
-          setup_go: "Iniciar",
-          setup_skip: "Omitir",
         },
         de: {
           idle_title: "Warte auf Musik…",
@@ -3576,9 +3459,6 @@
           confirm_shutdown: "VybecordTS beenden?",
           saved: "✓ Gespeichert",
           error: "✗ Fehler",
-          setup_title: "Willkommen bei VybecordTS",
-          setup_go: "Starten",
-          setup_skip: "Überspringen",
         },
         pt: {
           idle_title: "Aguardando música…",
@@ -3593,9 +3473,6 @@
           confirm_shutdown: "Encerrar VybecordTS?",
           saved: "✓ Salvo",
           error: "✗ Erro",
-          setup_title: "Bem-vindo ao VybecordTS",
-          setup_go: "Iniciar",
-          setup_skip: "Pular",
         },
         ru: {
           idle_title: "Ожидание музыки…",
@@ -3610,9 +3487,6 @@
           confirm_shutdown: "Остановить?",
           saved: "✓ Сохранено",
           error: "✗ Ошибка",
-          setup_title: "Добро пожаловать",
-          setup_go: "Запустить",
-          setup_skip: "Пропустить",
         },
         ja: {
           idle_title: "音楽を待っています…",
@@ -3627,9 +3501,6 @@
           confirm_shutdown: "終了？",
           saved: "✓ 保存済み",
           error: "✗ エラー",
-          setup_title: "VybecordTSへようこそ",
-          setup_go: "起動",
-          setup_skip: "スキップ",
         },
         ko: {
           idle_title: "음악 대기 중…",
@@ -3644,9 +3515,6 @@
           confirm_shutdown: "종료?",
           saved: "✓ 저장됨",
           error: "✗ 오류",
-          setup_title: "VybecordTS 환영",
-          setup_go: "시작",
-          setup_skip: "건너뛰기",
         },
         zh: {
           idle_title: "等待音乐…",
@@ -3661,9 +3529,6 @@
           confirm_shutdown: "关闭？",
           saved: "✓ 已保存",
           error: "✗ 错误",
-          setup_title: "欢迎",
-          setup_go: "启动",
-          setup_skip: "跳过",
         },
       };
       function detectLang() {
@@ -3780,7 +3645,6 @@
             case "init":
               config = msg.config || {};
               loadConfig(config);
-              if (typeof checkFirstRun === "function") checkFirstRun(config);
               updateStatus(msg);
               if (msg.track) {
                 updateTrack(msg.track);
@@ -4319,7 +4183,6 @@
         $("cfgCcLang").value = c.cc_lang || "auto";
         $("cfgCcLang").disabled = !$("cfgCcEnabled").checked;
         $("cfgCcLang").style.opacity = $("cfgCcEnabled").checked ? 1 : 0.4;
-        $("cfgUserTier").value = c.user_tier || "auto";
         $("cfgPollInterval").value = c.poll_interval_ms || 3000;
         $("cfgLrclibDumpPath").value = c.lrclib_dump_path || "";
         $("cfgDetailsUrl").value = c.rpc_details_url || "auto";
@@ -4374,7 +4237,6 @@
           hide_small_icon: $("cfgSmallIconMode").value === "hidden",
           cc_enabled: $("cfgCcEnabled").checked,
           cc_lang: $("cfgCcLang").value,
-          user_tier: $("cfgUserTier").value,
           poll_interval_ms: parseInt($("cfgPollInterval").value) || 3000,
           lrclib_dump_path: $("cfgLrclibDumpPath").value.trim(),
           rpc_details_url: $("cfgDetailsUrl").value,
@@ -4413,12 +4275,14 @@
       }
       // STATUS
       function updateStatus(msg) {
-        const dc = msg.discordConnected,
-          mode = (msg.sourceMode || "free").toUpperCase();
+        const dc = msg.discordConnected;
+        // Spotify arrives only via the Spicetify extension now; everything else
+        // comes from SMTC or a browser userscript.
+        const spice = msg.spicetifyActive === true;
         $("badgeDiscord").className = `badge ${dc ? "badge-discord" : "badge-red"}`;
         $("badgeDiscord").innerHTML = `<span class="dot">●</span> Discord`;
-        $("badgeMode").textContent = mode;
-        $("badgeMode").className = `badge ${mode === "PREMIUM" ? "badge-discord" : "badge-white"}`;
+        $("badgeMode").textContent = spice ? "SPICETIFY" : "SMTC";
+        $("badgeMode").className = `badge ${spice ? "badge-discord" : "badge-white"}`;
         // Lyrics status badge
         const showLyrics = msg.showLyrics !== false;
         $("badgeLyrics").className = `badge ${showLyrics ? "badge-green" : "badge-red"}`;
@@ -5421,42 +5285,6 @@
         const mode = localStorage.getItem("vybecord_theme") || "system";
         if (mode === "system") applyThemeMode("system");
       });
-      // SETUP
-      function checkFirstRun(cfg) {
-        // Setup wizard disabled
-        return;
-      }
-      function showSetupWizard() {
-        $("setupOverlay").classList.remove("hidden");
-        setTimeout(() => $("setupOverlay").classList.add("visible"), 50);
-      }
-      function setupDismiss() {
-        $("setupOverlay").classList.remove("visible");
-        setTimeout(() => $("setupOverlay").classList.add("hidden"), 400);
-      }
-      function setupSelectTier(el) {
-        document.querySelectorAll(".setup-tier-btn").forEach((b) => b.classList.remove("active"));
-        el.classList.add("active");
-        const tier = el.getAttribute("data-tier");
-        $("setupSpicetifyWarning").style.display = tier === "premium" ? "block" : "none";
-      }
-      async function setupSave() {
-        const tier = document.querySelector(".setup-tier-btn.active")?.getAttribute("data-tier") || "free";
-        const cfg = {};
-        if (tier === "premium") {
-          cfg.user_tier = "premium";
-        } else {
-          cfg.user_tier = "free";
-        }
-        try {
-          await fetch("/api/config", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(cfg),
-          });
-        } catch {}
-        setupDismiss();
-      }
       // BUG REPORT
       let _lastBugTime = 0;
       async function submitBugReport() {

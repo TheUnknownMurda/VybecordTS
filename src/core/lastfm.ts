@@ -32,7 +32,6 @@ let scrobbleEnabled = false;
 // Scrobble state (current track timing)
 let scrobbleTrack: { track: string; artist: string; album: string; duration: number; startedAt: number } | null = null;
 let scrobbled = false; // Has the current track been scrobbled?
-let nowPlayingSent = false;
 
 /** Corrected metadata returned by Last.fm. */
 export interface LastFmCorrection {
@@ -308,7 +307,6 @@ export function scrobbleTrackStart(track: string, artist: string, album: string,
     startedAt: Math.round(Date.now() / 1000),
   };
   scrobbled = false;
-  nowPlayingSent = false;
 
   // Send updateNowPlaying (fire-and-forget)
   signedPost({
@@ -318,10 +316,7 @@ export function scrobbleTrackStart(track: string, artist: string, album: string,
     album: scrobbleTrack.album,
     duration: String(scrobbleTrack.duration),
   }).then(r => {
-    if (r) {
-      nowPlayingSent = true;
-      log.debug(`[SCROBBLE] Now Playing: "${track}" by ${artist}`);
-    }
+    if (r) log.debug(`[SCROBBLE] Now Playing: "${track}" by ${artist}`);
   });
 }
 
@@ -355,5 +350,4 @@ export function scrobbleTrackEnd(): void {
   checkAndScrobble();
   scrobbleTrack = null;
   scrobbled = false;
-  nowPlayingSent = false;
 }

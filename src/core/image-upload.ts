@@ -12,6 +12,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { createLogger } from './logger.js';
+import { evictOldest } from './utils.js';
 import FormData from 'form-data';
 
 const log = createLogger('ImageUpload');
@@ -19,8 +20,11 @@ const log = createLogger('ImageUpload');
 const THUMB_PATH = path.join(process.env.TEMP || os.tmpdir(), 'vybecord_thumb.jpg');
 const CATBOX_API = 'https://litterbox.catbox.moe/resources/internals/api.php';
 
-// Per-session cache: trackKey → public URL
+// Per-session cache: trackKey → public URL.
+// Bounded like every other cache in the app — the uploads expire after 24h
+// server-side anyway, so an unbounded map would only grow stale entries.
 const cache = new Map<string, string>();
+const CACHE_MAX = 200;
 
 /**
  * Upload the local SMTC thumbnail to catbox.moe for use in Discord RPC.
@@ -65,6 +69,7 @@ export async function uploadThumbForRpc(trackKey: string, signal?: AbortSignal):
     const url = (await res.text()).trim();
     if (url.startsWith('https://')) {
       cache.set(trackKey, url);
+      evictOldest(cache, CACHE_MAX);
       log.info(`Local thumb uploaded → ${url}`);
       return url;
     }

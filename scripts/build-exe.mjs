@@ -18,9 +18,9 @@ const DIST = path.join(BUILD, 'VybecordTS');
 
 // ── Helpers ──
 
-function run(cmd) {
+function run(cmd, cwd = ROOT) {
   console.log(`  > ${cmd}`);
-  execSync(cmd, { cwd: ROOT, stdio: 'inherit' });
+  execSync(cmd, { cwd, stdio: 'inherit' });
 }
 
 function copy(src, dest) {
@@ -65,7 +65,14 @@ try {
   fs.mkdirSync(PREBUILD_DEST, { recursive: true });
   // Download then extract (two steps — Windows cmd doesn't pipe like bash)
   run(`curl.exe -sL "${PREBUILD_URL}" -o "${PREBUILD_TGZ}"`);
-  run(`tar xzf "${PREBUILD_TGZ}" -C "${PREBUILD_DEST}"`);
+  // Extract from inside the destination using a RELATIVE archive path.
+  // An absolute "C:\..." path makes GNU tar — which Git Bash puts ahead of
+  // System32 in PATH — read it as a remote host:path and abort with
+  // "Cannot connect to C: resolve failed". A colon-free relative path is
+  // understood by both GNU tar and the bsdtar shipped in System32, so the
+  // build no longer depends on which shell it was launched from.
+  const relTgz = path.relative(PREBUILD_DEST, PREBUILD_TGZ).replace(/\\/g, '/');
+  run(`tar xzf "${relTgz}"`, PREBUILD_DEST);
   // The tarball extracts as build/Release/better_sqlite3.node inside PREBUILD_DEST
   // Move it to the right place if nested
   const nested = path.join(PREBUILD_DEST, 'build', 'Release', 'better_sqlite3.node');
@@ -84,12 +91,26 @@ try {
   fs.unlinkSync(PREBUILD_TGZ);
 } catch (e) {
   console.warn(`  ⚠ Prebuild download failed: ${e.message}`);
-  console.warn('    Falling back to local .node (may have version mismatch)');
   const localNode = path.join(ROOT, 'node_modules', 'better-sqlite3', 'build', 'Release', 'better_sqlite3.node');
   if (fs.existsSync(localNode)) {
     fs.mkdirSync(PREBUILD_DEST, { recursive: true });
     fs.copyFileSync(localNode, path.join(PREBUILD_DEST, 'better_sqlite3.node'));
-    console.log('  ✓ Copied local better_sqlite3.node as fallback');
+    // The local addon was compiled for whatever Node runs this script; the exe
+    // embeds Node 20 (NODE_MODULE_VERSION 115). If they differ, the addon cannot
+    // load and the lyrics database is silently dead in the shipped build — so
+    // say it plainly instead of printing a checkmark next to a broken artifact.
+    const localAbi = process.versions.modules;
+    if (localAbi !== '115') {
+      console.warn('');
+      console.warn(`  ✗ ABI MISMATCH: local addon is NODE_MODULE_VERSION ${localAbi}, the exe needs 115.`);
+      console.warn('    The packaged exe will NOT be able to open the lyrics database.');
+      console.warn('    Fix the download above, or build on Node 20, before shipping this.');
+      console.warn('');
+    } else {
+      console.log('  ✓ Copied local better_sqlite3.node as fallback (ABI 115 — matches)');
+    }
+  } else {
+    console.warn('  ✗ No local better_sqlite3.node either — the exe will have no lyrics database.');
   }
 }
 
@@ -183,9 +204,11 @@ fs.writeFileSync(readmePath, [
   '  Setup page: http://127.0.0.1:8888/setup',
   '  Dashboard:  http://127.0.0.1:8888',
   '',
-  'MODES:',
-  '  FREE  — Works with any music player (Spotify Free, YouTube, etc.)',
-  '  PREMIUM — Uses Spotify API for richer data (needs Spotify Developer App)',
+  'SOURCES:',
+  '  • Spotify   — install the Spicetify extension (folder spicetify-extension/)',
+  '  • Browsers  — install the userscripts from the setup page (YouTube,',
+  '                SoundCloud, Bandcamp, Twitch, Kick)',
+  '  • Anything else — detected automatically via Windows media controls',
   '',
   'FOLDERS:',
   '  • tampermonkey/ — Browser userscripts (installed from the setup page)',

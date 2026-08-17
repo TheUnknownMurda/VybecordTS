@@ -20,11 +20,6 @@ const enum Opcode {
   PONG = 4,
 }
 
-interface IpcMessage {
-  opcode: number;
-  data: Record<string, unknown>;
-}
-
 /** Strip control chars that Discord's JSON parser rejects (U+0000–001F, U+007F–009F, line/para separators). */
 const RE_CONTROL = /[\x00-\x1f\x7f-\x9f\u2028\u2029]/g;
 function sanitize(s: string): string { return s.replace(RE_CONTROL, ''); }

@@ -12,10 +12,14 @@ let cacheFile = '';
 let cacheDirty = false;
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
+// Set by initTranslateCache(); falls back to cwd only if that was never called.
+let cacheBaseDir = '';
+
 function initCachePath(): void {
   if (cacheFile) return;
-  // Store next to config.json
-  cacheFile = join(process.cwd(), 'translate-cache.json');
+  // Store next to config.json — that is the exe's own directory when packaged,
+  // which is NOT process.cwd() when the app is launched from a shortcut.
+  cacheFile = join(cacheBaseDir || process.cwd(), 'translate-cache.json');
 }
 
 function loadDiskCache(): void {
@@ -29,8 +33,12 @@ function loadDiskCache(): void {
   } catch { /* ignore corrupt cache */ }
 }
 
-/** Load the on-disk translation cache. Call once, early in startup — after the banner. */
-export function initTranslateCache(): void {
+/**
+ * Load the on-disk translation cache. Call once, early in startup — after the banner.
+ * `baseDir` is the app's data directory (exe dir when packaged, cwd in dev).
+ */
+export function initTranslateCache(baseDir?: string): void {
+  if (baseDir) cacheBaseDir = baseDir;
   loadDiskCache();
 }
 

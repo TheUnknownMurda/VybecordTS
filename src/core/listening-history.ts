@@ -132,10 +132,16 @@ function saveToDisk(): void {
   }
 }
 
-/** Get N most recent history entries. */
+/** Get N most recent history entries (newest first). */
 export function getRecentHistory(limit = 50, offset = 0): HistoryEntry[] {
-  const reversed = [...entries].reverse();
-  return reversed.slice(offset, offset + limit);
+  // Walk backwards by index instead of copying + reversing all 10k entries
+  // just to slice 50 off the front.
+  const out: HistoryEntry[] = [];
+  const start = entries.length - 1 - Math.max(0, offset);
+  for (let i = start; i >= 0 && out.length < limit; i--) {
+    out.push(entries[i]);
+  }
+  return out;
 }
 
 /** Get total entry count. */

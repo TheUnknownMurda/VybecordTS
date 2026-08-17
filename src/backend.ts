@@ -1,31 +1,30 @@
 /**
  * VybecordBackend — main orchestrator.
  *
- * Supports THREE track sources (priority order):
- *   1. SpicetifySource (push) → Spicetify extension sends real-time data via HTTP POST
- *      - Event-driven (instant), full Spotify metadata, album art CDN, accurate progress
- *      - Eliminates need for Deezer/iTunes/Last.fm metadata enrichment
- *   2. SpotifyClient (API) → Premium users without Spicetify
- *   3. DesktopSource (SMTC) → Free users (no API needed, reads Windows media session)
+ * Track sources, in priority order:
+ *   1. SpicetifySource (push) → Spicetify extension posts real-time Spotify data
+ *      - Event-driven (instant), full metadata, album art CDN, accurate progress,
+ *        playlist context, shuffle/repeat — none of which needs a Spotify API key
+ *   2. Browser userscripts (push) → YouTube, SoundCloud, Bandcamp, Twitch, Kick
+ *   3. DesktopSource (SMTC) → anything else with a Windows media session
  *
- * Auto-detection: tries Spotify API first. If it fails (403 / no premium),
- * automatically falls back to SMTC. Spicetify activates on first push.
+ * There is no Spotify Web API path: the Spicetify extension supersedes it and
+ * needs no developer application, client secret or OAuth round-trip.
+ * Push sources need no startup step — they activate on their first POST.
  *
  * Flow:
- *   1. Detect user tier (auto / premium / free)
+ *   1. Start SMTC (Windows only; its absence is non-fatal)
  *   2. Connect to Discord IPC
- *   3. Poll active source every N ms for current track
- *   4. On new track → fetch lyrics from LRCLib (async) + album art from Deezer
+ *   3. Poll the active source every N ms for the current track
+ *   4. On new track → fetch lyrics (local DB → LRCLib/Netease/Musixmatch race)
  *   5. Feed lyrics to LyricsEngine → precise setTimeout scheduling → RPC updates
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { performance } from 'node:perf_hooks';
 import { EventEmitter } from 'node:events';
 import { createLogger } from './core/logger.js';
 import { ConfigManager, sanitizeConfigUpdate } from './core/config.js';
-import { SpotifyClient } from './core/spotify.js';
 import { DesktopSource } from './core/desktop-source.js';
 import { SpicetifySource, type SpicetifyPayload } from './core/spicetify-source.js';
 import { YouTubeSource, type YouTubePayload } from './core/youtube-source.js';
@@ -35,18 +34,17 @@ import { KickSource, type KickPayload } from './core/kick-source.js';
 import { TwitchSource, type TwitchPayload } from './core/twitch-source.js';
 import { DiscordIPC } from './core/discord-ipc.js';
 import { LyricsEngine } from './sync/lyrics-engine.js';
-import { fetchLyrics, fetchTrackMetadata, fetchPlainLyrics } from './core/provider.js';
-import { fetchYouTubeCaptions, clearCCCache, type CCResult } from './core/youtube-captions.js';
-import { similarity } from './core/similarity.js';
+import { fetchLyrics, fetchPlainLyrics } from './core/provider.js';
+import { fetchYouTubeCaptions, clearCCCache } from './core/youtube-captions.js';
 import { initLocalDb, closeLocalDb, insertCustomLyrics, listCustomLyrics, getCustomLyrics, updateCustomLyrics, deleteCustomLyrics, findExistingCustomLyrics, searchLrclibDump as searchLrclibDumpDb, getLrclibTrackLyrics as getLrclibTrackLyricsDb } from './core/local-lyrics-db.js';
-import { initLastFm, scrobbleTrackStart, checkAndScrobble, scrobbleTrackEnd, isScrobbleEnabled, getAuthUrl, completeAuth, disconnectScrobble, canAuth } from './core/lastfm.js';
+import { initLastFm, scrobbleTrackStart, checkAndScrobble, scrobbleTrackEnd } from './core/lastfm.js';
 import { uploadThumbForRpc } from './core/image-upload.js';
 import { extractLocalArt, extractArtFromPath } from './core/local-art.js';
 import { initBlacklist, flagLyrics, isLyricsFlagged, clearFlags, listFlaggedTracks, clearFlagsByKey } from './core/lyrics-blacklist.js';
 import { initHistory, historyTrackStart, historyTrackEnd, getRecentHistory, getHistoryCount, getWrappedStats } from './core/listening-history.js';
 import { translateBatch } from './core/translate.js';
 import { evictOldest, evictUntil } from './core/utils.js';
-import type { TrackData, SpotifyPlayback, LyricLine, VybecordConfig } from './core/types.js';
+import type { TrackData, LyricLine, VybecordConfig } from './core/types.js';
 
 const log = createLogger('Backend');
 
@@ -86,8 +84,6 @@ const PLATFORM_DISCORD_APP_IDS: Record<string, string> = {
   // Default falls back to config discord_app_id or env DISCORD_CLIENT_ID
 };
 
-type TrackSourceMode = 'premium' | 'free';
-
 /** Map a media_source string to its per-platform config key. */
 function platformConfigKey(src: string): keyof import('./core/types.js').VybecordConfig | null {
   if (src === 'spotify') return 'detect_spotify';
@@ -103,7 +99,6 @@ function platformConfigKey(src: string): keyof import('./core/types.js').Vybecor
 
 export class VybecordBackend extends EventEmitter {
   private config: ConfigManager;
-  private spotify: SpotifyClient | null = null;
   private desktop: DesktopSource | null = null;
   private spicetify: SpicetifySource;
   private youtubeSource: YouTubeSource;
@@ -114,15 +109,13 @@ export class VybecordBackend extends EventEmitter {
   private discord: DiscordIPC;
   private lyricsEngine: LyricsEngine;
 
-  private sourceMode: TrackSourceMode = 'free';
   private pollTimer: ReturnType<typeof setInterval> | null = null;
+  private polling = false;  // re-entrance guard for the async poll() (see poll())
   private currentTrack: TrackData | null = null;
   private currentTrackKey = '';
   private currentCacheKey = '';
   private lyricsCache = new Map<string, LyricLine[]>();
   private lastLyricsState: { current: string; next: string; prev: string; progress_ms: number; duration_ms: number } | null = null;
-  private enrichedMeta = new Map<string, { album_art_url: string; album_name: string; artist_name?: string }>();
-  private prefetchedKey = '';  // track key of last prefetched lyrics
   private spotifyLyricsStore = new Map<string, LyricLine[]>();  // track_id → synced lyrics from Spotify Web
   private fetchAbort: AbortController | null = null;  // cancel in-flight fetches on track skip
   private shuttingDown = false;
@@ -134,7 +127,6 @@ export class VybecordBackend extends EventEmitter {
   // Session stats (reset on app restart)
   private sessionTrackPlays = new Map<string, { name: string; artist: string; art: string; count: number }>();
   private sessionArtistPlays = new Map<string, { name: string; art: string; artist_art: string; count: number }>();
-  private lastStatsKey = '';  // track key used by last recordPlay (for enrichment lookup)
   private cachedStats: { topTracks: any[]; topArtists: any[] } | null = null;
   private statsDirty = true;
   private _lastCcLang: string | undefined;
@@ -194,7 +186,6 @@ export class VybecordBackend extends EventEmitter {
       } else {
         // Track is playing → restart lyrics engine with new config
         // (handles show_lyrics toggle, template changes, button changes, etc.)
-        this.mergeEnriched(this.currentTrack);
         const rpcConfig = this.getRpcConfig();
         const cachedLyrics = this.lyricsCache.get(this.currentCacheKey);
         if (!cachedLyrics) {
@@ -248,14 +239,16 @@ export class VybecordBackend extends EventEmitter {
 
     initHistory(this.configDir);
 
-    // 1. Detect user tier and init track source
-    await Promise.race([
-      this.initTrackSource(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Track source detection timeout (15s)')), 15000))
-    ]).catch(e => {
-      log.warn(`Track source detection failed or timed out: ${e}. Falling back to FREE mode (SMTC).`);
+    // 1. Start the desktop (SMTC) source. Push sources — Spicetify and the
+    //    browser userscripts — need no startup step: they activate on first push.
+    //    SMTC is Windows-only, and its absence is not fatal: everything the push
+    //    sources cover keeps working without it.
+    try {
       this.startDesktopSource();
-    });
+    } catch (e) {
+      log.warn(`Desktop SMTC source unavailable: ${e}`);
+      log.warn('Only push sources (Spicetify extension, browser userscripts) will be detected.');
+    }
 
     // 2. Discord RPC connect (with retry)
     this.wireDiscordHandlers();
@@ -267,73 +260,24 @@ export class VybecordBackend extends EventEmitter {
 
     // 3. Start polling
     const interval = this.config.get('poll_interval_ms') || 1500;
-    log.info(`Starting ${this.sourceMode.toUpperCase()} polling (every ${interval}ms)`);
+    log.info(`Starting polling (every ${interval}ms)`);
     this.pollTimer = setInterval(() => this.poll(), interval);
 
     // Immediate first poll
     this.poll();
   }
 
-  // ── Track source detection ──
-
-  private async initTrackSource(): Promise<void> {
-    const userTier = (this.config.get('user_tier') as string) || 'auto';
-    const clientId = this.config.get('spotify_client_id') || process.env.SPOTIFY_CLIENT_ID || '';
-    const clientSecret = this.config.get('spotify_client_secret') || process.env.SPOTIFY_CLIENT_SECRET || '';
-
-    if (userTier === 'free') {
-      // Forced free mode — skip API entirely
-      this.startDesktopSource();
-      return;
-    }
-
-    if (userTier === 'premium' && clientId && clientSecret) {
-      // Forced premium mode
-      await this.startSpotifySource(clientId, clientSecret);
-      return;
-    }
-
-    // Auto-detect: try Spotify API first, fall back to SMTC
-    if (clientId && clientSecret) {
-      try {
-        await this.startSpotifySource(clientId, clientSecret);
-        // Test if the API actually works (Premium check)
-        const test = await this.spotify!.getCurrentPlayback();
-        // If no error, API works (even if nothing is playing)
-        log.info('Spotify API accessible → PREMIUM mode');
-        return;
-      } catch (e) {
-        log.warn(`Spotify API failed (${e}) → falling back to FREE mode (SMTC)`);
-      }
-    } else {
-      log.info('No Spotify credentials → FREE mode (SMTC)');
-    }
-
-    this.startDesktopSource();
-  }
-
-  private async startSpotifySource(clientId: string, clientSecret: string): Promise<void> {
-    this.spotify = new SpotifyClient({
-      clientId,
-      clientSecret,
-      cacheDir: path.join(this.configDir, 'envs'),
-    });
-    await this.spotify.authenticate();
-    this.sourceMode = 'premium';
-    log.info('Spotify authenticated ✓ (PREMIUM source)');
-  }
+  // ── Track source ──
 
   private startDesktopSource(): void {
     if (process.platform !== 'win32') {
       log.error('SMTC desktop source is only available on Windows.');
-      log.error('Set user_tier to "premium" and provide Spotify credentials.');
-      throw new Error('SMTC requires Windows — configure Spotify credentials for other platforms');
+      log.error('On other platforms, use the Spicetify extension or the browser userscripts.');
+      throw new Error('SMTC requires Windows — use the Spicetify extension or userscripts elsewhere');
     }
     this.desktop = new DesktopSource();
     this.desktop.start();
-    this.sourceMode = 'free';
-    this.spotify = null;
-    log.info('Desktop SMTC source started ✓ (FREE mode — no Spotify Premium required)');
+    log.info('Desktop SMTC source started ✓');
   }
 
   // ── Spicetify push handler (event-driven, called by web server) ──
@@ -386,7 +330,6 @@ export class VybecordBackend extends EventEmitter {
     }
 
     // New track detected — instant response (no 3s poll delay!)
-    this.prefetchedKey = '';
     this.currentTrackKey = trackKey;
     this.currentTrack = track;
     this.cachedIsWebSource = false; // Spicetify is Spotify — never a web source
@@ -432,7 +375,6 @@ export class VybecordBackend extends EventEmitter {
     }
 
     // New video detected — instant response
-    this.prefetchedKey = '';
     this.currentTrackKey = trackKey;
     this.currentTrack = track;
     this.cachedIsWebSource = true; // YouTube is a web source
@@ -471,7 +413,6 @@ export class VybecordBackend extends EventEmitter {
     }
 
     // New track detected
-    this.prefetchedKey = '';
     this.currentTrackKey = trackKey;
     this.currentTrack = track;
     this.cachedIsWebSource = true; // SoundCloud is a web source
@@ -510,7 +451,6 @@ export class VybecordBackend extends EventEmitter {
     }
 
     // New track detected
-    this.prefetchedKey = '';
     this.currentTrackKey = trackKey;
     this.currentTrack = track;
     this.cachedIsWebSource = true; // Bandcamp is a web source
@@ -550,7 +490,6 @@ export class VybecordBackend extends EventEmitter {
     }
 
     // New stream detected
-    this.prefetchedKey = '';
     this.currentTrackKey = trackKey;
     this.currentTrack = track;
     this.cachedIsWebSource = true; // Kick is a web source
@@ -590,7 +529,6 @@ export class VybecordBackend extends EventEmitter {
     }
 
     // New stream detected
-    this.prefetchedKey = '';
     this.currentTrackKey = trackKey;
     this.currentTrack = track;
     this.cachedIsWebSource = true; // Twitch is a web source
@@ -698,6 +636,12 @@ export class VybecordBackend extends EventEmitter {
   }
 
   private async poll(): Promise<void> {
+    // Re-entrance guard: the Spotify API branch below awaits a fetch with an 8s
+    // timeout while the interval fires every poll_interval_ms (3s by default).
+    // Without this, slow API responses stack overlapping polls, each re-emitting
+    // progress and potentially racing onNewTrack against itself.
+    if (this.polling) return;
+    this.polling = true;
     try {
       this.ensurePollSources();
 
@@ -774,121 +718,22 @@ export class VybecordBackend extends EventEmitter {
         return;
       }
 
-      // Priority 3: Spotify API (Premium users without Spicetify)
-      if (this.sourceMode === 'premium' && this.spotify) {
-        const playback = await this.spotify.getCurrentPlayback();
-        this.handleSpotifyPlayback(playback);
-      } else {
-        // Priority 3b–3f: all push-based web sources (table-driven)
-        if (this.pollWebSources()) return;
+      // Priority 3: all push-based web sources (table-driven)
+      if (this.pollWebSources()) return;
 
-        // Priority 4: Desktop SMTC (Free users)
-        if (this.desktop) {
-          const track = this.desktop.getCurrentTrack();
-          this.handleDesktopTrack(track);
-        }
+      // Priority 4: Desktop SMTC
+      if (this.desktop) {
+        const track = this.desktop.getCurrentTrack();
+        this.handleDesktopTrack(track);
       }
     } catch (e) {
       log.error(`Poll error: ${e}`);
+    } finally {
+      this.polling = false;
     }
   }
 
-  // ── Premium: Spotify API ──
-
-  private handleSpotifyPlayback(playback: SpotifyPlayback | null): void {
-    if (!playback || !playback.is_playing || !playback.item) {
-      this.onTrackStopped();
-      return;
-    }
-
-    if (this.config.get('detect_spotify') === false) return;
-
-    this.idleSince = 0; // Reset grace period
-    const trackData = this.extractSpotifyTrackData(playback);
-    const trackKey = this.buildTrackKey(trackData);
-
-    if (trackKey === this.currentTrackKey) {
-      if (this.checkRepeatLoop(trackData)) return;
-      this.syncTrackProgress(trackData);
-
-      // Prefetch next track's lyrics when >80% done (fire-and-forget)
-      if (trackData.duration_ms > 0 && trackData.progress_ms / trackData.duration_ms > 0.8) {
-        this.prefetchNextLyrics();
-      }
-      return;
-    }
-
-    this.prefetchedKey = ''; // Reset on new track
-    this.currentTrackKey = trackKey;
-    this.currentTrack = trackData;
-    this.cachedIsWebSource = false; // Spotify API source is never a web source
-    log.info(`[NEW TRACK] ${trackData.track_name} — ${trackData.artist_name}`);
-    this.recordPlay(trackData);
-    this.emit('trackUpdate', trackData);
-    this.onNewTrack(trackData).catch(e => log.error(`[NEW TRACK] Error: ${e}`));
-  }
-
-  /** Pre-warm lyrics cache for the next track in the Spotify queue. */
-  private prefetchNextLyrics(): void {
-    if (!this.spotify || this.prefetchedKey === this.currentTrackKey) return;
-    this.prefetchedKey = this.currentTrackKey;
-
-    // Own AbortController — survives track skips so prefetch work isn't wasted
-    const prefetchAbort = new AbortController();
-    // Auto-abort after 15s to prevent lingering fetches
-    const timeout = setTimeout(() => prefetchAbort.abort(), 15_000);
-
-    this.spotify.getNextInQueue().then(async (nextItem) => {
-      if (!nextItem) return;
-      const cacheKey = `${nextItem.id}|${nextItem.name}|${nextItem.artists.map(a => a.name).join(', ')}|${nextItem.duration_ms}`;
-      if (this.lyricsCache.has(cacheKey)) return; // Already cached
-
-      const artist = nextItem.artists.map(a => a.name).join(', ');
-      log.debug(`[PREFETCH] Fetching lyrics for next: ${nextItem.name} — ${artist}`);
-      const lyrics = await fetchLyrics(nextItem.name, artist, nextItem.album.name, nextItem.duration_ms, prefetchAbort.signal);
-      if (lyrics.length > 0) {
-        this.lyricsCache.set(cacheKey, lyrics);
-        this.evictCache();
-        log.info(`[PREFETCH] Cached ${lyrics.length} lines for "${nextItem.name}"`);
-      }
-    }).catch(() => {}).finally(() => clearTimeout(timeout)); // Silent fail — prefetch is best-effort
-  }
-
-  private extractSpotifyTrackData(playback: SpotifyPlayback): TrackData {
-    const item = playback.item!;
-    const artist = item.artists.map(a => a.name).join(', ');
-    const albumImages = item.album.images;
-    // Pick largest image directly (O(n)) instead of sorting (O(n log n)) every poll
-    let artUrl = '';
-    if (albumImages.length > 0) {
-      let best = albumImages[0];
-      for (let i = 1; i < albumImages.length; i++) {
-        if (albumImages[i].width > best.width) best = albumImages[i];
-      }
-      artUrl = best.url;
-    }
-
-    return {
-      track_id: item.id,
-      track_name: item.name,
-      artist_name: artist,
-      album_name: item.album.name,
-      duration_ms: item.duration_ms,
-      progress_ms: playback.progress_ms,
-      is_playing: playback.is_playing,
-      album_art_url: artUrl,
-      spotify_url: item.external_urls?.spotify ?? '',
-      artist_url: item.artists[0]?.external_urls?.spotify ?? '',
-      album_url: item.album.external_urls?.spotify ?? '',
-      context_url: playback.context?.external_urls?.spotify ?? '',
-      context_type: playback.context?.type ?? '',
-      // context_name not available from Spotify API without an extra /playlists/{id} call
-      media_source: 'spotify',
-      _received_at: performance.now(),
-    };
-  }
-
-  // ── Free: Desktop SMTC ──
+  // ── Desktop SMTC ──
 
   private handleDesktopTrack(track: TrackData | null): void {
     if (!track) {
@@ -955,8 +800,6 @@ export class VybecordBackend extends EventEmitter {
       // already guards against stale positions, and syncProgress's built-in
       // isRepeatJump handles genuine repeats for native apps.
 
-      // Merge enriched metadata from persistent store (survives poll replacement)
-      this.mergeEnriched(track);
       this.currentTrack = track;
 
       // Web sources (browser, YouTube, SoundCloud): SMTC progress is unreliable
@@ -1138,22 +981,9 @@ export class VybecordBackend extends EventEmitter {
     const cached = this.lyricsCache.get(cacheKey);
     if (cached && cached.length > 0) {
       lyrics = cached;
-      this.mergeEnriched(trackData); // Restore enriched art from persistent store
       log.info(`[LYRICS] Cache hit (${lyrics.length} lines)`);
     } else {
-      // Show "Fetching Lyrics..." while searching (only when lyrics display is enabled)
-      if (this.config.get('show_lyrics') !== false) {
-        this.lyricsEngine.setFetchingLyrics(true);
-      }
-
-      // Fire metadata fetch independently so album art appears ASAP
-      // Also run when album_art_url is /api/thumbnail (local-only SMTC thumb) — Discord RPC needs a public CDN URL
-      // Determine source type early (needed by both metadata and lyrics branches)
-      const isYouTubeSource = src === 'youtube' || src === 'youtube_music' || src.startsWith('browser_');
       const isVideoSource = VIDEO_SOURCES.some(s => src.startsWith(s));
-
-      // Metadata enrichment disabled per user request
-      const metadataPromise = Promise.resolve();
 
       // Video sources: duration ≠ song duration (music videos have intros/outros)
       // Skip duration matching only for video-based sources
@@ -1218,17 +1048,6 @@ export class VybecordBackend extends EventEmitter {
               // But preserve local album art if it was already extracted
               if (ccResult.thumbnailUrl && trackData.album_art_url !== '/api/thumbnail') {
                 trackData.album_art_url = ccResult.thumbnailUrl;
-                // Persist in enrichedMeta so it survives subsequent poll cycles
-                const existing = this.enrichedMeta.get(this.currentTrackKey);
-                if (existing) {
-                  existing.album_art_url = ccResult.thumbnailUrl;
-                } else {
-                  this.enrichedMeta.set(this.currentTrackKey, {
-                    album_art_url: ccResult.thumbnailUrl,
-                    album_name: trackData.album_name,
-                    artist_name: trackData.artist_name,
-                  });
-                }
                 log.info(`[CC] Using YouTube thumbnail as album art`);
               }
               
@@ -1257,9 +1076,7 @@ export class VybecordBackend extends EventEmitter {
           })()
         : Promise.resolve([]);
 
-      // Wait for both to complete before starting lyrics engine
-      const [, lyricsResult] = await Promise.all([metadataPromise, lyricsPromise]);
-      lyrics = lyricsResult;
+      lyrics = await lyricsPromise;
 
       // Check blacklist: discard if this exact match was flagged as wrong
       if (lyrics.length > 0 && isLyricsFlagged(trackData.track_name, trackData.artist_name, lyrics)) {
@@ -1296,10 +1113,7 @@ export class VybecordBackend extends EventEmitter {
     // don't overwrite them with external (LRCLib/Netease) results.
     const spotifyInjected = this.spotifyLyricsStore.has(trackData.track_id) &&
       (this.spotifyLyricsStore.get(trackData.track_id)?.length ?? 0) > 0;
-    
-    // Clear "Fetching Lyrics..." status message since fetch is complete
-    this.lyricsEngine.setFetchingLyrics(false);
-    
+
     if (spotifyInjected) {
       log.info(`[LYRICS] Skipping external inject — Spotify official lyrics already active`);
     } else if (lyrics.length > 0) {
@@ -1348,8 +1162,6 @@ export class VybecordBackend extends EventEmitter {
   clearLyricsCache(): number {
     const count = this.lyricsCache.size;
     this.lyricsCache.clear();
-    this.enrichedMeta.clear();
-    this.prefetchedKey = '';
     log.info(`Lyrics cache cleared (${count} entries)`);
     return count;
   }
@@ -1510,7 +1322,6 @@ export class VybecordBackend extends EventEmitter {
     this.emit('configUpdate', this.config.getAll());
   }
   getCurrentTrack() { return this.currentTrack; }
-  getSourceMode() { return this.sourceMode; }
   getCurrentLyricsState() { return this.lastLyricsState; }
 
   /** Return the current track's cached lyrics as LRC text, or null. */
@@ -1603,16 +1414,13 @@ export class VybecordBackend extends EventEmitter {
   getListeningWrapped(days?: number) { return getWrappedStats(days); }
 
   isDiscordConnected() { return this.discord.isConnected; }
-  isSpotifyConnected() { return this.spotify?.isAuthenticated ?? false; }
   isSpicetifyActive() { return this.spicetify.isActive; }
 
   /** Push connection status to dashboard via SSE. */
   private emitStatus(): void {
     this.emit('statusUpdate', {
       discordConnected: this.discord.isConnected,
-      spotifyConnected: this.spotify?.isAuthenticated ?? false,
       spicetifyActive: this.spicetify.isActive,
-      sourceMode: this.sourceMode,
       showLyrics: this.config.get('show_lyrics') !== false,
     });
   }
@@ -1724,7 +1532,6 @@ export class VybecordBackend extends EventEmitter {
 
     // Track plays — keyed by normalized name+primary artist (stable before enrichment)
     const trackKey = `${t.track_name.toLowerCase()}|${artistKey}`;
-    this.lastStatsKey = trackKey;
     const existing = this.sessionTrackPlays.get(trackKey);
     if (existing) {
       existing.count++;
@@ -1814,12 +1621,6 @@ export class VybecordBackend extends EventEmitter {
     });
   }
 
-  /** Merge persisted enriched metadata (album art, album name, full artist) into a track object. */
-  private mergeEnriched(track: TrackData): void {
-    // Metadata enrichment disabled per user request
-    return;
-  }
-
   /**
    * Upload the local SMTC thumbnail to a public image host and update Discord RPC.
    * Called async (non-blocking) when a track has album_art_url === '/api/thumbnail'.
@@ -1841,7 +1642,6 @@ export class VybecordBackend extends EventEmitter {
 
   private evictCache(): void {
     evictUntil(this.lyricsCache, 50);
-    evictUntil(this.enrichedMeta, 50);
   }
 
   // ── Shutdown ──

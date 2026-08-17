@@ -11,25 +11,27 @@
 - ✅ **Discord** (desktop app, NOT the web version)
 
 ### Optional
-- 🌐 **[Tampermonkey](https://www.tampermonkey.net/)** → for YouTube, SoundCloud, Bandcamp, Twitch, Kick
-- 🎵 **Spotify Premium** → richer Spotify data through the official API
-- 🛠️ **Spotify Free, desktop app** → [Spicetify](https://spicetify.app/) (see warning below)
+- 🌐 **[Tampermonkey](https://www.tampermonkey.net/)** → for YouTube, SoundCloud, Bandcamp, Twitch, Kick, and the Spotify web player
+- 🛠️ **Spotify desktop app** → [Spicetify](https://spicetify.app/) (see warning below)
 
 **You do not need a Discord developer account.** VybecordTS ships with a
 working application ID, so it displays your activity out of the box.
+
+**You do not need a Spotify developer account either.** VybecordTS does not use
+the Spotify Web API — there is no client ID, client secret or login to set up.
 
 ---
 
 ## ⚠️ IMPORTANT WARNING - Spicetify
 
-**If you use Spotify Free with Spicetify:**
+**If you use Spicetify:**
 
 - Spicetify **violates Spotify's Terms of Service**
 - Used incorrectly (ad blockers, etc.) → **risk of account ban**
 - **We are not responsible** for account suspensions
 - **Recommendation:** Use Spicetify ONLY for theming/customization, NOT for blocking ads
 
-**Safer Alternative:** Upgrade to Spotify Premium or use the Tampermonkey userscript for the Spotify web player.
+**Safer Alternative:** Use the Spotify web player with the Tampermonkey userscript — no client modification, no TOS risk.
 
 ---
 
@@ -95,17 +97,6 @@ apps work with no script at all.
 
 ---
 
-### Optional: Spotify Premium via the official API
-
-Richer Spotify data, no third-party tools:
-
-1. Open the dashboard → **Settings**
-2. Set the tier to **Premium**
-3. Create an app at [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard)
-   - Copy **Client ID** and **Client Secret** into the settings
-   - Add `http://127.0.0.1:8888/callback` to **Redirect URIs**
-4. Authorize Spotify when the page opens
-
 ### Optional: your own Discord app name
 
 The activity name shown on Discord comes from the application ID. To use your
@@ -160,9 +151,10 @@ Access `http://127.0.0.1:8888` in your browser to:
 
 ### "Spotify won't connect"
 
-- Check that your **Redirect URI** is exactly: `http://127.0.0.1:8888/callback`
-- Check that you copied the correct **Client ID** and **Client Secret**
-- For Spotify Premium: your account must be added as a "test user" in the Spotify Dashboard
+- Spotify **desktop app**: check the Spicetify extension is installed (see below)
+- Spotify **web player**: check the Tampermonkey userscript is installed and enabled
+- Without either, Spotify is still picked up by Windows media controls, but with
+  less metadata (no playlist name, no shuffle/repeat)
 
 ### "Spicetify not working"
 

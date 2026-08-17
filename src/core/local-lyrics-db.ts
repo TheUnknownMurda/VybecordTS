@@ -30,9 +30,6 @@ if (IS_PKG) {
     nativeBinding = candidate;
   }
 }
-import { createReadStream, createWriteStream } from 'node:fs';
-import { createGunzip } from 'node:zlib';
-import { pipeline } from 'node:stream/promises';
 import { createLogger } from './logger.js';
 import { parseLrc } from './lrc-parser.js';
 import { similarity } from './similarity.js';
@@ -41,7 +38,6 @@ import type { LyricLine } from './types.js';
 const log = createLogger('LocalDB');
 
 const DB_FILENAMES = ['lrclib.db', 'lrclib.sqlite3', 'lrclib-db-dump.sqlite3'];
-const GZ_PATTERN = /^lrclib.*\.sqlite3\.gz$/i;
 const LRCLIB_DUMP_FOLDER = 'LRCLIB Dump';
 const LRCLIB_DUMP_FILE = 'db.sqlite3';
 

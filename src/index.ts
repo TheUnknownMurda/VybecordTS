@@ -48,6 +48,14 @@ loadEnv({ path: path.join(envsDir, '.env') });
 // ── Init logging ──
 initLogFile(path.join(baseDir, 'logs'));
 
+// Opt-in verbose logging. Without this the level is pinned to 'info' and every
+// log.debug() call in the codebase is unreachable, which made them useless for
+// diagnosing a user's problem. Default behaviour is unchanged.
+const envLogLevel = (process.env.VYBECORD_LOG_LEVEL ?? '').toLowerCase();
+if (envLogLevel === 'debug' || envLogLevel === 'info' || envLogLevel === 'warn' || envLogLevel === 'error') {
+  setLogLevel(envLogLevel);
+}
+
 // ── Banner ──
 const logoWidth = Math.max(...renderBigText('VYBECORD').map(l => l.length));
 writeBigRainbow('VYBECORD');
@@ -59,7 +67,7 @@ writeSection('Startup', logoWidth);
 
 // Deferred to here (was module-import side effect before) so its log line
 // can't ever print above the banner.
-initTranslateCache();
+initTranslateCache(baseDir);
 
 // ── Global error safety net ──
 process.on('uncaughtException', (err) => {

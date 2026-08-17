@@ -405,9 +405,12 @@ export async function fetchLyrics(
 
   const racers: Promise<{ source: string; lines: LyricLine[] }>[] = [];
 
+  // Every racer gets `raceSignal`, not `combinedSignal` — that is what makes
+  // raceAbort.abort() below actually cancel the losers instead of leaving them
+  // to run to their own 6–8s timeout on every track change.
   // Racer 1: LRCLib direct lookup (usually fastest for exact matches)
   racers.push(
-    tryDirectLookup(name, cleanName, artist, primaryArtist, albumClean, durationSec, combinedSignal)
+    tryDirectLookup(name, cleanName, artist, primaryArtist, albumClean, durationSec, raceSignal)
       .then(lines => {
         if (!lines) throw new Error('no result');
         return { source: 'LRCLib-direct', lines };
@@ -416,7 +419,7 @@ export async function fetchLyrics(
 
   // Racer 2: Netease Cloud Music (huge catalogue, often has what LRCLib doesn't)
   racers.push(
-    searchNetease(cleanName, primaryArtist, durationSec, combinedSignal)
+    searchNetease(cleanName, primaryArtist, durationSec, raceSignal)
       .then(lines => {
         if (!lines) throw new Error('no result');
         return { source: 'Netease', lines };
@@ -425,7 +428,7 @@ export async function fetchLyrics(
 
   // Racer 3: Musixmatch (largest synced lyrics database — guest token, no API key needed)
   racers.push(
-    searchMusixmatch(cleanName, primaryArtist, durationSec, combinedSignal)
+    searchMusixmatch(cleanName, primaryArtist, durationSec, raceSignal)
       .then(lines => {
         if (!lines) throw new Error('no result');
         return { source: 'Musixmatch', lines };
@@ -479,21 +482,21 @@ export async function fetchLyrics(
         const corrRacers: Promise<{ source: string; lines: LyricLine[] }>[] = [];
         const [corrClean] = cleanForSearch(cTrack, cArtist);
         corrRacers.push(
-          tryDirectLookup(cTrack, corrClean, cArtist, cArtist, cAlbum, cDur, combinedSignal)
+          tryDirectLookup(cTrack, corrClean, cArtist, cArtist, cAlbum, cDur, corrSignal)
             .then(lines => {
               if (!lines) throw new Error('no result');
               return { source: 'LRCLib-corrected', lines };
             }),
         );
         corrRacers.push(
-          searchNetease(cTrack, cArtist, cDur, combinedSignal)
+          searchNetease(cTrack, cArtist, cDur, corrSignal)
             .then(lines => {
               if (!lines) throw new Error('no result');
               return { source: 'Netease-corrected', lines };
             }),
         );
         corrRacers.push(
-          searchMusixmatch(cTrack, cArtist, cDur, combinedSignal)
+          searchMusixmatch(cTrack, cArtist, cDur, corrSignal)
             .then(lines => {
               if (!lines) throw new Error('no result');
               return { source: 'Musixmatch-corrected', lines };
@@ -745,6 +748,7 @@ interface ITunesResult {
   artworkUrl100?: string;
   collectionName?: string;
   artistName?: string;
+  trackName?: string;
 }
 
 type MetadataResult = { albumArtUrl?: string; albumName?: string; artistName?: string; spotifyUrl?: string; artistUrl?: string };
@@ -815,6 +819,7 @@ async function searchITunes(
   );
   if (!data?.results?.length) return {};
 
+  const expTrackLow = expectedTrack.toLowerCase();
   const expArtistLow = expectedArtist.toLowerCase();
   let bestHit: ITunesResult | null = null;
   let bestScore = -1;
@@ -823,8 +828,12 @@ async function searchITunes(
     if (!hit.artworkUrl100) continue;
     const artistSim = similarity(expArtistLow, (hit.artistName ?? '').toLowerCase());
     if (artistSim < 0.40) continue;
-    if (artistSim > bestScore) {
-      bestScore = artistSim;
+    // Score on the title too, not just the artist — ranking by artist alone
+    // returns whichever song of theirs iTunes listed first, not this one.
+    const trackSim = similarity(expTrackLow, (hit.trackName ?? '').toLowerCase());
+    const score = trackSim * 0.5 + artistSim * 0.5;
+    if (score > bestScore) {
+      bestScore = score;
       bestHit = hit;
     }
   }

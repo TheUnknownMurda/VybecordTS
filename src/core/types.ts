@@ -1,26 +1,3 @@
-// ── Track data from Spotify API ──
-export interface SpotifyPlayback {
-  is_playing: boolean;
-  progress_ms: number;
-  item: {
-    id: string;
-    name: string;
-    duration_ms: number;
-    artists: { name: string; external_urls?: { spotify?: string } }[];
-    album: {
-      name: string;
-      images: { url: string; width: number; height: number }[];
-      external_urls?: { spotify?: string };
-    };
-    external_urls?: { spotify?: string };
-  } | null;
-  context?: {
-    type: string;
-    uri: string;
-    external_urls?: { spotify?: string };
-  } | null;
-}
-
 // ── Normalized track data (source-agnostic) ──
 export interface TrackData {
   track_id: string;
@@ -118,11 +95,7 @@ export interface VybecordConfig {
   detect_twitch: boolean;
   detect_browser: boolean;
   detect_other_apps: boolean;
-  /** 'auto' = try API then SMTC, 'premium' = force API, 'free' = force SMTC */
-  user_tier: 'auto' | 'premium' | 'free';
   discord_app_id: string;
-  spotify_client_id: string;
-  spotify_client_secret: string;
   // RPC customization
   /** Which URL each clickable RPC field links to: 'track' | 'artist' | 'album' | 'context' | 'auto' */
   rpc_details_url: string;
@@ -179,11 +152,4 @@ export interface VybecordConfig {
   [key: string]: unknown;
 }
 
-// ── Spotify token cache ──
-export interface TokenCache {
-  access_token: string;
-  refresh_token: string;
-  expires_at: number;
-  scope: string;
-}
 

@@ -9,24 +9,27 @@
 ### Obligatoire (sans exception)
 - ✅ **Windows 10 ou 11**
 - ✅ **Discord** (application de bureau, PAS la version web)
-- ✅ **Un compte Spotify** (Premium OU Gratuit)
 
 ### Facultatif
-- 🎵 **Spotify Premium** → Meilleure expérience, aucun outil supplémentaire requis
-- 🛠️ **Spotify Gratuit** → Nécessite [Spicetify](https://spicetify.app/) (voir mise en garde ci-dessous)
+- 🌐 **[Tampermonkey](https://www.tampermonkey.net/)** → pour YouTube, SoundCloud, Bandcamp, Twitch, Kick et le lecteur web Spotify
+- 🛠️ **Application Spotify de bureau** → [Spicetify](https://spicetify.app/) (voir mise en garde ci-dessous)
+
+**Aucun compte développeur n'est nécessaire.** VybecordTS embarque un ID
+d'application Discord fonctionnel, et n'utilise pas l'API Web de Spotify : ni
+Client ID, ni Client Secret, ni connexion à configurer.
 
 ---
 
 ## ⚠️ AVERTISSEMENT IMPORTANT - Spicetify
 
-**Si vous utilisez Spotify Gratuit avec Spicetify :**
+**Si vous utilisez Spicetify :**
 
 - Spicetify **viole les Conditions d'Utilisation de Spotify**
 - Utilisé incorrectement (bloqueur de pubs, etc.) → **risque de ban de compte**
 - **Nous ne sommes pas responsables** des suspensions de compte
 - **Recommandation :** Utilisez Spicetify UNIQUEMENT pour le thème/personnalisation, PAS pour bloquer les pubs
 
-**Alternative plus sûre :** Passez à Spotify Premium ou utilisez le script Tampermonkey pour le lecteur web Spotify.
+**Alternative plus sûre :** Utilisez le lecteur web Spotify avec le script Tampermonkey — aucune modification du client, aucun risque vis-à-vis des CGU.
 
 ---
 
@@ -66,37 +69,23 @@ VybecordTS/
 2. Votre navigateur s'ouvre automatiquement sur `http://127.0.0.1:8888`
 3. **L'Assistant de Configuration** apparaît :
 
-#### Option A - Spotify Premium (Recommandé)
+#### Option A - Spotify, application de bureau
 
-1. Cochez **"Premium"**
-2. Collez votre **Discord Application ID**
-3. Allez sur [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard)
-   - Créez une app
-   - Copiez **Client ID** et **Client Secret**
-   - Dans **Redirect URIs**, ajoutez : `http://127.0.0.1:8888/callback`
-4. Collez ces informations dans l'assistant
-5. Cliquez **"Démarrer"**
-
-#### Option B - Spotify Gratuit
-
-1. Cochez **"Free"**
-2. Collez votre **Discord Application ID**
-3. Installez [Spicetify](https://spicetify.app/) (si pas encore fait)
-4. Suivez les instructions pour installer l'extension VybecordTS dans Spicetify
-5. Cliquez **"Démarrer"**
+1. Installez [Spicetify](https://spicetify.app/) (si ce n'est pas déjà fait)
+2. Installez l'extension VybecordTS dans Spicetify — l'installateur peut le faire pour vous
+3. Relancez Spotify
 
 **⚠️ Voir l'avertissement Spicetify en haut de ce guide**
 
----
+#### Option B - Navigateur (YouTube, SoundCloud, Spotify web…)
 
-### Étape 4 : Autoriser Spotify
+1. Installez [Tampermonkey](https://www.tampermonkey.net/)
+2. Sur la page de configuration, cliquez **Installer** pour chaque plateforme que vous utilisez
 
-Si vous avez choisi **Premium** :
+#### Option C - Tout le reste
 
-1. Une page Spotify s'ouvre demandant l'autorisation
-2. Cliquez **"Agree"** ou **"Accepter"**
-3. Redirection vers `http://127.0.0.1:8888/callback`
-4. **C'est bon !** ✅
+Rien à faire : Windows détecte automatiquement la plupart des lecteurs
+(Apple Music, VLC, foobar2000…).
 
 ---
 
@@ -141,9 +130,10 @@ Accédez à `http://127.0.0.1:8888` dans votre navigateur pour :
 
 ### "Spotify ne se connecte pas"
 
-- Vérifiez que votre **Redirect URI** est exactement : `http://127.0.0.1:8888/callback`
-- Vérifiez que vous avez copié le bon **Client ID** et **Client Secret**
-- Pour Spotify Premium : votre compte doit être ajouté comme "test user" dans le Dashboard Spotify
+- Application de bureau : vérifiez que l'extension Spicetify est bien installée (voir ci-dessous)
+- Lecteur web : vérifiez que le script Tampermonkey est installé et activé
+- Sans l'un des deux, Spotify reste détecté via les contrôles média de Windows,
+  mais avec moins d'informations (pas de nom de playlist, pas d'aléatoire/répétition)
 
 ### "Spicetify ne marche pas"
 

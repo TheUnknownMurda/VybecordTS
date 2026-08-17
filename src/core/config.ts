@@ -18,10 +18,7 @@ const DEFAULTS: VybecordConfig = {
   detect_twitch: true,
   detect_browser: true,
   detect_other_apps: true,
-  user_tier: 'auto',
   discord_app_id: '',
-  spotify_client_id: '',
-  spotify_client_secret: '',
   rpc_details_url: 'auto',
   rpc_state_url: 'auto',
   rpc_large_url: 'auto',
@@ -76,10 +73,7 @@ export const CONFIG_SCHEMA: Record<string, FieldSpec> = {
   detect_twitch: { type: 'boolean' },
   detect_browser: { type: 'boolean' },
   detect_other_apps: { type: 'boolean' },
-  user_tier: { type: 'string', values: ['auto', 'premium', 'free'] },
   discord_app_id: { type: 'string', maxLength: 32 },
-  spotify_client_id: { type: 'string', maxLength: 128 },
-  spotify_client_secret: { type: 'string', maxLength: 128 },
   rpc_details_url: { type: 'string', values: URL_CHOICES },
   rpc_state_url: { type: 'string', values: URL_CHOICES },
   rpc_large_url: { type: 'string', values: URL_CHOICES },
@@ -118,9 +112,21 @@ export const CONFIG_SCHEMA: Record<string, FieldSpec> = {
 
 /** Keys never sent back to a client in clear text. */
 export const CONFIG_SECRET_KEYS: readonly string[] = [
-  'spotify_client_secret',
   'lastfm_api_secret',
   'bug_report_webhook',
+];
+
+/**
+ * Settings removed when the Spotify Web API ("premium") mode was dropped.
+ * They are stripped from config.json on load rather than left in place: a
+ * config file predating the removal still holds `spotify_client_secret`, and
+ * since that key is no longer in CONFIG_SECRET_KEYS it would otherwise be
+ * served to the dashboard in clear text by redactConfig().
+ */
+const OBSOLETE_KEYS: readonly string[] = [
+  'user_tier',
+  'spotify_client_id',
+  'spotify_client_secret',
 ];
 
 /** Placeholder returned in place of a configured secret. */
@@ -213,6 +219,14 @@ export class ConfigManager {
       for (const key of Object.keys(DEFAULTS)) {
         if (!(key in parsed)) {
           dirty = true;
+        }
+      }
+      // Drop settings belonging to removed features (see OBSOLETE_KEYS)
+      for (const key of OBSOLETE_KEYS) {
+        if (key in merged) {
+          delete (merged as Record<string, unknown>)[key];
+          dirty = true;
+          log.info(`Removed obsolete config key: ${key}`);
         }
       }
       if (dirty) this.save(merged);

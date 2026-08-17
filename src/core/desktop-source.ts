@@ -5,12 +5,23 @@
 
 import { spawn, type ChildProcess } from 'node:child_process';
 import path from 'node:path';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { createLogger } from './logger.js';
 import { existsSync } from 'node:fs';
 import type { TrackData } from './types.js';
 
 const log = createLogger('DesktopSource');
+
+const THUMB_PATH = path.join(process.env.TEMP || os.tmpdir(), 'vybecord_thumb.jpg');
+
+// The reader emits a line every ~400ms. Past this, its data no longer describes
+// reality — better to report nothing than to keep interpolating a frozen track.
+const STALE_DATA_MS = 5_000;
+// No output at all for this long means the reader is wedged (a WinRT call that
+// never returned, despite the bounded awaits). Kill it and let it respawn.
+const HANG_RESTART_MS = 15_000;
+const WATCHDOG_INTERVAL_MS = 5_000;
 
 // SMTC WinRT APIs only work reliably under powershell.exe (5.1).
 // pwsh 7.x cannot enumerate GlobalSystemMediaTransportControls sessions — $mgr is always null.
@@ -46,15 +57,13 @@ export class DesktopSource {
   private lineBuffer = '';
   private _stopped = false;
   private restartTimer: ReturnType<typeof setTimeout> | null = null;
-  private onTrack?: (track: TrackData | null) => void;
+  private watchdogTimer: ReturnType<typeof setInterval> | null = null;
   private lastStderrMsg = '';
-  // Cached getCurrentTrack result — avoids re-creating an identical object every 400ms
-  private _cachedTrack: TrackData | null = null;
+  private errorLineCount = 0;
+  // Parsed track for the current key. Used as a template only — getCurrentTrack()
+  // never hands this instance out, see the comment there.
+  private _cachedTemplate: TrackData | null = null;
   private _cachedTrackKey = ''; // Use track key instead of object reference
-
-  constructor(onTrack?: (track: TrackData | null) => void) {
-    this.onTrack = onTrack;
-  }
 
   start(): void {
     if (process.platform !== 'win32') {
@@ -94,9 +103,22 @@ export class DesktopSource {
           const data = JSON.parse(trimmed) as SmtcData;
           if (data.ready) {
             this.ready = true;
+            // Seed the watchdog clock — the reader is alive from here on.
+            this.dataReceivedAt = performance.now();
             log.info('SMTC reader ready');
             continue;
           }
+          if (data.error) {
+            // A transient WinRT failure is not "nothing is playing". Keep the last
+            // known state and leave dataReceivedAt alone, so a persistent failure
+            // ages out through the staleness check instead of flapping the presence.
+            this.errorLineCount++;
+            if (this.errorLineCount === 1 || this.errorLineCount % 50 === 0) {
+              log.warn(`SMTC reader error: ${data.error} (x${this.errorLineCount})`);
+            }
+            continue;
+          }
+          this.errorLineCount = 0;
           this.latestData = data;
           this.dataReceivedAt = performance.now();
         } catch (e) {
@@ -116,10 +138,15 @@ export class DesktopSource {
       }
     });
 
+    this.startWatchdog();
+
     this.psProcess.on('exit', (code) => {
       log.warn(`SMTC reader exited (code=${code})`);
       this.ready = false;
       this.psProcess = null;
+      this.stopWatchdog();
+      // Don't serve the last known track across a restart gap.
+      this.latestData = null;
       // Auto-restart after 3s if not intentionally stopped
       if (!this._stopped) {
         log.info('SMTC reader will auto-restart in 3s...');
@@ -132,31 +159,48 @@ export class DesktopSource {
     });
   }
 
+  /**
+   * Restart the reader if it stops emitting entirely.
+   * The PowerShell side bounds every WinRT await and re-acquires a stale session
+   * manager on its own, but a wedged process can't fix itself — only a respawn can.
+   */
+  private startWatchdog(): void {
+    if (this.watchdogTimer) return;
+    this.watchdogTimer = setInterval(() => {
+      if (!this.psProcess || !this.ready) return;
+      const silentMs = performance.now() - this.dataReceivedAt;
+      if (silentMs < HANG_RESTART_MS) return;
+      log.warn(`SMTC reader silent for ${Math.round(silentMs)}ms — restarting`);
+      this.ready = false; // Prevents a second kill before 'exit' fires
+      this.latestData = null;
+      try { this.psProcess.kill(); } catch { /* already gone */ }
+    }, WATCHDOG_INTERVAL_MS);
+    this.watchdogTimer.unref?.();
+  }
+
+  private stopWatchdog(): void {
+    if (this.watchdogTimer) {
+      clearInterval(this.watchdogTimer);
+      this.watchdogTimer = null;
+    }
+  }
+
   /** Get the current track from the latest SMTC poll. */
   getCurrentTrack(): TrackData | null {
     const d = this.latestData;
     if (!d || !d.is_playing || !d.title) return null;
 
+    // Staleness guard: the reader emits every ~400ms whether or not anything plays.
+    // Silence means it died or wedged, and serving the last track from here would
+    // freeze the presence on a phantom song while interpolating its position.
+    if (performance.now() - this.dataReceivedAt > STALE_DATA_MS) return null;
+
     // Build track key for cache comparison
     const trackKey = `${d.source}:${d.title}:${d.artist}`;
 
-    // Fast path: same track → return cached TrackData (avoids object alloc every 400ms)
-    if (trackKey === this._cachedTrackKey && this._cachedTrack) {
-      // Check thumbnail file and update album_art_url if needed (for local music apps)
-      const thumbPath = path.join(process.env.TEMP || require('os').tmpdir(), 'vybecord_thumb.jpg');
-      const hasThumbFile = existsSync(thumbPath);
-      const shouldHaveThumb = hasThumbFile;
-      const currentHasThumb = this._cachedTrack.album_art_url === '/api/thumbnail';
-      if (shouldHaveThumb !== currentHasThumb) {
-        // Thumbnail file status changed — update album_art_url
-        this._cachedTrack.album_art_url = shouldHaveThumb ? '/api/thumbnail' : '';
-      }
-      // Update only the progress field (it's interpolated from performance.now())
-      const rawPos = d.is_live ? 0 : this.getCompensatedPosition(d);
-      const durMs = this._cachedTrack.duration_ms;
-      this._cachedTrack.progress_ms = durMs > 0 ? Math.min(rawPos, durMs) : rawPos;
-      this._cachedTrack._received_at = performance.now();
-      return this._cachedTrack;
+    // Fast path: same track → reuse the parsed template (skips title parsing/regexes)
+    if (trackKey === this._cachedTrackKey && this._cachedTemplate) {
+      return this.snapshot(this._cachedTemplate, d);
     }
 
     // Ignore Windows Media Player / video players — not a music streaming source
@@ -193,34 +237,53 @@ export class DesktopSource {
       }
     }
 
-    const durMs = d.is_live ? 0 : (d.duration_ms || 240_000);
-    const rawPos = d.is_live ? 0 : this.getCompensatedPosition(d);
-    // Clamp position to duration (SMTC browser data can overshoot)
-    const posMs = durMs > 0 ? Math.min(rawPos, durMs) : rawPos;
-
-    // Check if thumbnail file exists (local-art.ts may have extracted it after SMTC reported no thumb)
-    const thumbPath = path.join(process.env.TEMP || require('os').tmpdir(), 'vybecord_thumb.jpg');
-    const hasThumbFile = d.thumb || existsSync(thumbPath);
-
-    const track: TrackData = {
+    const template: TrackData = {
       track_id: `desktop:${trackName}:${artistName}`,
       track_name: trackName,
       artist_name: artistName,
       album_name: albumName,
-      duration_ms: durMs,
-      progress_ms: posMs,
+      duration_ms: d.is_live ? 0 : (d.duration_ms || 240_000),
+      progress_ms: 0,      // Filled in per snapshot
       is_playing: true,
       is_live: d.is_live ?? false,
-      album_art_url: hasThumbFile ? '/api/thumbnail' : '',  // Use SMTC thumbnail if available, else enriched by provider
+      album_art_url: '',   // Filled in per snapshot
       spotify_url: '',
       artist_url: '',
       media_source: source,
       is_local: source === 'apple_music' && !d.source_id?.includes('music.apple'),  // Apple Music local files don't have music.apple URLs
-      _received_at: performance.now(),
+      _received_at: 0,     // Filled in per snapshot
     };
     this._cachedTrackKey = trackKey;
-    this._cachedTrack = track;
-    return track;
+    this._cachedTemplate = template;
+    return this.snapshot(template, d);
+  }
+
+  /**
+   * Build the TrackData handed to callers: a fresh object every time.
+   *
+   * Callers keep the returned reference and mutate it — the backend stores it as
+   * `currentTrack` and stamps the uploaded Catbox art onto it, the lyrics engine
+   * keeps it as `trackData`. Returning a shared cached instance made those the same
+   * object, with two consequences: the enriched art was overwritten by the local
+   * '/api/thumbnail' placeholder on the next poll (so the cover vanished from Discord
+   * a few seconds in), and the engine's `prev.album_art_url !== next.album_art_url`
+   * check compared an object with itself and could never fire.
+   *
+   * Only the placeholder is decided here. Whether real art exists is the backend's
+   * call, and nothing in this snapshot may downgrade what it already resolved.
+   */
+  private snapshot(template: TrackData, d: SmtcData): TrackData {
+    // local-art.ts may have written the file after SMTC reported no thumbnail
+    const hasThumb = d.thumb || existsSync(THUMB_PATH);
+    const rawPos = d.is_live ? 0 : this.getCompensatedPosition(d);
+    const durMs = template.duration_ms;
+    return {
+      ...template,
+      // Clamp position to duration (SMTC browser data can overshoot)
+      progress_ms: durMs > 0 ? Math.min(rawPos, durMs) : rawPos,
+      album_art_url: hasThumb ? '/api/thumbnail' : '',  // else enriched by provider
+      _received_at: performance.now(),
+    };
   }
 
   /**
@@ -251,11 +314,13 @@ export class DesktopSource {
       clearTimeout(this.restartTimer);
       this.restartTimer = null;
     }
+    this.stopWatchdog();
     if (this.psProcess) {
       this.psProcess.kill();
       this.psProcess = null;
     }
     this.ready = false;
+    this.latestData = null;
   }
 }
 

@@ -25,7 +25,6 @@ const artCache = new Map<string, boolean | 'pending'>();
 
 // File index: normalized filename → full path (built once, refreshed on miss)
 let fileIndex: Map<string, string[]> | null = null;
-let indexedDirs: string[] = [];
 
 // Dynamic import for music-metadata (ES module compatibility with pkg)
 let parseFile: any = null;
@@ -186,7 +185,6 @@ async function buildFileIndex(dirs: string[]): Promise<void> {
   }
 
   fileIndex = index;
-  indexedDirs = dirs;
   log.info(`File index built: ${index.size} audio files`);
 }
 

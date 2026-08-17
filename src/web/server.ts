@@ -12,7 +12,7 @@ import { createLogger } from '../core/logger.js';
 import { romanize, needsRomanization } from '../core/romanize.js';
 import { evictOldest } from '../core/utils.js';
 import { isScrobbleEnabled, canAuth, getAuthUrl, completeAuth, disconnectScrobble } from '../core/lastfm.js';
-import { translateText, translateBatch, TRANSLATE_LANGS, clearTranslationCache, getTranslationCacheSize, flushTranslationCache } from '../core/translate.js';
+import { translateText, translateBatch, TRANSLATE_LANGS, clearTranslationCache } from '../core/translate.js';
 import { redactConfig } from '../core/config.js';
 import type { VybecordBackend } from '../backend.js';
 
@@ -114,13 +114,10 @@ function sanitizeDiscordContent(text: string): string {
 }
 
 function getClientIp(req: http.IncomingMessage): string {
-  // Try various headers, fallback to socket address
-  const forwarded = req.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string') {
-    return forwarded.split(',')[0].trim();
-  }
-  const realIp = req.headers['x-real-ip'];
-  if (typeof realIp === 'string') return realIp;
+  // Deliberately ignores X-Forwarded-For / X-Real-IP: this server binds to
+  // 127.0.0.1 with no reverse proxy in front, so those headers are fully
+  // attacker-controlled. Honouring them let any caller mint a fresh rate-limit
+  // bucket per request and bypass the bug-report quotas entirely.
   return req.socket.remoteAddress || 'unknown';
 }
 
@@ -130,6 +127,12 @@ export class WebServer {
   private sseClients = new Set<http.ServerResponse>();
   private port: number;
   private keepaliveTimer: ReturnType<typeof setInterval> | null = null;
+
+  // Translation settings mirrored from config. The lyricsUpdate handler runs on
+  // every lyric line (every ~250ms on a CC track) and getConfig() spreads the
+  // whole ~50-key config object each call — far too heavy for that path.
+  private translateOn = false;
+  private translateLang = 'en';
 
   // Webhook rate limiting state
   private rateLimitMap = new Map<string, RateLimitEntry>();
@@ -141,6 +144,8 @@ export class WebServer {
     this.backend = backend;
     this.port = port;
     this.server = http.createServer((req, res) => this.handleRequest(req, res));
+
+    this.refreshTranslateCfg(backend.getConfig());
 
     // Wire backend events → SSE broadcast
     const sseRomanizeCache = new Map<string, string>();
@@ -163,9 +168,8 @@ export class WebServer {
         data.r_prev = sseRomanizeCached(sseRomanizeCache, prv);
       }
       // Attach translations from server cache (non-blocking — only if already cached)
-      const cfg = this.backend.getConfig();
-      if (cfg.translate_lyrics && cur) {
-        const tgt = cfg.translate_target_lang || 'en';
+      if (this.translateOn && cur) {
+        const tgt = this.translateLang;
         const tCur = sseTranslateCache.get(cur + '|' + tgt);
         if (tCur) data.t_current = tCur;
         const tNxt = nxt ? sseTranslateCache.get(nxt + '|' + tgt) : undefined;
@@ -195,6 +199,7 @@ export class WebServer {
       this.broadcast('lyricsUpdate', data);
     });
     backend.on('configUpdate', (cfg) => {
+      this.refreshTranslateCfg(cfg);
       this.broadcast('configUpdate', redactConfig(cfg));
     });
     let lastProgressBroadcast = 0;
@@ -214,6 +219,14 @@ export class WebServer {
     backend.on('plainLyricsUpdate', (data) => {
       this.broadcast('plainLyricsUpdate', data);
     });
+  }
+
+  /** Mirror the two translation settings read on the per-lyric-line hot path. */
+  private refreshTranslateCfg(cfg: { translate_lyrics?: unknown; translate_target_lang?: unknown }): void {
+    this.translateOn = cfg.translate_lyrics === true;
+    this.translateLang = typeof cfg.translate_target_lang === 'string' && cfg.translate_target_lang
+      ? cfg.translate_target_lang
+      : 'en';
   }
 
   start(): void {
@@ -305,9 +318,7 @@ export class WebServer {
       if (url.pathname === '/api/status' && method === 'GET') {
         return this.jsonResponse(res, {
           track: this.backend.getCurrentTrack(),
-          sourceMode: this.backend.getSourceMode(),
           discordConnected: this.backend.isDiscordConnected(),
-          spotifyConnected: this.backend.isSpotifyConnected(),
           spicetifyActive: this.backend.isSpicetifyActive(),
           youtubeActive: this.backend.isYouTubeSourceActive(),
           soundcloudActive: this.backend.isSoundCloudSourceActive(),
@@ -950,9 +961,7 @@ export class WebServer {
       type: 'init',
       track: this.backend.getCurrentTrack(),
       config: redactConfig(this.backend.getConfig()),
-      sourceMode: this.backend.getSourceMode(),
       discordConnected: this.backend.isDiscordConnected(),
-      spotifyConnected: this.backend.isSpotifyConnected(),
       spicetifyActive: this.backend.isSpicetifyActive(),
       youtubeActive: this.backend.isYouTubeSourceActive(),
       stats: this.backend.getSessionStats(),

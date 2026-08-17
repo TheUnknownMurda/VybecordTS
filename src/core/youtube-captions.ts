@@ -450,15 +450,13 @@ export async function fetchYouTubeCaptions(
     ];
 
     let isManualSub = false;
-    let lastError: unknown;
     let isAgeRestricted = false;
-    
+
     await execFileAsync('yt-dlp', [
       ...baseArgs,
       '--write-sub',
       '--sub-lang', manualLangs,
     ], { timeout: YT_DLP_TIMEOUT, signal }).catch((e) => {
-      lastError = e;
       const errStr = String(e);
       log.warn(`[CC] Manual subs fetch error: ${errStr}`);
       if (errStr.includes('Sign in to confirm your age') || errStr.includes('age')) {
@@ -481,7 +479,6 @@ export async function fetchYouTubeCaptions(
         '--write-auto-sub',
         '--sub-lang', autoLangs,
       ], { timeout: YT_DLP_TIMEOUT, signal }).catch((e) => {
-        lastError = e;
         const errStr = String(e);
         log.warn(`[CC] Auto-CC fetch error: ${errStr}`);
         if (errStr.includes('Sign in to confirm your age') || errStr.includes('age')) {
