@@ -9,6 +9,14 @@
 //   - Eliminates need for Deezer/iTunes/Last.fm metadata enrichment
 
 (async function vybecord() {
+  // Guard against a double load — the native install (spicetify config extensions)
+  // and the Marketplace "Installed" entry both inject this file. First one wins.
+  if (window.__vybecordLoaded) {
+    console.log('[VybecordTS] Already loaded — skipping duplicate instance.');
+    return;
+  }
+  window.__vybecordLoaded = true;
+
   // Wait for Spicetify API to be available
   while (!(Spicetify?.Player?.addEventListener && Spicetify?.Player?.data)) {
     await new Promise(r => setTimeout(r, 200));

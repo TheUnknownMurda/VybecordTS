@@ -1,0 +1,19 @@
+{
+  "name": "Vybecord",
+  "description": "Sends the track you are playing to VybecordTS for real-time Discord Rich Presence: instant track changes, accurate progress, album art and full Spotify metadata.",
+  "preview": "assets/spicetify-preview.png",
+  "main": "spicetify-extension/vybecord.js",
+  "readme": "README.md",
+  "authors": [
+    {
+      "name": "TheUnknownMurda",
+      "url": "https://github.com/TheUnknownMurda"
+    }
+  ],
+  "tags": [
+    "discord",
+    "rich presence",
+    "integration",
+    "now playing"
+  ]
+}
