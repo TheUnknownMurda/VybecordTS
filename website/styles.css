@@ -1036,3 +1036,39 @@ body {
     text-align: center;
   }
 }
+
+/* ── Download: the unsigned-installer note ───────────────────────────────── */
+
+.dl-note {
+  margin-top: 22px;
+  text-align: left;
+  max-width: 560px;
+  margin-left: auto;
+  margin-right: auto;
+  font-size: 0.9rem;
+}
+.dl-note summary {
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.55);
+  transition: color 0.2s;
+}
+.dl-note summary:hover {
+  color: rgba(255, 255, 255, 0.85);
+}
+.dl-note p {
+  margin: 12px 0 10px;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.6);
+}
+.dl-note code {
+  display: block;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.8rem;
+  /* A SHA-256 does not wrap nicely; let it scroll rather than reflow the card. */
+  overflow-x: auto;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.75);
+}

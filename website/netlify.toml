@@ -5,6 +5,14 @@
 [build.environment]
   NODE_VERSION = "18"
 
+# A stable, shareable address on your own domain. The binary lives on the
+# release, which has no size or bandwidth limit — this is just the front door.
+[[redirects]]
+  from = "/download"
+  to = "https://github.com/TheUnknownMurda/VybecordTS/releases/latest"
+  status = 302
+  force = true
+
 [[redirects]]
   from = "/*"
   to = "/index.html"

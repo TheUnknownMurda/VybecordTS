@@ -9,6 +9,13 @@
   ],
   "routes": [
     {
+      "src": "/download",
+      "status": 302,
+      "headers": {
+        "Location": "https://github.com/TheUnknownMurda/VybecordTS/releases/latest"
+      }
+    },
+    {
       "src": "/(.*)",
       "dest": "/$1"
     }

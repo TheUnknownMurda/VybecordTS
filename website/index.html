@@ -284,15 +284,15 @@
           <h2>Ready to enhance your vibe?</h2>
           <p>Download the latest version and get started in minutes. Requires Discord Desktop and Windows 10/11.</p>
           <div class="download-buttons">
-            <a href="https://github.com/TheUnknownMurda/VybecordTS/releases/latest" class="btn btn-download btn-primary" target="_blank">
+            <a href="download/" id="dlPrimary" class="btn btn-download btn-primary">
               <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                 <polyline points="7 10 12 15 17 10"/>
                 <line x1="12" y1="15" x2="12" y2="3"/>
               </svg>
               <div class="btn-text">
-                <span class="btn-label">Download</span>
-                <span class="btn-version">Latest Release</span>
+                <span class="btn-label">Download for Windows</span>
+                <span class="btn-version" id="dlVersion">Latest release</span>
               </div>
             </a>
             <a href="https://github.com/TheUnknownMurda/VybecordTS" class="btn btn-download btn-secondary" target="_blank">
@@ -305,13 +305,29 @@
               </div>
             </a>
           </div>
-          <div class="download-meta">
+          <div class="download-meta" id="dlMeta">
             <span>Windows 10/11</span>
             <span>•</span>
             <span>Requires Discord Desktop</span>
             <span>•</span>
             <span>Spotify/YouTube optional</span>
           </div>
+
+          <!--
+            The installer is not code-signed, so Windows warns the first time it
+            runs. Saying so here, plainly, is the difference between "this looks
+            sketchy" and "right, they told me".
+          -->
+          <details class="dl-note">
+            <summary>Windows will warn you the first time — here is why</summary>
+            <p>
+              This installer is not signed with a paid code-signing certificate, so SmartScreen shows
+              <em>&ldquo;Windows protected your PC&rdquo;</em>. Choose <strong>More info</strong>, then
+              <strong>Run anyway</strong>. To be sure you have the genuine file, compare its SHA-256 with
+              the one below and with the checksum on the release page.
+            </p>
+            <code id="dlHash">Checking the latest release&hellip;</code>
+          </details>
         </div>
       </div>
     </div>
@@ -360,6 +376,82 @@
         }
       });
     });
+
+    /*
+     * Fill the download button from the latest GitHub release.
+     *
+     * The release is the source of truth, so publishing one updates this page
+     * with no edit and no build step. Everything degrades to the /download
+     * redirect if the API is unreachable or rate-limited, which it will be for
+     * anyone browsing from an address that has been hammering github.com.
+     */
+    const REPO = 'TheUnknownMurda/VybecordTS';
+
+    const prettySize = (bytes) => (bytes / 1048576).toFixed(1) + ' MB';
+    const prettyDate = (iso) => new Date(iso).toLocaleDateString(undefined, {
+      year: 'numeric', month: 'long', day: 'numeric',
+    });
+
+    async function fillLatestRelease() {
+      const button = document.getElementById('dlPrimary');
+      const versionLabel = document.getElementById('dlVersion');
+      const meta = document.getElementById('dlMeta');
+      const hash = document.getElementById('dlHash');
+      if (!button) return;
+
+      let release;
+      try {
+        const res = await fetch('https://api.github.com/repos/' + REPO + '/releases/latest', {
+          headers: { Accept: 'application/vnd.github+json' },
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        release = await res.json();
+      } catch {
+        // Leave the button pointing at /download; it redirects to the release.
+        if (hash) hash.textContent = 'Checksum is on the release page.';
+        return;
+      }
+
+      const installer = (release.assets || []).find((a) => /-setup\.exe$/i.test(a.name));
+      if (!installer) {
+        if (hash) hash.textContent = 'Checksum is on the release page.';
+        return;
+      }
+
+      button.href = installer.browser_download_url;
+      if (versionLabel) versionLabel.textContent = release.tag_name || release.name || 'Latest release';
+
+      if (meta) {
+        meta.innerHTML = '';
+        const parts = [
+          'Windows 10/11',
+          prettySize(installer.size),
+          release.published_at ? prettyDate(release.published_at) : null,
+          'Requires Discord Desktop',
+        ].filter(Boolean);
+        parts.forEach((text, i) => {
+          if (i) {
+            const dot = document.createElement('span');
+            dot.textContent = '•';
+            meta.appendChild(dot);
+          }
+          const span = document.createElement('span');
+          span.textContent = text;
+          meta.appendChild(span);
+        });
+      }
+
+      if (hash) {
+        // GitHub exposes a digest on assets only on newer API versions; when it
+        // is missing there is nothing honest to print, so say where to look.
+        const digest = installer.digest || '';
+        hash.textContent = digest.startsWith('sha256:')
+          ? 'SHA-256  ' + digest.slice(7)
+          : 'The checksum is published with the release on GitHub.';
+      }
+    }
+
+    fillLatestRelease();
 
     // Navbar background on scroll
     const navbar = document.querySelector('.navbar');
