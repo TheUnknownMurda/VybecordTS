@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — Vybecord</title>
+  <meta name="description" content="What the Vybecord browser extension reads, where it sends it, and what it never collects.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0a0a0f;
+      --bg-card: rgba(26, 26, 36, 0.6);
+      --accent-primary: #5865f2;
+      --text-primary: #ffffff;
+      --text-secondary: #b5bac1;
+      --text-muted: #6d6f78;
+      --border-color: rgba(255, 255, 255, 0.08);
+      color-scheme: dark;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: var(--bg-primary);
+      color: var(--text-secondary);
+      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      line-height: 1.7;
+      padding: 4rem 1.5rem 6rem;
+    }
+    .wrap { max-width: 46rem; margin: 0 auto; }
+    a { color: var(--accent-primary); }
+    h1 { color: var(--text-primary); font-size: 2.25rem; line-height: 1.2; margin-bottom: .5rem; }
+    h2 {
+      color: var(--text-primary); font-size: 1.25rem; margin: 2.5rem 0 .75rem;
+      padding-top: 2rem; border-top: 1px solid var(--border-color);
+    }
+    h2:first-of-type { border-top: 0; padding-top: 0; }
+    p, li { margin-bottom: .75rem; }
+    ul { padding-left: 1.25rem; }
+    strong { color: var(--text-primary); font-weight: 600; }
+    .date { color: var(--text-muted); font-size: .9rem; margin-bottom: 3rem; }
+    .callout {
+      background: var(--bg-card); border: 1px solid var(--border-color);
+      border-radius: 12px; padding: 1.25rem 1.5rem; margin: 1.5rem 0;
+    }
+    .callout p:last-child { margin-bottom: 0; }
+    code {
+      background: rgba(255,255,255,.06); border-radius: 5px;
+      padding: .15em .45em; font-size: .9em; color: var(--text-primary);
+    }
+    footer { margin-top: 4rem; padding-top: 2rem; border-top: 1px solid var(--border-color); font-size: .9rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Privacy Policy</h1>
+    <p class="date">Vybecord browser extension · Last updated 20 August 2026</p>
+
+    <div class="callout">
+      <p>
+        <strong>The short version.</strong> The extension reads what is playing in your
+        music tabs and sends it to the Vybecord app running on your own computer, at
+        <code>127.0.0.1</code>. It has no server, no account, and no analytics. Nothing is
+        sent to us, because there is no &ldquo;us&rdquo; to send it to.
+      </p>
+    </div>
+
+    <h2>What the extension reads</h2>
+    <p>
+      On the six sites it supports &mdash; Spotify, YouTube and YouTube Music, SoundCloud,
+      Bandcamp, Twitch and Kick &mdash; it reads the metadata of what is currently playing:
+    </p>
+    <ul>
+      <li>Track, video, or stream title</li>
+      <li>Artist, uploader, or channel name</li>
+      <li>Album or release name, where the site shows one</li>
+      <li>Cover or thumbnail image address</li>
+      <li>Playback position, duration, and whether playback is paused</li>
+      <li>The address of the item playing, so the app can link to it</li>
+    </ul>
+    <p>
+      It reads this from the page you already have open. It does not sign in on your
+      behalf, and it has no access to your account on any of these services.
+    </p>
+
+    <h2>Where that data goes</h2>
+    <p>
+      To one place: <code>http://127.0.0.1:8888</code> &mdash; the Vybecord desktop app, on the
+      machine you are sitting at. <code>127.0.0.1</code> is the address a computer uses to talk
+      to itself; traffic to it never reaches a network. The extension is technically
+      incapable of sending anywhere else, because that address is the only one its
+      manifest permits it to contact.
+    </p>
+    <p>
+      The desktop app then publishes what you are playing to your Discord profile, which
+      is the purpose of installing it. That step is Discord's, and is covered by
+      <a href="https://discord.com/privacy" target="_blank" rel="noopener">Discord's privacy policy</a>.
+      If the app is not running, pushes from the extension simply fail and nothing happens.
+    </p>
+
+    <h2>What is stored, and where</h2>
+    <ul>
+      <li>
+        <strong>Your per-site switches</strong> (which of the six sites are enabled) are kept
+        in the browser's synced extension storage. If you are signed into your browser,
+        it syncs them across your devices the same way it syncs your bookmarks. They are
+        six true/false values and nothing else.
+      </li>
+      <li>
+        <strong>A stream start time</strong> is kept in the page's local storage, under keys
+        beginning with <code>vybecord:</code>, so a live stream's elapsed counter survives a
+        page reload.
+      </li>
+    </ul>
+    <p>Uninstalling the extension removes both.</p>
+
+    <h2>What is never collected</h2>
+    <ul>
+      <li>No browsing history, and no awareness of any tab other than the supported sites</li>
+      <li>No passwords, cookies, form data, or payment information</li>
+      <li>No name, email address, or account identifier</li>
+      <li>No analytics, telemetry, crash reporting, or advertising identifiers</li>
+      <li>No data sold, rented, or shared with third parties &mdash; there is no third party</li>
+    </ul>
+
+    <h2>Permissions, and why each is needed</h2>
+    <ul>
+      <li>
+        <strong>Access to the six supported sites</strong> &mdash; to read the metadata of what is
+        playing. Without it there is nothing to report.
+      </li>
+      <li>
+        <strong>Access to <code>http://127.0.0.1:8888</code></strong> &mdash; to reach the desktop app.
+        This is a local address, not a website.
+      </li>
+      <li>
+        <strong><code>storage</code></strong> &mdash; to remember which sites you switched off.
+      </li>
+    </ul>
+
+    <h2>Your control</h2>
+    <p>
+      Every site has its own switch in the extension's options, and turning one off stops
+      the reporting for that site immediately, without a page reload. Closing the desktop
+      app stops everything. Uninstalling the extension removes it and its stored settings.
+    </p>
+
+    <h2>Changes and contact</h2>
+    <p>
+      If this policy changes, the revision date above changes with it and the previous
+      version stays in the site's public git history.
+    </p>
+    <p>
+      Questions, or something here that does not match what you observe? Open an issue at
+      <a href="https://github.com/TheUnknownMurda/VybecordTS/issues" target="_blank" rel="noopener">github.com/TheUnknownMurda/VybecordTS/issues</a>.
+      The extension is open source: you can read every line of what is described above.
+    </p>
+
+    <footer>
+      <a href="../">&larr; Back to Vybecord</a>
+    </footer>
+  </div>
+</body>
+</html>
