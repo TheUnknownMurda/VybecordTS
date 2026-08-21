@@ -54,14 +54,20 @@
 <body>
   <div class="wrap">
     <h1>Privacy Policy</h1>
-    <p class="date">Vybecord browser extension · Last updated 20 August 2026</p>
+    <p class="date">Vybecord browser extension and desktop app · Last updated 20 August 2026</p>
 
     <div class="callout">
       <p>
         <strong>The short version.</strong> The extension reads what is playing in your
         music tabs and sends it to the Vybecord app running on your own computer, at
-        <code>127.0.0.1</code>. It has no server, no account, and no analytics. Nothing is
-        sent to us, because there is no &ldquo;us&rdquo; to send it to.
+        <code>127.0.0.1</code>. It has no server, no account, and no analytics.
+      </p>
+      <p>
+        The desktop app makes one exception, and only one. When you play a file whose
+        cover art exists nowhere on the internet &mdash; something you ripped or recorded
+        yourself &mdash; it publishes that one image so Discord has something to display.
+        Never the audio, and nothing that identifies you. It is described in full
+        below, and it has a switch.
       </p>
     </div>
 
@@ -87,9 +93,18 @@
     <p>
       To one place: <code>http://127.0.0.1:8888</code> &mdash; the Vybecord desktop app, on the
       machine you are sitting at. <code>127.0.0.1</code> is the address a computer uses to talk
-      to itself; traffic to it never reaches a network. The extension is technically
-      incapable of sending anywhere else, because that address is the only one its
-      manifest permits it to contact.
+      to itself; traffic to it never reaches a network. It is the only address the
+      extension's manifest permits it to contact, and the only place what you are
+      playing is ever sent.
+    </p>
+    <p>
+      One request goes elsewhere, and it carries none of that. On <code>kick.com</code>, the
+      extension asks Kick for the current channel's stream start time, because the page
+      does not show it and the elapsed timer would otherwise be wrong. That request goes
+      to the site you are already looking at, is the same one the Kick page makes for
+      itself, and contains only the channel name already in your address bar. Kick is the
+      only site this happens on; everywhere else the extension reads the page and asks
+      no one anything.
     </p>
     <p>
       The desktop app then publishes what you are playing to your Discord profile, which
@@ -97,6 +112,61 @@
       <a href="https://discord.com/privacy" target="_blank" rel="noopener">Discord's privacy policy</a>.
       If the app is not running, pushes from the extension simply fail and nothing happens.
     </p>
+
+    <h2>Cover art the desktop app publishes</h2>
+    <p>
+      This section is about the desktop app, not the extension. The extension uploads
+      nothing, anywhere, ever.
+    </p>
+    <p>
+      Discord displays artwork by address, not by file. For anything that was ever
+      released, the app finds a cover already on the internet by looking the album up on
+      a public music catalogue &mdash; Deezer, then Apple. That sends only the track and
+      artist name, and nothing of yours is uploaded.
+    </p>
+    <p>
+      Music you ripped or recorded yourself is in no catalogue. Its artwork exists only
+      inside your own file, so there is no address for Discord to load and your profile
+      would show a blank placeholder. For those tracks, and only those, the app publishes
+      that single image to a store we run at
+      <code>vybecord-art.vybecord.workers.dev</code>, hosted on Cloudflare, and hands
+      Discord the resulting address.
+    </p>
+    <p>Precisely what that involves:</p>
+    <ul>
+      <li>
+        <strong>The cover image, and nothing else.</strong> Not the audio file, not its
+        name, not its folder, not its tags, and nothing about the rest of your library.
+      </li>
+      <li>
+        <strong>Metadata is stripped before it leaves your machine.</strong> EXIF, XMP and
+        embedded comments are removed &mdash; camera model, timestamps and GPS coordinates
+        among them. Only the picture itself is sent.
+      </li>
+      <li>
+        <strong>The address is the image.</strong> A cover is stored under the SHA&#8209;256
+        hash of its own bytes. That address carries no username, no account, no device
+        identifier and no timestamp. Two people who own the same cover produce the same
+        address and share one stored file.
+      </li>
+      <li>
+        <strong>Nothing is recorded alongside it.</strong> The store holds images. It has
+        no accounts, keeps no log tying an upload to a person, and cannot link two
+        uploads to each other.
+      </li>
+      <li>
+        <strong>Stored covers are publicly readable</strong> by anyone holding the address
+        &mdash; that is what lets Discord fetch them. An address cannot be guessed, but it
+        is not a secret either: anyone who already has the identical image file can
+        compute the same address. Treat this as publishing the picture, because it is.
+      </li>
+      <li>
+        <strong>It is a switch, not a fact of life.</strong> Settings &rarr; Cover images
+        &rarr; <em>Publish artwork that exists only on this PC</em>. Turned off, nothing is
+        ever uploaded and local-only tracks fall back to the default placeholder. You can
+        also point the app at your own store instead of ours.
+      </li>
+    </ul>
 
     <h2>What is stored, and where</h2>
     <ul>
@@ -120,7 +190,11 @@
       <li>No passwords, cookies, form data, or payment information</li>
       <li>No name, email address, or account identifier</li>
       <li>No analytics, telemetry, crash reporting, or advertising identifiers</li>
-      <li>No data sold, rented, or shared with third parties &mdash; there is no third party</li>
+      <li>
+        No data sold or rented, by the extension or the app. The cover store above is the
+        only service we operate: it holds images, has no accounts, and receives nothing
+        else
+      </li>
     </ul>
 
     <h2>Permissions, and why each is needed</h2>
@@ -143,6 +217,13 @@
       Every site has its own switch in the extension's options, and turning one off stops
       the reporting for that site immediately, without a page reload. Closing the desktop
       app stops everything. Uninstalling the extension removes it and its stored settings.
+    </p>
+    <p>
+      Cover publishing has its own switch in the app, under Settings &rarr; Cover images,
+      and turning it off takes effect on the next track. If a cover of yours is already in
+      the store and you want it gone, open an issue with its address and it will be
+      deleted; because the address is a hash of the image, nothing else can be relying
+      on it.
     </p>
 
     <h2>Changes and contact</h2>
