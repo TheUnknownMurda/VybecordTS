@@ -1,0 +1,15 @@
+{
+  "name": "vybecord-art-worker",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Content-addressed cover-art store for Vybecord, on Cloudflare Workers + R2",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  },
+  "type": "module"
+}

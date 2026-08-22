@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Vybecord</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <header>
+      <span class="mark"></span>
+      <h1>Vybecord</h1>
+      <span id="status" class="status">Checking…</span>
+    </header>
+
+    <p class="intro">
+      Choose which sites report what you are playing. A site switched off sends nothing at all —
+      the desktop app then falls back to whatever Windows reports for that tab, which is less detailed.
+    </p>
+
+    <ul id="sites" class="sites"></ul>
+
+    <footer>
+      <p>
+        Playback is sent only to Vybecord on this computer, over <code>127.0.0.1</code>.
+        Nothing is sent anywhere else.
+      </p>
+    </footer>
+
+    <script src="options.js"></script>
+  </body>
+</html>

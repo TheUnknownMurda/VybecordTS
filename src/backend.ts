@@ -1,21 +1,22 @@
 /**
- * VybecordBackend — main orchestrator.
+ * VybecordBackend — main orchestrator (desktop edition).
  *
- * Track sources, in priority order:
- *   1. SpicetifySource (push) → Spicetify extension posts real-time Spotify data
- *      - Event-driven (instant), full metadata, album art CDN, accurate progress,
- *        playlist context, shuffle/repeat — none of which needs a Spotify API key
- *   2. Browser userscripts (push) → YouTube, SoundCloud, Bandcamp, Twitch, Kick
- *   3. DesktopSource (SMTC) → anything else with a Windows media session
+ * One track source: NativeMediaSource, reading Windows media sessions through a
+ * NAPI addon. The Spicetify extension, the browser userscripts and the
+ * PowerShell SMTC reader are all gone — everything known about playback now
+ * comes from the OS, so there is nothing for the user to install into Spotify or
+ * their browser for the app to work.
  *
- * There is no Spotify Web API path: the Spicetify extension supersedes it and
- * needs no developer application, client secret or OAuth round-trip.
- * Push sources need no startup step — they activate on their first POST.
+ * What that costs, and why it is still the right trade: push sources supplied
+ * metadata the OS does not expose — playlist context, shuffle/repeat state,
+ * artist images, canonical track URLs. Those fields are simply absent now.
+ * Everything the *lyrics* pipeline needs (title, artist, album, duration,
+ * position) the OS does expose, so the core of the app is unaffected.
  *
  * Flow:
- *   1. Start SMTC (Windows only; its absence is non-fatal)
+ *   1. Start the native media monitor (Windows only)
  *   2. Connect to Discord IPC
- *   3. Poll the active source every N ms for the current track
+ *   3. Poll the source every N ms for the current track
  *   4. On new track → fetch lyrics (local DB → LRCLib/Netease/Musixmatch race)
  *   5. Feed lyrics to LyricsEngine → precise setTimeout scheduling → RPC updates
  */
@@ -25,7 +26,7 @@ import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { createLogger } from './core/logger.js';
 import { ConfigManager, sanitizeConfigUpdate } from './core/config.js';
-import { DesktopSource } from './core/desktop-source.js';
+import { NativeMediaSource, looksLikeSpotifyAd, type DetectedPlayer } from './core/native-media-source.js';
 import { SpicetifySource, type SpicetifyPayload } from './core/spicetify-source.js';
 import { YouTubeSource, type YouTubePayload } from './core/youtube-source.js';
 import { SoundCloudSource, type SoundCloudPayload } from './core/soundcloud-source.js';
@@ -36,13 +37,14 @@ import { DiscordIPC } from './core/discord-ipc.js';
 import { LyricsEngine } from './sync/lyrics-engine.js';
 import { fetchLyrics, fetchPlainLyrics } from './core/provider.js';
 import { fetchYouTubeCaptions, clearCCCache } from './core/youtube-captions.js';
-import { initLocalDb, closeLocalDb, insertCustomLyrics, listCustomLyrics, getCustomLyrics, updateCustomLyrics, deleteCustomLyrics, findExistingCustomLyrics, searchLrclibDump as searchLrclibDumpDb, getLrclibTrackLyrics as getLrclibTrackLyricsDb } from './core/local-lyrics-db.js';
+import { initLocalDb, closeLocalDb, insertCustomLyrics, listCustomLyrics, getCustomLyrics, updateCustomLyrics, deleteCustomLyrics, findExistingCustomLyrics, searchLrclibDump as searchLrclibDumpDb, getLrclibTrackLyrics as getLrclibTrackLyricsDb, lrclibDumpStatus } from './core/local-lyrics-db.js';
 import { initLastFm, scrobbleTrackStart, checkAndScrobble, scrobbleTrackEnd } from './core/lastfm.js';
-import { uploadThumbForRpc } from './core/image-upload.js';
+import { lookupCoverArt } from './core/cover-art.js';
+import { configureArtUpload, uploadCoverArt, thumbnailSignature } from './core/art-upload.js';
 import { extractLocalArt, extractArtFromPath } from './core/local-art.js';
 import { initBlacklist, flagLyrics, isLyricsFlagged, clearFlags, listFlaggedTracks, clearFlagsByKey } from './core/lyrics-blacklist.js';
-import { initHistory, historyTrackStart, historyTrackEnd, getRecentHistory, getHistoryCount, getWrappedStats } from './core/listening-history.js';
-import { translateBatch } from './core/translate.js';
+import { initHistory, historyTrackStart, historyTrackPause, historyTrackResume, historyTrackEnd, historyUpdateArt, getHistoryPage, getWrappedStats } from './core/listening-history.js';
+import { translateBatch, translateText, getCachedTranslation } from './core/translate.js';
 import { evictOldest, evictUntil } from './core/utils.js';
 import type { TrackData, LyricLine, VybecordConfig } from './core/types.js';
 
@@ -58,6 +60,19 @@ interface SessionSnapshot {
 
 // ── Module-level constants (avoid re-creating on every 400ms poll) ──
 const MUSIC_APPS = new Set(['spotify', 'apple_music', 'deezer', 'tidal', 'amazon_music']);
+
+/**
+ * What a browser tab can turn out to be once the extension names it.
+ *
+ * Consulted only when a pin is placed on a media session Windows could not
+ * identify beyond "some tab in Edge" — see mayOwnPresence. Spotify is absent on
+ * purpose: its push comes from Spicetify inside the desktop client, never from
+ * a browser tab.
+ */
+const BROWSER_PUSH_SOURCES = new Set(['youtube', 'youtube_music', 'soundcloud', 'bandcamp', 'kick', 'twitch']);
+/** Live-stream sources: logged in the history, never counted as music played. */
+const STREAM_SOURCES = new Set(['twitch', 'kick']);
+
 const WEB_SOURCES = ['browser_', 'soundcloud', 'bandcamp', 'youtube'];
 const VIDEO_SOURCES = ['browser_', 'youtube'];
 const ARTIST_SPLIT_RE = /[,]/;  // Precompiled — used in recordPlay + artist key extraction
@@ -71,6 +86,19 @@ const ARTIST_SPLIT_RE = /[,]/;  // Precompiled — used in recordPlay + artist k
  * Override it with `discord_app_id` in config.json or DISCORD_CLIENT_ID in .env.
  */
 const DEFAULT_DISCORD_APP_ID = '1396531182426128394';
+
+/**
+ * How long to wait before acting on an App ID change.
+ *
+ * Switching App IDs means tearing down the Discord IPC socket and opening a new
+ * one, and Discord stops accepting connections for tens of seconds if that
+ * happens a few times in quick succession — which is exactly what clicking
+ * through the player list does now that pinning drives the presence. Waiting a
+ * moment turns a burst of changes into one reconnect. The old socket stays up
+ * meanwhile, so the presence keeps flowing under the previous app's name for an
+ * instant rather than going blank.
+ */
+const APP_ID_SWITCH_DEBOUNCE_MS = 1500;
 
 // Platform-specific Discord App IDs (changes the app name shown in Discord)
 const PLATFORM_DISCORD_APP_IDS: Record<string, string> = {
@@ -99,13 +127,29 @@ function platformConfigKey(src: string): keyof import('./core/types.js').Vybecor
 
 export class VybecordBackend extends EventEmitter {
   private config: ConfigManager;
-  private desktop: DesktopSource | null = null;
+  private media: NativeMediaSource | null = null;
+  private mediaWorkerPath: string;
+  private lrclibWorkerPath: string;
+  /** Pending App ID switch — see APP_ID_SWITCH_DEBOUNCE_MS. */
+  private appIdSwitchTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * Push sources, fed by the browser extension.
+   *
+   * These supply what a media session cannot: which site a tab is on, the
+   * canonical track URL, the position straight from the page's own audio
+   * element, and live-stream start times. They stay dormant until the extension
+   * pushes for the first time, so an install without it behaves exactly as if
+   * they were absent.
+   */
   private spicetify: SpicetifySource;
   private youtubeSource: YouTubeSource;
   private soundcloudSource: SoundCloudSource;
   private bandcampSource: BandcampSource;
   private kickSource: KickSource;
   private twitchSource: TwitchSource;
+  /** track_id → synced lyrics pushed from the Spotify web player. */
+  private spotifyLyricsStore = new Map<string, LyricLine[]>();
   private discord: DiscordIPC;
   private lyricsEngine: LyricsEngine;
 
@@ -115,11 +159,15 @@ export class VybecordBackend extends EventEmitter {
   private currentTrackKey = '';
   private currentCacheKey = '';
   private lyricsCache = new Map<string, LyricLine[]>();
-  private lastLyricsState: { current: string; next: string; prev: string; progress_ms: number; duration_ms: number } | null = null;
-  private spotifyLyricsStore = new Map<string, LyricLine[]>();  // track_id → synced lyrics from Spotify Web
+  private lastLyricsState: { current: string; next: string; prev: string; progress_ms: number; duration_ms: number; translation?: string } | null = null;
+  /** Line a translation is already in flight for, so one miss starts one fetch. */
+  private pendingTranslation = '';
   private fetchAbort: AbortController | null = null;  // cancel in-flight fetches on track skip
+  /** Thumbnail the last art resolution acted on — see resolveDiscordArt(). */
+  private artThumbSig = '';
   private shuttingDown = false;
   private idleSince = 0;  // grace period timestamp (prevent SMTC flicker)
+  private lastAdState = false;  // so the ad status is pushed on change, not every poll
   private configDir: string;
   private cachedIsWebSource = false;  // cached per-track: avoids WEB_SOURCES.some() on every 400ms poll
   private currentDiscordAppId = '';  // tracks current Discord App ID for platform-specific switching
@@ -132,10 +180,24 @@ export class VybecordBackend extends EventEmitter {
   private _lastCcLang: string | undefined;
   private statsHistory: SessionSnapshot[] = [];
   private statsHistoryPath: string;
+  /** Album of the last play accepted as real — lets recordPlay() tell an
+   *  interlude from an advertisement, the same way the media source does. */
+  private lastRecordedAlbum = '';
 
-  constructor(configDir: string) {
+  /**
+   * @param configDir  where config.json, the lyrics DB and logs live
+   * @param mediaWorkerPath  absolute path to the built media-worker.cjs. The
+   *   backend cannot derive it: it is bundled by the Electron build, not by the
+   *   backend's own module layout.
+   * @param lrclibWorkerPath  absolute path to the built lrclib-worker.cjs, for
+   *   the same reason. Empty disables the LRCLIB dump; the app still runs on the
+   *   custom store and the online providers.
+   */
+  constructor(configDir: string, mediaWorkerPath: string, lrclibWorkerPath = '') {
     super();
     this.configDir = configDir;
+    this.mediaWorkerPath = mediaWorkerPath;
+    this.lrclibWorkerPath = lrclibWorkerPath;
     this.statsHistoryPath = path.join(configDir, 'stats-history.json');
     this.statsHistory = this.loadStatsHistory();
     this.config = new ConfigManager(configDir, (cfg) => {
@@ -168,6 +230,7 @@ export class VybecordBackend extends EventEmitter {
 
     // React to config toggles in real-time
     this.on('configUpdate', (cfg) => {
+      this.media?.setAdFilter(cfg.filter_spotify_ads !== false);
       // Emit status update for dashboard (showLyrics badge, etc.)
       this.emitStatus();
 
@@ -208,11 +271,12 @@ export class VybecordBackend extends EventEmitter {
   async start(): Promise<void> {
     log.info('VybecordTS starting...');
 
+
     // 0. Init optional enhancements
     let localDbInitialized = false;
     try {
       localDbInitialized = await Promise.race([
-        initLocalDb(this.configDir, this.config.get('lrclib_dump_path')),
+        initLocalDb(this.configDir, this.config.get('lrclib_dump_path'), this.lrclibWorkerPath),
         new Promise<boolean>((_, reject) => setTimeout(() => reject(new Error('Database initialization timeout (30s)')), 30000))
       ]);
     } catch (e) {
@@ -230,6 +294,8 @@ export class VybecordBackend extends EventEmitter {
       this.configDir,
     );
 
+    this.applyArtUploadConfig();
+
     const blacklistInitialized = initBlacklist(this.configDir);
     if (blacklistInitialized) {
       log.info('Lyrics blacklist initialized successfully');
@@ -239,15 +305,14 @@ export class VybecordBackend extends EventEmitter {
 
     initHistory(this.configDir);
 
-    // 1. Start the desktop (SMTC) source. Push sources — Spicetify and the
-    //    browser userscripts — need no startup step: they activate on first push.
-    //    SMTC is Windows-only, and its absence is not fatal: everything the push
-    //    sources cover keeps working without it.
+    // 1. Start the native media monitor. It is now the only track source, so
+    //    its failure leaves nothing to detect — but it must still not abort
+    //    startup: the window has to open so it can explain what went wrong.
     try {
-      this.startDesktopSource();
+      await this.startMediaSource();
     } catch (e) {
-      log.warn(`Desktop SMTC source unavailable: ${e}`);
-      log.warn('Only push sources (Spicetify extension, browser userscripts) will be detected.');
+      log.error(`Native media source unavailable: ${e}`);
+      log.error('No playback can be detected. Windows 10 1809 or later is required.');
     }
 
     // 2. Discord RPC connect (with retry)
@@ -269,15 +334,100 @@ export class VybecordBackend extends EventEmitter {
 
   // ── Track source ──
 
-  private startDesktopSource(): void {
+  private async startMediaSource(): Promise<void> {
     if (process.platform !== 'win32') {
-      log.error('SMTC desktop source is only available on Windows.');
-      log.error('On other platforms, use the Spicetify extension or the browser userscripts.');
-      throw new Error('SMTC requires Windows — use the Spicetify extension or userscripts elsewhere');
+      throw new Error('Windows media sessions require Windows');
     }
-    this.desktop = new DesktopSource();
-    this.desktop.start();
-    log.info('Desktop SMTC source started ✓');
+    this.media = new NativeMediaSource(this.mediaWorkerPath);
+    this.media.setAdFilter(this.config.get('filter_spotify_ads') !== false);
+    await this.media.start();
+    if (!this.media.isReady) throw new Error('the media session monitor failed to initialise');
+    log.info('Native media source started ✓');
+  }
+
+  // ── Player picker (surfaced in the window) ──
+
+  /** Every media session Windows currently reports, playing or not. */
+  listPlayers(): DetectedPlayer[] {
+    return this.media?.listPlayers() ?? [];
+  }
+
+  /** Pin the presence to one player; null restores automatic priority. */
+  setPreferredPlayer(appId: string | null): void {
+    this.media?.setPreferredSource(appId);
+    this.emitStatus();
+    // Re-decide now rather than at the next tick. Whoever holds the presence
+    // may be exactly the player just excluded, and a second of the old one
+    // still showing reads as the click not having worked.
+    void this.poll();
+  }
+
+  getPreferredPlayer(): string | null {
+    return this.media?.getPreferredSource() ?? null;
+  }
+
+  /**
+   * Whether a source may own the presence right now.
+   *
+   * With no pin, anything may — the usual priority order decides. With a pin,
+   * only the pinned player, and nothing else for as long as it stands. The
+   * media source already enforces that among Windows' own sessions; this is the
+   * same rule extended to the browser extension, which the pick inside
+   * NativeMediaSource never sees.
+   *
+   * A pin is on a player, not on a transport. The extension pushing for the
+   * same service the pinned session is announced as counts as that player
+   * rather than as a rival — pinning the YouTube tab must not then reject the
+   * extension's much better data about that very tab.
+   *
+   * A pin whose player is not running blocks everything, which is what makes it
+   * a pin rather than a preference: the window says "waiting for it to play"
+   * instead of quietly handing the presence to whatever else is open.
+   */
+  /**
+   * Whether to leave this platform to the browser extension instead of
+   * announcing the OS media session ourselves.
+   *
+   * Standing aside is right while the extension is reporting the same playback:
+   * it reads the page directly, so its position, artist and URLs beat anything
+   * the OS session can offer, and without this the two fight over the presence
+   * on every poll.
+   *
+   * It is wrong whenever the extension is not going to report anything, because
+   * then nobody announces and the presence sits on whatever it happened to hold.
+   * Two ways that happens, both of which need a pin to be set:
+   *
+   *   - the pin excludes that source outright, so it will never publish;
+   *   - it is sitting paused while Windows says the pinned player is playing,
+   *     which means the two are describing different playback.
+   *
+   * @param reporting  the source's own "I am the one covering this" test, kept
+   *   verbatim per platform so behaviour with no pin is exactly as before.
+   */
+  private deferToPush(pushSource: string, reporting: boolean, paused: boolean): boolean {
+    if (!reporting || !this.mayOwnPresence(pushSource)) return false;
+    return !(paused && this.media?.getPreferredSource());
+  }
+
+  private mayOwnPresence(mediaSource: string): boolean {
+    if (!this.media?.getPreferredSource()) return true;
+    const pinned = this.media.pinnedSourceName();
+    if (pinned === null) return false;  // pinned to a player that is not running
+    if (pinned === mediaSource) return true;
+    /*
+     * A pin on a browser session Windows could not name.
+     *
+     * `browser_edge` is not a service, it is an admission: the media session
+     * says a tab is playing and nothing more. The extension saying that tab is
+     * YouTube is better information about the same playback, not a rival — so a
+     * pin placed on the anonymous session has to accept it, or pinning a
+     * browser tab would announce nothing at all.
+     *
+     * Spotify is not in that set: its push comes from Spicetify, inside the
+     * desktop client, so it is never what an unnamed browser tab turned out to
+     * be.
+     */
+    return pinned.startsWith('browser_') && BROWSER_PUSH_SOURCES.has(mediaSource);
   }
 
   // ── Spicetify push handler (event-driven, called by web server) ──
@@ -287,6 +437,7 @@ export class VybecordBackend extends EventEmitter {
     this.spicetify.update(data);
 
     if (!this.config.get('detect_spotify')) return;
+    if (!this.mayOwnPresence('spotify')) return;
 
     if (!data.is_playing) {
       // Paused via Spicetify — clear immediately (push is authoritative, no grace period needed)
@@ -345,6 +496,7 @@ export class VybecordBackend extends EventEmitter {
     this.youtubeSource.update(data);
 
     if (!this.config.get('detect_youtube')) return;
+    if (!this.mayOwnPresence(data.source || 'youtube')) return;
 
     if (!data.is_playing) {
       // Paused via userscript — clear immediately (push is authoritative)
@@ -392,6 +544,7 @@ export class VybecordBackend extends EventEmitter {
     this.soundcloudSource.update(data);
 
     if (!this.config.get('detect_soundcloud')) return;
+    if (!this.mayOwnPresence('soundcloud')) return;
 
     if (!data.is_playing) {
       if (this.currentTrackKey.startsWith('sc:')) this.onTrackStopped();
@@ -430,6 +583,7 @@ export class VybecordBackend extends EventEmitter {
     this.bandcampSource.update(data);
 
     if (this.config.get('detect_other_apps') === false) return;
+    if (!this.mayOwnPresence('bandcamp')) return;
 
     if (!data.is_playing) {
       if (this.currentTrackKey.startsWith('bc:')) this.onTrackStopped();
@@ -468,6 +622,7 @@ export class VybecordBackend extends EventEmitter {
     this.kickSource.update(data);
 
     if (this.config.get('detect_kick') === false) return;
+    if (!this.mayOwnPresence('kick')) return;
 
     if (!data.is_live) {
       if (this.currentTrackKey.startsWith('kick:')) this.onTrackStopped();
@@ -507,6 +662,7 @@ export class VybecordBackend extends EventEmitter {
     this.twitchSource.update(data);
 
     if (this.config.get('detect_twitch') === false) return;
+    if (!this.mayOwnPresence('twitch')) return;
 
     if (!data.is_live) {
       if (this.currentTrackKey.startsWith('twitch:')) this.onTrackStopped();
@@ -574,7 +730,7 @@ export class VybecordBackend extends EventEmitter {
     }
   }
 
-  // ── Polling (supports Premium API, Spicetify, & Free SMTC) ──
+  // ── Polling ──
 
   /**
    * Declarative source table used by poll() to iterate push-based sources.
@@ -612,6 +768,10 @@ export class VybecordBackend extends EventEmitter {
       if (!source.isActive || this.config.get(configKey) === false) continue;
       const track = source.getCurrentTrack();
       if (track) {
+        // `continue`, not `return`: a source the pin excludes must not claim the
+        // tick either, or the pinned player — reached further down, in the OS
+        // media session — would never get one.
+        if (!this.mayOwnPresence(track.media_source)) continue;
         const trackKey = this.buildTrackKey(track);
         if (trackKey === this.currentTrackKey) {
           if (isLive) {
@@ -635,97 +795,68 @@ export class VybecordBackend extends EventEmitter {
     return false;
   }
 
+
+  /**
+   * Poll tick: pick whichever source should own the presence right now.
+   *
+   * Push sources (the browser extension) outrank the OS media session, because
+   * they know things it cannot: which site a tab is on, the canonical URL, the
+   * position read from the page's own audio element. They are dormant until the
+   * extension pushes, so with no extension installed this collapses to the
+   * native path alone.
+   *
+   * For the native source this is not what discovers a track — media-changed
+   * events beat it there. It keeps the lyrics engine's clock tied to the
+   * player's and notices the transition to nothing-playing, which produces no
+   * event of its own.
+   */
   private async poll(): Promise<void> {
-    // Re-entrance guard: the Spotify API branch below awaits a fetch with an 8s
-    // timeout while the interval fires every poll_interval_ms (3s by default).
-    // Without this, slow API responses stack overlapping polls, each re-emitting
-    // progress and potentially racing onNewTrack against itself.
+    // Re-entrance guard: onNewTrack() awaits the lyric-provider race, and a slow
+    // one must not let the next tick start a competing fetch for the same track.
     if (this.polling) return;
     this.polling = true;
     try {
       this.ensurePollSources();
 
-      // Priority 1: Spicetify extension (push-based, highest quality for Spotify)
-      if (this.spicetify.isActive) {
+      // Priority 1: the Spotify web player — richest metadata of any source.
+      if (this.spicetify.isActive && this.mayOwnPresence('spotify')) {
         const spTrack = this.spicetify.getCurrentTrack();
         if (spTrack && this.config.get('detect_spotify') !== false) {
-          // Spicetify is playing — sync progress as a safety net (push is primary)
           const trackKey = this.buildTrackKey(spTrack);
-          if (trackKey === this.currentTrackKey) {
-            if (!this.checkRepeatLoop(spTrack)) {
-              // Engine stopped but track still playing → repeat restart
-              if (!this.lyricsEngine.isRunning() && spTrack.progress_ms < 5000) {
-                log.info(`[REPEAT] Engine stopped but track restarted via poll (progress=${spTrack.progress_ms}ms)`);
-                this.currentTrack = spTrack;
-                this.recordPlay(spTrack);
-                this.emit('trackUpdate', spTrack);
-                this.onNewTrack(spTrack).catch(e => log.error(`[REPEAT] Error: ${e}`));
-              } else {
-                this.syncTrackProgress(spTrack, true);
-              }
+          if (trackKey === this.currentTrackKey && !this.checkRepeatLoop(spTrack)) {
+            // Engine stopped while the track still plays → the track repeated.
+            if (!this.lyricsEngine.isRunning() && spTrack.progress_ms < 5000) {
+              log.info(`[REPEAT] Engine stopped but track restarted via poll (progress=${spTrack.progress_ms}ms)`);
+              this.currentTrack = spTrack;
+              this.recordPlay(spTrack);
+              this.emit('trackUpdate', spTrack);
+              this.onNewTrack(spTrack).catch(e => log.error(`[REPEAT] Error: ${e}`));
+            } else {
+              this.syncTrackProgress(spTrack, true);
             }
           }
           return;
         }
-        // Spicetify disabled or paused — check web sources for non-Spotify media
+        // Paused or disabled — let the other web sources have the tick.
         if (this.pollWebSources()) return;
-
-        // Fall through to SMTC for desktop apps (non-browser)
-        if (this.desktop) {
-          const desktopTrack = this.desktop.getCurrentTrack();
-          const dSrc = desktopTrack?.media_source || '';
-          const isBrowserSrc = dSrc.startsWith('browser_') || dSrc === 'unknown';
-          const spicetifyPlaying = !this.spicetify.isPaused;
-          const blocked = spicetifyPlaying ? (dSrc === 'spotify' || isBrowserSrc) : isBrowserSrc;
-          if (desktopTrack && !blocked) {
-            this.handleDesktopTrack(desktopTrack);
-            return;
-          }
-        }
-        // Spicetify paused AND no other source found
-        if (this.spicetify.isPaused && !this.currentTrack) {
-          this.onTrackStopped();
-        }
-        if (this.spicetify.isPaused && this.config.get('rpc_only_when_playing')) {
-          this.setIdlePresence();
-        }
-        return;
       }
 
-      // Priority 2: YouTube userscript (when no Spicetify)
-      if (this.youtubeSource.isActive && this.config.get('detect_youtube') !== false) {
-        const ytTrack = this.youtubeSource.getCurrentTrack();
-        if (ytTrack) {
-          const trackKey = this.buildTrackKey(ytTrack);
-          if (trackKey === this.currentTrackKey && !this.checkRepeatLoop(ytTrack)) {
-            this.syncTrackProgress(ytTrack);
-          }
-          return;
-        }
-        // YouTube paused — check SMTC for non-YouTube media
-        if (this.desktop) {
-          const desktopTrack = this.desktop.getCurrentTrack();
-          const src = desktopTrack?.media_source || '';
-          const isYtSrc = src === 'youtube' || src === 'youtube_music' || src.startsWith('browser_');
-          if (desktopTrack && !isYtSrc) {
-            this.handleDesktopTrack(desktopTrack);
-            return;
-          }
-        }
-        if (this.youtubeSource.isPaused && !this.currentTrackKey) {
-          this.onTrackStopped();
-        }
-        return;
-      }
-
-      // Priority 3: all push-based web sources (table-driven)
+      // Priority 2: every other push source, in table order.
       if (this.pollWebSources()) return;
 
-      // Priority 4: Desktop SMTC
-      if (this.desktop) {
-        const track = this.desktop.getCurrentTrack();
-        this.handleDesktopTrack(track);
+      // Priority 3: the OS media session.
+      if (!this.media) return;
+
+      // An ad break produces no track, so without this the window would just say
+      // "nothing playing" for 30 seconds and look broken. Only pushed on change.
+      const ad = this.media.isAdPlaying();
+      if (ad !== this.lastAdState) {
+        this.lastAdState = ad;
+        log.info(ad ? '[AD] Spotify advertisement — presence hidden' : '[AD] Advertisement over');
+        this.emitStatus();
       }
+
+      this.handleMediaTrack(this.media.getCurrentTrack(), ad);
     } catch (e) {
       log.error(`Poll error: ${e}`);
     } finally {
@@ -733,12 +864,18 @@ export class VybecordBackend extends EventEmitter {
     }
   }
 
-  // ── Desktop SMTC ──
+  // ── Windows media session ──
 
-  private handleDesktopTrack(track: TrackData | null): void {
+  /**
+   * @param adPlaying skips the idle grace period. An advertisement is a positive
+   *   identification, not a gap in detection, so there is nothing to debounce —
+   *   waiting the grace out would leave the previous song on the user's profile
+   *   for the first seconds of every ad break.
+   */
+  private handleMediaTrack(track: TrackData | null, adPlaying = false): void {
     if (!track) {
       // Grace period: wait 1.5s before treating as truly idle (prevents SMTC flicker)
-      if (this.currentTrack) {
+      if (this.currentTrack && !adPlaying) {
         const now = Date.now();
         if (this.idleSince === 0) {
           this.idleSince = now;
@@ -768,54 +905,101 @@ export class VybecordBackend extends EventEmitter {
       return;
     }
 
-    // Block SMTC Spotify when Spicetify/TM script is actively playing.
-    // When Spicetify is inactive or paused, SMTC Spotify desktop should pass through.
-    if (src === 'spotify' && this.spicetify.isActive && !this.spicetify.isPaused) {
-      return;
-    }
+    /*
+     * Stand aside when a push source owns this platform.
+     *
+     * The extension reads the page directly, so its position, artist and URLs
+     * beat anything the OS session can offer for the same playback. Without
+     * these guards the two would fight over the presence on every poll.
+     *
+     * When to stand aside and when not to is deferToPush's judgement — see
+     * there for why a pin changes the answer.
+     */
+    if (src === 'spotify' && this.deferToPush('spotify',
+      this.spicetify.isActive && !this.spicetify.isPaused, this.spicetify.isPaused)) return;
 
-    // Block SMTC YouTube/browser sources when the userscript is active, was recently active
-    // (prevents ghost sessions after browser close), or owns the current track.
-    const isYtSmtc = src === 'youtube' || src === 'youtube_music' || src.startsWith('browser_');
-    if (isYtSmtc && (this.youtubeSource.isActive || this.youtubeSource.wasRecentlyActive || this.currentTrackKey.startsWith('yt:'))) {
-      return;
-    }
+    // Browser tabs included: a media session cannot say which site a tab is on,
+    // so any browser playback might be what the YouTube script is reporting.
+    // wasRecentlyActive covers the gap after a tab closes, before it ages out.
+    const isYtLike = src === 'youtube' || src === 'youtube_music' || src.startsWith('browser_');
+    if (isYtLike && this.deferToPush('youtube',
+      this.youtubeSource.isActive || this.youtubeSource.wasRecentlyActive
+        || this.currentTrackKey.startsWith('yt:'),
+      this.youtubeSource.isPaused)) return;
 
-    // Block SMTC SoundCloud when the userscript is active (userscript has real artist/art)
-    if (src === 'soundcloud' && (this.soundcloudSource.isActive || this.currentTrackKey.startsWith('sc:'))) {
-      return;
-    }
-
-    // Block SMTC Bandcamp when the userscript is active (userscript has proper metadata/art)
-    if (src === 'bandcamp' && (this.bandcampSource.isActive || this.currentTrackKey.startsWith('bc:'))) {
-      return;
-    }
+    if (src === 'soundcloud' && this.deferToPush('soundcloud',
+      this.soundcloudSource.isActive || this.currentTrackKey.startsWith('sc:'),
+      this.soundcloudSource.isPaused)) return;
+    if (src === 'bandcamp' && this.deferToPush('bandcamp',
+      this.bandcampSource.isActive || this.currentTrackKey.startsWith('bc:'),
+      this.bandcampSource.isPaused)) return;
 
     const trackKey = this.buildTrackKey(track);
 
     if (trackKey === this.currentTrackKey) {
-      // NOTE: Do NOT use checkRepeatLoop for SMTC — browser sources report
-      // progress_ms clamped to duration_ms, triggering false repeats and
-      // an infinite REPEAT→DRIFT→REPEAT cycle. The web source handler below
-      // already guards against stale positions, and syncProgress's built-in
-      // isRepeatJump handles genuine repeats for native apps.
+      // NOTE: Do NOT use checkRepeatLoop here — browser sessions report
+      // progress_ms clamped to duration_ms, which reads as a repeat and drives an
+      // endless REPEAT→DRIFT→REPEAT cycle. syncProgress's own isRepeatJump
+      // handles genuine repeats.
 
+      // Cover art can appear a beat after the track does: SMTC publishes the
+      // metadata and the artwork as separate events, and the catalogue lookup
+      // lands later still. The window only repaints its art on trackUpdate, so
+      // without this it would keep the empty cover it was given at track start
+      // for the whole song.
+      const prevArt = this.currentTrack?.album_art_url ?? '';
+      // What the OS itself reported, before the preservation below rewrites it.
+      const osArt = track.album_art_url;
+      // Never let a bare OS snapshot overwrite art the backend already resolved
+      // to a real URL — snapshot() only ever reports the local placeholder.
+      if (prevArt && prevArt !== '/api/thumbnail' && osArt === '/api/thumbnail') {
+        track.album_art_url = prevArt;
+      }
       this.currentTrack = track;
-
-      // Web sources (browser, YouTube, SoundCloud): SMTC progress is unreliable
-      // when a userscript is active (the userscript pushes accurate progress via
-      // its own path). When NO userscript is active, SMTC is the only data source
-      // so we must use it — otherwise the engine free-runs and the bar gets stuck.
-      const hasUserscript = this.youtubeSource.isActive || this.soundcloudSource.isActive
-        || this.bandcampSource.isActive;
-      if (!this.cachedIsWebSource || !hasUserscript) {
-        this.lyricsEngine.syncProgress(track.progress_ms, track);
-      } else {
-        // Userscript active — metadata-only update (album art, etc.)
-        this.lyricsEngine.syncProgress(-1, track);
+      if (track.album_art_url !== prevArt) {
+        this.emit('trackUpdate', track);
       }
 
-      // Emit progress: use engine elapsed for web sources (more accurate)
+      /*
+       * The artwork on disk is not final when the track starts.
+       *
+       * Windows publishes metadata and artwork as separate events, and a player
+       * that has not loaded the cover yet fills the gap with its own logo —
+       * Spotify does this for local files. Resolving once at track start
+       * therefore published that logo, and the preservation above then pinned it
+       * for the rest of the song while the real cover sat unused on disk.
+       *
+       * So resolution follows the file rather than the track. A changed
+       * thumbnail is a different content hash, which is a different URL, and the
+       * catalogue lookup behind it is cached per track — so this costs a stat
+       * per poll and nothing else until the bytes actually change.
+       *
+       * Gated on what the OS reported rather than on what we resolved: a track
+       * whose art already came from a provider as a real URL does not depend on
+       * this file, and must not be re-pointed at a catalogue guess because some
+       * other player rewrote the thumbnail.
+       */
+      if (osArt === '/api/thumbnail') {
+        const sig = thumbnailSignature();
+        if (sig && sig !== this.artThumbSig) {
+          this.resolveDiscordArt(track, this.fetchAbort?.signal);
+        }
+      }
+
+      /*
+       * Whose clock to trust.
+       *
+       * The extension reads currentTime off the page's own audio element, which
+       * is exact; a browser's media session publishes a position only every few
+       * seconds. So when a push source is live for this playback, hand the
+       * engine metadata only (-1) and let its own interpolation carry the time.
+       */
+      const pushOwnsProgress = this.cachedIsWebSource
+        && (this.youtubeSource.isActive || this.soundcloudSource.isActive || this.bandcampSource.isActive);
+      this.lyricsEngine.syncProgress(pushOwnsProgress ? -1 : track.progress_ms, track);
+
+      // Browser sessions publish a position only every few seconds; the engine
+      // interpolates between those, so its elapsed is the smoother of the two.
       const progressMs = this.cachedIsWebSource
         ? Math.round(this.lyricsEngine.getElapsed())
         : track.progress_ms;
@@ -839,6 +1023,10 @@ export class VybecordBackend extends EventEmitter {
     if (this.currentTrack) {
       log.info('Music paused');
       scrobbleTrackEnd();
+      // Stop the history clock rather than letting it run until the next track
+      // starts — otherwise a pause banks its whole length as listening. The
+      // entry stays open so resuming this same track continues it.
+      historyTrackPause();
       this.currentTrack = null;
       this.currentTrackKey = '';
       this.currentCacheKey = '';
@@ -967,7 +1155,7 @@ export class VybecordBackend extends EventEmitter {
 
     // Start local thumb upload immediately (Apple Music etc.) — async, non-blocking
     if (trackData.album_art_url === '/api/thumbnail') {
-      this.uploadLocalThumbForRpc(trackData, signal);
+      this.resolveDiscordArt(trackData, signal);
     }
 
     // Phase 2: ASYNC — fetch lyrics in background
@@ -976,6 +1164,20 @@ export class VybecordBackend extends EventEmitter {
 
     // Preserve original album_art_url to prevent losing local art during lyrics search
     const originalAlbumArtUrl = trackData.album_art_url;
+
+    /*
+     * Lyrics the Spicetify extension pushed for this track.
+     *
+     * It fetches on songchange, so they routinely land before the track is set
+     * up here — the hot-inject path in handleSpotifyLyrics only covers the
+     * opposite order. Folding them into the cache now is what makes an early
+     * push count instead of being stored and forgotten.
+     */
+    const pushed = this.spotifyLyricsStore.get(trackData.track_id);
+    if (pushed?.length && !this.lyricsCache.get(cacheKey)?.length) {
+      this.lyricsCache.set(cacheKey, pushed);
+      log.info(`[SPOTIFY-LYRICS] Using ${pushed.length} lines pushed for this track`);
+    }
 
     let lyrics: LyricLine[];
     const cached = this.lyricsCache.get(cacheKey);
@@ -992,16 +1194,23 @@ export class VybecordBackend extends EventEmitter {
 
       const lyricsPromise = (!trackData.is_live)
         ? (async (): Promise<LyricLine[]> => {
-            // Priority 0: Spotify Web lyrics (official synced lyrics from Tampermonkey)
-            // If already in store (pre-fetched from previous track or fast push), use immediately.
-            // Otherwise, fall through to LRCLib/Netease. If TM lyrics arrive later,
-            // handleSpotifyLyrics() will hot-inject them and the Phase 3 guard prevents overwrite.
-            const isYouTubeSource = trackData.track_id.startsWith('yt:');
-            const spotifyLyrics = this.spotifyLyricsStore.get(trackData.track_id);
-            if (spotifyLyrics && spotifyLyrics.length > 0) {
-              log.info(`[SPOTIFY-LYRICS] Using ${spotifyLyrics.length} pre-fetched official lyrics`);
-              return spotifyLyrics;
-            }
+            // Spotify's own lyrics do not come through here: the Spicetify
+            // extension pushes them, and they are picked up from the cache above.
+            // This chain is what runs when it has nothing — which is most of the
+            // catalogue, and everything not playing through Spotify.
+            //
+            // Browser tabs count as YouTube here. The userscripts used to declare
+            // `media_source: 'youtube'`; the OS session says only "MSEdge" and
+            // publishes the video title as the track and the channel as the
+            // artist, with nothing naming the site. Requiring a literal 'youtube'
+            // meant captions never ran for browser playback at all — which is
+            // where nearly all of it happens. Guessing wrong is cheap: captions
+            // are only reached after the local database and every lyrics
+            // provider have missed, and a search that finds nothing just returns
+            // empty.
+            const isYouTubeSource = trackData.media_source === 'youtube'
+              || trackData.media_source === 'youtube_music'
+              || trackData.media_source.startsWith('browser_');
 
             if (isYouTubeSource) {
               // Priority 0.5: Local DB FIRST for YouTube — user-imported lyrics beat auto-CC
@@ -1034,8 +1243,20 @@ export class VybecordBackend extends EventEmitter {
                 return [];
               }
 
-              // Extract video ID from YouTubeSource (yt:VIDEO_ID) for direct CC fetch
-              const ytVideoId = trackData.track_id.startsWith('yt:') ? trackData.track_id.slice(3) : undefined;
+              /*
+               * Use the exact video when we have it.
+               *
+               * The extension reports the id and the source keys its track_id as
+               * `yt:<id>`, which lets the captions be fetched from that video
+               * rather than searched for. Without the extension the OS session
+               * exposes only the tab's media metadata — no URL — so the fetcher
+               * falls back to a title/artist search, which is right far more
+               * often than not but can land on a different upload.
+               */
+              const ytVideoId = trackData.track_id.startsWith('yt:')
+                ? trackData.track_id.slice(3)
+                : undefined;
+              log.info(`[CC] Trying captions for a ${trackData.media_source} session`);
               const ccLang = this.config.get('cc_lang') || 'auto';
               
               log.info(`[CC] Fetching captions for "${trackData.track_name}" (videoId: ${ytVideoId || 'search'}, lang: ${ccLang})`);
@@ -1044,6 +1265,14 @@ export class VybecordBackend extends EventEmitter {
               
               log.info(`[CC] Result: ${ccResult.lines.length} lines, thumbnail: ${ccResult.thumbnailUrl ? 'yes' : 'no'}`);
               
+              // The search resolved the actual video, which the OS session could
+              // not name. Turning that into a direct link restores the "watch
+              // this exact video" button the userscript used to provide; without
+              // it the button falls back to a YouTube search.
+              if (ccResult.videoId) {
+                trackData.video_url = `https://www.youtube.com/watch?v=${ccResult.videoId}`;
+              }
+
               // YouTube thumbnail takes priority — more relevant than generic album art
               // But preserve local album art if it was already extracted
               if (ccResult.thumbnailUrl && trackData.album_art_url !== '/api/thumbnail') {
@@ -1093,7 +1322,7 @@ export class VybecordBackend extends EventEmitter {
 
     // Persist enriched track + re-emit to dashboard
     // Restore original album_art_url to prevent losing local art during lyrics search
-    // But preserve uploaded public URL if uploadLocalThumbForRpc completed during lyrics search
+    // But preserve the public URL if resolveDiscordArt completed during lyrics search
     // Also preserve /api/thumbnail (local art extracted by local-art.ts)
     const uploadedUrl = this.currentTrack?.album_art_url?.startsWith('https://') ? this.currentTrack.album_art_url : null;
     const localArtUrl = this.currentTrack?.album_art_url === '/api/thumbnail' ? '/api/thumbnail' : null;
@@ -1109,26 +1338,23 @@ export class VybecordBackend extends EventEmitter {
     }
 
     // Phase 3: Inject lyrics into the running engine (no restart = no gap)
-    // Guard: if Spotify official lyrics were hot-injected while we were fetching,
-    // don't overwrite them with external (LRCLib/Netease) results.
-    const spotifyInjected = this.spotifyLyricsStore.has(trackData.track_id) &&
-      (this.spotifyLyricsStore.get(trackData.track_id)?.length ?? 0) > 0;
-
-    if (spotifyInjected) {
-      log.info(`[LYRICS] Skipping external inject — Spotify official lyrics already active`);
-    } else if (lyrics.length > 0) {
+    if (lyrics.length > 0) {
       this.lyricsEngine.injectLyrics(lyrics, trackData);
       log.info(`[LYRICS] Injected ${lyrics.length} lines into running engine`);
 
-      // Pre-translate lyrics for RPC display (fire-and-forget, warms cache)
-      if (this.config.get('rpc_translate_lyrics') && !signal.aborted) {
+      // Warm the cache for the whole song up front, so the window and the
+      // presence both read a hit on the tick instead of waiting on a request
+      // per line. Either destination being switched on is reason enough.
+      if ((this.config.get('rpc_translate_lyrics') || this.config.get('translate_lyrics')) && !signal.aborted) {
         const tgtLang = this.config.get('translate_target_lang') || 'en';
         const lines = lyrics.map(l => l.text).filter(t => t && t.trim().length >= 2);
         translateBatch(lines, tgtLang, signal).catch(() => {});
       }
     } else {
       // No lyrics found
-      const noLyricsSource = trackData.track_id.startsWith('yt:') ? 'CC fetch failed or empty' : 'LRCLib/Netease fetch failed';
+      const isYt = trackData.media_source === 'youtube' || trackData.media_source === 'youtube_music'
+        || trackData.media_source.startsWith('browser_');
+      const noLyricsSource = isYt ? 'CC fetch failed or empty' : 'LRCLib/Netease fetch failed';
       log.info(`[LYRICS] No lyrics found for "${trackData.track_name}" — ${noLyricsSource}`);
       this.lyricsEngine.updateTrackData(trackData);
 
@@ -1146,17 +1372,21 @@ export class VybecordBackend extends EventEmitter {
     }
   }
 
-  /** Build a consistent track key from TrackData (must match what handlers store). */
+  /**
+   * Build a consistent track key from TrackData.
+   *
+   * Every track now originates from the OS session, whose track_id is already
+   * `desktop:<title>:<artist>` — unique enough to key on directly. The fallback
+   * covers anything that reaches here without that shape.
+   */
   private buildTrackKey(t: TrackData): string {
-    // Desktop, YouTube, SoundCloud & Bandcamp sources use track_id directly as key
-    if (t.track_id.startsWith('desktop:') || t.track_id.startsWith('yt:') || t.track_id.startsWith('sc:') || t.track_id.startsWith('bc:')) return t.track_id;
-    // Spotify source uses id|name|first_artist (indexOf avoids split allocation)
+    if (t.track_id.startsWith('desktop:')) return t.track_id;
     const artist = t.artist_name;
     const commaIdx = artist.indexOf(', ');
     return `${t.track_id}|${t.track_name}|${commaIdx >= 0 ? artist.slice(0, commaIdx) : artist}`;
   }
 
-  // ── Public getters (for web server) ──
+  // ── Public getters (for the window) ──
 
   getConfig() { return this.config.getAll(); }
   clearLyricsCache(): number {
@@ -1171,9 +1401,14 @@ export class VybecordBackend extends EventEmitter {
     return findExistingCustomLyrics(track, artist, album, duration);
   }
 
+  /** Whether an LRCLIB dump is loaded, and the folder one can be dropped into. */
+  getLrclibDumpStatus() {
+    return { ...lrclibDumpStatus(this.configDir), configured: this.config.get('lrclib_dump_path') || '' };
+  }
+
   /** Free-text search across the local LRCLIB dump, for the dashboard's search UI. */
   searchLrclibDump(query: string, limit?: number) {
-    return searchLrclibDumpDb(query, limit);
+    return searchLrclibDumpDb(query, limit);  // resolves on the dump worker
   }
 
   /** Fetch full lyrics for one LRCLIB search result, to preview or load into the import form. */
@@ -1319,7 +1554,23 @@ export class VybecordBackend extends EventEmitter {
     }
     if (!Object.keys(accepted).length) return;
     this.config.setMany(accepted as Partial<VybecordConfig>);
+    if ('art_upload_enabled' in accepted || 'art_upload_url' in accepted) {
+      this.applyArtUploadConfig();
+    }
     this.emit('configUpdate', this.config.getAll());
+  }
+
+  /**
+   * Point the cover uploader at the configured store, or at nothing.
+   *
+   * Both settings have to agree: a store with the toggle off publishes nothing,
+   * and the toggle on with no store has nowhere to publish. Turning it off mid
+   * session takes effect immediately — the uploader stops reading the local
+   * thumbnail at all.
+   */
+  private applyArtUploadConfig(): void {
+    const cfg = this.config.getAll();
+    configureArtUpload(cfg.art_upload_enabled ? String(cfg.art_upload_url || '') : '');
   }
   getCurrentTrack() { return this.currentTrack; }
   getCurrentLyricsState() { return this.lastLyricsState; }
@@ -1408,19 +1659,72 @@ export class VybecordBackend extends EventEmitter {
     return this.statsHistory;
   }
 
-  /** Get persistent listening history (most recent first). */
-  getListeningHistory(limit = 50, offset = 0) { return getRecentHistory(limit, offset); }
-  getListeningHistoryCount() { return getHistoryCount(); }
+  /** Get a page of the persistent listening history (most recent first). */
+  getListeningHistory(limit = 50, offset = 0, anchor?: number) { return getHistoryPage(limit, offset, anchor); }
   getListeningWrapped(days?: number) { return getWrappedStats(days); }
 
   isDiscordConnected() { return this.discord.isConnected; }
-  isSpicetifyActive() { return this.spicetify.isActive; }
+  isMediaSourceReady() { return this.media?.isReady ?? false; }
 
-  /** Push connection status to dashboard via SSE. */
+  /**
+   * Whether the browser extension has pushed recently.
+   *
+   * Each source ages out on its own after ~10s of silence, so this reflects an
+   * extension that is actually reporting, not merely one that was installed
+   * once. It is what lets the install page say "connected" rather than making
+   * the user guess.
+   */
+  /** Whether the Spicetify extension is reporting right now. */
+  isSpicetifyActive(): boolean { return this.spicetify.isActive; }
+
+  isExtensionConnected(): boolean {
+    return this.spicetify.isActive || this.youtubeSource.isActive
+      || this.soundcloudSource.isActive || this.bandcampSource.isActive
+      || this.twitchSource.isActive || this.kickSource.isActive;
+  }
+  isAdPlaying() { return this.media?.isAdPlaying() ?? false; }
+
+  /**
+   * The translation to show under a lyric line, when the window asks for one.
+   *
+   * Reads the cache only: this runs on the lyric tick, and awaiting a network
+   * round trip here would hold the line itself back. A miss starts one fetch and
+   * re-emits when it lands, so the translation appears a beat later rather than
+   * never — which is what happened before, since nothing read `translate_lyrics`
+   * at all and the window's translation line was always empty.
+   */
+  private translationFor(line: string): string {
+    if (this.config.get('translate_lyrics') !== true) return '';
+    const trimmed = (line || '').trim();
+    if (trimmed.length < 2) return '';
+
+    const lang = this.config.get('translate_target_lang') || 'en';
+    const hit = getCachedTranslation(trimmed, lang);
+    if (hit) return hit;
+
+    if (this.pendingTranslation === trimmed) return '';
+    this.pendingTranslation = trimmed;
+    translateText(trimmed, lang)
+      .then(res => {
+        this.pendingTranslation = '';
+        // The song moves on while this is in flight; a late answer must not be
+        // pinned under whatever line is showing by then.
+        if (!res || this.lastLyricsState?.current?.trim() !== trimmed) return;
+        const merged = { ...this.lastLyricsState, translation: res.translation };
+        this.lastLyricsState = merged;
+        this.emit('lyricsUpdate', merged);
+      })
+      .catch(() => { this.pendingTranslation = ''; });
+    return '';
+  }
+
+  /** Push connection status to the window. */
   private emitStatus(): void {
     this.emit('statusUpdate', {
       discordConnected: this.discord.isConnected,
-      spicetifyActive: this.spicetify.isActive,
+      mediaSourceReady: this.media?.isReady ?? false,
+      preferredPlayer: this.media?.getPreferredSource() ?? null,
+      adPlaying: this.media?.isAdPlaying() ?? false,
       showLyrics: this.config.get('show_lyrics') !== false,
     });
   }
@@ -1443,6 +1747,7 @@ export class VybecordBackend extends EventEmitter {
           duration_ms: t ? t.duration_ms : 0,
           lyrics: this.lyricsEngine.getLyrics(),
           currentIndex: this.lyricsEngine.getCurrentIndex(),
+          translation: this.translationFor(current),
         };
         this.lastLyricsState = lyricsState;
         this.emit('lyricsUpdate', lyricsState);
@@ -1469,7 +1774,20 @@ export class VybecordBackend extends EventEmitter {
         return;
       }
       log.info('Discord RPC connected ✓');
-      this.setIdlePresence();
+      /*
+       * Republish before falling back to the idle presence.
+       *
+       * Most reconnects are an App ID switch, and the app only switches App IDs
+       * because the announced player changed — so there is virtually always a
+       * track already playing that the fresh socket knows nothing about. Sending
+       * the idle presence here instead left the profile empty until the next
+       * heartbeat, which is exactly long enough for pinning a player to look
+       * like it did nothing at all.
+       */
+      const republished = this.config.get('rpc_enabled') !== false
+        && this.currentTrack !== null
+        && this.lyricsEngine.pushRpcNow();
+      if (!republished) this.setIdlePresence();
       this.emitStatus();
     });
     ipc.onDisconnect(() => {
@@ -1493,12 +1811,28 @@ export class VybecordBackend extends EventEmitter {
 
     log.debug(`[DISCORD] Source: ${source}, Platform AppID: ${platformAppId || 'none'}, Target AppID: ${targetAppId}, Current AppID: ${this.currentDiscordAppId}`);
 
+    if (this.appIdSwitchTimer) {
+      clearTimeout(this.appIdSwitchTimer);
+      this.appIdSwitchTimer = null;
+    }
+
     // No change needed
     if (targetAppId === this.currentDiscordAppId) {
       log.debug(`[DISCORD] No AppID change needed for ${source}`);
       return;
     }
 
+    // Only the last change in a burst is acted on — see APP_ID_SWITCH_DEBOUNCE_MS.
+    this.appIdSwitchTimer = setTimeout(() => {
+      this.appIdSwitchTimer = null;
+      if (targetAppId === this.currentDiscordAppId || this.shuttingDown) return;
+      this.applyDiscordAppId(targetAppId, source);
+    }, APP_ID_SWITCH_DEBOUNCE_MS);
+    this.appIdSwitchTimer.unref?.();
+  }
+
+  /** Tear down the Discord connection and rebuild it under a different App ID. */
+  private applyDiscordAppId(targetAppId: string, source: string): void {
     log.info(`[DISCORD] Switching App ID for ${source}: ${this.currentDiscordAppId || 'default'} → ${targetAppId}`);
 
     // Close current connection
@@ -1523,9 +1857,52 @@ export class VybecordBackend extends EventEmitter {
 
   /** Record a track play for session stats + scrobbling. */
   private recordPlay(t: TrackData): void {
-    this.statsDirty = true;
-    historyTrackStart(t.track_name, t.artist_name, t.album_name, t.album_art_url, t.media_source);
+    // An advertisement is not a play. The presence filter is a user preference,
+    // so it cannot be relied on here: with it off, every ad break used to land
+    // in the history as a track by a brand. The heuristic is the same one.
+    if (looksLikeSpotifyAd(
+      t.media_source,
+      { title: t.track_name, artist: t.artist_name, albumTitle: t.album_name },
+      t.duration_ms,
+      this.lastRecordedAlbum,
+    )) {
+      log.info(`[STATS] Ignoring advertisement: ${t.track_name}`);
+      // Hold the interrupted song's clock for the length of the break; leaving
+      // it running would bank the whole ad against it.
+      historyTrackPause();
+      return;
+    }
+    this.lastRecordedAlbum = t.album_name;
+
+    // Pausing clears currentTrackKey, so resuming arrives here looking exactly
+    // like a new track. It is not: it is the same listen continued, and counting
+    // it again is what put 122 consecutive duplicate rows in the log. The
+    // history module owns the decision — it is the side holding the open entry.
+    const resumed = historyTrackResume(t.track_name, t.artist_name, t.media_source);
+    if (!resumed) {
+      historyTrackStart({
+        track: t.track_name,
+        artist: t.artist_name,
+        album: t.album_name,
+        art: t.album_art_url,
+        source: t.media_source,
+        durationMs: t.duration_ms,
+      });
+    }
+
+    // Last.fm is told either way: scrobbleTrackEnd() cleared its now-playing
+    // when playback stopped, so a resumed track needs it set again or the
+    // scrobble is lost.
     scrobbleTrackStart(t.track_name, t.artist_name, t.album_name, t.duration_ms);
+
+    // The session counters already have this play.
+    if (resumed) return;
+
+    // A stream is kept in the log but never counted: its title is a banner and
+    // its "artist" is a streamer, so one afternoon would own every top list.
+    if (STREAM_SOURCES.has(t.media_source)) return;
+
+    this.statsDirty = true;
     // Extract primary artist once (used for both track and artist stats)
     const artistDisplay = t.artist_name.split(ARTIST_SPLIT_RE)[0].trim();
     const artistKey = artistDisplay.toLowerCase();
@@ -1574,6 +1951,8 @@ export class VybecordBackend extends EventEmitter {
       rpc_button1_url: cfg.rpc_button1_url,
       rpc_button2_label: '🎵 Listen on {platform}',
       rpc_activity_type: cfg.rpc_activity_type,
+      rpc_status_display: cfg.rpc_status_display,
+      rpc_status_template: cfg.rpc_status_template,
       dance_mode: cfg.dance_mode,
       radiate_mode: cfg.radiate_mode,
       purple_rad_mode: cfg.purple_rad_mode,
@@ -1609,8 +1988,13 @@ export class VybecordBackend extends EventEmitter {
     const buttons: { label: string; url: string }[] = [];
     if (btn1 && btn1Url) buttons.push({ label: btn1, url: btn1Url });
 
+    // No track to name here, so 'title' falls back to the app name like 'app'.
+    const statusDisplay = this.config.get('rpc_status_display');
+    const sdt = statusDisplay === 'details' ? 2 : statusDisplay === 'state' ? 1 : undefined;
+
     this.discord.setActivity({
       type: this.config.get('rpc_activity_type'),
+      status_display_type: sdt,
       details: '⏸ Nothing playing',
       state: '  ',
       assets: {
@@ -1622,22 +2006,71 @@ export class VybecordBackend extends EventEmitter {
   }
 
   /**
-   * Upload the local SMTC thumbnail to a public image host and update Discord RPC.
-   * Called async (non-blocking) when a track has album_art_url === '/api/thumbnail'.
+   * Give Discord a URL for the cover art.
+   *
+   * Discord needs a URL and Windows gives us a file, so something has to bridge
+   * the two, and it is tried in that order for a reason:
+   *
+   * 1. Look the album up on a music CDN (cover-art.ts). Discord's proxy loads
+   *    those without argument, it costs one small request, nothing leaves the
+   *    machine, and it answers for 42 of 44 tracks measured against real
+   *    listening — everything that was ever released.
+   * 2. Only for what is left — rips, demos, DJ sets, whose artwork exists
+   *    nowhere but this machine — publish the file itself (art-upload.ts), if
+   *    the user turned that on. Uploading to a free anonymous host is what this
+   *    used to do and it failed twice over: Discord's proxy would not fetch
+   *    from those hosts, and antivirus vendors blocklist them. Our own endpoint
+   *    has neither problem.
+   *
+   * Anything still unresolved gets the default placeholder, which at least
+   * renders. None of this affects the window, which reads the artwork straight
+   * from the player and is therefore always right.
    */
-  private uploadLocalThumbForRpc(trackData: TrackData, signal?: AbortSignal): void {
+  private resolveDiscordArt(trackData: TrackData, signal?: AbortSignal): void {
     const trackKey = this.currentTrackKey;
-    uploadThumbForRpc(trackKey, signal).then(publicUrl => {
-      if (!publicUrl) return;
-      // Make sure we're still on the same track
+    // Claimed before the await, so a poll landing mid-resolve does not start a
+    // second one for the same bytes.
+    this.artThumbSig = thumbnailSignature();
+
+    void (async () => {
+      const catalogue = await lookupCoverArt(trackKey, trackData.artist_name, trackData.track_name, signal);
+      const url = catalogue ?? await uploadCoverArt(signal);
+      if (!url) {
+        log.debug(`[RPC] No cover for "${trackData.artist_name} - ${trackData.track_name}"`);
+        return;
+      }
+      // The track may have moved on while the lookup was in flight.
       if (this.currentTrackKey !== trackKey) return;
-      // Update currentTrack so the Catbox URL survives subsequent polls
-      if (this.currentTrack) this.currentTrack.album_art_url = publicUrl;
-      // Update RPC with the public URL (use currentTrack for up-to-date data)
-      const rpcTrack = { ...(this.currentTrack || trackData), album_art_url: publicUrl };
+      if (this.currentTrack) this.currentTrack.album_art_url = url;
+      const rpcTrack = { ...(this.currentTrack || trackData), album_art_url: url };
       this.lyricsEngine.updateTrackData(rpcTrack);
-      log.info(`[RPC] Using uploaded local thumb: ${publicUrl}`);
-    }).catch(() => { /* upload errors already logged in image-upload */ });
+      // Stats and history captured this track's art when it started, which for
+      // OS-detected covers is the local '/api/thumbnail' placeholder — a path
+      // that means nothing outside the running app, so those lists rendered
+      // with no cover at all. Backfill them now that a URL exists.
+      this.backfillArt(this.currentTrack || trackData, url);
+      log.info(`[RPC] Cover: ${url}`);
+    })().catch(e => log.debug(`[RPC] Cover resolution failed: ${e}`));
+  }
+
+  /**
+   * Point the current track's stats and history rows at a real cover URL, and
+   * tell the window so it repaints without waiting for the next track.
+   */
+  private backfillArt(t: TrackData, url: string): void {
+    historyUpdateArt(url);
+
+    // Same keys recordPlay() derives, so the rows it created are the rows updated.
+    const artistDisplay = t.artist_name.split(ARTIST_SPLIT_RE)[0].trim();
+    const artistKey = artistDisplay.toLowerCase();
+    const trackEntry = this.sessionTrackPlays.get(`${t.track_name.toLowerCase()}|${artistKey}`);
+    if (trackEntry) trackEntry.art = url;
+    const artistEntry = this.sessionArtistPlays.get(artistKey);
+    if (artistEntry) artistEntry.art = url;
+
+    this.statsDirty = true;
+    this.emit('statsUpdate', this.getSessionStats());
+    if (this.currentTrack) this.emit('trackUpdate', this.currentTrack);
   }
 
   private evictCache(): void {
@@ -1650,6 +2083,13 @@ export class VybecordBackend extends EventEmitter {
     if (this.shuttingDown) return;
     this.shuttingDown = true;
     log.info('Shutting down...');
+
+    // 0. Drop any queued App ID switch — reconnecting on the way out would only
+    // race the graceful close.
+    if (this.appIdSwitchTimer) {
+      clearTimeout(this.appIdSwitchTimer);
+      this.appIdSwitchTimer = null;
+    }
 
     // 1. Abort in-flight fetches (lyrics, album art)
     if (this.fetchAbort) {
@@ -1669,10 +2109,8 @@ export class VybecordBackend extends EventEmitter {
     // 4. Clear Discord presence and disconnect (waits for Discord ACK before closing pipe)
     await this.discord.gracefulClose();
 
-    // 5. Stop desktop source
-    if (this.desktop) {
-      this.desktop.stop();
-    }
+    // 5. Stop the media source
+    this.media?.stop();
 
     // 6. Stop config watcher
     this.config.close();

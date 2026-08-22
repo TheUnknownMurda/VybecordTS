@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <!--
+      The renderer talks to the backend only through the preload bridge, so it
+      needs no network access of its own. Locking the CSP down to 'self' means a
+      lyric line or track title carrying markup can never pull in a remote
+      script. 'unsafe-inline' for styles only, because album art drives a few
+      inline background colours.
+      img-src allows blob: (local cover art, delivered as bytes over IPC) and
+      https for the album art URLs providers hand back.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'none'"
+    />
+    <title>Vybecord</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <!-- Ambient glow, tinted from the current album art -->
+    <div id="ambient" aria-hidden="true"><span class="orb orb-a"></span><span class="orb orb-b"></span></div>
+
+    <!-- ── Custom title bar (the window is frameless) ── -->
+    <header id="titlebar">
+      <div class="tb-drag">
+        <span class="tb-mark"></span>
+        <span class="tb-title">Vybecord</span>
+        <span id="tbStatus" class="tb-status"></span>
+      </div>
+      <div class="tb-buttons">
+        <button id="btnMin" class="tb-btn" title="Minimise" aria-label="Minimise">
+          <svg viewBox="0 0 12 12"><path d="M2 6h8" /></svg>
+        </button>
+        <button id="btnMax" class="tb-btn" title="Maximise" aria-label="Maximise">
+          <svg viewBox="0 0 12 12"><rect x="2.5" y="2.5" width="7" height="7" rx="1" /></svg>
+        </button>
+        <button id="btnClose" class="tb-btn tb-close" title="Close" aria-label="Close">
+          <svg viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" /></svg>
+        </button>
+      </div>
+    </header>
+
+    <div id="shell">
+      <!-- ── Sidebar ── -->
+      <nav id="sidebar" aria-label="Sections">
+        <button class="nav-item" data-page="now" title="Now playing">
+          <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" /></svg>
+          <span>Now playing</span>
+        </button>
+        <button class="nav-item" data-page="players" title="Players">
+          <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="14" rx="2" /><path d="M8 21h8M12 18v3" /></svg>
+          <span>Players</span>
+        </button>
+        <!-- TEMPORARILY HIDDEN — Stats and History are parked while the rest of
+             the app is finished. The pages, the IPC and the recording all still
+             exist and still run; only the way in is gone. Restore by
+             uncommenting this block, the two <section>s below, and the matching
+             block in ui/src/main.js.
+        <button class="nav-item" data-page="stats" title="Stats">
+          <svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></svg>
+          <span>Stats</span>
+        </button>
+        <button class="nav-item" data-page="history" title="History">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
+          <span>History</span>
+        </button>
+        -->
+        <button class="nav-item" data-page="library" title="Lyrics library">
+          <svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 012-2h13v18H6a2 2 0 01-2-2z" /><path d="M9 7h7M9 11h7" /></svg>
+          <span>Lyrics</span>
+        </button>
+        <button class="nav-item" data-page="settings" title="Settings">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.6 1.6 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.6 1.6 0 00-1.8-.3 1.6 1.6 0 00-1 1.5V21a2 2 0 11-4 0v-.1A1.6 1.6 0 008 19.4a1.6 1.6 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.6 1.6 0 00.3-1.8 1.6 1.6 0 00-1.5-1H2a2 2 0 110-4h.1A1.6 1.6 0 003.6 8a1.6 1.6 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.6 1.6 0 001.8.3H8a1.6 1.6 0 001-1.5V2a2 2 0 114 0v.1a1.6 1.6 0 001 1.5 1.6 1.6 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.6 1.6 0 00-.3 1.8V8a1.6 1.6 0 001.5 1H22a2 2 0 110 4h-.1a1.6 1.6 0 00-1.5 1z" /></svg>
+          <span>Settings</span>
+        </button>
+        <button class="nav-item" data-page="account" title="Last.fm">
+          <svg viewBox="0 0 24 24"><path d="M12 3v18M5 8v8M19 8v8" /></svg>
+          <span>Last.fm</span>
+        </button>
+        <div class="nav-spacer"></div>
+        <button class="nav-item" data-page="report" title="Report a bug">
+          <svg viewBox="0 0 24 24"><path d="M8 6a4 4 0 018 0M6 10h12v5a6 6 0 01-12 0zM3 12h3M18 12h3M4 7l2 2M20 7l-2 2M5 18l2-1M19 18l-2-1" /></svg>
+          <span>Report</span>
+        </button>
+        <button class="nav-item nav-quit" id="btnQuit" title="Quit">
+          <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" /></svg>
+          <span>Quit</span>
+        </button>
+      </nav>
+
+      <!-- ── Pages ── -->
+      <main id="content">
+        <section class="page" data-page="now"></section>
+        <section class="page" data-page="players"></section>
+        <!-- TEMPORARILY HIDDEN — see the sidebar block above.
+        <section class="page" data-page="stats"></section>
+        <section class="page" data-page="history"></section>
+        -->
+        <section class="page" data-page="library"></section>
+        <section class="page" data-page="settings"></section>
+        <section class="page" data-page="account"></section>
+        <section class="page" data-page="report"></section>
+      </main>
+    </div>
+
+    <div id="toasts" aria-live="polite"></div>
+    <script src="app.js"></script>
+  </body>
+</html>

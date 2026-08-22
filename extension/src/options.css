@@ -1,0 +1,171 @@
+/* Options page. Mirrors the desktop window's palette so the two feel related. */
+
+:root {
+  --accent: #10b981;
+  --bg: #0e0e14;
+  --surface: #14141c;
+  --hover: #1a1a24;
+  --border: rgba(255, 255, 255, 0.08);
+  --text: #fafafa;
+  --text-dim: #a1a1aa;
+  --text-faint: #71717a;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-width: 420px;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 22px 24px 28px;
+  background: var(--bg);
+  color: var(--text-dim);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.mark {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--accent);
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.7);
+}
+h1 {
+  font-size: 16px;
+  font-weight: 650;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+.status {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-faint);
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 99px;
+}
+.status.ok {
+  color: var(--accent);
+  border-color: rgba(16, 185, 129, 0.35);
+}
+.status.off {
+  color: var(--text-faint);
+}
+
+.intro {
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-faint);
+  margin-bottom: 18px;
+}
+
+.sites {
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.sites li + li {
+  border-top: 1px solid var(--border);
+}
+
+.site {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 13px 16px;
+  cursor: pointer;
+  transition: background 0.14s;
+}
+.site:hover {
+  background: var(--hover);
+}
+.site-text {
+  flex: 1;
+  min-width: 0;
+}
+.site-name {
+  font-size: 13.5px;
+  font-weight: 550;
+  color: var(--text);
+}
+.site-detail {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  margin-top: 2px;
+  line-height: 1.45;
+}
+
+/* Switch */
+.switch {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  flex-shrink: 0;
+}
+.switch input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
+  cursor: pointer;
+}
+.switch .track {
+  position: absolute;
+  inset: 0;
+  border-radius: 99px;
+  background: var(--hover);
+  border: 1px solid var(--border);
+  transition: background 0.18s, border-color 0.18s;
+  pointer-events: none;
+}
+.switch .thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), background 0.18s;
+  pointer-events: none;
+}
+.switch input:checked ~ .track {
+  background: rgba(16, 185, 129, 0.25);
+  border-color: rgba(16, 185, 129, 0.4);
+}
+.switch input:checked ~ .thumb {
+  transform: translateX(18px);
+  background: var(--accent);
+}
+.switch input:focus-visible ~ .track {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+footer {
+  margin-top: 16px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--text-faint);
+}
+code {
+  font-family: 'Cascadia Mono', ui-monospace, monospace;
+  font-size: 11px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--hover);
+}

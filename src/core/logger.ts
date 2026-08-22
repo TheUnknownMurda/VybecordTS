@@ -213,8 +213,23 @@ export function writeSection(title: string, width = 70): void {
 let globalLevel: LogLevel = 'info';
 let logFileStream: fs.WriteStream | null = null;
 
+/**
+ * Where log lines go instead of this thread's console and log file.
+ *
+ * A worker thread has neither: its stdout is forwarded to the parent's console
+ * but never reaches the log file, so anything it reports is missing from the one
+ * place anyone looks afterwards. Installing a sink lets it hand its lines to the
+ * main thread, which logs them normally. Null on the main thread itself.
+ */
+let logSink: ((level: LogLevel, name: string, msg: string) => void) | null = null;
+
 export function setLogLevel(level: LogLevel): void {
   globalLevel = level;
+}
+
+/** Redirect this thread's log output — see logSink. Pass null to restore normal output. */
+export function setLogSink(sink: ((level: LogLevel, name: string, msg: string) => void) | null): void {
+  logSink = sink;
 }
 
 const MAX_LOG_SIZE = 5 * 1024 * 1024; // 5 MB — rotate when exceeded
@@ -326,6 +341,13 @@ export function createLogger(name: string) {
 
   const emit = (level: LogLevel, msg: string) => {
     if (LEVEL_PRIORITY[level] < LEVEL_PRIORITY[globalLevel]) return;
+
+    if (logSink) {
+      // The sink owns formatting and destination; a thread with one has no
+      // console or log file of its own worth writing to.
+      logSink(level, name, msg);
+      return;
+    }
 
     const ts = formatTime();
     const marked = highlightMarks(msg);

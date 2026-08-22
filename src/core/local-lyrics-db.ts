@@ -1,22 +1,32 @@
 /**
- * Local LRCLib SQLite database for instant lyrics lookup (~1ms vs ~300ms network).
- * Uses the official LRCLib database dump from https://lrclib.net/db-dumps
+ * The app's two lyrics databases, behind one entry point.
  *
- * Schema (from lrclib.net dump):
+ * They are very different things:
+ *
+ *   - The LRCLIB dump is read-only, optional, and routinely 100 GB+. It lives on
+ *     a worker thread (electron/lrclib-worker.ts) because better-sqlite3 is
+ *     synchronous: a query here would stop the window, the tray and the Discord
+ *     presence for as long as it ran, and the search box issues one per
+ *     keystroke. Everything dump-related on this side is therefore async.
+ *   - The custom store holds lyrics the user imported. It is small, it is
+ *     written to, and its writes must be visible to the very next read, so it
+ *     stays in-process and synchronous.
+ *
+ * Schema (from lrclib.net dump, mirrored by the custom store):
  *   tracks(id, name, name_lower, artist_name, artist_name_lower, album_name, duration, last_lyrics_id, ...)
  *   lyrics(id, synced_lyrics, has_synced_lyrics, plain_lyrics, track_id, ...)
  *   tracks_fts — FTS5 virtual table on (name_lower, album_name_lower, artist_name_lower)
  *
  * Setup:
  *   1. Download the latest .sqlite3 dump from https://lrclib.net/db-dumps
- *   2. Place it in "LRCLIB Dump/db.sqlite3" folder
+ *   2. Put it in the "LRCLIB Dump" folder, or point lrclib_dump_path at it
  *   3. The module auto-detects and opens it on startup
- *   4. Custom lyrics are stored in a separate database for persistence
  */
 
 import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
+import { Worker } from 'node:worker_threads';
 
 // ── Native binding resolution for pkg-packaged exe ──
 // When packaged with pkg, better-sqlite3's `bindings` module cannot locate
@@ -30,21 +40,60 @@ if (IS_PKG) {
     nativeBinding = candidate;
   }
 }
-import { createLogger } from './logger.js';
+import { createLogger, type LogLevel } from './logger.js';
 import { parseLrc } from './lrc-parser.js';
-import { similarity } from './similarity.js';
+import type { LrclibSearchResult, LrclibTrackLyrics } from './lrclib-dump.js';
 import type { LyricLine } from './types.js';
+
+export type { LrclibSearchResult, LrclibTrackLyrics };
 
 const log = createLogger('LocalDB');
 
 const DB_FILENAMES = ['lrclib.db', 'lrclib.sqlite3', 'lrclib-db-dump.sqlite3'];
 const LRCLIB_DUMP_FOLDER = 'LRCLIB Dump';
-const LRCLIB_DUMP_FILE = 'db.sqlite3';
 
-// LRCLIB dump database (read-only, large database)
-let lrclibDb: Database.Database | null = null;
-let stmtExact: Database.Statement | null = null;
-let stmtFuzzy: Database.Statement | null = null;
+/*
+ * The two databases used to be a coin toss to tell apart: the dump could end up
+ * called `db.sqlite3`, which says nothing, and the custom store was
+ * `lrclib-custom.sqlite3`, near-identical to the `lrclib-*.sqlite3` names a
+ * downloaded dump arrives under. Someone renaming a 100 GB dump by hand into
+ * the wrong one of those is not a mistake worth leaving available, so the
+ * canonical names now state which is which, and the old ones are still read.
+ */
+
+/** The read-only LRCLIB dump, inside the drop folder. */
+const LRCLIB_DUMP_FILE = 'lrclib-dump.sqlite3';
+/** Names an existing install may have the dump under, tried in this order. */
+const LEGACY_DUMP_FILES = ['db.sqlite3'];
+
+/** The app's own store of user-imported lyrics — never a dump, however it sorts. */
+const CUSTOM_DB_FILE = 'custom-lyrics.sqlite3';
+/** Renamed to CUSTOM_DB_FILE on first run; see migrateCustomDbName(). */
+const LEGACY_CUSTOM_DB_FILE = 'lrclib-custom.sqlite3';
+
+/**
+ * How long a dump request may go unanswered before the caller is told it failed.
+ *
+ * Generous on purpose: it is a backstop against a query that will never come
+ * back, not a performance budget. Nothing is cancelled when it fires — the
+ * worker is wedged in a synchronous native call and cannot be interrupted — but
+ * the caller stops waiting, and the window says so instead of spinning forever.
+ */
+const DUMP_REQUEST_TIMEOUT_MS = 60_000;
+
+// ── LRCLIB dump (read-only, on its own thread) ──
+let dumpWorker: Worker | null = null;
+/** Which file the dump was opened from; '' when none was found. */
+let lrclibDbPath = '';
+let dumpOpen = false;
+/** Set while we are the ones stopping the worker, so its exit is not reported as a fault. */
+let dumpClosing = false;
+let nextRequestId = 0;
+const pendingRequests = new Map<number, {
+  resolve: (v: unknown) => void;
+  reject: (e: Error) => void;
+  timer: ReturnType<typeof setTimeout>;
+}>();
 
 // Custom lyrics database (read-write, user-imported lyrics)
 let customDb: Database.Database | null = null;
@@ -56,70 +105,210 @@ let stmtInsertFts: Database.Statement | null = null;
 let stmtBacklinkLyrics: Database.Statement | null = null;
 let stmtFindTrackByUnique: Database.Statement | null = null;
 
-/**
- * Initialize the local lyrics database.
- * Loads two databases:
- * 1. LRCLIB dump — either from a configured absolute path (dumpPathOverride,
- *    for a dump kept outside the app folder, e.g. because it's too large to
- *    bundle), or auto-detected under "LRCLIB Dump/db.sqlite3" (read-only,
- *    large database)
- * 2. Custom lyrics database from config directory (read-write, user-imported lyrics)
- * Returns true if at least one database was successfully opened.
- */
-export async function initLocalDb(baseDir: string, dumpPathOverride?: string): Promise<boolean> {
-  let lrclibLoaded = false;
-  let customLoaded = false;
+// ── Worker plumbing ──────────────────────────────────────────────────────────
 
-  // A configured absolute path takes priority over auto-detection — falls
-  // through to the normal search if it's unset, or points to a file that
-  // no longer exists (moved drive, typo, etc.) rather than failing outright.
-  if (dumpPathOverride && dumpPathOverride.trim()) {
-    if (fs.existsSync(dumpPathOverride)) {
-      log.debug(`initLocalDb: Using configured LRCLIB dump path: ${dumpPathOverride}`);
-      lrclibLoaded = openLrclibDb(dumpPathOverride);
-    } else {
-      log.warn(`Configured LRCLIB dump path not found: ${dumpPathOverride} — falling back to auto-detection`);
-    }
+/** Mirrors DumpWorkerOut in electron/lrclib-worker.ts. */
+type DumpWorkerOut =
+  | { t: 'ok'; id: number; value: unknown }
+  | { t: 'err'; id: number; message: string }
+  | { t: 'log'; level: LogLevel; name: string; message: string };
+
+/**
+ * Start the dump worker, or return the running one.
+ *
+ * Returns null when the thread cannot be started at all. That is not fatal: the
+ * dump is optional, so the app carries on with the custom store and the online
+ * providers, having said plainly in the log why offline lookup is unavailable.
+ */
+function ensureDumpWorker(workerPath: string): Worker | null {
+  if (dumpWorker) return dumpWorker;
+  let worker: Worker;
+  try {
+    worker = new Worker(workerPath);
+  } catch (e) {
+    log.warn(`Could not start the LRCLIB dump worker (${workerPath}): ${e}`);
+    return null;
   }
 
-  if (!lrclibLoaded) {
-    // Try to load LRCLIB dump from specific folder
-    const lrclibDumpPath = path.join(baseDir, LRCLIB_DUMP_FOLDER, LRCLIB_DUMP_FILE);
-    log.debug(`initLocalDb: Checking for LRCLIB dump at ${lrclibDumpPath}...`);
+  worker.on('message', (msg: DumpWorkerOut) => {
+    if (msg.t === 'log') {
+      // The worker has no log file of its own — re-emit its lines here so they
+      // land beside everything else.
+      createLogger(msg.name)[msg.level](msg.message);
+      return;
+    }
+    const pending = pendingRequests.get(msg.id);
+    if (!pending) return;  // already timed out
+    pendingRequests.delete(msg.id);
+    clearTimeout(pending.timer);
+    if (msg.t === 'ok') pending.resolve(msg.value);
+    else pending.reject(new Error(msg.message));
+  });
 
-    if (fs.existsSync(lrclibDumpPath)) {
-      log.debug(`initLocalDb: Found LRCLIB dump: ${lrclibDumpPath}`);
-      lrclibLoaded = openLrclibDb(lrclibDumpPath);
-    } else {
-      log.debug(`initLocalDb: LRCLIB dump not found at ${lrclibDumpPath}`);
-      // Fallback: check for lrclib files in root directory (backward compatibility)
-      for (const name of DB_FILENAMES) {
-        const dbPath = path.join(baseDir, name);
-        if (fs.existsSync(dbPath)) {
-          log.debug(`initLocalDb: Found legacy LRCLIB file: ${dbPath}`);
-          lrclibLoaded = openLrclibDb(dbPath);
+  worker.on('error', (e) => {
+    log.error(`LRCLIB dump worker crashed: ${e.message}`);
+    dumpWorker = null;
+    dumpOpen = false;
+    failAllPending(`dump worker crashed: ${e.message}`);
+  });
+
+  worker.on('exit', (code) => {
+    // terminate() reports a non-zero code by design; only an exit we did not
+    // ask for says something went wrong.
+    if (code !== 0 && !dumpClosing) log.warn(`LRCLIB dump worker exited with code ${code}`);
+    dumpWorker = null;
+    dumpOpen = false;
+    failAllPending('dump worker stopped');
+  });
+
+  dumpWorker = worker;
+  return worker;
+}
+
+/** Reject every in-flight request — the thread that owed them answers is gone. */
+function failAllPending(reason: string): void {
+  for (const [, pending] of pendingRequests) {
+    clearTimeout(pending.timer);
+    pending.reject(new Error(reason));
+  }
+  pendingRequests.clear();
+}
+
+/** One request, one reply, matched by id. Rejects rather than hanging forever. */
+function askWorker<T>(msg: Record<string, unknown>): Promise<T> {
+  const worker = dumpWorker;
+  if (!worker) return Promise.reject(new Error('no LRCLIB dump loaded'));
+  const id = ++nextRequestId;
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      pendingRequests.delete(id);
+      reject(new Error(`LRCLIB dump did not answer within ${DUMP_REQUEST_TIMEOUT_MS / 1000}s`));
+    }, DUMP_REQUEST_TIMEOUT_MS);
+    timer.unref?.();
+    pendingRequests.set(id, { resolve: resolve as (v: unknown) => void, reject, timer });
+    worker.postMessage({ ...msg, id });
+  });
+}
+
+/**
+ * Ask the dump for something, and treat any failure as "no result".
+ *
+ * Every caller has a working answer for "not found" — the online providers, or
+ * an empty result list — so a worker that is missing, busy or broken should look
+ * the same as a dump with no match rather than propagate an error the UI has no
+ * better response to.
+ */
+async function askDump<T>(msg: Record<string, unknown>, fallback: T): Promise<T> {
+  if (!dumpOpen || !dumpWorker) return fallback;
+  try {
+    return await askWorker<T>(msg);
+  } catch (e) {
+    log.debug(`Dump request "${msg.t}" failed: ${e}`);
+    return fallback;
+  }
+}
+
+// ── Dump discovery ───────────────────────────────────────────────────────────
+
+/**
+ * Every place a dump might be, best first.
+ *
+ * Only paths that exist are returned, so the caller can try them in turn — a
+ * file that is present but unopenable (truncated download, wrong format) falls
+ * through to the next candidate instead of ending the search.
+ */
+function dumpCandidates(baseDir: string, dumpPathOverride?: string): string[] {
+  const found: string[] = [];
+  const add = (p: string | null) => {
+    if (p && fs.existsSync(p) && !found.includes(p)) found.push(p);
+  };
+
+  // A configured absolute path wins — that is the whole point of setting it.
+  if (dumpPathOverride && dumpPathOverride.trim()) {
+    if (fs.existsSync(dumpPathOverride)) add(dumpPathOverride);
+    else log.warn(`Configured LRCLIB dump path not found: ${dumpPathOverride} — falling back to auto-detection`);
+  }
+
+  // The documented spot, then anything else in that folder: the folder is the
+  // instruction, so a dump left with the name it was downloaded under, or
+  // renamed, is still plainly the one that was put there to be used. Renaming a
+  // 100 GB file is not something to make someone do twice.
+  const dumpFolder = path.join(baseDir, LRCLIB_DUMP_FOLDER);
+  add(path.join(dumpFolder, LRCLIB_DUMP_FILE));
+  for (const legacy of LEGACY_DUMP_FILES) add(path.join(dumpFolder, legacy));
+  add(findDumpInFolder(dumpFolder));
+
+  // Legacy layouts: loose files in the config directory.
+  for (const name of DB_FILENAMES) add(path.join(baseDir, name));
+  try {
+    // Any lrclib*.sqlite3 — except our own custom-lyrics store, under either
+    // name, which the pattern would otherwise match. Opening that as the dump
+    // makes the app report a dump is loaded while every search comes back empty.
+    const ours = new Set([CUSTOM_DB_FILE, LEGACY_CUSTOM_DB_FILE]);
+    const stray = fs.readdirSync(baseDir).find(f =>
+      /^lrclib.*\.sqlite3$/i.test(f)
+      && !f.endsWith('.gz')
+      && !ours.has(f.toLowerCase()));
+    if (stray) add(path.join(baseDir, stray));
+  } catch (e) {
+    log.debug(`dumpCandidates: could not scan ${baseDir}: ${e}`);
+  }
+
+  return found;
+}
+
+/**
+ * Open both databases.
+ *
+ * The dump is handed to a worker thread; candidates are tried in order until
+ * one opens, so a stale path or a half-downloaded file falls through to the
+ * next rather than leaving the feature off. The custom store is opened here, in
+ * process, and is created empty if it does not exist yet.
+ *
+ * Returns true if at least one database is usable.
+ *
+ * @param workerPath  absolute path to the built lrclib-worker.cjs. Without it
+ *   the dump is skipped entirely — this module cannot derive the path, since
+ *   the worker is bundled by the Electron build, not by its own module layout.
+ */
+export async function initLocalDb(
+  baseDir: string,
+  dumpPathOverride?: string,
+  workerPath?: string,
+): Promise<boolean> {
+  let lrclibLoaded = false;
+
+  const candidates = dumpCandidates(baseDir, dumpPathOverride);
+  if (candidates.length === 0) {
+    log.debug(`initLocalDb: no LRCLIB dump found under ${baseDir}`);
+  } else if (!workerPath) {
+    log.warn('LRCLIB dump found but no worker path was supplied — offline lookup is off');
+  } else if (ensureDumpWorker(workerPath)) {
+    for (const candidate of candidates) {
+      try {
+        const res = await askWorker<{ ok: boolean; tracks: number; error?: string }>({
+          t: 'open', path: candidate, nativeBinding,
+        });
+        if (res.ok) {
+          if (candidate !== path.join(baseDir, LRCLIB_DUMP_FOLDER, LRCLIB_DUMP_FILE)) {
+            log.info(`Using ${path.basename(candidate)} as the LRCLIB dump`);
+          }
+          lrclibDbPath = candidate;
+          dumpOpen = true;
+          lrclibLoaded = true;
           break;
         }
-      }
-
-      if (!lrclibLoaded) {
-        // Check for any lrclib*.sqlite3 file
-        try {
-          const files = fs.readdirSync(baseDir);
-          const sqliteFile = files.find(f => /^lrclib.*\.sqlite3$/i.test(f) && !f.endsWith('.gz'));
-          if (sqliteFile) {
-            log.debug(`initLocalDb: Found lrclib*.sqlite3 file: ${sqliteFile}`);
-            lrclibLoaded = openLrclibDb(path.join(baseDir, sqliteFile));
-          }
-        } catch (e) {
-          log.debug(`initLocalDb: Error scanning for sqlite files: ${e}`);
-        }
+        log.warn(`Not a usable LRCLIB dump, trying the next candidate: ${candidate} (${res.error})`);
+      } catch (e) {
+        log.warn(`Could not open ${candidate}: ${e}`);
       }
     }
   }
 
   // Always create/load custom lyrics database
-  const customDbPath = path.join(baseDir, 'lrclib-custom.sqlite3');
+  migrateCustomDbName(baseDir);
+  const customDbPath = path.join(baseDir, CUSTOM_DB_FILE);
+  let customLoaded: boolean;
   if (fs.existsSync(customDbPath)) {
     log.debug(`initLocalDb: Found existing custom DB: ${customDbPath}`);
     customLoaded = openCustomDb(customDbPath);
@@ -128,10 +317,77 @@ export async function initLocalDb(baseDir: string, dumpPathOverride?: string): P
     customLoaded = createEmptyCustomDb(customDbPath);
   }
 
-  const totalLoaded = (lrclibLoaded ? 1 : 0) + (customLoaded ? 1 : 0);
   log.info(`Database initialization complete: LRCLIB dump (${lrclibLoaded ? 'loaded' : 'not found'}), Custom DB (${customLoaded ? 'loaded' : 'failed'})`);
-  
-  return totalLoaded > 0;
+
+  return lrclibLoaded || customLoaded;
+}
+
+/**
+ * Move an existing custom-lyrics store onto its clearer name.
+ *
+ * Renaming rather than reading both: two accepted names is two things to keep
+ * straight forever, and the lyrics people imported are the one thing here that
+ * cannot be re-downloaded, so they should live under a name that says what they
+ * are. Runs once — after the rename the legacy name is gone.
+ *
+ * The -wal and -shm sidecars are removed rather than renamed: a clean shutdown
+ * checkpoints the WAL into the database, and SQLite rebuilds both on next open.
+ * A non-empty WAL is carried across instead, since it holds writes the database
+ * file does not have yet.
+ */
+function migrateCustomDbName(baseDir: string): void {
+  const legacy = path.join(baseDir, LEGACY_CUSTOM_DB_FILE);
+  const target = path.join(baseDir, CUSTOM_DB_FILE);
+  if (fs.existsSync(target) || !fs.existsSync(legacy)) return;
+
+  try {
+    fs.renameSync(legacy, target);
+    for (const suffix of ['-wal', '-shm']) {
+      const from = legacy + suffix;
+      if (!fs.existsSync(from)) continue;
+      try {
+        if (suffix === '-wal' && fs.statSync(from).size > 0) fs.renameSync(from, target + suffix);
+        else fs.rmSync(from, { force: true });
+      } catch (e) {
+        log.debug(`migrateCustomDbName: could not deal with ${from}: ${e}`);
+      }
+    }
+    log.info(`Renamed ${LEGACY_CUSTOM_DB_FILE} to ${CUSTOM_DB_FILE}`);
+  } catch (e) {
+    // Not fatal: the store stays where it is and opens under the old name on
+    // the next line, because that path is what createEmptyCustomDb would
+    // otherwise recreate empty. Better a stale name than lost imports.
+    log.warn(`Could not rename ${LEGACY_CUSTOM_DB_FILE}: ${e}`);
+  }
+}
+
+/**
+ * The largest SQLite file in the drop folder, or null if there is none.
+ *
+ * Largest wins because a dump dwarfs anything else that could plausibly end up
+ * beside it, and because SQLite's own sidecars (-wal, -shm) do not end in a
+ * database extension and never match in the first place. A .gz is the download
+ * before it was unpacked, not a database, so it is skipped too.
+ */
+function findDumpInFolder(folder: string): string | null {
+  try {
+    const candidates = fs.readdirSync(folder)
+      .filter(f => /\.(sqlite3?|db)$/i.test(f))
+      .map((f) => {
+        const full = path.join(folder, f);
+        try {
+          const st = fs.statSync(full);
+          return st.isFile() ? { full, size: st.size } : null;
+        } catch {
+          return null;
+        }
+      })
+      .filter((c): c is { full: string; size: number } => c !== null)
+      .sort((a, b) => b.size - a.size);
+    return candidates[0]?.full ?? null;
+  } catch {
+    return null;  // no folder yet, or unreadable
+  }
 }
 
 /** Create a minimal empty database for custom lyrics with the LRCLib-compatible schema. */
@@ -177,64 +433,16 @@ function createEmptyCustomDb(dbPath: string): boolean {
   }
 }
 
-/** Open and prepare the LRCLIB dump database (read-only). */
-function openLrclibDb(dbPath: string): boolean {
-  log.debug(`openLrclibDb: Opening LRCLIB dump at ${dbPath}...`);
-  try {
-    lrclibDb = new Database(dbPath, { readonly: true, fileMustExist: true, nativeBinding });
-    log.debug('openLrclibDb: LRCLIB dump opened, setting pragmas...');
-    
-    // Set pragmas for read-only performance
-    lrclibDb.pragma('cache_size = -64000'); // 64MB page cache for fast reads
-
-    // Prepare reusable statements for LRCLIB dump queries
-    stmtExact = lrclibDb.prepare(`
-      SELECT l.synced_lyrics, t.duration
-      FROM tracks t
-      JOIN lyrics l ON l.id = t.last_lyrics_id
-      WHERE t.name_lower = lower(?)
-        AND t.artist_name_lower = lower(?)
-        AND l.has_synced_lyrics = 1
-        AND l.synced_lyrics IS NOT NULL
-        AND length(l.synced_lyrics) > 20
-      ORDER BY
-        CASE WHEN t.duration IS NOT NULL THEN 0 ELSE 1 END,
-        t.id DESC
-      LIMIT 5
-    `);
-
-    stmtFuzzy = lrclibDb.prepare(`
-      SELECT t.name AS track_name, t.artist_name, t.album_name, t.duration, l.synced_lyrics
-      FROM tracks_fts fts
-      JOIN tracks t ON t.id = fts.rowid
-      JOIN lyrics l ON l.id = t.last_lyrics_id
-      WHERE tracks_fts MATCH ?
-        AND l.has_synced_lyrics = 1
-        AND l.synced_lyrics IS NOT NULL
-        AND length(l.synced_lyrics) > 20
-      LIMIT 20
-    `);
-
-    const count = (lrclibDb.prepare('SELECT COUNT(*) as c FROM tracks').get() as { c: number })?.c ?? 0;
-    log.info(`Opened LRCLIB dump: ${dbPath} (${(count / 1_000_000).toFixed(1)}M tracks)`);
-    return true;
-  } catch (e) {
-    log.warn(`Failed to open LRCLIB dump ${dbPath}: ${e}`);
-    lrclibDb = null;
-    return false;
-  }
-}
-
 /** Open and prepare the custom lyrics database (read-write). */
 function openCustomDb(dbPath: string): boolean {
   log.debug(`openCustomDb: Opening custom DB at ${dbPath}...`);
   try {
     customDb = new Database(dbPath, { readonly: false, fileMustExist: true, nativeBinding });
     log.debug('openCustomDb: Custom DB opened, setting pragmas...');
-    
+
     // Disable foreign key constraints to allow deletion of custom lyrics
     customDb.pragma('foreign_keys = OFF');
-    
+
     // Set pragmas with timeout to prevent hanging on large databases
     try {
       customDb.pragma('journal_mode = WAL', { simple: true });  // Allow concurrent reads + writes (custom lyrics import)
@@ -302,113 +510,57 @@ function openCustomDb(dbPath: string): boolean {
 
 /** Check if local DB is available (either LRCLIB dump or custom DB). */
 export function hasLocalDb(): boolean {
-  return lrclibDb !== null || customDb !== null;
+  return dumpOpen || customDb !== null;
 }
-
-export interface LrclibSearchResult {
-  id: number;
-  track: string;
-  artist: string;
-  album: string;
-  duration: number | null;
-  hasSynced: boolean;
-  hasPlain: boolean;
-}
-
-const MAX_LRCLIB_SEARCH_RESULTS = 50;
 
 /**
- * Build an order-independent, prefix-friendly FTS5 MATCH query from free
- * text: each word becomes its own quoted term (so punctuation like "don't"
- * or "AC/DC" can't break the query), all ANDed together, with the last
- * term prefix-matched so results appear while the user is still typing.
- * Returns null for an empty/whitespace-only query.
+ * Where the dump was loaded from, and where one would be picked up automatically.
+ *
+ * The window needs both: with no dump every search comes back empty, which is
+ * indistinguishable from "no match" unless it can say the dump is missing and
+ * point at the folder to drop one into.
  */
-function buildFtsQuery(userQuery: string): string | null {
-  const words = userQuery.trim().split(/\s+/).filter(Boolean).map(w => w.replace(/"/g, ''));
-  if (words.length === 0) return null;
-  return words.map((w, i) => `"${w}"${i === words.length - 1 ? '*' : ''}`).join(' ');
+export function lrclibDumpStatus(baseDir: string): { loaded: boolean; path: string; folder: string } {
+  return {
+    loaded: dumpOpen,
+    path: lrclibDbPath,
+    folder: path.join(baseDir, LRCLIB_DUMP_FOLDER),
+  };
 }
 
 /** Free-text search across the LRCLIB dump (track/artist/album) for the dashboard's search UI. */
-export function searchLrclibDump(query: string, limit = 30): LrclibSearchResult[] {
-  if (!lrclibDb) return [];
-  const ftsQuery = buildFtsQuery(query);
-  if (!ftsQuery) return [];
-  const capped = Math.min(Math.max(1, limit), MAX_LRCLIB_SEARCH_RESULTS);
-  try {
-    const rows = lrclibDb.prepare(`
-      SELECT t.id AS id, t.name AS track, t.artist_name AS artist, t.album_name AS album,
-             t.duration AS duration, l.has_synced_lyrics AS hasSynced, l.has_plain_lyrics AS hasPlain
-      FROM tracks_fts fts
-      JOIN tracks t ON t.id = fts.rowid
-      JOIN lyrics l ON l.id = t.last_lyrics_id
-      WHERE tracks_fts MATCH ?
-        AND (l.has_synced_lyrics = 1 OR l.has_plain_lyrics = 1)
-      ORDER BY l.has_synced_lyrics DESC, t.id DESC
-      LIMIT ?
-    `).all(ftsQuery, capped) as {
-      id: number; track: string; artist: string; album: string;
-      duration: number | null; hasSynced: number; hasPlain: number;
-    }[];
-    return rows.map(r => ({
-      id: r.id, track: r.track, artist: r.artist, album: r.album, duration: r.duration,
-      hasSynced: !!r.hasSynced, hasPlain: !!r.hasPlain,
-    }));
-  } catch (e) {
-    log.debug(`searchLrclibDump: query failed for "${query}": ${e}`);
-    return [];
-  }
+export function searchLrclibDump(query: string, limit = 30): Promise<LrclibSearchResult[]> {
+  return askDump<LrclibSearchResult[]>({ t: 'search', query, limit }, []);
 }
 
-/** Fetch the full lyrics content for one LRCLIB track (to preview or load into the import form). */
-export function getLrclibTrackLyrics(trackId: number): {
-  track: string; artist: string; album: string; duration: number | null;
-  syncedLyrics: string | null; plainLyrics: string | null;
-} | null {
-  if (!lrclibDb) return null;
-  try {
-    const row = lrclibDb.prepare(`
-      SELECT t.name AS track, t.artist_name AS artist, t.album_name AS album, t.duration AS duration,
-             l.synced_lyrics AS syncedLyrics, l.plain_lyrics AS plainLyrics
-      FROM tracks t
-      JOIN lyrics l ON l.id = t.last_lyrics_id
-      WHERE t.id = ?
-    `).get(trackId) as {
-      track: string; artist: string; album: string; duration: number | null;
-      syncedLyrics: string | null; plainLyrics: string | null;
-    } | undefined;
-    return row ?? null;
-  } catch (e) {
-    log.debug(`getLrclibTrackLyrics: query failed for id=${trackId}: ${e}`);
-    return null;
-  }
+/** Fetch full lyrics for one LRCLIB search result, to preview or import it. */
+export function getLrclibTrackLyrics(trackId: number): Promise<LrclibTrackLyrics | null> {
+  return askDump<LrclibTrackLyrics | null>({ t: 'track', trackId }, null);
 }
 
-interface LocalRow {
+/** A row of the custom store's exact-match lookup. */
+interface CustomRow {
   synced_lyrics: string;
   duration: number | null;
-  track_name?: string;
-  artist_name?: string;
-  album_name?: string;
 }
 
 /**
- * Search the local LRCLib database for synced lyrics.
- * Phase 0: Custom-imported lyrics (highest priority)
- * Phase 1: Exact match on track_name + artist_name from LRCLIB dump
- * Phase 2: LIKE fuzzy on track name if exact fails
- * Returns parsed LyricLine[] or null.
+ * Find synced lyrics for the track that is playing.
+ *
+ * Phase 0 is the custom store, in process: lyrics the user imported themselves
+ * outrank anything the dump has to say, and the store is small enough that
+ * querying it costs nothing.
+ * Phases 1 and 2 are the dump, on its worker thread — an exact name+artist
+ * match, then an FTS fallback on the title filtered by artist similarity.
  */
-export function searchLocalDb(
+export async function searchLocalDb(
   trackName: string,
   artistName: string,
   durationSec: number | undefined,
-): LyricLine[] | null {
+): Promise<LyricLine[] | null> {
   try {
-    // Phase 0: Custom-imported lyrics always take priority (no duration filtering)
     if (customDb && stmtCustomExact) {
-      const customRows = stmtCustomExact.all(trackName, artistName, artistName, artistName) as LocalRow[];
+      const customRows = stmtCustomExact.all(trackName, artistName, artistName, artistName) as CustomRow[];
       if (customRows.length > 0) {
         const lines = parseLrc(customRows[0].synced_lyrics);
         if (lines.length >= 2) {
@@ -417,87 +569,14 @@ export function searchLocalDb(
         }
       }
     }
-
-    // Phase 1: Exact match (artist + track) from LRCLIB dump
-    if (lrclibDb && stmtExact) {
-      const exactRows = stmtExact.all(trackName, artistName) as LocalRow[];
-      log.debug(`[LOCAL] Exact query returned ${exactRows.length} rows for "${trackName}" by "${artistName}"`);
-      const exactResult = pickBestRow(exactRows, durationSec);
-      if (exactResult) {
-        log.info(`[LOCAL] Exact match for "${trackName}" (${exactResult.length} lines)`);
-        return exactResult;
-      }
-    }
-
-    // Phase 2: FTS5 fuzzy on track name (handles slight name differences) from LRCLIB dump
-    if (lrclibDb && stmtFuzzy) {
-      // Escape double quotes in track name and wrap as FTS5 phrase
-      const ftsQuery = '"' + trackName.replace(/"/g, '""') + '"';
-      const fuzzyRows = stmtFuzzy.all(ftsQuery) as LocalRow[];
-      log.debug(`[LOCAL] FTS query returned ${fuzzyRows.length} rows for "${trackName}"`);
-      if (fuzzyRows.length > 0) {
-        // Filter by artist similarity using proper string similarity scoring
-        const MIN_ARTIST_SIM = 0.50;
-        const artistLow = artistName.toLowerCase();
-        const artistFiltered = fuzzyRows.filter(r => {
-          const candArtist = (r.artist_name ?? '').toLowerCase();
-          // Check full similarity + primary artist (before comma/&)
-          const primaryCand = candArtist.split(/[,]/)[0].trim();
-          const sim = Math.max(
-            similarity(artistLow, candArtist),
-            similarity(artistLow, primaryCand),
-          );
-          return sim >= MIN_ARTIST_SIM;
-        });
-
-        // Never fall back to unfiltered results — wrong artist = wrong lyrics
-        if (artistFiltered.length > 0) {
-          const fuzzyResult = pickBestRow(artistFiltered, durationSec);
-          if (fuzzyResult) {
-            log.info(`[LOCAL] Fuzzy match for "${trackName}" by "${artistName}" (${fuzzyResult.length} lines)`);
-            return fuzzyResult;
-          }
-        } else if (fuzzyRows.length > 0) {
-          log.debug(`[LOCAL] Fuzzy candidates found for "${trackName}" but no artist match (need ≥${MIN_ARTIST_SIM})`);
-        }
-      }
-    }
   } catch (e) {
-    log.warn(`[LOCAL] Query error: ${e}`);
+    log.warn(`[LOCAL] Custom store query error: ${e}`);
   }
 
-  return null;
-}
-
-/**
- * Pick the best row from a set of candidates based on duration proximity.
- * Returns parsed lyrics or null.
- */
-function pickBestRow(rows: LocalRow[], durationSec: number | undefined): LyricLine[] | null {
-  if (!rows.length) return null;
-
-  let best = rows[0];
-
-  if (durationSec != null) {
-    let bestDiff = Infinity;
-    for (const row of rows) {
-      if (row.duration != null) {
-        const diff = Math.abs(row.duration - durationSec);
-        if (diff < bestDiff) {
-          bestDiff = diff;
-          best = row;
-        }
-      }
-    }
-    // Reject if best match is >30s off and we have duration info
-    if (bestDiff !== Infinity && bestDiff > 30) {
-      log.debug(`[LOCAL] Rejected due to duration mismatch (${bestDiff.toFixed(1)}s)`);
-      return null;
-    }
-  }
-
-  const lines = parseLrc(best.synced_lyrics);
-  return lines.length >= 2 ? lines : null;
+  return askDump<LyricLine[] | null>(
+    { t: 'lookup', track: trackName, artist: artistName, duration: durationSec },
+    null,
+  );
 }
 
 /**
@@ -707,45 +786,45 @@ export function deleteCustomLyrics(trackId: number): boolean {
   if (!customDb) return false;
   try {
     log.info(`[LOCAL] Attempting to delete custom lyrics track #${trackId}`);
-    
+
     const row = customDb.prepare(`
-      SELECT t.last_lyrics_id, l.source 
+      SELECT t.last_lyrics_id, l.source
       FROM tracks t
       JOIN lyrics l ON l.id = t.last_lyrics_id
       WHERE t.id = ?
     `).get(trackId) as { last_lyrics_id: number; source: string } | undefined;
-    
+
     if (!row) {
       log.warn(`[LOCAL] Track #${trackId} not found`);
       return false;
     }
-    
+
     log.info(`[LOCAL] Found track #${trackId} with lyrics_id=${row.last_lyrics_id}, source=${row.source}`);
-    
+
     // Only delete custom lyrics, not LRCLib official lyrics
     if (row.source !== 'custom') {
       log.warn(`[LOCAL] Cannot delete non-custom lyrics track #${trackId} (source: ${row.source})`);
       return false;
     }
-    
+
     // Step-by-step deletion with logging
     log.info(`[LOCAL] Step 1: Clearing last_lyrics_id reference`);
     customDb.prepare('UPDATE tracks SET last_lyrics_id = NULL WHERE id = ?').run(trackId);
-    
+
     log.info(`[LOCAL] Step 2: Clearing track_id in lyrics`);
     customDb.prepare('UPDATE lyrics SET track_id = NULL WHERE id = ?').run(row.last_lyrics_id);
-    
+
     log.info(`[LOCAL] Step 3: Deleting FTS entry`);
-    try { customDb.prepare('DELETE FROM tracks_fts WHERE rowid = ?').run(trackId); } catch (e) { 
-      log.debug(`[LOCAL] FTS deletion failed (non-critical): ${e}`); 
+    try { customDb.prepare('DELETE FROM tracks_fts WHERE rowid = ?').run(trackId); } catch (e) {
+      log.debug(`[LOCAL] FTS deletion failed (non-critical): ${e}`);
     }
-    
+
     log.info(`[LOCAL] Step 4: Deleting lyrics`);
     customDb.prepare('DELETE FROM lyrics WHERE id = ?').run(row.last_lyrics_id);
-    
+
     log.info(`[LOCAL] Step 5: Deleting track`);
     customDb.prepare('DELETE FROM tracks WHERE id = ?').run(trackId);
-    
+
     log.info(`[LOCAL] Successfully deleted custom lyrics track #${trackId}`);
     return true;
   } catch (e) {
@@ -756,21 +835,31 @@ export function deleteCustomLyrics(trackId: number): boolean {
 
 /** Close the database connections. */
 export function closeLocalDb(): void {
-  if (lrclibDb) {
-    try { lrclibDb.close(); } catch { /* ignore */ }
-    lrclibDb = null;
-    log.info('LRCLIB dump database closed');
+  if (dumpWorker) {
+    // Ask first, then stop waiting: a query in flight is native code that
+    // terminate() cannot interrupt, and shutdown must not stall behind it. The
+    // dump is read-only, so an abandoned connection loses nothing.
+    dumpClosing = true;
+    try { dumpWorker.postMessage({ t: 'close' }); } catch { /* ignore */ }
+    void dumpWorker.terminate().catch(() => { /* already gone */ });
+    dumpWorker = null;
+    dumpOpen = false;
+    lrclibDbPath = '';
+    failAllPending('shutting down');
+    log.info('LRCLIB dump worker stopped');
   }
-  
+
   if (customDb) {
+    // Fold the -wal file back into the main DB before closing, so a copy or
+    // backup of custom-lyrics.sqlite3 taken after shutdown is never missing
+    // the latest writes still sitting in the WAL.
+    try { customDb.pragma('wal_checkpoint(TRUNCATE)'); } catch { /* ignore */ }
     try { customDb.close(); } catch { /* ignore */ }
     customDb = null;
     log.info('Custom lyrics database closed');
   }
-  
+
   // Clear all prepared statements
-  stmtExact = null;
-  stmtFuzzy = null;
   stmtCustomExact = null;
   stmtInsertLyrics = null;
   stmtInsertTrack = null;
@@ -778,6 +867,6 @@ export function closeLocalDb(): void {
   stmtInsertFts = null;
   stmtBacklinkLyrics = null;
   stmtFindTrackByUnique = null;
-  
+
   log.info('All local database connections closed');
 }

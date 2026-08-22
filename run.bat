@@ -1,1 +1,2 @@
-npm exec tsx src/index.ts
+@echo off
+npm run dev

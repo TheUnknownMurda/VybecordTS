@@ -7,6 +7,7 @@
 //   - Full metadata: Spotify ID, album art URL, all artists, Spotify URIs
 //   - Accurate progress_ms (no SMTC delay compensation)
 //   - Eliminates need for Deezer/iTunes/Last.fm metadata enrichment
+//   - Spotify's own timed lyrics, which only the client itself can read
 
 (async function vybecord() {
   // Guard against a double load — the native install (spicetify config extensions)
@@ -23,11 +24,19 @@
   }
 
   const ENDPOINT = 'http://127.0.0.1:8888/api/spicetify';
+  const LYRICS_ENDPOINT = 'http://127.0.0.1:8888/api/spotify-lyrics';
   const PROGRESS_INTERVAL_MS = 2000; // Sync progress every 2s (for drift correction)
+
+  // Spotify's own lyrics endpoint — the one the client's lyrics panel uses.
+  // Reachable only from inside the client, which is the whole reason this lives
+  // in a Spicetify extension: CosmosAsync signs the request with the client's
+  // own token, so there is no auth to obtain or refresh here.
+  const LYRICS_API = 'https://spclient.wg.spotify.com/color-lyrics/v2/track/';
 
   let progressTimer = null;
   let lastSentUri = '';
   let lastSentPlaying = null;
+  let lastLyricsTrackId = '';
 
   /** Extract full track data from Spicetify Player. */
   function getTrackData() {
@@ -177,6 +186,52 @@
     }).catch(() => { /* VybecordTS not running — ignore */ });
   }
 
+  /**
+   * Fetch Spotify's own timed lyrics for a track and forward them.
+   *
+   * Only LINE_SYNCED is sent: Vybecord schedules lines against the clock, and an
+   * unsynced blob has every line stamped at 0, which would show the whole song
+   * at once. A track with no lyrics answers 404 — that is the normal case for a
+   * good part of the catalogue, not an error worth reporting.
+   *
+   * Deliberately never awaited by the track push: lyrics are a bonus, and a slow
+   * or failed call must not delay the presence.
+   */
+  async function pushLyrics(trackId) {
+    if (!trackId || trackId === lastLyricsTrackId) return;
+    if (!Spicetify?.CosmosAsync?.get) return;  // older Spicetify
+    lastLyricsTrackId = trackId;
+
+    let body;
+    try {
+      body = await Spicetify.CosmosAsync.get(
+        `${LYRICS_API}${trackId}?format=json&vocalRemoval=false&market=from_token`,
+      );
+    } catch (e) {
+      // 404 = this track simply has no lyrics. Anything else is Spotify moving
+      // the endpoint, which is worth a line but not a retry loop.
+      const msg = String(e?.message || e);
+      if (!msg.includes('404')) console.log('[VybecordTS] Lyrics lookup failed:', msg);
+      return;
+    }
+
+    const lyrics = body?.lyrics;
+    if (!lyrics || lyrics.syncType !== 'LINE_SYNCED' || !Array.isArray(lyrics.lines)) return;
+
+    const lines = lyrics.lines
+      .map(l => ({ time: Number(l.startTimeMs) || 0, text: String(l.words || '').trim() }))
+      .filter(l => l.text);
+    if (!lines.length) return;
+
+    // The track may have changed while the request was in flight; sending anyway
+    // is harmless — Vybecord keys these by track id and only injects on a match.
+    fetch(LYRICS_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ track_id: trackId, lines }),
+    }).catch(() => { /* VybecordTS not running — ignore */ });
+  }
+
   /** Handle song change — immediate push. */
   function onSongChange() {
     const data = getTrackData();
@@ -184,6 +239,7 @@
     lastSentUri = data.uri;
     lastSentPlaying = data.is_playing;
     send(data);
+    void pushLyrics(data.track_id);
   }
 
   /** Handle play/pause toggle — immediate push. */
@@ -218,6 +274,7 @@
     lastSentUri = initial.uri;
     lastSentPlaying = initial.is_playing;
     send(initial);
+    void pushLyrics(initial.track_id);
   }
 
   console.log('[VybecordTS] Spicetify extension loaded ✓');

@@ -1,0 +1,58 @@
+{
+  "manifest_version": 3,
+  "name": "Vybecord",
+  "version": "2.0.0",
+  "description": "Sends what you are playing on Spotify, YouTube, SoundCloud, Bandcamp, Twitch and Kick to the Vybecord desktop app.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "browser_specific_settings": { "gecko": { "id": "vybecord@theunknownmurda.github.io", "strict_min_version": "121.0" } },
+  "background": { "service_worker": "src/background.js" },
+  "options_ui": { "page": "src/options.html", "open_in_tab": true },
+  "action": {
+    "default_popup": "src/options.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "permissions": ["storage"],
+  "host_permissions": ["http://127.0.0.1:8888/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://open.spotify.com/*"],
+      "js": ["src/gm-shim.js", "src/sites/spotify.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://www.youtube.com/*", "https://music.youtube.com/*"],
+      "js": ["src/gm-shim.js", "src/sites/youtube.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://soundcloud.com/*"],
+      "js": ["src/gm-shim.js", "src/sites/soundcloud.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://*.bandcamp.com/*"],
+      "js": ["src/gm-shim.js", "src/sites/bandcamp.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.twitch.tv/*"],
+      "js": ["src/gm-shim.js", "src/sites/twitch.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://kick.com/*"],
+      "js": ["src/gm-shim.js", "src/sites/kick.js"],
+      "run_at": "document_start"
+    }
+  ]
+}

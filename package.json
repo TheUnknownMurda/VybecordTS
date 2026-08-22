@@ -1,7 +1,7 @@
 {
-  "name": "vybecord-ts",
-  "version": "1.0.0",
-  "description": "Discord Rich Presence with real-time synced lyrics — TypeScript edition",
+  "name": "vybecord-desktop",
+  "version": "2.0.3",
+  "description": "Discord Rich Presence with real-time synced lyrics — desktop app",
   "type": "module",
   "repository": {
     "type": "git",
@@ -11,34 +11,23 @@
     "url": "https://github.com/TheUnknownMurda/VybecordTS/issues"
   },
   "homepage": "https://github.com/TheUnknownMurda/VybecordTS#readme",
+  "main": "dist-electron/main.mjs",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "build": "tsup src/index.ts --format esm --dts --clean && node -e \"const fs=require('fs');['dashboard-v2.html','setup.html'].forEach(f=>{try{fs.copyFileSync('src/web/'+f,'dist/'+f)}catch(e){console.log('skip '+f)}})\"",
-    "start": "node dist/index.js",
-    "build:exe": "node scripts/build-exe.mjs",
-    "build:installer": "node scripts/build-installer.mjs"
-  },
-  "pkg": {
-    "scripts": [
-      "node_modules/better-sqlite3/**/*.js",
-      "node_modules/bindings/**/*.js",
-      "node_modules/file-uri-to-path/**/*.js"
-    ],
-    "assets": [
-      "node_modules/better-sqlite3/build/Release/*.node",
-      "node_modules/better-sqlite3/prebuilds/**/*"
-    ],
-    "targets": [
-      "node20-win-x64"
-    ],
-    "outputPath": "build/VybecordTS",
-    "win": {
-      "icon": "assets/icon.ico"
-    }
+    "dev": "node scripts/build-electron.mjs && electron .",
+    "watch": "node scripts/build-electron.mjs --watch",
+    "build": "node scripts/build-electron.mjs",
+    "typecheck": "tsc --noEmit",
+    "rebuild": "node scripts/fetch-native.mjs",
+    "dist": "node scripts/fetch-ytdlp.mjs && node scripts/build-electron.mjs && electron-builder --win",
+    "dist:dir": "node scripts/fetch-ytdlp.mjs && node scripts/build-electron.mjs && electron-builder --win --dir",
+    "postinstall": "node scripts/fetch-native.mjs",
+    "fetch:ytdlp": "node scripts/fetch-ytdlp.mjs"
   },
   "dependencies": {
+    "@coooookies/windows-smtc-monitor": "^1.0.12",
     "better-sqlite3": "^12.9.0",
     "dotenv": "^16.4.7",
+    "electron-updater": "^6.8.9",
     "form-data": "^4.0.6",
     "music-metadata": "^11.12.3",
     "pinyin-pro": "^3.28.1"
@@ -47,9 +36,73 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.10.0",
     "@yao-pkg/pkg": "^6.15.0",
+    "electron": "41.10.5",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2",
     "tsup": "^8.3.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
+  },
+  "build": {
+    "appId": "app.vybecord.desktop",
+    "productName": "Vybecord",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist-electron/**/*",
+      "package.json",
+      "!node_modules/**/{test,tests,example,examples,docs,doc}/**",
+      "!node_modules/**/*.{md,markdown,map,ts,flow}",
+      "!node_modules/**/{.bin,.github,.vscode}/**"
+    ],
+    "extraResources": [
+      {
+        "from": "assets/icon.ico",
+        "to": "assets/icon.ico"
+      },
+      {
+        "from": "spicetify-extension",
+        "to": "spicetify-extension"
+      },
+      {
+        "from": "extension",
+        "to": "extension"
+      },
+      {
+        "from": "vendor/yt-dlp.exe",
+        "to": "yt-dlp.exe"
+      }
+    ],
+    "asarUnpack": [
+      "dist-electron/media-worker.cjs",
+      "dist-electron/lrclib-worker.cjs",
+      "node_modules/better-sqlite3/**",
+      "node_modules/bindings/**",
+      "node_modules/file-uri-to-path/**",
+      "node_modules/@coooookies/**"
+    ],
+    "npmRebuild": false,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Vybecord",
+      "artifactName": "${productName}-${version}-setup.${ext}"
+    }
   },
   "engines": {
     "node": ">=20.0.0"

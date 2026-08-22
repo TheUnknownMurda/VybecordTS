@@ -384,15 +384,19 @@ export async function fetchLyrics(
   const globalTimeout = AbortSignal.timeout(20_000);
   const combinedSignal = signal ? AbortSignal.any([signal, globalTimeout]) : globalTimeout;
 
-  // ── PHASE 0: LOCAL DB (~1ms) ──
+  // ── PHASE 0: LOCAL DB ──
+  // Tried in order, cleanest name first, and one at a time: each is a fallback
+  // for the one before it, and the dump answers from a single worker thread, so
+  // firing them together would only queue four queries to throw three away.
   if (hasLocalDb()) {
-    const localResult = searchLocalDb(cleanName, primaryArtist, durationSec)
-      ?? searchLocalDb(name, primaryArtist, durationSec)
-      ?? (artist !== primaryArtist ? searchLocalDb(cleanName, artist, durationSec) : null)
-      ?? (artist !== primaryArtist ? searchLocalDb(name, artist, durationSec) : null);
-    if (localResult) {
-      log.info(`[LYRICS] Local DB hit (${localResult.length} lines)`);
-      return localResult;
+    const attempts: [string, string][] = [[cleanName, primaryArtist], [name, primaryArtist]];
+    if (artist !== primaryArtist) attempts.push([cleanName, artist], [name, artist]);
+    for (const [attemptName, attemptArtist] of attempts) {
+      const localResult = await searchLocalDb(attemptName, attemptArtist, durationSec);
+      if (localResult) {
+        log.info(`[LYRICS] Local DB hit (${localResult.length} lines)`);
+        return localResult;
+      }
     }
   }
 
@@ -469,7 +473,7 @@ export async function fetchLyrics(
       if (changed) {
         // Try local DB with corrected names first
         if (hasLocalDb()) {
-          const localCorrected = searchLocalDb(cTrack, cArtist, cDur);
+          const localCorrected = await searchLocalDb(cTrack, cArtist, cDur);
           if (localCorrected) {
             log.info(`[LYRICS] Local DB hit after Last.fm correction (${localCorrected.length} lines)`);
             return localCorrected;

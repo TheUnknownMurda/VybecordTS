@@ -164,7 +164,10 @@ export class LyricsEngine {
 
   // CC-sourced lyrics use faster update interval
   private isCC = false;
-  private isPushSource = false; // Push-based sources (YouTube, SC, BC, Spicetify) → shorter recalib cooldown
+  // Push sources got a shorter recalibration cooldown. Nothing sets _from_push
+  // now that detection is OS-only, so this stays false — the branch is kept for
+  // any future source that pushes its own position.
+  private isPushSource = false;
   private lastRecalibTime = 0;
 
   // Auto-offset detection: compensates for systematically early/late lyrics
@@ -185,6 +188,8 @@ export class LyricsEngine {
   private cfgShowLyrics = true;
   private cfgRomanize = false;
   private cfgActivityType = 2;
+  private cfgStatusDisplay = 'app';
+  private cachedStatusName = '';
   private cfgHideSmallIcon = false;
   private cfgIconMode: 'default' | 'dance' | 'radiate' | 'purple_rad' | 'rouge' | 'lrc_off' | 'bleeding' | 'blue_rad' | 'random' = 'default';
   private cfgRpcTranslate = false;
@@ -432,13 +437,26 @@ export class LyricsEngine {
     let modeChanged = false;
 
     if (trackData) {
-      // Preserve Catbox URL if current track has one and new trackData doesn't
-      const currentCatboxUrl = this.trackData?.album_art_url?.includes('catbox.moe') ? this.trackData.album_art_url : null;
-      if (currentCatboxUrl && !trackData.album_art_url?.includes('catbox.moe')) {
-        trackData.album_art_url = currentCatboxUrl;
+      /*
+       * Keep the resolved cover across polls.
+       *
+       * The OS session hands over a fresh object every tick carrying the local
+       * '/api/thumbnail' placeholder, which would otherwise overwrite the public
+       * URL resolved for this track and blank the art on Discord.
+       *
+       * This used to test for 'catbox.moe' specifically, from when covers were
+       * uploaded to that host. Uploading is gone — covers now come from a music
+       * CDN — so that test could never fire again. Matching any resolved http(s)
+       * URL is what was meant all along, and it does not care where it came from.
+       */
+      const resolvedArt = /^https?:\/\//.test(this.trackData?.album_art_url ?? '')
+        ? this.trackData!.album_art_url
+        : null;
+      if (resolvedArt && !/^https?:\/\//.test(trackData.album_art_url ?? '')) {
+        trackData.album_art_url = resolvedArt;
       }
 
-      // Compare AFTER the Catbox restore, not before: SMTC hands us a fresh object
+      // Compare AFTER the restore, not before: the OS hands us a fresh object
       // every poll carrying the local '/api/thumbnail' placeholder, so comparing the
       // raw incoming value would report a change on every tick and force a redundant
       // RPC push. What matters is whether the *effective* art actually moved.
@@ -822,31 +840,54 @@ export class LyricsEngine {
     return start > 0 ? start - 1 : -1;
   }
 
+  /**
+   * Publish the current presence again immediately.
+   *
+   * Discord drops the activity when the socket closes, and the app closes it on
+   * purpose every time the announced player changes — a different platform means
+   * a different Discord application, so switching player means reconnecting.
+   * Nothing else republishes until the next heartbeat, which is long enough that
+   * pinning a player looks like it did nothing, and long enough for the new
+   * player's track to arrive under the old one's app name.
+   *
+   * The heartbeat clock is reset rather than the dedupe fields: buildActivity
+   * suppresses an unchanged payload, and after a reconnect the payload is
+   * unchanged by definition — it is the socket underneath that is new.
+   *
+   * Returns false when there is nothing to publish, so the caller can fall back
+   * to whatever it shows when no track is playing.
+   */
+  pushRpcNow(): boolean {
+    if (!this.running || !this.trackData || !this.callbacks) return false;
+    const [current, next] = this.displayPair();
+    this.lastRpcPushTime = 0;  // past buildActivity's dedupe
+    const activity = this.buildActivity(current, next);
+    if (!activity) return false;
+    this.callbacks.onRpcUpdate(activity);
+    return true;
+  }
+
+  /** The current and next lines as the presence should show them. */
+  private displayPair(): [current: string, next: string] {
+    if (!this.lyrics.length) return ['♪♪', ''];
+    if (this.currentIdx < 0) return ['♪♪', this.getDisplayText(0)];
+    const nextIdx = this.currentIdx + 1;
+    return [
+      this.getDisplayText(this.currentIdx),
+      nextIdx < this.lyrics.length ? this.getDisplayText(nextIdx) : '',
+    ];
+  }
+
   /** Emit the current lyric state to callbacks. */
   private emitUpdate(): void {
     if (!this.callbacks || !this.trackData) return;
 
     // Build display text with consecutive repeat collapsing
-    let current: string;
-    let next: string;
-    let prev: string;
-    if (!this.lyrics.length) {
-      current = '♪♪';
-      next = '';
-      prev = '';
-    } else if (this.currentIdx < 0) {
-      current = '♪♪';
-      next = this.getDisplayText(0);
-      prev = '';
-    } else {
-      current = this.getDisplayText(this.currentIdx);
-      // Use currentIdx + 1 for next line to show even if in same group (identical lines)
-      const nextIdx = this.currentIdx + 1;
-      next = nextIdx < this.lyrics.length ? this.getDisplayText(nextIdx) : '';
-      const prevGroupIdx = this.getPrevGroupEnd(this.currentIdx);
-      prev = prevGroupIdx >= 0 ? this.getDisplayText(prevGroupIdx) : '';
-
-    }
+    const [current, next] = this.displayPair();
+    const prevGroupIdx = this.lyrics.length && this.currentIdx >= 0
+      ? this.getPrevGroupEnd(this.currentIdx)
+      : -1;
+    const prev = prevGroupIdx >= 0 ? this.getDisplayText(prevGroupIdx) : '';
 
     // Rate limiting: protect Discord from too-frequent updates.
     // Bypass conditions (always allow update):
@@ -937,6 +978,15 @@ export class LyricsEngine {
     this.cfgRpcTranslate = (this.rpcConfig.rpc_translate_lyrics as boolean) === true;
     this.cfgTranslateLang = (this.rpcConfig.translate_target_lang as string) || 'en';
     this.cfgActivityType = (this.rpcConfig.rpc_activity_type as number) ?? 2;
+    this.cfgStatusDisplay = (this.rpcConfig.rpc_status_display as string) || 'app';
+    // Resolved once per track — the status line only depends on metadata, never on
+    // the current lyric, so it never needs rebuilding between lines.
+    const statusTpl = this.cfgStatusDisplay === 'custom'
+      ? (this.rpcConfig.rpc_status_template as string) || ''
+      : STATUS_TEMPLATES[this.cfgStatusDisplay] || '';
+    this.cachedStatusName = statusTpl
+      ? truncate(renderStatusTemplate(statusTpl, statusVars(d)), 128)
+      : '';
     this.cfgHideSmallIcon = (this.rpcConfig.hide_small_icon as boolean) === true;
     // Custom icon modes are Spotify-specific — force 'default' (platform icon) for other sources
     const isSpotify = source === 'spotify';
@@ -1159,8 +1209,18 @@ export class LyricsEngine {
     this.lastLargeImage = this.cachedLargeImage;
     this.lastRpcPushTime = rpcNow;
 
+    // Status line ("Listening to …" in the member list). It can only read from
+    // name / state / details, so the metadata presets route through `name` — the
+    // one slot the lyrics don't already occupy, leaving details/state intact.
+    // An empty render (e.g. {playlist} on a track with no context) omits `name`
+    // entirely, which falls back to the application name.
     const activity: DiscordActivity = {
       type: activityType,
+      ...(this.cachedStatusName
+        ? { name: this.cachedStatusName, status_display_type: 0 }
+        : this.cfgStatusDisplay === 'details' ? { status_display_type: 2 }
+        : this.cfgStatusDisplay === 'state' ? { status_display_type: 1 }
+        : {}),
       details,
       state,
       timestamps: endTs > startTs ? { start: startTs, end: endTs } : { start: startTs },
@@ -1356,6 +1416,63 @@ function deduplicateArtist(trackName: string, artistName: string): string {
   return kept.join(', ');
 }
 
+// ── Status-line templating ──
+
+/** Preset templates behind the dashboard's status-line choices. */
+const STATUS_TEMPLATES: Record<string, string> = {
+  title:        '{title}',
+  title_artist: '{title} - {artist}',
+  artist_title: '{artist} - {title}',
+  artist:       '{artist}',
+  album:        '{album}',
+  playlist:     '{playlist}',
+};
+
+const RE_STATUS_TOKEN = /\{(\w+)\}/g;
+/** Separators left stranded once a leading placeholder resolves to nothing. */
+const RE_LEADING_SEP = /^[\s\-–—|·•,:/]+/;
+
+/** Placeholder values for the status line. Lyrics are deliberately not exposed here. */
+function statusVars(d: TrackData): Record<string, string> {
+  return {
+    title:    d.track_name || '',
+    artist:   deduplicateArtist(d.track_name, d.artist_name) || '',
+    album:    d.album_name || '',
+    playlist: getContextDisplayName(d),
+    platform: PLATFORM_ICONS[d.media_source || '']?.[1] || '',
+  };
+}
+
+/**
+ * Render a status template, dropping the literal that *precedes* any placeholder
+ * resolving to nothing — so "{title} - {artist}" on a track with no artist gives
+ * "Title", not "Title - ", and "{a} - {b} - {c}" with an empty middle gives
+ * "A - C". A template with no placeholders at all is taken as a literal.
+ */
+function renderStatusTemplate(tpl: string, vars: Record<string, string>): string {
+  let out = '';
+  let seen = 0;
+  let kept = 0;
+  let last = 0;
+  let lastWasEmpty = false;
+  for (const m of tpl.matchAll(RE_STATUS_TOKEN)) {
+    seen++;
+    const idx = m.index ?? 0;
+    const value = (vars[m[1].toLowerCase()] ?? '').trim();
+    if (value) {
+      out += tpl.slice(last, idx) + value;
+      kept++;
+    }
+    lastWasEmpty = !value;
+    last = idx + m[0].length;
+  }
+  if (seen === 0) return tpl.trim();
+  // The trailing literal belongs to the final placeholder: keeping it after an
+  // empty one strands its closing half — "{title} [{lyric}]" would end in "]".
+  if (kept > 0 && !lastWasEmpty) out += tpl.slice(last);
+  return out.replace(RE_LEADING_SEP, '').trim();
+}
+
 /** Build large_text from metadata parts, excluding values already visible in other fields. */
 function buildInfoText(d: TrackData, currentText: string, nextText: string): string {
   // Concatenate shown texts once for fast substring check (avoids per-field .some().includes())
@@ -1392,6 +1509,8 @@ const PLATFORM_SEARCH: Record<string, (q: string) => string> = {
   browser_edge:   q => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
   browser_brave:  q => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
   browser_opera:  q => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
+  browser_vivaldi:q => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
+  browser_zen:    q => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
 };
 
 function platformSearchUrl(source: string, query: string): string {

@@ -228,10 +228,38 @@ export function canAuth(): boolean {
   return !!(apiKey && apiSecret && !sessionKey);
 }
 
-/** Get the URL to redirect the user to for Last.fm authentication. */
-export function getAuthUrl(callbackUrl: string): string | null {
+/**
+ * Desktop auth, step 1: ask Last.fm for a request token.
+ *
+ * The web flow this replaced sent the user to Last.fm with a `cb=` callback URL
+ * and caught the redirect on the app's own HTTP server. There is no server to
+ * catch it now, so the app uses Last.fm's desktop flow instead: get a token up
+ * front, have the user approve *that token* in their browser, then exchange it.
+ * No callback, and nothing listening on a port.
+ */
+export async function requestAuthToken(): Promise<string | null> {
   if (!apiKey || !apiSecret) return null;
-  return `https://www.last.fm/api/auth/?api_key=${apiKey}&cb=${encodeURIComponent(callbackUrl)}`;
+  const params = new URLSearchParams({ method: 'auth.getToken', api_key: apiKey, format: 'json' });
+  try {
+    const resp = await fetch(`${LASTFM_BASE}?${params}`, {
+      signal: AbortSignal.timeout(LASTFM_TIMEOUT),
+    });
+    if (!resp.ok) {
+      log.warn(`[SCROBBLE] auth.getToken failed: ${resp.status}`);
+      return null;
+    }
+    const data = (await resp.json()) as { token?: string };
+    return data.token ?? null;
+  } catch (e: unknown) {
+    log.warn(`[SCROBBLE] auth.getToken error: ${(e as Error).message}`);
+    return null;
+  }
+}
+
+/** Desktop auth, step 2: the page the user has to approve in their browser. */
+export function getAuthUrlForToken(token: string): string | null {
+  if (!apiKey) return null;
+  return `https://www.last.fm/api/auth/?api_key=${apiKey}&token=${encodeURIComponent(token)}`;
 }
 
 /** Complete the auth flow: exchange token for session key. */

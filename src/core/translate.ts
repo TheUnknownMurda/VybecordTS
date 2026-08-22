@@ -107,26 +107,85 @@ function detectScriptLang(text: string): string | null {
   return null;
 }
 
-// ── Translation API (Lingva Translate — free Google Translate proxy) ──
+// ── Translation API ──
+//
+// Three providers, tried in order, because free endpoints come and go: the two
+// Lingva instances this used to rely on both stopped answering (500 and 503),
+// which is why translation silently produced nothing.
+//
+//   1. Google's public translate endpoint. Fastest, and the only one that
+//      detects the source language itself — which matters for lyrics, where we
+//      cannot know it up front.
+//   2. A Lingva mirror, which proxies the same service.
+//   3. MyMemory, which needs an explicit source language, so it only gets a
+//      turn once something has told us what that is.
+
+const GOOGLE_ENDPOINT = 'https://translate.googleapis.com/translate_a/single';
+
+/** Lingva mirrors. Public instances die often — order is the try order. */
 const LINGVA_INSTANCES = [
+  'https://lingva.dialectapp.org',
   'https://lingva.ml',
   'https://lingva.thedaviddelta.com',
 ];
 
 let activeInstance = 0;
 
-async function fetchLingva(text: string, source: string, target: string, signal?: AbortSignal): Promise<string | null> {
+/** What a provider returns: the text, plus the source language when it knows it. */
+interface Translated {
+  text: string;
+  detected?: string;
+}
+
+// Several call sites (lyrics-engine lookahead, translate:batch) pass no signal,
+// so without a per-attempt timeout a hung translation server would pin one of
+// the MAX_CONCURRENT semaphore slots forever — 12 hung fetches and the whole
+// translation feature is dead until restart.
+const REQUEST_TIMEOUT_MS = 8000;
+
+function withTimeout(signal?: AbortSignal): AbortSignal {
+  const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+  return signal ? AbortSignal.any([signal, timeout]) : timeout;
+}
+
+/**
+ * Google's translate_a endpoint.
+ *
+ * The response is a nested array rather than an object: [0] holds the segments,
+ * each segment's [0] being the translated chunk, and [2] holds the language it
+ * decided the input was. A long lyric line can come back split across several
+ * segments, so they are joined rather than taking the first.
+ */
+async function fetchGoogle(text: string, target: string, signal?: AbortSignal): Promise<Translated | null> {
+  const url = `${GOOGLE_ENDPOINT}?client=gtx&sl=auto&tl=${encodeURIComponent(target)}&dt=t&q=${encodeURIComponent(text)}`;
+  try {
+    const res = await fetch(url, { signal: withTimeout(signal), headers: { Accept: 'application/json' } });
+    if (!res.ok) return null;
+    const data = await res.json() as [Array<[string, ...unknown[]]>, unknown, string?];
+    const segments = data?.[0];
+    if (!Array.isArray(segments)) return null;
+    const out = segments.map(seg => (Array.isArray(seg) ? seg[0] : '')).join('').trim();
+    if (!out) return null;
+    return { text: out, detected: typeof data[2] === 'string' ? data[2] : undefined };
+  } catch {
+    return null;
+  }
+}
+
+async function fetchLingva(text: string, target: string, signal?: AbortSignal): Promise<Translated | null> {
   const encoded = encodeURIComponent(text);
   for (let attempt = 0; attempt < LINGVA_INSTANCES.length; attempt++) {
-    const base = LINGVA_INSTANCES[(activeInstance + attempt) % LINGVA_INSTANCES.length];
-    const url = `${base}/api/v1/${source}/${target}/${encoded}`;
+    const index = (activeInstance + attempt) % LINGVA_INSTANCES.length;
+    const url = `${LINGVA_INSTANCES[index]}/api/v1/auto/${target}/${encoded}`;
     try {
-      const res = await fetch(url, { signal, headers: { 'Accept': 'application/json' } });
+      const res = await fetch(url, { signal: withTimeout(signal), headers: { Accept: 'application/json' } });
       if (!res.ok) continue;
       const data = await res.json() as { translation?: string };
       if (data.translation) {
-        activeInstance = (activeInstance + attempt) % LINGVA_INSTANCES.length;
-        return data.translation;
+        // Stick with whichever mirror answered, so the dead ones are not retried
+        // line after line.
+        activeInstance = index;
+        return { text: data.translation };
       }
     } catch {
       // Try next instance
@@ -136,12 +195,18 @@ async function fetchLingva(text: string, source: string, target: string, signal?
 }
 
 // ── Fallback: MyMemory API (1000 req/day free) ──
+/**
+ * MyMemory. Needs a real source language — passing 'auto' returns a 200 whose
+ * body is the words "'AUTO' IS AN INVALID SOURCE LANGUAGE", which is how this
+ * fallback used to fail while looking like it had answered.
+ */
 async function fetchMyMemory(text: string, source: string, target: string, signal?: AbortSignal): Promise<string | null> {
+  if (!source || source === 'auto' || source === target) return null;
   const encoded = encodeURIComponent(text);
   const langPair = `${source}|${target}`;
   const url = `https://api.mymemory.translated.net/get?q=${encoded}&langpair=${langPair}`;
   try {
-    const res = await fetch(url, { signal });
+    const res = await fetch(url, { signal: withTimeout(signal) });
     if (!res.ok) return null;
     const data = await res.json() as { responseData?: { translatedText?: string }; responseStatus?: number };
     if (data.responseStatus === 200 && data.responseData?.translatedText) {
@@ -183,13 +248,29 @@ function releaseSlot(): void {
   }
 }
 
-async function translateOne(trimmed: string, targetLang: string, signal?: AbortSignal): Promise<string | null> {
+/**
+ * @param sourceHint the source language when something already knows it — the
+ *   script detector, say. Only MyMemory needs one; the others detect their own.
+ */
+async function translateOne(
+  trimmed: string,
+  targetLang: string,
+  sourceHint: string | null,
+  signal?: AbortSignal,
+): Promise<Translated | null> {
   const acquired = await acquireSlot(signal);
   if (!acquired) return null;
   try {
-    let result = await fetchLingva(trimmed, 'auto', targetLang, signal);
-    if (!result) result = await fetchMyMemory(trimmed, 'auto', targetLang, signal);
-    return result;
+    const google = await fetchGoogle(trimmed, targetLang, signal);
+    if (google) return google;
+
+    const lingva = await fetchLingva(trimmed, targetLang, signal);
+    if (lingva) return lingva;
+
+    const source = sourceHint || detectScriptLang(trimmed);
+    if (!source) return null;
+    const mem = await fetchMyMemory(trimmed, source, targetLang, signal);
+    return mem ? { text: mem } : null;
   } finally {
     releaseSlot();
   }
@@ -226,18 +307,21 @@ export async function translateText(
   const detected = detectScriptLang(trimmed);
   if (detected === targetLang) return null;
 
-  const result = await translateOne(trimmed, targetLang, signal);
+  const result = await translateOne(trimmed, targetLang, detected, signal);
+  if (!result) return null;
 
-  if (result) {
-    // Don't cache if translation is identical to input (same language)
-    if (result.toLowerCase() === trimmed.toLowerCase()) return null;
-    evictOldest(cache, CACHE_MAX - 1);
-    cache.set(key, result);
-    scheduleCacheFlush();
-    return { translation: result, cached: false };
-  }
+  // A provider that recognised the line as already being in the target language
+  // has nothing to add, and caching its echo would leave the original sitting
+  // under itself for the rest of the song.
+  if (result.detected && result.detected.split('-')[0] === targetLang) return null;
 
-  return null;
+  // Don't cache if translation is identical to input (same language)
+  if (result.text.toLowerCase() === trimmed.toLowerCase()) return null;
+
+  evictOldest(cache, CACHE_MAX - 1);
+  cache.set(key, result.text);
+  scheduleCacheFlush();
+  return { translation: result.text, cached: false };
 }
 
 /**
@@ -289,5 +373,9 @@ export function getCachedTranslation(text: string, targetLang: string): string |
 
 /** Flush cache to disk (call on shutdown). */
 export function flushTranslationCache(): void {
+  if (flushTimer) {
+    clearTimeout(flushTimer);
+    flushTimer = null;
+  }
   flushDiskCache();
 }

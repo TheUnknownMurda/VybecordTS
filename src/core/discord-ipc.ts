@@ -53,6 +53,9 @@ export class DiscordIPC {
   // Activity types Discord's IPC actually accepts for third-party Rich
   // Presence — Streaming(1) and Custom(4) are hard-rejected (error code 4000).
   private static readonly VALID_ACTIVITY_TYPES = new Set([0, 2, 3, 5]);
+  // status_display_type: NAME(0) / STATE(1) / DETAILS(2) — anything else is dropped
+  // rather than sent, so a bad config value can't sink the whole payload.
+  private static readonly VALID_STATUS_DISPLAY_TYPES = new Set([0, 1, 2]);
   private loggedInvalidActivityType = false;
 
   constructor(clientId: string) {
@@ -326,8 +329,18 @@ export class DiscordIPC {
           const len = this.readBuffer.readUInt32LE(this.readOffset + 4);
           const frameEnd = this.readOffset + 8 + len;
           if (this.readLen < frameEnd) return;
-          const payload = JSON.parse(this.readBuffer.toString('utf-8', this.readOffset + 8, frameEnd));
+          const raw = this.readBuffer.toString('utf-8', this.readOffset + 8, frameEnd);
           this.readOffset = frameEnd;
+          let payload: Record<string, unknown>;
+          try {
+            payload = JSON.parse(raw) as Record<string, unknown>;
+          } catch (e) {
+            // A malformed frame here used to throw straight out of the socket
+            // 'data' listener and crash the whole process — skip it instead
+            // and keep waiting for READY (the 5s timeout still bounds us).
+            log.error(`Failed to parse IPC handshake frame: ${e}`);
+            continue;
+          }
           if (op === Opcode.FRAME && payload.evt === 'READY') {
             clearTimeout(timeout);
             this.socket!.removeListener('data', onData);
@@ -377,6 +390,15 @@ export class DiscordIPC {
       }
       rpcActivity.type = type;
     }
+    // Discord's IPC accepts a `name` override even though the docs present it as
+    // fixed to the application name — verified against the live client, which
+    // echoes back the supplied value instead of the app's own name. It drives
+    // both the presence card header and the "Listening to …" status line.
+    if (activity.name) rpcActivity.name = padMin2(sanitize(activity.name)).slice(0, 128);
+    // Which field the status line reads from: 0 = name, 1 = state, 2 = details.
+    if (activity.status_display_type != null && DiscordIPC.VALID_STATUS_DISPLAY_TYPES.has(activity.status_display_type)) {
+      rpcActivity.status_display_type = activity.status_display_type;
+    }
     // Discord requires details/state to be at least 2 characters — pad if needed
     if (activity.details) rpcActivity.details = padMin2(sanitize(activity.details));
     if (activity.state) rpcActivity.state = padMin2(sanitize(activity.state));
@@ -417,6 +439,11 @@ export class DiscordIPC {
       // Reuse cached args portion, only swap nonce
       payload = `{"cmd":"SET_ACTIVITY","args":${this.lastActivityArgs},"nonce":"${nonce}"}`;
     } else {
+      // The presence content genuinely changed — worth one line. Heartbeats take
+      // the branch above and stay silent, so this reads as a history of what the
+      // profile actually showed, which is the only way to answer "Discord is
+      // showing the wrong player" without guessing.
+      log.info(`[PRESENCE] ${rpcActivity.name || '(app name)'} | ${rpcActivity.details || ''} | ${rpcActivity.state || ''}`);
       this.lastActivityJson = activityJson;
       this.lastActivityArgs = `{"pid":${this.pid},"activity":${activityJson}}`;
       payload = `{"cmd":"SET_ACTIVITY","args":${this.lastActivityArgs},"nonce":"${nonce}"}`;

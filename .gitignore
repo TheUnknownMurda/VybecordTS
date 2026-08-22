@@ -22,17 +22,32 @@ src/logs/
 
 # ── Dependencies / build ──
 node_modules/
+# yt-dlp, fetched at build time by scripts/fetch-ytdlp.mjs — a 17MB binary does
+# not belong in git, and pinning one would ship a stale copy.
+vendor/
 dist/
+dist-electron/
 build/
+release/
 
 # ── OS artifacts ──
 .DS_Store
 Thumbs.db
+desktop.ini
+
+# ── IDE artifacts ──
+.vs/
 
 # ── LRCLib SQLite database dumps (can be 100GB+) ──
 LRCLIB DUMP/
 *.sqlite3.gz
 *.db
+
+# ── Lyrics databases ──
+# The dump is far too large, and the custom store holds whatever lyrics the user
+# imported — licensed text that has no business in a public repository. The app
+# creates an empty one on first run, so nothing needs seeding here.
+*.sqlite3
 
 # ── SQLite temporary files (WAL/SHM) ──
 *.sqlite3-shm
@@ -44,3 +59,18 @@ config.json.*-backup
 
 # ── Atomic-write temp files ──
 *.tmp
+
+# ── Agent worktrees and session state ──
+.claude/
+
+# ── Cloudflare Worker build cache ──
+.wrangler/
+
+# ── Scratch: a partial unpacked build kept while chasing a packaging problem ──
+release-fix/
+
+# ── Windows shortcuts that wander into the working tree ──
+*.lnk
+
+# ── Renderer test harness (generated; never packaged) ──
+harness/

@@ -79,12 +79,23 @@ export class SoundCloudSource {
     // Clean title
     trackName = cleanTitle(trackName);
 
-    // Compensate progress for time since last push
-    const durMs = d.duration_ms || 240_000; // Fallback like desktop source
+    /*
+     * Compensate progress for the time since the last push — clamped to the
+     * track when its length is known, and not clamped at all when it is not.
+     *
+     * There is deliberately no fallback length. This used to substitute four
+     * minutes for a missing duration, and that one number cost more than the
+     * bug it papered over: when the scraper's progress-bar selector stopped
+     * matching, every SoundCloud track was announced as a confident 4:00 stuck
+     * at 0:00, which reads as a timing bug rather than as no data at all. A
+     * duration of 0 is the honest answer, and everything downstream already
+     * knows what to do with it — the window shows "—" instead of a total, and
+     * the presence sends an elapsed time with no end timestamp.
+     */
     const elapsed = performance.now() - this.receivedAt;
     const compensatedProgress = Math.min(
       Math.round(d.progress_ms + elapsed),
-      durMs,
+      d.duration_ms || Infinity,
     );
 
     return {
@@ -92,7 +103,7 @@ export class SoundCloudSource {
       track_name: trackName,
       artist_name: artistName,
       album_name: '',
-      duration_ms: durMs,
+      duration_ms: d.duration_ms,
       progress_ms: compensatedProgress,
       is_playing: true,
       is_live: false,

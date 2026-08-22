@@ -1,209 +1,154 @@
-# 🎵 VybecordTS - User Guide for Beginners
+# Vybecord — Getting started
 
-> **Discord Rich Presence with real-time synced lyrics**
+Vybecord shows what you are listening to on your Discord profile, with the lyrics scrolling in real time.
 
----
-
-## 📋 What You Need BEFORE Starting
-
-### Required (No Exceptions)
-- ✅ **Windows 10 or 11**
-- ✅ **Discord** (desktop app, NOT the web version)
-
-### Optional
-- 🌐 **[Tampermonkey](https://www.tampermonkey.net/)** → for YouTube, SoundCloud, Bandcamp, Twitch, Kick, and the Spotify web player
-- 🛠️ **Spotify desktop app** → [Spicetify](https://spicetify.app/) (see warning below)
-
-**You do not need a Discord developer account.** VybecordTS ships with a
-working application ID, so it displays your activity out of the box.
-
-**You do not need a Spotify developer account either.** VybecordTS does not use
-the Spotify Web API — there is no client ID, client secret or login to set up.
+**Nothing to install into Spotify, nothing to install into your browser.** The app reads Windows' own media player information.
 
 ---
 
-## ⚠️ IMPORTANT WARNING - Spicetify
+## What you need
 
-**If you use Spicetify:**
-
-- Spicetify **violates Spotify's Terms of Service**
-- Used incorrectly (ad blockers, etc.) → **risk of account ban**
-- **We are not responsible** for account suspensions
-- **Recommendation:** Use Spicetify ONLY for theming/customization, NOT for blocking ads
-
-**Safer Alternative:** Use the Spotify web player with the Tampermonkey userscript — no client modification, no TOS risk.
+- **Windows 10 version 1809 or newer** (released late 2018 — if your PC is up to date, you are fine)
+- **The Discord desktop app**, installed and running — the browser version will not work
+- That is all.
 
 ---
 
-## 🚀 Installation - STEP BY STEP
+## Install
 
-### Step 1: Download and run the installer
+1. Download `Vybecord-<version>-setup.exe` from the [releases page](https://github.com/TheUnknownMurda/VybecordTS/releases)
+2. Run it, pick a folder, follow the installer
+3. Open Vybecord
+4. Play some music
 
-1. Go to the [GitHub Releases page](https://github.com/TheUnknownMurda/VybecordTS/releases)
-2. Download **VybecordTS-Setup.exe**
-3. Run it — no administrator rights needed
+Your Discord status updates on its own. There is no setup step.
 
-It installs to `%APPDATA%\VybecordTS` by default. You may pick another folder,
-but it has to be one you can write to: VybecordTS stores its settings, logs and
-lyrics database next to the program. The installer refuses protected locations
-like `C:\Program Files` and tells you why.
+> **Windows shows a SmartScreen warning?** The app is not signed with a paid certificate. Click "More info" then "Run anyway".
 
 ---
 
-### Step 2: The Spotify page (optional)
+## Day to day
 
-The wizard asks whether to install **Spicetify + the Vybecord extension**.
+### Closing the window does not quit
 
-- **You use the Spotify desktop app** → tick it, and **close Spotify first**
-  (Spicetify cannot patch a running Spotify). Read the warning above.
-- **You listen to Spotify in your browser** → leave it unticked, the
-  Tampermonkey script at step 4 covers you.
-- **You don't use Spotify** → leave it unticked.
+Vybecord keeps running in the notification area, next to the clock. Click the icon to bring the window back, or right-click → **Quit** to actually exit.
 
-If anything goes wrong here, the installation carries on regardless: only the
-Spotify desktop integration is affected.
+You can change this under **Settings → App → Close to tray**.
 
----
+### The pages
 
-### Step 3: First launch
+| Page | What it does |
+| --- | --- |
+| **Now playing** | Current track, cover, and the scrolling lyrics |
+| **Players** | Every detected player — useful when more than one thing is playing |
+| **Stats** | Your top tracks and artists this session |
+| **History** | Your full listening log, plus a "wrapped" summary |
+| **Lyrics** | Your own lyrics library, importing, and flagged tracks |
+| **Settings** | Everything else |
+| **Last.fm** | Scrobbling, if you want it |
 
-VybecordTS starts and opens **http://127.0.0.1:8888/setup** in your browser.
-This page only shows up on the first run; afterwards you land on the dashboard.
-
----
-
-### Step 4: Add the browser scripts
-
-On the setup page:
-
-1. **Install Tampermonkey** — pick your browser from the buttons in step 1
-2. **Click *Install*** next to each platform you actually use
-   (Spotify web, YouTube, SoundCloud, Bandcamp, Twitch, Kick)
-3. Tampermonkey shows its install screen → confirm
-
-Each entry has a status dot. It turns **green** as soon as VybecordTS receives
-data from that platform — play something to check.
-
-**📝 Nothing happens when you click?** Tampermonkey probably isn't installed yet,
-or your browser is showing the code instead of intercepting it. Redo step 1 and
-reload the page.
+Tip: keys **1–8** jump between pages.
 
 ---
 
-### Step 5: Play something
+## Common problems
 
-That's it. Windows also detects most desktop players automatically, so many
-apps work with no script at all.
+### Nothing is detected
 
----
+Open the **Players** page. If it is empty, your player does not talk to Windows.
 
-### Optional: your own Discord app name
+**How to check:** press a media key (play/pause) on your keyboard. If the Windows volume overlay shows the track name, Vybecord can see it too. If it shows nothing, Vybecord cannot see it either — that is a limitation of the player, not the app.
 
-The activity name shown on Discord comes from the application ID. To use your
-own:
+### The status does not show on Discord
 
-1. Go to [discord.com/developers/applications](https://discord.com/developers/applications)
-2. **New Application** → name it → **Create**
-3. Copy the **Application ID** and paste it in the dashboard settings
+- Discord must be the **desktop app**, and must be running
+- Look at Vybecord's title bar: if the dot next to "Discord" is red, the connection failed. Restart Discord, then Vybecord.
+- In Discord, check **Settings → Activity Privacy → Display current activity** is on
 
-No bot, no extra permission required.
+### No lyrics
 
----
+- Check that **Settings → Lyrics → Show lyrics** is on
+- Some tracks simply have no synced lyrics published anywhere
+- From a browser tab, the published title is often the video name ("Artist - Title (Official Video)") rather than a clean track title, which makes matching less reliable
 
-## 🎵 Daily Usage
+### No lyrics on a YouTube video
 
-### Starting VybecordTS
+Captions are a fallback, used only when no synced lyrics exist for the track. They need **yt-dlp**, which now ships with Vybecord — there is nothing to install.
 
-1. Use the **VybecordTS** shortcut (Desktop or Start Menu)
-2. Let it run in the background
-3. Play music — Spotify, YouTube, or anything else
-4. **Your Discord displays:**
-   - 🎵 Track + Artist
-   - 📝 Synced lyrics (if available)
-   - ⏱️ Elapsed time
-   - 🔄 Shuffle / Repeat (if enabled)
+**Settings → Lyrics → YouTube captions** shows which copy is in use. To run your own instead, drop `yt-dlp.exe` in the folder that card opens; it takes priority over the bundled one.
 
-### Web Dashboard
+Not every video has captions, and the video has to be findable by its title and channel — the browser tells Windows what is playing, but not which page it is on, so Vybecord searches YouTube for it.
 
-Access `http://127.0.0.1:8888` in your browser to:
+### Lyrics are out of sync
 
-- 📊 View statistics
-- 🎨 Change theme (colors)
-- 📝 Import custom lyrics
-- 📱 Display QR code for mobile
-- ⚙️ Modify configuration
+On **Now playing**, use the **−250 / +250** buttons under the lyrics. The offset is remembered and applies to later tracks too.
 
----
+### Wrong lyrics
 
-## 🔧 Troubleshooting
+Click **Wrong lyrics**. That result will never be reused for this track. You can then import the correct file under **Lyrics → Import**, or undo the flag under **Lyrics → Flagged**.
 
-### "Discord not showing"
+### My status disappears during Spotify ads
 
-- ❌ Discord Web does NOT work
-- ✅ You must use the **Discord desktop app**
-- Check: Discord Settings → Activity Privacy → **"Share your activity"** must be ON
+That is on purpose. Without the filter your Discord profile would announce "Monster Energy" as though it were a song.
 
-### "No lyrics found"
+Spotify does not flag its ad breaks — it just swaps the track metadata for the advertiser's. Vybecord spots them by **duration**: every ad observed ran 30 seconds, while the shortest of 44 real tracks sampled ran 83. So a Spotify track under a minute is treated as an ad.
 
-- VybecordTS searches multiple sources (LRCLib, Netease, YouTube)
-- Some songs don't have synced lyrics available
-- You can import your own `.lrc` files via the Dashboard
+Album interludes and skits are spared: an interlude belongs to the album already playing, an ad never does.
 
-### "Spotify won't connect"
+While an ad plays the window says "Advertisement", so you know it is not a bug. You can turn the filter off under **Settings → Detection**.
 
-- Spotify **desktop app**: check the Spicetify extension is installed (see below)
-- Spotify **web player**: check the Tampermonkey userscript is installed and enabled
-- Without either, Spotify is still picked up by Windows media controls, but with
-  less metadata (no playlist name, no shuffle/repeat)
+### The cover does not show on Discord (but shows in the window)
 
-### "Spicetify not working"
+The window reads the artwork straight off your disk. Discord cannot — it needs a URL, so Vybecord looks the album up on a public music CDN and hands Discord that.
 
-- Make sure Spicetify is installed: `spicetify --version` in PowerShell
-- Check that the VybecordTS extension is copied to the Extensions folder
-- Completely restart Spotify after installation
+If a track shows the default placeholder instead, it is simply not in the catalogue — usually an unreleased track or a local file. **Settings → Presence → Cover images → Test with the current track** tells you which case you are in.
 
-### "A browser script does nothing"
+Uploading your own file does not help: Discord accepts the presence and then refuses to load the image, showing a "?". That was tried both with a public file host and with Discord's own CDN.
 
-- Reopen **http://127.0.0.1:8888/setup** and check the status dot for that platform
-- The dot only turns green while something is actually playing on that site
-- Make sure Tampermonkey is enabled for the site (its toolbar icon shows the
-  active scripts)
+### Getting more detail from browser playback
 
-### "I want to see the setup page again"
+Windows tells Vybecord what is playing, not which website it is on: a SoundCloud tab and a YouTube tab look identical.
 
-Open **http://127.0.0.1:8888/setup** directly — it stays available at all times.
+The optional extension in the `extension/` folder fixes that. Load it via `chrome://extensions` → Developer mode → **Load unpacked**, and pick that folder. Its icon opens a settings page with a switch per site — Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick — all on by default.
 
-### "VybecordTS can't write its configuration"
+With it, each site is identified properly, the presence links straight to the track, and the progress bar reads the page's own audio element instead of the coarser system position. Without it, everything below still applies.
 
-You installed it in a folder Windows protects. Reinstall into the suggested
-location (`%APPDATA%\VybecordTS`) or any folder you own.
+### SoundCloud shows as a browser, not as SoundCloud
+
+Windows tells Vybecord what is playing, not which website it is on: a SoundCloud tab and a YouTube tab look identical. Only the userscripts could tell them apart, and they are gone.
+
+What still works: the track and artist are parsed with SoundCloud's conventions in mind, so an upload titled "Artist - Track (prod. Someone)" resolves to the right artist rather than the uploading account. Lyrics, cover art and the presence itself are unaffected — they key on the track and artist, not the site.
+
+What does not: the per-site toggle under Settings → Detection. Browser playback is governed by the **Browser tabs** switch instead.
+
+### Two things playing at once
+
+Go to **Players** and click the one you want announced. It stays pinned until you click **Automatic**.
 
 ---
 
-## ❓ Frequently Asked Questions (FAQ)
+## FAQ
 
-**Q: Is it free?**
-A: Yes, VybecordTS is 100% free and open source.
+**Does this need Spotify Premium?**
+No. Vybecord never talks to Spotify's API — it reads what Windows already knows.
 
-**Q: Is it safe?**
-A: Yes, everything runs locally on your PC. Your data never leaves your machine (except normal API requests to Discord/Spotify).
+**Do I need Spicetify or a browser extension?**
+No. Older versions did; this one does not.
 
-**Q: Can I use it without Spotify?**
-A: Yes! "Free" mode detects any Windows player (YouTube, SoundCloud, etc.) via SMTC.
+**What does it work with?**
+Anything that appears in the Windows media overlay: Spotify, browser tabs (YouTube, SoundCloud, Deezer…), VLC, foobar2000, MusicBee, AIMP, Apple Music, Tidal, Amazon Music.
 
-**Q: Can I use it on Mac/Linux?**
-A: No, VybecordTS requires Windows for SMTC detection.
+**Does my data leave my PC?**
+Track and artist names go to the lyrics services (LRCLib, Netease, Musixmatch) to look lyrics up, and to Discord for the status. If you enable Last.fm, they go there too. Your history and imported lyrics stay local.
 
-**Q: Lyrics are out of sync, what to do?**
-A: In the Dashboard, adjust "Lyrics Offset" (negative = earlier, positive = later).
+**Where are my files?**
+In `%APPDATA%\Vybecord` — paste that into Explorer.
 
----
-
-## 📞 Support
-
-- 🐛 **Bug report:** Via the Dashboard → "Bug Report" button
-- 💬 **Discord:** [Your Discord server here]
+**I'm coming from VybecordTS 1.x — do I lose anything?**
+Your config, lyrics database and history all carry over. You do lose playlist context, shuffle/repeat state and clickable track links: Windows does not expose them. You can uninstall the Spicetify extension and the Tampermonkey scripts.
 
 ---
 
-**Enjoy your synced lyrics on Discord! 🎶**
+## Support
+
+Something broken? Use the **Report** page in the app, or open an issue on [GitHub](https://github.com/TheUnknownMurda/VybecordTS/issues).

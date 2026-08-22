@@ -19,7 +19,8 @@ export interface TrackData {
   context_url?: string;
   /** Context type: 'playlist' | 'album' | 'artist' | 'collection' | etc. */
   context_type?: string;
-  /** Artist profile image URL (from Spicetify/Tampermonkey) */
+  /** Artist profile image URL. The OS media session does not expose one, so
+   *  this is only ever set when a lyrics provider supplies it. */
   artist_art_url?: string;
   /** True if this is a live stream (YouTube live, radio, etc.) */
   is_live?: boolean;
@@ -33,7 +34,9 @@ export interface TrackData {
   is_local?: boolean;
   /** High-res timestamp (performance.now()) when this data was received */
   _received_at: number;
-  /** True if this track came from a push source (Spicetify, YouTube/SC/BC userscript) */
+  /** True if this track came from a push source. No source sets it since the
+   *  userscripts were removed; kept so the engine's recalibration branch stays
+   *  intact for any future push source. */
   _from_push?: boolean;
   /** Direct URL to the video (YouTube, etc.) */
   video_url?: string;
@@ -63,6 +66,10 @@ export interface LrcLibResult {
 // ── Discord RPC activity ──
 export interface DiscordActivity {
   type?: number;
+  /** Overrides the Discord application name in the presence header + status line. */
+  name?: string;
+  /** Which field feeds the "Listening to …" status line: 0 = name, 1 = state, 2 = details. */
+  status_display_type?: number;
   details?: string;
   state?: string;
   timestamps?: { start?: number; end?: number };
@@ -95,6 +102,12 @@ export interface VybecordConfig {
   detect_twitch: boolean;
   detect_browser: boolean;
   detect_other_apps: boolean;
+  /** Hide the presence while Spotify plays an advertisement. Heuristic — see
+   *  looksLikeSpotifyAd() in native-media-source.ts. */
+  filter_spotify_ads: boolean;
+  /** Accept playback pushes from the browser extension. When false no port is
+   *  opened at all. */
+  extension_enabled: boolean;
   discord_app_id: string;
   // RPC customization
   /** Which URL each clickable RPC field links to: 'track' | 'artist' | 'album' | 'context' | 'auto' */
@@ -105,6 +118,14 @@ export interface VybecordConfig {
   rpc_button1_url: string;
   rpc_button2_label: string;
   rpc_activity_type: number;
+  /**
+   * What the "Listening to …" status line shows (member list / profile), independent
+   * of the presence card: 'app' = application name, 'title' = current track title,
+   * 'details' = the details field, 'state' = the state field.
+   */
+  rpc_status_display: string;
+  /** Free-form status-line template used when rpc_status_display is 'custom'. */
+  rpc_status_template: string;
   /** Dance mode: animated small icon for Spotify */
   dance_mode: boolean;
   /** Radiate mode: custom animated GIF as small icon (all platforms) */
@@ -129,7 +150,7 @@ export interface VybecordConfig {
   lyrics_offset_ms: number;
   /** Auto-romanize Japanese/Korean lyrics (Kana→romaji, Hangul→romanization) */
   romanize_lyrics: boolean;
-  /** Enable real-time lyric translation (dashboard only) */
+  /** Enable real-time lyric translation in the window */
   translate_lyrics: boolean;
   /** Enable translated lyrics on Discord RPC */
   rpc_translate_lyrics: boolean;
@@ -139,16 +160,35 @@ export interface VybecordConfig {
   poll_interval_ms: number;
   /** Absolute path to a local LRCLIB dump .sqlite3 file (too large to bundle
    *  with the app). If set and the file exists, it's used instead of the
-   *  default "<app dir>/LRCLIB Dump/db.sqlite3" auto-detection. */
+   *  default "<app dir>/LRCLIB Dump/lrclib-dump.sqlite3" auto-detection. */
   lrclib_dump_path: string;
   /** Discord webhook URL for bug reports (optional) */
   bug_report_webhook?: string;
+  /**
+   * Publish cover art that exists only on this machine, so Discord can show it.
+   *
+   * On by default. Music that was ever released is found on a public catalogue
+   * without anything leaving the machine (see cover-art.ts), so this only ever
+   * applies to local rips and recordings, whose artwork Discord could otherwise
+   * never show. Identifying metadata is stripped first. See art-upload.ts.
+   */
+  art_upload_enabled: boolean;
+  /** Base URL of the cover store to publish to. Empty means no store. */
+  art_upload_url: string;
   /** False until the user has been through the /setup onboarding page once.
    *  Drives whether startup opens /setup or the dashboard. */
   first_run_completed: boolean;
-  /** Show a Windows notification-area icon (dashboard / setup / quit).
+  /** Show a Windows notification-area icon (show / quit).
    *  Windows-only; ignored elsewhere. */
   tray_enabled: boolean;
+  /** Closing the window hides it to the tray instead of quitting. */
+  minimize_to_tray: boolean;
+  /** Start hidden in the tray rather than showing the window. */
+  start_minimized: boolean;
+  /** Register the app to launch when the user signs in. */
+  launch_on_startup: boolean;
+  /** Window colour scheme: 'dark' | 'light'. */
+  theme: string;
   [key: string]: unknown;
 }
 

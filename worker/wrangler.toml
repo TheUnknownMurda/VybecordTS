@@ -1,0 +1,33 @@
+name = "vybecord-art"
+main = "src/index.js"
+compatibility_date = "2026-08-20"
+
+# Plain JS, no build step and no dependencies: wrangler uploads this file as is.
+# Deliberate — the app already carries an antivirus reputation problem, and the
+# less unsigned tooling in the tree the better.
+
+[observability]
+enabled = true
+
+[[r2_buckets]]
+binding = "ART"
+bucket_name = "vybecord-art"
+
+# 60 writes per minute per IP. A listener changes track at most a few times a
+# minute and only uploads on a cache miss, so this is far above real use and far
+# below what it takes to fill a bucket.
+[[ratelimits]]
+name = "UPLOAD_LIMIT"
+namespace_id = "1001"
+
+  [ratelimits.simple]
+  limit = 60
+  period = 60
+
+# Serve from a domain we own rather than *.workers.dev: shared Cloudflare
+# subdomains are heavily used for phishing and appear on DNS filter lists, which
+# would put us straight back into the problem this replaced. Uncomment once the
+# zone is in this Cloudflare account.
+# [[routes]]
+# pattern = "art.vybecord.app/*"
+# custom_domain = true

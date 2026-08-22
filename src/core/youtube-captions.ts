@@ -63,6 +63,15 @@ export interface CCResult {
   lines: LyricLine[];
   thumbnailUrl?: string;
   ageRestricted?: boolean;
+  /**
+   * The video the captions came from.
+   *
+   * Worth surfacing because it is the one thing the search recovers that the OS
+   * media session cannot give: a browser tab reports a title and a channel, not
+   * a URL. With this the presence can link straight to the video instead of a
+   * search — which is what the retired userscript used to supply.
+   */
+  videoId?: string;
 }
 
 // ── In-memory cache ──
@@ -123,18 +132,94 @@ function cleanQuery(title: string, artist: string): [string, string] {
 // ── yt-dlp helpers ──
 
 /** Check if yt-dlp is installed (cached). */
+/**
+ * Extra folder to look for yt-dlp in, besides PATH.
+ *
+ * Set to the app's own data directory, so the binary can simply be dropped there
+ * instead of the user having to edit their PATH — which most people should not
+ * have to do to get lyrics on a video.
+ */
+let ytDlpExtraDir = '';
+
+/** Path to the copy shipped with the app, when there is one. */
+let ytDlpBundled = '';
+
+/** Resolved command used to invoke yt-dlp: a bare name or an absolute path. */
+let ytDlpCommand = 'yt-dlp';
+
+export function setYtDlpSearchDir(dir: string): void {
+  if (dir === ytDlpExtraDir) return;
+  ytDlpExtraDir = dir;
+  ytDlpChecked = false;  // re-probe with the new location
+}
+
+/** Point at the copy bundled with the app. */
+export function setYtDlpBundled(exe: string): void {
+  if (exe === ytDlpBundled) return;
+  ytDlpBundled = exe;
+  ytDlpChecked = false;
+}
+
+/** Where yt-dlp should be dropped when it is not on PATH. */
+export function ytDlpDropDir(): string {
+  return ytDlpExtraDir;
+}
+
+/**
+ * Is yt-dlp usable, and where did it come from?
+ *
+ * Surfaced to the window because its absence silently disables captions: the app
+ * would look like it was ignoring the setting, with the reason buried in a log.
+ */
+export async function ytDlpStatus(): Promise<{
+  available: boolean; command: string; dropDir: string; source: string;
+}> {
+  const available = await ensureYtDlp();
+  const source = !available ? ''
+    : ytDlpCommand === 'yt-dlp' ? 'PATH'
+    : ytDlpCommand === ytDlpBundled ? 'bundled'
+    : 'user';
+  return { available, command: available ? ytDlpCommand : '', dropDir: ytDlpExtraDir, source };
+}
+
 async function ensureYtDlp(): Promise<boolean> {
   if (ytDlpChecked) return ytDlpAvailable;
   ytDlpChecked = true;
-  try {
-    await execFileAsync('yt-dlp', ['--version'], { timeout: 5_000 });
-    ytDlpAvailable = true;
-    log.info('[CC] yt-dlp found — YouTube CC enabled');
-  } catch {
-    ytDlpAvailable = false;
-    log.info('[CC] yt-dlp not found — YouTube CC disabled');
+
+  /*
+   * Order: what the user deliberately put there, then what shipped, then
+   * whatever is on PATH.
+   *
+   * The bundled copy comes before PATH so the app behaves the same on every
+   * machine — it is a known, checksum-verified version, whereas a copy on PATH
+   * could be years old, and yt-dlp needs regular updates to keep working against
+   * YouTube. Anyone who wants their own version to win can drop it in the app's
+   * bin folder, which is checked first precisely because it is an explicit
+   * choice rather than something that happens to be installed.
+   */
+  const exeName = process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp';
+  const candidates: string[] = [];
+  if (ytDlpExtraDir) candidates.push(path.join(ytDlpExtraDir, exeName));
+  if (ytDlpBundled) candidates.push(ytDlpBundled);
+  candidates.push('yt-dlp');
+
+  for (const cmd of candidates) {
+    try {
+      await execFileAsync(cmd, ['--version'], { timeout: 5_000 });
+      ytDlpAvailable = true;
+      ytDlpCommand = cmd;
+      const where = cmd === 'yt-dlp' ? 'on PATH' : cmd === ytDlpBundled ? 'bundled with the app' : cmd;
+      log.info(`[CC] yt-dlp found (${where}) — YouTube CC enabled`);
+      return true;
+    } catch {
+      /* try the next candidate */
+    }
   }
-  return ytDlpAvailable;
+
+  ytDlpAvailable = false;
+  log.info('[CC] yt-dlp not found — YouTube captions are unavailable. '
+    + `Install it, or drop yt-dlp.exe in ${ytDlpExtraDir || 'the app data folder'}`);
+  return false;
 }
 
 /** Promise wrapper around execFile. */
@@ -290,7 +375,21 @@ function postProcessCC(lines: LyricLine[]): LyricLine[] {
  *   Auto:    `<id>.en-eEY6OEpapPo.json3` (original auto-CC with hash suffix)
  * Priority: manual sub > auto original > auto translated.
  */
-function pickBestSubFile(files: string[], langOrder: string[] = CC_LANGS): { file: string; isAuto: boolean; lang: string } | null {
+/**
+ * Choose which downloaded subtitle file to use.
+ *
+ * @param requireLang reject anything outside `langOrder`. Manual subtitles are
+ *   ranked above auto-generated ones, which is right for quality but wrong for
+ *   language: a video whose only *manual* track is Italian would beat its
+ *   auto-generated English one, and captions nobody can read are worse than
+ *   rough ones they can. Callers use this to insist on a readable language
+ *   first, then relax it if nothing at all turns up.
+ */
+function pickBestSubFile(
+  files: string[],
+  langOrder: string[] = CC_LANGS,
+  requireLang = false,
+): { file: string; isAuto: boolean; lang: string } | null {
   const json3Files = files.filter(f => f.endsWith('.json3'));
   if (!json3Files.length) return null;
 
@@ -315,16 +414,19 @@ function pickBestSubFile(files: string[], langOrder: string[] = CC_LANGS): { fil
     log.debug(`[CC] File: ${c.file} → lang=${c.lang}, isAuto=${c.isAuto}`);
   }
 
+  const usable = requireLang ? classified.filter(c => langOrder.includes(c.lang)) : classified;
+  if (!usable.length) return null;
+
   // Sort: manual first, then by language preference order
-  classified.sort((a, b) => {
+  usable.sort((a, b) => {
     if (a.isAuto !== b.isAuto) return a.isAuto ? 1 : -1;
     const aRank = langOrder.indexOf(a.lang);
     const bRank = langOrder.indexOf(b.lang);
     return (aRank >= 0 ? aRank : 99) - (bRank >= 0 ? bRank : 99);
   });
 
-  log.debug(`[CC] Picked: ${classified[0]?.file} (isAuto=${classified[0]?.isAuto})`);
-  return classified[0];
+  log.debug(`[CC] Picked: ${usable[0]?.file} (isAuto=${usable[0]?.isAuto})`);
+  return usable[0];
 }
 
 // ── Public API ──
@@ -363,8 +465,9 @@ const LANG_VARIANTS: Record<string, string[]> = {
 
 /** Build ordered lang lists based on preferred language. */
 function buildLangLists(preferred: string): { manualLangs: string; autoLangs: string; sortOrder: string[] } {
-  // Default sort order
-  const defaultOrder = ['fr', 'en'];
+  // "auto" follows the machine's own language, then English. It used to be
+  // hardcoded to French first, which is only right for one locale.
+  const defaultOrder = autoOrder();
 
   if (!preferred || preferred === 'auto') {
     return {
@@ -389,6 +492,22 @@ function buildLangLists(preferred: string): { manualLangs: string; autoLangs: st
   const autoLangs = [`${pref}-orig`, ...sortOrder.filter(l => l !== pref).map(l => `${l}-orig`), ...sortOrder].join(',');
 
   return { manualLangs, autoLangs, sortOrder };
+}
+
+/**
+ * Language order for "auto": the system language first, then English.
+ *
+ * English is always kept as a second choice because it is what most videos
+ * caption, and a caption the user cannot read is barely better than none.
+ */
+function autoOrder(): string[] {
+  let sys = 'en';
+  try {
+    sys = (Intl.DateTimeFormat().resolvedOptions().locale || 'en').slice(0, 2).toLowerCase();
+  } catch {
+    /* keep the default */
+  }
+  return sys === 'en' ? ['en'] : [sys, 'en'];
 }
 
 /**
@@ -452,7 +571,7 @@ export async function fetchYouTubeCaptions(
     let isManualSub = false;
     let isAgeRestricted = false;
 
-    await execFileAsync('yt-dlp', [
+    await execFileAsync(ytDlpCommand, [
       ...baseArgs,
       '--write-sub',
       '--sub-lang', manualLangs,
@@ -466,7 +585,10 @@ export async function fetchYouTubeCaptions(
     });
 
     let files = await readdir(tmpDir);
-    let pick = files.length ? pickBestSubFile(files, sortOrder) : null;
+    const manualFiles = files;
+    // Insist on a language the user can read; an Italian track for an English
+    // talk is worse than that talk's auto-generated English.
+    let pick = files.length ? pickBestSubFile(files, sortOrder, true) : null;
 
     if (pick) {
       isManualSub = true;
@@ -474,7 +596,7 @@ export async function fetchYouTubeCaptions(
     } else {
       // ── Step 2: No manual subs — fall back to auto-generated CC ──
       log.info('[CC] No manual subs — trying auto-CC...');
-      await execFileAsync('yt-dlp', [
+      await execFileAsync(ytDlpCommand, [
         ...baseArgs,
         '--write-auto-sub',
         '--sub-lang', autoLangs,
@@ -489,7 +611,19 @@ export async function fetchYouTubeCaptions(
 
       files = await readdir(tmpDir);
       log.info(`[CC] Files in temp dir: ${files.join(', ') || '(none)'}`);
+      // Auto-CC is normally in the video's own language, which for a song is
+      // exactly what its lyrics are — so any language is accepted here.
       pick = files.length ? pickBestSubFile(files, sortOrder) : null;
+
+      // Still nothing: take the manual track in whatever language it came in,
+      // rather than showing none at all.
+      if (!pick && manualFiles.length) {
+        pick = pickBestSubFile(manualFiles, sortOrder);
+        if (pick) {
+          isManualSub = true;
+          log.info(`[CC] Falling back to manual subtitles in ${pick.lang} — no track in a preferred language`);
+        }
+      }
     }
 
     if (!pick) {
@@ -536,7 +670,7 @@ export async function fetchYouTubeCaptions(
       log.info('[CC] FAILED: No usable lines in captions after filtering');
     }
 
-    const result: CCResult = { lines, thumbnailUrl };
+    const result: CCResult = { lines, thumbnailUrl, videoId: extractedVideoId ?? undefined };
     setCache(key, result);
     return result;
   } catch (err: unknown) {
@@ -557,7 +691,7 @@ export async function fetchYouTubeCaptions(
           const sourceTag = pick.isAuto ? 'cc' as const : 'sub' as const;
           for (const l of lines) l.source = sourceTag;
           const videoId = extractVideoId(pick.file);
-          const result: CCResult = { lines, thumbnailUrl: videoId ? ytThumbnail(videoId) : undefined };
+          const result: CCResult = { lines, thumbnailUrl: videoId ? ytThumbnail(videoId) : undefined, videoId: videoId ?? undefined };
           log.info(`[CC] Recovered ${lines.length} lines from partial download (${pick.lang})`);
           setCache(key, result);
           return result;

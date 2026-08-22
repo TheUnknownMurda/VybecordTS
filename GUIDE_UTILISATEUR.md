@@ -1,182 +1,154 @@
-# 🎵 VybecordTS - Guide pour Débutants
+# Vybecord — Guide de démarrage
 
-> **Discord Rich Presence avec paroles synchronisées en temps réel**
+Vybecord affiche sur ton profil Discord la musique que tu écoutes, avec les paroles qui défilent en temps réel.
 
----
-
-## 📋 Ce dont vous avez besoin AVANT de commencer
-
-### Obligatoire (sans exception)
-- ✅ **Windows 10 ou 11**
-- ✅ **Discord** (application de bureau, PAS la version web)
-
-### Facultatif
-- 🌐 **[Tampermonkey](https://www.tampermonkey.net/)** → pour YouTube, SoundCloud, Bandcamp, Twitch, Kick et le lecteur web Spotify
-- 🛠️ **Application Spotify de bureau** → [Spicetify](https://spicetify.app/) (voir mise en garde ci-dessous)
-
-**Aucun compte développeur n'est nécessaire.** VybecordTS embarque un ID
-d'application Discord fonctionnel, et n'utilise pas l'API Web de Spotify : ni
-Client ID, ni Client Secret, ni connexion à configurer.
+**Rien à installer dans Spotify, rien à installer dans ton navigateur.** L'appli lit directement le lecteur média de Windows.
 
 ---
 
-## ⚠️ AVERTISSEMENT IMPORTANT - Spicetify
+## Ce qu'il te faut
 
-**Si vous utilisez Spicetify :**
-
-- Spicetify **viole les Conditions d'Utilisation de Spotify**
-- Utilisé incorrectement (bloqueur de pubs, etc.) → **risque de ban de compte**
-- **Nous ne sommes pas responsables** des suspensions de compte
-- **Recommandation :** Utilisez Spicetify UNIQUEMENT pour le thème/personnalisation, PAS pour bloquer les pubs
-
-**Alternative plus sûre :** Utilisez le lecteur web Spotify avec le script Tampermonkey — aucune modification du client, aucun risque vis-à-vis des CGU.
+- **Windows 10 version 1809 ou plus récent** (sorti fin 2018 — si ton PC est à jour, c'est bon)
+- **Discord installé sur ton PC** et lancé — la version dans le navigateur ne fonctionne pas
+- C'est tout.
 
 ---
 
-## 🚀 Installation - ÉTAPE PAR ÉTAPE
+## Installation
 
-### Étape 1 : Créer une Application Discord (2 minutes)
+1. Télécharge `Vybecord-<version>-setup.exe` depuis la [page des releases](https://github.com/TheUnknownMurda/VybecordTS/releases)
+2. Lance-le, choisis un dossier, suis l'installateur
+3. Ouvre Vybecord
+4. Mets de la musique
 
-1. Allez sur [discord.com/developers/applications](https://discord.com/developers/applications)
-2. Cliquez **"New Application"** (bouton bleu en haut à droite)
-3. Donnez un nom (ex: "Vybecord") → Cliquez **Create**
-4. Dans le menu de gauche, cliquez **OAuth2** → **General**
-5. Copiez l'**Application ID** (numéros en haut, gardez-le précieusement)
+Ton statut Discord se met à jour tout seul. Il n'y a aucune étape de configuration.
 
-**📝 Note :** Vous n'avez PAS besoin de créer un bot ou d'activer quoi que ce soit d'autre.
-
----
-
-### Étape 2 : Télécharger VybecordTS
-
-1. Allez sur la page [Releases GitHub](https://github.com/TheUnknownMurda/VybecordTS/releases)
-2. Téléchargez **VybecordTS.zip** (dernière version)
-3. Extrayez le ZIP où vous voulez (Bureau, Documents, etc.)
-
-**📁 Structure après extraction :**
-```
-VybecordTS/
-├── VybecordTS.exe    ← Lancez celui-ci !
-├── config.json       ← Se crée automatiquement
-└── ...
-```
+> **Windows affiche un avertissement SmartScreen ?** L'application n'est pas signée par un certificat payant. Clique sur « Informations complémentaires » puis « Exécuter quand même ».
 
 ---
 
-### Étape 3 : Lancer l'Assistant de Configuration
+## L'utiliser au quotidien
 
-1. Double-cliquez sur **VybecordTS.exe**
-2. Votre navigateur s'ouvre automatiquement sur `http://127.0.0.1:8888`
-3. **L'Assistant de Configuration** apparaît :
+### Fermer la fenêtre n'arrête pas l'appli
 
-#### Option A - Spotify, application de bureau
+Vybecord continue dans la zone de notification (à côté de l'horloge). Clique sur l'icône pour rouvrir la fenêtre, ou clic droit → **Quit** pour vraiment quitter.
 
-1. Installez [Spicetify](https://spicetify.app/) (si ce n'est pas déjà fait)
-2. Installez l'extension VybecordTS dans Spicetify — l'installateur peut le faire pour vous
-3. Relancez Spotify
+Tu peux changer ça dans **Settings → App → Close to tray**.
 
-**⚠️ Voir l'avertissement Spicetify en haut de ce guide**
+### Les pages
 
-#### Option B - Navigateur (YouTube, SoundCloud, Spotify web…)
+| Page | À quoi ça sert |
+| --- | --- |
+| **Now playing** | Le titre en cours, la pochette, et les paroles qui défilent |
+| **Players** | Tous les lecteurs détectés — utile si plusieurs choses jouent en même temps |
+| **Stats** | Tes titres et artistes les plus écoutés de la session |
+| **History** | Tout ton historique, plus un résumé façon « Wrapped » |
+| **Lyrics** | Ta bibliothèque de paroles perso, l'import, et les titres signalés |
+| **Settings** | Tous les réglages |
+| **Last.fm** | Le scrobbling, si tu veux |
 
-1. Installez [Tampermonkey](https://www.tampermonkey.net/)
-2. Sur la page de configuration, cliquez **Installer** pour chaque plateforme que vous utilisez
-
-#### Option C - Tout le reste
-
-Rien à faire : Windows détecte automatiquement la plupart des lecteurs
-(Apple Music, VLC, foobar2000…).
+Astuce : les touches **1 à 8** changent de page.
 
 ---
 
-## 🎵 Utilisation Quotidienne
+## Problèmes courants
 
-### Démarrer VybecordTS
+### Rien n'est détecté
 
-1. Double-cliquez sur `VybecordTS.exe`
-2. Laissez-le tourner en arrière-plan
-3. Lancez Spotify et jouez de la musique
-4. **Votre Discord affiche :**
-   - 🎵 Titre + Artiste
-   - 📝 Paroles synchronisées (si disponibles)
-   - ⏱️ Temps écoulé
-   - 🔄 Shuffle / Repeat (si activé)
+Va sur la page **Players**. Si elle est vide, c'est que ton lecteur ne communique pas avec Windows.
 
-### Dashboard Web
+**Comment vérifier :** appuie sur une touche média (play/pause) de ton clavier. Si l'encart de volume Windows affiche le titre du morceau, Vybecord peut le voir. S'il n'affiche rien, Vybecord ne peut rien voir non plus — c'est une limite du lecteur, pas de l'appli.
 
-Accédez à `http://127.0.0.1:8888` dans votre navigateur pour :
+### Le statut n'apparaît pas sur Discord
 
-- 📊 Voir les statistiques
-- 🎨 Changer le thème (couleurs)
-- 📝 Importer des paroles personnalisées
-- 📱 Afficher un QR code pour le mobile
-- ⚙️ Modifier la configuration
+- Discord doit être l'**application de bureau**, et être lancée
+- Regarde la barre de titre de Vybecord : si le point à côté de « Discord » est rouge, la connexion n'est pas établie. Relance Discord puis Vybecord.
+- Vérifie dans Discord : **Paramètres → Activité → Afficher l'activité en cours** doit être activé
 
----
+### Pas de paroles
 
-## 🔧 Résolution des Problèmes
+- Vérifie que **Settings → Lyrics → Show lyrics** est activé
+- Certains morceaux n'ont tout simplement pas de paroles synchronisées en ligne
+- Depuis un onglet de navigateur, le titre publié est souvent le nom de la vidéo (« Artiste - Titre (Official Video) ») plutôt qu'un titre propre, ce qui rend la recherche moins fiable
 
-### "Discord ne s'affiche pas"
+### Pas de paroles sur une vidéo YouTube
 
-- ❌ Discord Web ne fonctionne PAS
-- ✅ Vous devez utiliser l'**application Discord de bureau**
-- Vérifiez : Paramètres Discord → Confidentialité & Sécurité → **"Afficher l'activité en cours"** doit être ACTIVÉ
+Les sous-titres sont un recours : ils ne servent que si aucune parole synchronisée n'existe pour le morceau. Ils reposent sur **yt-dlp**, désormais livré avec Vybecord — il n'y a rien à installer.
 
-### "Pas de paroles"
+**Settings → Lyrics → YouTube captions** indique quelle copie est utilisée. Pour imposer la tienne, dépose `yt-dlp.exe` dans le dossier que ce panneau ouvre : elle passe avant celle embarquée.
 
-- VybecordTS cherche sur plusieurs sources (LRCLib, Netease, YouTube)
-- Certaines chansons n'ont pas de paroles synchronisées disponibles
-- Vous pouvez importer vos propres fichiers `.lrc` via le Dashboard
+Toutes les vidéos n'ont pas de sous-titres, et la vidéo doit être retrouvable par son titre et sa chaîne : le navigateur dit à Windows ce qui joue, mais pas sur quelle page — Vybecord la cherche donc sur YouTube.
 
-### "Spotify ne se connecte pas"
+### Les paroles sont décalées
 
-- Application de bureau : vérifiez que l'extension Spicetify est bien installée (voir ci-dessous)
-- Lecteur web : vérifiez que le script Tampermonkey est installé et activé
-- Sans l'un des deux, Spotify reste détecté via les contrôles média de Windows,
-  mais avec moins d'informations (pas de nom de playlist, pas d'aléatoire/répétition)
+Sur **Now playing**, utilise les boutons **−250 / +250** sous les paroles. Le décalage est mémorisé et s'applique aux morceaux suivants.
 
-### "Spicetify ne marche pas"
+### Les paroles sont fausses
 
-- Assurez-vous que Spicetify est bien installé : `spicetify --version` dans PowerShell
-- Vérifiez que l'extension VybecordTS est bien copiée dans le dossier Extensions
-- Redémarrez complètement Spotify après l'installation
+Clique sur **Wrong lyrics**. Ce résultat ne sera plus jamais réutilisé pour ce morceau. Tu peux ensuite importer les bonnes paroles dans **Lyrics → Import**, ou annuler le signalement dans **Lyrics → Flagged**.
 
-### "Erreur Missing DISCORD_CLIENT_ID"
+### Mon statut disparaît pendant les pubs Spotify
 
-- Relancez l'assistant via le Dashboard
-- Ou éditez manuellement `config.json` :
-  ```json
-  {
-    "discord_app_id": "VOTRE_ID_ICI"
-  }
-  ```
+C'est voulu. Sans filtre, ton profil Discord annoncerait « Monster Energy » comme si c'était un morceau.
 
----
+Spotify ne signale pas ses coupures publicitaires : il remplace simplement les métadonnées du morceau par celles de l'annonceur. Vybecord les repère à leur **durée** : toutes les pubs observées font 30 secondes, alors que le plus court de 44 vrais morceaux échantillonnés faisait 83 secondes. Un titre Spotify de moins d'une minute est donc traité comme une pub.
 
-## ❓ Questions Fréquentes (FAQ)
+Les interludes et skits d'album sont épargnés : un interlude appartient à l'album en cours de lecture, une pub jamais.
 
-**Q : Est-ce que c'est gratuit ?**
-R : Oui, VybecordTS est 100% gratuit et open source.
+Pendant une pub, la fenêtre affiche « Advertisement » pour que tu saches que ce n'est pas un bug. Tu peux désactiver le filtre dans **Settings → Detection**.
 
-**Q : Est-ce que c'est sûr ?**
-R : Oui, tout se passe localement sur votre PC. Vos données ne quittent jamais votre machine (sauf les requêtes API normales à Discord/Spotify).
+### La pochette s'affiche dans la fenêtre mais pas sur Discord
 
-**Q : Puis-je l'utiliser sans Spotify ?**
-R : Oui ! Le mode "Free" détecte n'importe quel lecteur Windows (YouTube, SoundCloud, etc.) via SMTC.
+La fenêtre lit l'image directement sur ton disque. Discord ne peut pas : il lui faut une URL. Vybecord cherche donc l'album sur un CDN musical public et transmet cette URL à Discord.
 
-**Q : Puis-je l'utiliser sur Mac/Linux ?**
-R : Non, VybecordTS nécessite Windows pour la détection SMTC.
+Si un morceau affiche l'image par défaut, c'est qu'il n'est simplement pas au catalogue — en général un titre non distribué ou un fichier local. **Settings → Presence → Cover images → Test with the current track** te dit dans quel cas tu es.
 
-**Q : Les paroles sont décalées, que faire ?**
-R : Dans le Dashboard, ajustez "Lyrics Offset" (négatif = plus tôt, positif = plus tard).
+Envoyer ton propre fichier ne sert à rien : Discord accepte la présence puis refuse de charger l'image, d'où le « ? ». Testé avec un hébergeur public et avec le CDN de Discord lui-même.
+
+### Obtenir plus de détails sur la lecture navigateur
+
+Windows dit à Vybecord ce qui joue, pas sur quel site : un onglet SoundCloud et un onglet YouTube sont identiques.
+
+L'extension optionnelle, dans le dossier `extension/`, corrige ça. Charge-la via `chrome://extensions` → Mode développeur → **Charger l'extension non empaquetée**, et choisis ce dossier. Son icône ouvre une page de réglages avec un interrupteur par site — Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick — tous actifs par défaut.
+
+Avec elle, chaque site est correctement identifié, la présence pointe directement vers le morceau, et la barre de progression lit l'élément audio de la page au lieu de la position système, plus grossière. Sans elle, tout ce qui suit reste valable.
+
+### SoundCloud apparaît comme un navigateur, pas comme SoundCloud
+
+Windows indique à Vybecord ce qui joue, pas sur quel site : un onglet SoundCloud et un onglet YouTube sont identiques. Seuls les scripts Tampermonkey savaient les distinguer, et ils ont disparu.
+
+Ce qui fonctionne quand même : le titre et l'artiste sont analysés avec les conventions de SoundCloud, donc un upload intitulé « Artiste - Titre (prod. Machin) » donne le bon artiste plutôt que le compte qui a mis en ligne. Les paroles, la pochette et la présence elle-même ne sont pas affectées — elles se basent sur le morceau et l'artiste, pas sur le site.
+
+Ce qui ne fonctionne pas : l'interrupteur par site dans Settings → Detection. La lecture navigateur est régie par **Browser tabs** à la place.
+
+### Deux choses jouent en même temps
+
+Va dans **Players** et clique sur le lecteur que tu veux afficher. Il reste épinglé jusqu'à ce que tu cliques sur **Automatic**.
 
 ---
 
-## 📞 Support
+## Questions fréquentes
 
-- 🐛 **Bug report** : Via le Dashboard → bouton "Bug Report"
-- 💬 **Discord** : [Votre serveur Discord ici]
+**Est-ce que ça marche sans Spotify Premium ?**
+Oui. Vybecord ne parle jamais à l'API de Spotify — il lit ce que Windows sait déjà.
+
+**Faut-il installer Spicetify ou une extension de navigateur ?**
+Non. Les anciennes versions le demandaient, plus celle-ci.
+
+**Ça marche avec quoi ?**
+Tout ce qui apparaît dans l'encart média de Windows : Spotify, les onglets de navigateur (YouTube, SoundCloud, Deezer…), VLC, foobar2000, MusicBee, AIMP, Apple Music, Tidal, Amazon Music.
+
+**Est-ce que mes données sortent de mon PC ?**
+Les titres et artistes sont envoyés aux services de paroles (LRCLib, Netease, Musixmatch) pour chercher les paroles, et à Discord pour le statut. Si tu actives Last.fm, ils vont aussi à Last.fm. L'historique et les paroles importées restent en local.
+
+**Où sont mes fichiers ?**
+Dans `%APPDATA%\Vybecord` — colle ce chemin dans l'explorateur.
+
+**Je viens de VybecordTS 1.x, je perds quelque chose ?**
+Ta configuration, ta base de paroles et ton historique sont conservés. En revanche, la playlist en cours, le mode aléatoire/répétition et les liens cliquables vers le morceau ne sont plus disponibles : Windows ne les expose pas. Tu peux désinstaller l'extension Spicetify et les scripts Tampermonkey.
 
 ---
 
-**Amusez-vous bien avec vos paroles synchronisées sur Discord ! 🎶**
+## Support
+
+Un souci ? Utilise la page **Report** dans l'appli, ou ouvre un ticket sur [GitHub](https://github.com/TheUnknownMurda/VybecordTS/issues).

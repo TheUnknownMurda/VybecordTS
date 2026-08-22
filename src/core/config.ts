@@ -18,6 +18,9 @@ const DEFAULTS: VybecordConfig = {
   detect_twitch: true,
   detect_browser: true,
   detect_other_apps: true,
+  filter_spotify_ads: true,
+  /** Listen for pushes from the browser extension (opens 127.0.0.1:8888). */
+  extension_enabled: true,
   discord_app_id: '',
   rpc_details_url: 'auto',
   rpc_state_url: 'auto',
@@ -26,6 +29,8 @@ const DEFAULTS: VybecordConfig = {
   rpc_button1_url: '',
   rpc_button2_label: '🎵 Listen on {platform}',
   rpc_activity_type: 2, // LISTENING
+  rpc_status_display: 'app', // status line keeps showing the app name by default
+  rpc_status_template: '{title} - {artist}',
   dance_mode: false,
   radiate_mode: false,
   purple_rad_mode: false,
@@ -42,10 +47,32 @@ const DEFAULTS: VybecordConfig = {
   translate_lyrics: false,
   rpc_translate_lyrics: false,
   translate_target_lang: 'en',
-  poll_interval_ms: 3000,
+  // The native source pushes track changes by event, so this interval only
+  // drives progress sync and idle detection. It is pure arithmetic now (no
+  // subprocess, no native call), which is why it can afford to be this tight.
+  poll_interval_ms: 1000,
   lrclib_dump_path: '',
+  // ── Cover art for local-only music ──
+  // On, so a local rip shows its artwork rather than a placeholder. Released
+  // music never reaches this: cover-art.ts resolves that from a public
+  // catalogue with nothing leaving the machine. Only artwork that exists
+  // nowhere else is published, and only after its EXIF is stripped. Disclosed
+  // in website/privacy/ and switchable in Settings → Cover images.
+  art_upload_enabled: true,
+  // The store Vybecord ships with — see worker/. On workers.dev rather than a
+  // domain of our own, which is fine here: what got the old file host blocked
+  // was being listed as malware, and this is neither that nor rate limited the
+  // way r2.dev is. Moving to a custom domain later costs nothing, because a
+  // cover's address is its hash: point this elsewhere and clients re-publish on
+  // their next miss, with no migration and no broken URLs.
+  art_upload_url: 'https://vybecord-art.vybecord.workers.dev',
   first_run_completed: false,
   tray_enabled: true,
+  // ── Window behaviour ──
+  minimize_to_tray: true,
+  start_minimized: false,
+  launch_on_startup: false,
+  theme: 'dark',
 };
 
 // ── Config validation schema ──
@@ -59,6 +86,10 @@ type FieldSpec =
   | { type: 'number'; min: number; max: number };
 
 const URL_CHOICES = ['auto', 'track', 'artist', 'album', 'context'] as const;
+const STATUS_DISPLAY_CHOICES = [
+  'app', 'title', 'title_artist', 'artist_title', 'artist', 'album', 'playlist',
+  'custom', 'details', 'state',
+] as const;
 
 export const CONFIG_SCHEMA: Record<string, FieldSpec> = {
   rpc_enabled: { type: 'boolean' },
@@ -73,6 +104,8 @@ export const CONFIG_SCHEMA: Record<string, FieldSpec> = {
   detect_twitch: { type: 'boolean' },
   detect_browser: { type: 'boolean' },
   detect_other_apps: { type: 'boolean' },
+  filter_spotify_ads: { type: 'boolean' },
+  extension_enabled: { type: 'boolean' },
   discord_app_id: { type: 'string', maxLength: 32 },
   rpc_details_url: { type: 'string', values: URL_CHOICES },
   rpc_state_url: { type: 'string', values: URL_CHOICES },
@@ -84,6 +117,8 @@ export const CONFIG_SCHEMA: Record<string, FieldSpec> = {
   rpc_button2_label: { type: 'string', maxLength: 128 },
   // Discord only accepts Playing(0) / Listening(2) / Watching(3) / Competing(5)
   rpc_activity_type: { type: 'number', min: 0, max: 5 },
+  rpc_status_display: { type: 'string', values: STATUS_DISPLAY_CHOICES },
+  rpc_status_template: { type: 'string', maxLength: 128 },
   dance_mode: { type: 'boolean' },
   radiate_mode: { type: 'boolean' },
   purple_rad_mode: { type: 'boolean' },
@@ -106,8 +141,14 @@ export const CONFIG_SCHEMA: Record<string, FieldSpec> = {
   lastfm_api_key: { type: 'string', maxLength: 128 },
   lastfm_api_secret: { type: 'string', maxLength: 128 },
   bug_report_webhook: { type: 'string', maxLength: 512 },
+  art_upload_enabled: { type: 'boolean' },
+  art_upload_url: { type: 'string', maxLength: 256 },
   first_run_completed: { type: 'boolean' },
   tray_enabled: { type: 'boolean' },
+  minimize_to_tray: { type: 'boolean' },
+  start_minimized: { type: 'boolean' },
+  launch_on_startup: { type: 'boolean' },
+  theme: { type: 'string', values: ['dark', 'light'] as const },
 };
 
 /** Keys never sent back to a client in clear text. */
@@ -127,6 +168,9 @@ const OBSOLETE_KEYS: readonly string[] = [
   'user_tier',
   'spotify_client_id',
   'spotify_client_secret',
+  // Cover art is looked up on a music CDN now. Uploading it to a webhook was
+  // tried and abandoned: Discord's image proxy would not render the result.
+  'image_webhook',
 ];
 
 /** Placeholder returned in place of a configured secret. */
