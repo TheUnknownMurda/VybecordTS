@@ -202,14 +202,13 @@ export class VybecordBackend extends EventEmitter {
     this.statsHistory = this.loadStatsHistory();
     this.config = new ConfigManager(configDir, (cfg) => {
       log.info('Config changed — will apply on next poll');
-      // Clear CC cache when language changes so new language takes effect immediately
-      if (this._lastCcLang !== undefined && this._lastCcLang !== cfg.cc_lang) {
-        clearCCCache();
-        log.info(`CC language changed: ${this._lastCcLang} → ${cfg.cc_lang}`);
-      }
-      this._lastCcLang = cfg.cc_lang;
+      // Reached only when config.json is edited by hand: the app's own writes
+      // set skipNextReload, so updateConfig() has to call this too.
+      this.syncCcLanguage(cfg.cc_lang);
       this.emit('configUpdate', cfg);
     });
+    // Seed before anything can change, so the first change is seen as one.
+    this._lastCcLang = this.config.get('cc_lang') as string | undefined;
 
     const discordAppId = this.config.get('discord_app_id')
       || process.env.DISCORD_CLIENT_ID
@@ -1544,6 +1543,36 @@ export class VybecordBackend extends EventEmitter {
     this.lyricsEngine.updateOffset(clamped);
   }
 
+  /**
+   * Drop cached captions when the caption language changes.
+   *
+   * Two caches hold them, not one: the fetcher's own — which does key on
+   * language, so it would eventually be right — and this class's lyricsCache,
+   * which is keyed by track and knows nothing about language. The second is why
+   * switching language did nothing for anything already playing or already
+   * seen: the old lines were handed straight back.
+   *
+   * Clearing all of lyricsCache rather than just the current track is
+   * deliberate. Any track cached this session holds captions in the old
+   * language too and would replay them on the way back, everything else in
+   * there is cheap to fetch again, and changing language is a rare, deliberate
+   * act. The configUpdate listener then re-fetches the playing track precisely
+   * because it finds nothing cached.
+   *
+   * Must be called from every path that can change the config. It used to live
+   * only in the ConfigManager's change callback, which fires from the file
+   * watcher — and the app suppresses that for its own writes, so a language
+   * picked in the window never reached it at all.
+   */
+  private syncCcLanguage(lang: string | undefined): void {
+    if (this._lastCcLang === lang) return;
+    const previous = this._lastCcLang;
+    this._lastCcLang = lang;
+    clearCCCache();
+    this.lyricsCache.clear();
+    log.info(`[CC] Language changed: ${previous ?? '(unset)'} → ${lang ?? '(unset)'} — cleared both lyric caches`);
+  }
+
   /** Batch-update config keys and emit configUpdate so toggles react immediately. */
   updateConfig(updates: Record<string, unknown>): void {
     // Anything reaching this method comes from an HTTP client — only known keys
@@ -1557,6 +1586,9 @@ export class VybecordBackend extends EventEmitter {
     if ('art_upload_enabled' in accepted || 'art_upload_url' in accepted) {
       this.applyArtUploadConfig();
     }
+    // Before the emit: the listener re-fetches the playing track only when it
+    // finds nothing cached, which is what this clears.
+    if ('cc_lang' in accepted) this.syncCcLanguage(accepted.cc_lang as string | undefined);
     this.emit('configUpdate', this.config.getAll());
   }
 

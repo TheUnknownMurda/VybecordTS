@@ -63,6 +63,11 @@ const api = {
     commands: { install: string; enable: string; apply: string };
   }>('spicetify:info'),
   spicetifyInstall: () => invoke<{ ok: boolean; path: string }>('spicetify:install'),
+  /** Copy, enable and apply in one go — this restarts Spotify. */
+  spicetifySetup: () => invoke<{
+    ok: boolean;
+    steps: { id: string; label: string; ok: boolean; detail: string }[];
+  }>('spicetify:setup'),
   spicetifyReveal: () => invoke<{ ok: boolean; dir: string }>('spicetify:reveal'),
   spicetifyCopy: (text: string) => invoke('spicetify:copy', text),
 

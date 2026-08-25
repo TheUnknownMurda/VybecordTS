@@ -37,6 +37,7 @@ import {
 } from './extension-install.js';
 import {
   spicetifyInfo, installSpicetifyExtension, revealSpicetifyExtensions, copyToClipboard,
+  setupSpicetify,
   SPICETIFY_INSTALL_CMD, SPICETIFY_ENABLE_CMD, SPICETIFY_APPLY_CMD,
 } from './spicetify-install.js';
 import { updateState, check as checkForUpdate, installNow } from './updater.js';
@@ -224,6 +225,7 @@ export function registerIpc(backend: VybecordBackend, getWindow: () => BrowserWi
     },
   }));
   handle('spicetify:install', () => installSpicetifyExtension());
+  handle('spicetify:setup', () => setupSpicetify());
   handle('spicetify:reveal', () => revealSpicetifyExtensions());
   handle('spicetify:copy', (text: string) => { copyToClipboard(String(text).slice(0, 500)); return { ok: true }; });
 
