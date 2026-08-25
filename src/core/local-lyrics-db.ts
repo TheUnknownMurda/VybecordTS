@@ -286,7 +286,7 @@ export async function initLocalDb(
   } else if (ensureDumpWorker(workerPath)) {
     for (const candidate of candidates) {
       try {
-        const res = await askWorker<{ ok: boolean; tracks: number; error?: string }>({
+        const res = await askWorker<{ ok: boolean; approxTracks: number; error?: string }>({
           t: 'open', path: candidate, nativeBinding,
         });
         if (res.ok) {

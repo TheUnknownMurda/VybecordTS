@@ -13,6 +13,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { createLogger } from './logger.js';
+import { evictOldest } from './utils.js';
 
 const log = createLogger('LocalArt');
 
@@ -22,6 +23,8 @@ const AUDIO_EXTS = new Set(['.m4a', '.mp3', '.flac', '.aac', '.alac', '.wav', '.
 
 // Cache: trackKey → true (art found) / false (no art) / 'pending'
 const artCache = new Map<string, boolean | 'pending'>();
+/** One entry per track played, and nothing ever cleared it. */
+const ART_CACHE_MAX = 500;
 
 // File index: normalized filename → full path (built once, refreshed on miss)
 let fileIndex: Map<string, string[]> | null = null;
@@ -113,6 +116,7 @@ export async function extractLocalArt(
           await fs.writeFile(SMTC_THUMB_PATH, pic.data);
           artCache.set(trackKey, true);
           log.info(`Extracted art from: ${path.basename(filePath)} (${pic.data.length} bytes)`);
+          evictOldest(artCache, ART_CACHE_MAX);
           return true;
         }
       } catch (e) {
@@ -138,6 +142,7 @@ export async function extractLocalArt(
             await fs.writeFile(SMTC_THUMB_PATH, pictures[0].data);
             artCache.set(trackKey, true);
             log.info(`Extracted art (retry) from: ${path.basename(filePath)}`);
+            evictOldest(artCache, ART_CACHE_MAX);
             return true;
           }
         } catch { continue; }
@@ -146,10 +151,12 @@ export async function extractLocalArt(
 
     artCache.set(trackKey, false);
     log.debug(`No embedded art found for: ${trackName} — ${artistName}`);
+    evictOldest(artCache, ART_CACHE_MAX);
     return false;
   } catch (e) {
     artCache.set(trackKey, false);
     log.warn(`Art extraction error: ${e}`);
+    evictOldest(artCache, ART_CACHE_MAX);
     return false;
   }
 }
@@ -229,6 +236,11 @@ function findCandidates(track: string, artist: string, album: string): string[] 
   const normArtist = normalize(artist);
   const normAlbum = normalize(album);
 
+  // Nothing left to match on — a title of pure punctuation, say. Every test
+  // below would succeed against every file, and the caller would publish some
+  // unrelated album's cover with full confidence. No candidates is the answer.
+  if (!normTrack) return [];
+
   // Strategy 1: Exact match on track name (highest priority)
   for (const [key, paths] of fileIndex) {
     if (key === normTrack) {
@@ -236,9 +248,12 @@ function findCandidates(track: string, artist: string, album: string): string[] 
     }
   }
 
-  // Strategy 2: If no exact match, try contains match on track name
+  // Strategy 2: If no exact match, try contains match on track name.
+  // Both sides must be substantial: a one-character filename is a substring of
+  // everything, which is the same failure as an empty needle in miniature.
   if (results.length === 0) {
     for (const [key, paths] of fileIndex) {
+      if (key.length < 2) continue;
       if (key.includes(normTrack) || normTrack.includes(key)) {
         results.push(...paths);
       }
@@ -293,12 +308,28 @@ function findCandidates(track: string, artist: string, album: string): string[] 
   return results.slice(0, 5);
 }
 
-/** Normalize a string for matching (lowercase, strip accents, remove special chars). */
+/**
+ * Normalize a string for matching: lowercase, accents stripped, punctuation out.
+ *
+ * Letters and digits are kept in *every* script. This used to reduce to
+ * `[a-z0-9\s]`, which does not mean "strip special characters" — it means
+ * delete every writing system that is not Latin. A Japanese, Korean, Chinese,
+ * Cyrillic, Greek, Arabic or Hebrew title normalised to the empty string, and
+ * an empty needle matches every file in the library (see findCandidates), so
+ * the first five arbitrary tracks were opened and whichever had embedded art
+ * became the cover published to Discord.
+ *
+ * Keeping those characters also makes the match work rather than merely fail
+ * safely: a file named 夜に駆ける.mp3 now matches the track called 夜に駆ける.
+ *
+ * NFD then stripping combining marks folds é to e; it leaves Han, Kana and
+ * Hangul alone, which is what we want — they are letters, not decorated ones.
+ */
 function normalize(s: string): string {
   return s
     .toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // strip accents
-    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }

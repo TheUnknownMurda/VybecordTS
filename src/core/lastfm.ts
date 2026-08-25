@@ -345,7 +345,7 @@ export function scrobbleTrackStart(track: string, artist: string, album: string,
     duration: String(scrobbleTrack.duration),
   }).then(r => {
     if (r) log.debug(`[SCROBBLE] Now Playing: "${track}" by ${artist}`);
-  });
+  }).catch(e => log.debug(`[SCROBBLE] nowPlaying callback failed: ${e}`));
 }
 
 /** Call periodically (e.g., on progress sync) to check if it's time to scrobble. */
@@ -358,18 +358,29 @@ export function checkAndScrobble(): void {
   // Last.fm scrobble rule: listened for >50% of track OR >4 minutes (240s)
   if (elapsed >= Math.min(halfDuration, 240)) {
     scrobbled = true;
+    /*
+     * Held in a local for the duration of the request.
+     *
+     * The module-level `scrobbleTrack` is cleared synchronously by
+     * scrobbleTrackEnd(), and reassigned by scrobbleTrackStart() — both of
+     * which routinely happen during the round trip this starts, because the
+     * scrobble fires mid-song and skipping is exactly when it lands. Reading it
+     * back in the callback therefore either threw on null or logged the name of
+     * whatever track had started since.
+     */
+    const scrobbling = scrobbleTrack;
     signedPost({
       method: 'track.scrobble',
-      'timestamp[0]': String(scrobbleTrack.startedAt),
-      'track[0]': scrobbleTrack.track,
-      'artist[0]': scrobbleTrack.artist,
-      'album[0]': scrobbleTrack.album,
-      'duration[0]': String(scrobbleTrack.duration),
+      'timestamp[0]': String(scrobbling.startedAt),
+      'track[0]': scrobbling.track,
+      'artist[0]': scrobbling.artist,
+      'album[0]': scrobbling.album,
+      'duration[0]': String(scrobbling.duration),
     }).then(r => {
       if (r) {
-        log.info(`[SCROBBLE] Scrobbled: "${scrobbleTrack!.track}" by ${scrobbleTrack!.artist} (${elapsed}s)`);
+        log.info(`[SCROBBLE] Scrobbled: "${scrobbling.track}" by ${scrobbling.artist} (${elapsed}s)`);
       }
-    });
+    }).catch(e => log.debug(`[SCROBBLE] scrobble callback failed: ${e}`));
   }
 }
 

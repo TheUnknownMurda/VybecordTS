@@ -13,6 +13,7 @@
  */
 
 import Database from 'better-sqlite3';
+import { statSync } from 'node:fs';
 import { createLogger } from './logger.js';
 import { parseLrc } from './lrc-parser.js';
 import { similarity } from './similarity.js';
@@ -87,7 +88,7 @@ export function openedPath(): string {
  * `nativeBinding` is passed through for hosts where better-sqlite3's `bindings`
  * lookup cannot find the .node file on its own.
  */
-export function openDump(path: string, nativeBinding?: string): { ok: boolean; tracks: number; error?: string } {
+export function openDump(path: string, nativeBinding?: string): { ok: boolean; approxTracks: number; error?: string } {
   closeDump();
   try {
     db = new Database(path, { readonly: true, fileMustExist: true, nativeBinding });
@@ -147,14 +148,34 @@ export function openDump(path: string, nativeBinding?: string): { ok: boolean; t
       LEFT JOIN lyrics l ON l.id = t.last_lyrics_id
     `);
 
-    const tracks = (db.prepare('SELECT COUNT(*) as c FROM tracks').get() as { c: number })?.c ?? 0;
-    log.info(`Opened LRCLIB dump: ${path} (${(tracks / 1_000_000).toFixed(1)}M tracks)`);
-    return { ok: true, tracks };
+    /*
+     * The highest track id, not a row count.
+     *
+     * `SELECT COUNT(*) FROM tracks` has to walk every entry of an index in a
+     * file that is routinely over 100 GB. Measured against a real 124 GB dump
+     * of 31.85M tracks it took **11.6 seconds**; MAX(id) is an index seek and
+     * took 0. Those 11.6 seconds sat on the startup path, inside the 30-second
+     * budget backend.start() allows the whole database init — so on a cold
+     * boot, which is exactly when the app launches itself at sign-in, an exact
+     * count could eat the budget and leave the dump not loaded at all.
+     *
+     * Nothing ever consumed the number: initLocalDb reads only `ok`, and
+     * lrclibDumpStatus reports no count. It bought one word in one log line.
+     * So this reports what it can get for nothing and says what it is — ids are
+     * sparse where rows were removed, so it is an upper bound, not a total.
+     */
+    const approxTracks = (db.prepare('SELECT MAX(id) AS m FROM tracks').get() as { m: number | null })?.m ?? 0;
+    let size = '';
+    try {
+      size = `${(statSync(path).size / 1e9).toFixed(1)} GB, `;
+    } catch { /* size is a nicety; a dump that opened is open either way */ }
+    log.info(`Opened LRCLIB dump: ${path} (${size}up to ${(approxTracks / 1_000_000).toFixed(1)}M tracks)`);
+    return { ok: true, approxTracks };
   } catch (e) {
     const error = `${(e as Error).message || e}`;
     log.warn(`Failed to open LRCLIB dump ${path}: ${error}`);
     closeDump();
-    return { ok: false, tracks: 0, error };
+    return { ok: false, approxTracks: 0, error };
   }
 }
 

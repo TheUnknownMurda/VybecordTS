@@ -97,8 +97,12 @@ export function flagCount(): number {
 export function listFlaggedTracks(): { key: string; track: string; artist: string; count: number }[] {
   const entries: { key: string; track: string; artist: string; count: number }[] = [];
   for (const [key, hashes] of blacklist) {
-    const [track, artist] = key.split('|');
-    entries.push({ key, track: track || '', artist: artist || '', count: hashes.size });
+    // normaliseKey() joins with '|', and a track name may contain one — so the
+    // artist is everything after the *last* separator, not the second field.
+    const cut = key.lastIndexOf('|');
+    const track = cut >= 0 ? key.slice(0, cut) : key;
+    const artist = cut >= 0 ? key.slice(cut + 1) : '';
+    entries.push({ key, track, artist, count: hashes.size });
   }
   return entries;
 }
@@ -113,17 +117,30 @@ export function clearFlagsByKey(key: string): boolean {
   return false;
 }
 
+/**
+ * Write the blacklist out atomically.
+ *
+ * The whole file is rewritten each time, so an interrupted write left invalid
+ * JSON behind — and initBlacklist() cannot parse that, so it starts empty and
+ * every track the user ever flagged comes back. A temp file plus a rename means
+ * the old file stands until a complete new one exists.
+ *
+ * Synchronous, like the stats and history writes next door: flagging is a
+ * deliberate, occasional click, the file is a few KB, and two overlapping async
+ * writes to one path could interleave into exactly the corruption above.
+ */
 function persist(): void {
+  if (!filePath) return;
+  const tmpPath = `${filePath}.${process.pid}.tmp`;
   try {
     const obj: Record<string, string[]> = {};
     for (const [key, hashes] of blacklist) {
       obj[key] = [...hashes];
     }
-    // Use async write to avoid blocking event loop
-    fs.writeFile(filePath, JSON.stringify(obj, null, 2), 'utf-8', (err) => {
-      if (err) log.error(`Failed to save flagged-lyrics.json: ${err}`);
-    });
+    fs.writeFileSync(tmpPath, JSON.stringify(obj, null, 2), 'utf-8');
+    fs.renameSync(tmpPath, filePath);
   } catch (e) {
     log.error(`Failed to save flagged-lyrics.json: ${e}`);
+    try { fs.unlinkSync(tmpPath); } catch { /* nothing to clean up */ }
   }
 }
