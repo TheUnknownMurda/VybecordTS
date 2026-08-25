@@ -63,7 +63,19 @@ export async function init() {
       : { progress_ms: 0, duration_ms: 0 },
   });
 
-  api.on('trackUpdate', (track) => set({ track }));
+  /*
+   * A new track invalidates the lines the old one left behind.
+   *
+   * Nothing else clears them — the backend pushes lyrics only once the new song
+   * has some — so between a skip and its first line the pages were painting the
+   * previous song's words under the new title. The id is what decides: the same
+   * track is re-sent whenever its metadata is enriched, and that must not wipe
+   * the lyrics it already has.
+   */
+  api.on('trackUpdate', (track) => {
+    const same = (track?.track_id || '') === (state.track?.track_id || '');
+    set(same ? { track } : { track, lyrics: null });
+  });
   api.on('progressUpdate', (progress) => set({ progress }));
   api.on('lyricsUpdate', (lyrics) => set({ lyrics }));
   api.on('plainLyricsUpdate', (lyrics) => set({ lyrics }));

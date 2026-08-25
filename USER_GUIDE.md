@@ -39,7 +39,7 @@ You can change this under **Settings → App → Close to tray**.
 
 | Page | What it does |
 | --- | --- |
-| **Now playing** | Current track, cover, and the scrolling lyrics |
+| **Now playing** | Current track, cover, and the scrolling lyrics — click them for the whole song |
 | **Players** | Every detected player — useful when more than one thing is playing |
 | **Stats** | Your top tracks and artists this session |
 | **History** | Your full listening log, plus a "wrapped" summary |

@@ -39,7 +39,7 @@ Tu peux changer ça dans **Settings → App → Close to tray**.
 
 | Page | À quoi ça sert |
 | --- | --- |
-| **Now playing** | Le titre en cours, la pochette, et les paroles qui défilent |
+| **Now playing** | Le titre en cours, la pochette, et les paroles qui défilent — clique dessus pour voir tout le morceau |
 | **Players** | Tous les lecteurs détectés — utile si plusieurs choses jouent en même temps |
 | **Stats** | Tes titres et artistes les plus écoutés de la session |
 | **History** | Tout ton historique, plus un résumé façon « Wrapped » |

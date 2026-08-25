@@ -550,14 +550,16 @@ label.field > span {
   align-items: flex-start;
 }
 .np-art {
-  width: 168px;
-  height: 168px;
+  /* Kept small on purpose: the cover is the least useful thing on this page,
+     and the room it gives back goes to the lyrics underneath. */
+  width: 118px;
+  height: 118px;
   flex-shrink: 0;
-  border-radius: var(--r-lg);
+  border-radius: var(--r-md);
   background: var(--bg-surface);
   border: 1px solid var(--border-s);
   object-fit: cover;
-  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4);
 }
 .np-meta {
   flex: 1;
@@ -603,6 +605,25 @@ label.field > span {
   border-color: var(--border-a);
   color: var(--accent-hex);
 }
+/* Shuffle, repeat and the rest are glyphs — the wording lives in the tooltip. */
+.badge-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 9px;
+  color: var(--text-tertiary);
+}
+.badge-icon svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 
 .np-cover-src {
   font-size: 11.5px;
@@ -641,34 +662,73 @@ label.field > span {
 }
 
 /* Lyrics */
+
+/*
+ * Now playing fits the window instead of scrolling.
+ *
+ * The page holds a fixed set of cards, so it is laid out as a column the height
+ * of the content area, and the lyric block takes whatever the other cards leave
+ * over. The words then get as much room as the window can spare — a taller
+ * fixed block bought that height by pushing the offset row off the bottom.
+ *
+ * The card scrolls inside itself as a last resort, so a window short enough to
+ * squeeze the block past its content still never scrolls the page.
+ */
+.page[data-page='now'].active {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.lyr-card {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  /* A flex item refuses to shrink past its content until it is told it may. */
+  min-height: 0;
+  margin-bottom: 0;
+  overflow-y: auto;
+}
+
+/*
+ * The lines scale with the window rather than sitting at one fixed size: the
+ * block is handed the leftover height, and on a short window a fixed size would
+ * spend height the page does not have and push the offset row out of the card.
+ */
 .lyr {
   display: flex;
   flex-direction: column;
-  gap: 9px;
-  min-height: 130px;
+  flex: 1;
+  gap: clamp(10px, 1.8vh, 24px);
+  min-height: clamp(110px, 16vh, 260px);
   justify-content: center;
   text-align: center;
-  padding: 8px 0;
+  padding: clamp(6px, 1vh, 16px) 0;
 }
 .lyr-prev,
 .lyr-next {
-  font-size: 14px;
+  font-size: clamp(14px, 1.6vh, 16.5px);
   color: var(--text-faint);
-  min-height: 20px;
+  min-height: clamp(18px, 2vh, 24px);
 }
 .lyr-cur {
-  font-size: 21px;
+  font-size: clamp(21px, 2.5vh, 30px);
   font-weight: 650;
   color: var(--text-primary);
-  line-height: 1.35;
-  min-height: 30px;
+  line-height: 1.32;
+  min-height: clamp(26px, 3.4vh, 40px);
   transition: opacity 0.2s;
 }
 .lyr-tr {
-  font-size: 13.5px;
+  font-size: clamp(13.5px, 1.5vh, 15.5px);
   color: rgba(var(--accent), 0.85);
   font-style: italic;
-  min-height: 18px;
+  min-height: clamp(16px, 1.8vh, 21px);
+}
+/* Reserved only when translations are switched on — see paintTrSlot(). Left in
+   the layout otherwise, its height opens a hole under the current line and the
+   three lines stop reading as evenly spaced. */
+.lyr:not(.with-tr) .lyr-tr {
+  display: none;
 }
 
 /* ── Lists ────────────────────────────────────────────────────────────────── */
@@ -1195,4 +1255,115 @@ label.field > span {
   gap: 8px;
   flex-wrap: wrap;
   margin-top: 10px;
+}
+
+/* ── Full lyrics ──────────────────────────────────────────────────────────── */
+
+/* The three lines on the card are a button in disguise — the hover state is
+   what says so, since a big centred block does not read as clickable on its own. */
+.lyr-clickable {
+  cursor: pointer;
+  border-radius: var(--r-md);
+  transition: background 0.14s;
+}
+.lyr-clickable:hover {
+  background: var(--bg-hover);
+}
+.lyr-clickable:focus-visible {
+  outline: 1px solid var(--border-a);
+  outline-offset: 2px;
+}
+/*
+ * No caption under the lines: it either spent height the lines were competing
+ * for, or — pulled out of the flow to stop that — landed on top of them. The
+ * hover tint, the tooltip and the "Full lyrics" button say the same thing
+ * without taking any room.
+ */
+
+.lyr-full-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.lyr-full-meta {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+.lyr-full-track {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  margin: 6px 0 2px;
+}
+.lyr-full {
+  margin-top: 12px;
+  max-height: 52vh;
+  overflow-y: auto;
+  border: 1px solid var(--border-s);
+  border-radius: var(--r-sm);
+  background: var(--bg-base);
+  padding: 8px;
+  user-select: text;
+}
+.lyr-full-line {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text-muted);
+  scroll-margin: 14px;
+}
+.lyr-full-line.is-blank {
+  padding: 2px 10px;
+  color: var(--text-faint);
+}
+.lyr-full-line.is-current {
+  background: rgba(var(--accent), 0.12);
+  box-shadow: inset 2px 0 0 var(--accent-hex);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.lyr-full-time {
+  font-family: 'Cascadia Mono', ui-monospace, monospace;
+  font-size: 11.5px;
+  color: var(--text-faint);
+  min-width: 42px;
+  font-variant-numeric: tabular-nums;
+}
+.lyr-full-line.is-current .lyr-full-time {
+  color: var(--accent-hex);
+}
+.lyr-full-text {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+.lyr-full-tr {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  font-style: italic;
+  font-weight: 400;
+  color: rgba(var(--accent), 0.85);
+}
+.lyr-full-empty {
+  padding: 22px 10px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.lyr-full-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 14px;
+}
+/* Pinned left while it is there; hiding it must not drag Close over with it. */
+.lyr-full-follow {
+  margin-right: auto;
 }
