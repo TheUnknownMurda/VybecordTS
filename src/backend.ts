@@ -27,12 +27,12 @@ import { EventEmitter } from 'node:events';
 import { createLogger } from './core/logger.js';
 import { ConfigManager, sanitizeConfigUpdate } from './core/config.js';
 import { NativeMediaSource, looksLikeSpotifyAd, type DetectedPlayer } from './core/native-media-source.js';
-import { SpicetifySource, type SpicetifyPayload } from './core/spicetify-source.js';
-import { YouTubeSource, type YouTubePayload } from './core/youtube-source.js';
-import { SoundCloudSource, type SoundCloudPayload } from './core/soundcloud-source.js';
-import { BandcampSource, type BandcampPayload } from './core/bandcamp-source.js';
-import { KickSource, type KickPayload } from './core/kick-source.js';
-import { TwitchSource, type TwitchPayload } from './core/twitch-source.js';
+import { SpicetifySource } from './core/spicetify-source.js';
+import { YouTubeSource } from './core/youtube-source.js';
+import { SoundCloudSource } from './core/soundcloud-source.js';
+import { BandcampSource } from './core/bandcamp-source.js';
+import { KickSource } from './core/kick-source.js';
+import { TwitchSource } from './core/twitch-source.js';
 import { DiscordIPC } from './core/discord-ipc.js';
 import { LyricsEngine } from './sync/lyrics-engine.js';
 import { fetchLyrics, fetchPlainLyrics } from './core/provider.js';
@@ -45,7 +45,7 @@ import { extractLocalArt, extractArtFromPath } from './core/local-art.js';
 import { initBlacklist, flagLyrics, isLyricsFlagged, clearFlags, listFlaggedTracks, clearFlagsByKey } from './core/lyrics-blacklist.js';
 import { initHistory, historyTrackStart, historyTrackPause, historyTrackResume, historyTrackEnd, historyUpdateArt, getHistoryPage, getWrappedStats } from './core/listening-history.js';
 import { translateBatch, translateText, getCachedTranslation } from './core/translate.js';
-import { evictOldest, evictUntil } from './core/utils.js';
+import { asNonNegativeInt, asRecord, asText, evictOldest, evictUntil } from './core/utils.js';
 import type { TrackData, LyricLine, VybecordConfig } from './core/types.js';
 
 const log = createLogger('Backend');
@@ -76,6 +76,9 @@ const STREAM_SOURCES = new Set(['twitch', 'kick']);
 const WEB_SOURCES = ['browser_', 'soundcloud', 'bandcamp', 'youtube'];
 const VIDEO_SOURCES = ['browser_', 'youtube'];
 const ARTIST_SPLIT_RE = /[,]/;  // Precompiled — used in recordPlay + artist key extraction
+
+/** Ceiling on lyric lines accepted from one push. Longer than any real song. */
+const MAX_PUSHED_LYRIC_LINES = 2000;
 
 /**
  * Discord App ID used when the user has not configured one.
@@ -431,9 +434,11 @@ export class VybecordBackend extends EventEmitter {
 
   // ── Spicetify push handler (event-driven, called by web server) ──
 
-  handleSpicetifyPush(data: SpicetifyPayload): void {
+  handleSpicetifyPush(raw: unknown): void {
+    // The source coerces the push and hands back the checked object; everything
+    // below reads that rather than whatever arrived on the socket.
+    const data = this.spicetify.update(raw);
     log.debug(`[SPICETIFY-PUSH] track="${data.track_name}" album="${data.album_name}" context="${data.context_name}" ctx_type="${data.context_type}" shuffle=${data.is_shuffle} repeat=${data.repeat_mode}`);
-    this.spicetify.update(data);
 
     if (!this.config.get('detect_spotify')) return;
     if (!this.mayOwnPresence('spotify')) return;
@@ -491,8 +496,8 @@ export class VybecordBackend extends EventEmitter {
 
   // ── YouTube push handler (event-driven, called by web server) ──
 
-  handleYouTubePush(data: YouTubePayload): void {
-    this.youtubeSource.update(data);
+  handleYouTubePush(raw: unknown): void {
+    const data = this.youtubeSource.update(raw);
 
     if (!this.config.get('detect_youtube')) return;
     if (!this.mayOwnPresence(data.source || 'youtube')) return;
@@ -539,8 +544,8 @@ export class VybecordBackend extends EventEmitter {
 
   // ── SoundCloud push handler (event-driven, called by web server) ──
 
-  handleSoundCloudPush(data: SoundCloudPayload): void {
-    this.soundcloudSource.update(data);
+  handleSoundCloudPush(raw: unknown): void {
+    const data = this.soundcloudSource.update(raw);
 
     if (!this.config.get('detect_soundcloud')) return;
     if (!this.mayOwnPresence('soundcloud')) return;
@@ -578,8 +583,8 @@ export class VybecordBackend extends EventEmitter {
 
   // ── Bandcamp push handler (event-driven, called by web server) ──
 
-  handleBandcampPush(data: BandcampPayload): void {
-    this.bandcampSource.update(data);
+  handleBandcampPush(raw: unknown): void {
+    const data = this.bandcampSource.update(raw);
 
     if (this.config.get('detect_other_apps') === false) return;
     if (!this.mayOwnPresence('bandcamp')) return;
@@ -617,8 +622,8 @@ export class VybecordBackend extends EventEmitter {
 
   // ── Kick push handler (event-driven, called by web server) ──
 
-  handleKickPush(data: KickPayload): void {
-    this.kickSource.update(data);
+  handleKickPush(raw: unknown): void {
+    const data = this.kickSource.update(raw);
 
     if (this.config.get('detect_kick') === false) return;
     if (!this.mayOwnPresence('kick')) return;
@@ -657,8 +662,8 @@ export class VybecordBackend extends EventEmitter {
 
   // ── Twitch push handler (event-driven, called by web server) ──
 
-  handleTwitchPush(data: TwitchPayload): void {
-    this.twitchSource.update(data);
+  handleTwitchPush(raw: unknown): void {
+    const data = this.twitchSource.update(raw);
 
     if (this.config.get('detect_twitch') === false) return;
     if (!this.mayOwnPresence('twitch')) return;
@@ -697,24 +702,39 @@ export class VybecordBackend extends EventEmitter {
 
   // ── Spotify Web lyrics handler (event-driven, called by web server) ──
 
-  handleSpotifyLyrics(data: { track_id: string; lines: { time: number; text: string }[] }): void {
-    if (!data.track_id || !Array.isArray(data.lines)) return;
+  handleSpotifyLyrics(raw: unknown): void {
+    /*
+     * Coerced the same way the six track sources are, and for the same reason:
+     * this array comes off the socket, and a line whose `text` is a number
+     * reaches `.trim()` one step later. Lines are also capped — a push claiming
+     * a hundred thousand of them would otherwise be kept in memory whole, and
+     * no song has more lines than a long audiobook chapter.
+     */
+    const d = asRecord(raw);
+    const trackId = asText(d.track_id, 200);
+    if (!trackId || !Array.isArray(d.lines)) return;
 
-    // Convert to LyricLine format
-    const lines: LyricLine[] = data.lines
-      .filter(l => l.text && l.text.trim())
-      .map(l => ({ time: l.time, text: l.text.trim() }));
+    const lines: LyricLine[] = [];
+    for (const entry of d.lines.slice(0, MAX_PUSHED_LYRIC_LINES)) {
+      const l = asRecord(entry);
+      const text = asText(l.text, 400);
+      if (!text) continue;
+      lines.push({ time: asNonNegativeInt(l.time), text });
+    }
+    // Timestamps are what the engine binary-searches; an out-of-order push
+    // would make findLyricIndex return nonsense for the whole song.
+    lines.sort((a, b) => a.time - b.time);
 
     // Store for later lookup (onNewTrack will check this)
-    this.spotifyLyricsStore.set(data.track_id, lines);
+    this.spotifyLyricsStore.set(trackId, lines);
     evictOldest(this.spotifyLyricsStore, 10);
 
-    log.info(`[SPOTIFY-LYRICS] Received ${lines.length} lines for track ${data.track_id}`);
+    log.info(`[SPOTIFY-LYRICS] Received ${lines.length} lines for track ${trackId}`);
 
     // Hot-inject if this is the currently playing track
     if (this.currentTrack && lines.length > 0) {
       const currentId = this.currentTrack.track_id;
-      const spotifyId = data.track_id;
+      const spotifyId = trackId;
       // Direct match (track_id identical) or Spicetify key starts with the Spotify ID
       const directMatch = currentId === spotifyId || this.currentTrackKey.startsWith(spotifyId + '|');
       // Fallback: SMTC track (desktop: prefix) — match by name similarity
@@ -836,8 +856,10 @@ export class VybecordBackend extends EventEmitter {
           }
           return;
         }
-        // Paused or disabled — let the other web sources have the tick.
-        if (this.pollWebSources()) return;
+        // Paused or disabled — fall through, and let the table walk below hand
+        // the tick to the other web sources. It used to call pollWebSources()
+        // here as well, which walked every source twice per poll to reach the
+        // same answer.
       }
 
       // Priority 2: every other push source, in table order.
@@ -1415,30 +1437,46 @@ export class VybecordBackend extends EventEmitter {
     return getLrclibTrackLyricsDb(trackId);
   }
 
+  /**
+   * Drop cached lyrics that a change to this custom entry could affect.
+   *
+   * Matching is a substring test in both directions on both fields, because a
+   * cache key holds the *player's* names while the argument holds the imported
+   * ones — a YouTube title like "Artist - Song (Official Video)" against an
+   * imported "Song" — and neither side is reliably the longer one.
+   *
+   * Import, edit and delete all want exactly this, and used to carry three
+   * near-copies that had drifted apart: the import copy matched in only one
+   * direction on the title, so importing an entry invalidated less than editing
+   * the very same entry did.
+   */
+  private evictCacheFor(track: string, artist: string): number {
+    const trackLow = track.trim().toLowerCase();
+    const artistLow = artist.trim().toLowerCase();
+    // An empty side substring-matches everything and would clear the whole cache.
+    if (!trackLow || !artistLow) return 0;
+    let dropped = 0;
+    for (const key of this.lyricsCache.keys()) {
+      // Cache key format: "id|track_name|artist_name|duration_ms"
+      const parts = key.toLowerCase().split('|');
+      if (parts.length < 3) continue;
+      const cachedTrack = parts[1];
+      const cachedArtist = parts[2];
+      if (!cachedTrack.includes(trackLow) && !trackLow.includes(cachedTrack)) continue;
+      if (!cachedArtist.includes(artistLow) && !artistLow.includes(cachedArtist)) continue;
+      this.lyricsCache.delete(key);
+      dropped++;
+    }
+    return dropped;
+  }
+
   importCustomLyrics(data: { track: string; artist: string; album: string; duration?: number; lrc: string }): number {
     const trackId = insertCustomLyrics(data.track, data.artist, data.album, data.duration, data.lrc);
     // Clear any flags for this track (user is providing correct lyrics)
     clearFlags(data.track, data.artist);
     // Evict cached results so the new lyrics are picked up immediately
-    const trackLow = data.track.toLowerCase();
-    const artistLow = data.artist.toLowerCase();
-    for (const [key] of this.lyricsCache) {
-      const keyLow = key.toLowerCase();
-      // Cache key format: "id|track_name|artist_name|duration_ms"
-      const parts = keyLow.split('|');
-      if (parts.length >= 3) {
-        const cachedTrack = parts[1];
-        const cachedArtist = parts[2];
-        // Exact match OR imported name is a substring of the cached name
-        // (handles YouTube titles like "Artist - SongName (Official Video)" vs imported "SongName")
-        const trackMatch = cachedTrack === trackLow || cachedTrack.includes(trackLow);
-        const artistMatch = cachedArtist === artistLow || cachedArtist.includes(artistLow) || artistLow.includes(cachedArtist);
-        if (trackMatch && artistMatch) {
-          this.lyricsCache.delete(key);
-          log.info(`[IMPORT] Evicted cache key: ${key}`);
-        }
-      }
-    }
+    const dropped = this.evictCacheFor(data.track, data.artist);
+    if (dropped > 0) log.info(`[IMPORT] Evicted ${dropped} stale cache entries`);
     // If a track is currently playing and its cache was evicted, re-fetch lyrics
     if (this.currentTrack && !this.lyricsCache.has(this.currentCacheKey)) {
       log.info(`[IMPORT] Current track cache evicted — triggering re-fetch`);
@@ -1459,41 +1497,20 @@ export class VybecordBackend extends EventEmitter {
 
   updateCustomLyricsEntry(trackId: number, data: { track_name?: string; artist_name?: string; album_name?: string; duration?: number | null; synced_lyrics?: string }): boolean {
     const ok = updateCustomLyrics(trackId, data);
-    if (ok) {
-      // Evict any cached lyrics that might be stale
-      for (const [key] of this.lyricsCache) {
-        const parts = key.toLowerCase().split('|');
-        if (parts.length >= 3) {
-          const entry = getCustomLyrics(trackId);
-          if (entry) {
-            const trackLow = entry.track_name.toLowerCase();
-            const artistLow = entry.artist_name.toLowerCase();
-            if (parts[1].includes(trackLow) || trackLow.includes(parts[1])) {
-              if (parts[2].includes(artistLow) || artistLow.includes(parts[2])) {
-                this.lyricsCache.delete(key);
-              }
-            }
-          }
-        }
-      }
-    }
-    return ok;
+    if (!ok) return false;
+    // Read the saved names once. This lookup used to sit inside the cache loop,
+    // so a full cache meant fifty identical SQL round-trips to answer one
+    // question that could not change between iterations.
+    const entry = getCustomLyrics(trackId);
+    if (entry) this.evictCacheFor(entry.track_name, entry.artist_name);
+    return true;
   }
 
   deleteCustomLyricsEntry(trackId: number): boolean {
+    // Read before deleting — afterwards there is nothing left to name.
     const entry = getCustomLyrics(trackId);
     const ok = deleteCustomLyrics(trackId);
-    if (ok && entry) {
-      // Evict cached lyrics for the deleted track
-      const trackLow = entry.track_name.toLowerCase();
-      const artistLow = entry.artist_name.toLowerCase();
-      for (const [key] of this.lyricsCache) {
-        const parts = key.toLowerCase().split('|');
-        if (parts.length >= 3 && (parts[1].includes(trackLow) || trackLow.includes(parts[1])) && (parts[2].includes(artistLow) || artistLow.includes(parts[2]))) {
-          this.lyricsCache.delete(key);
-        }
-      }
-    }
+    if (ok && entry) this.evictCacheFor(entry.track_name, entry.artist_name);
     return ok;
   }
 

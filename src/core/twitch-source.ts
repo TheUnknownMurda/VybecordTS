@@ -29,7 +29,7 @@
 
 import { performance } from 'node:perf_hooks';
 import { createLogger } from './logger.js';
-import { evictOldest } from './utils.js';
+import { asBool, asNonNegativeInt, asRecord, asText, asUrl, evictOldest } from './utils.js';
 import type { TrackData } from './types.js';
 
 const log = createLogger('TwitchSource');
@@ -47,6 +47,23 @@ export interface TwitchPayload {
   profile_picture_url: string;
   /** Estimated — superseded by the GraphQL lookup below once it resolves. */
   stream_start_time_ms?: number;
+}
+
+/** Coerce a push into the shape above, whatever actually arrived. */
+export function normalizeTwitchPayload(raw: unknown): TwitchPayload {
+  const d = asRecord(raw);
+  return {
+    username: asText(d.username, 64),
+    display_name: asText(d.display_name, 64),
+    followers: asText(d.followers, 32),
+    category: asText(d.category, 64),
+    stream_title: asText(d.stream_title),
+    profile_url: asUrl(d.profile_url),
+    is_live: asBool(d.is_live),
+    thumbnail_url: asUrl(d.thumbnail_url),
+    profile_picture_url: asUrl(d.profile_picture_url),
+    stream_start_time_ms: asNonNegativeInt(d.stream_start_time_ms),
+  };
 }
 
 const STALE_THRESHOLD_MS = 10_000;
@@ -187,7 +204,8 @@ export class TwitchSource {
    * Ingest a push from the Twitch userscript.
    * Called by the web server on POST /api/twitch.
    */
-  update(data: TwitchPayload): void {
+  update(raw: unknown): TwitchPayload {
+    const data = normalizeTwitchPayload(raw);
     this.latestData = data;
     this.receivedAt = performance.now();
 
@@ -202,7 +220,7 @@ export class TwitchSource {
       this.streamStartTime = 0;
       if (this.activeStreamer) this.resolvedStarts.delete(this.activeStreamer);
       this.activeStreamer = '';
-      return;
+      return data;
     }
 
     // Use stream start time from Tampermonkey script — an estimate, and only
@@ -216,6 +234,7 @@ export class TwitchSource {
 
     this.activeStreamer = normaliseLogin(data.username);
     void this.resolveStreamStart(this.activeStreamer);
+    return data;
   }
 
   /**

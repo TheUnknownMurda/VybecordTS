@@ -95,14 +95,42 @@ async function start(): Promise<void> {
     if (enabled) pushServer?.start();
     else pushServer?.stop();
   };
-  syncPushServer(backend.getConfig().extension_enabled !== false);
+
+  const initialConfig = backend.getConfig();
+  syncPushServer(initialConfig.extension_enabled !== false);
+
+  /*
+   * Settings that live outside the backend have to be re-applied when they
+   * change, not only read once at startup.
+   *
+   * The push server already was. The tray and the login item were not: flipping
+   * either switch wrote config.json and stopped there. For the tray that meant
+   * the icon stayed exactly as it was for the rest of the session. For "launch
+   * at sign-in" it meant the switch did nothing at all until the app was
+   * started again — and starting it again is the one thing someone who wants it
+   * to start by itself is not going to do, so the feature simply never engaged.
+   */
+  let lastTrayEnabled = initialConfig.tray_enabled !== false;
+  let lastLaunchOnStartup = initialConfig.launch_on_startup === true;
   backend.on('configUpdate', (cfg: Record<string, unknown>) => {
     syncPushServer(cfg.extension_enabled !== false);
+
+    const trayEnabled = cfg.tray_enabled !== false;
+    if (trayEnabled !== lastTrayEnabled) {
+      lastTrayEnabled = trayEnabled;
+      syncTray(trayEnabled);
+    }
+
+    const launchOnStartup = cfg.launch_on_startup === true;
+    if (launchOnStartup !== lastLaunchOnStartup) {
+      lastLaunchOnStartup = launchOnStartup;
+      applyLaunchOnStartup(launchOnStartup);
+    }
   });
 
   createWindow();
-  createTray();
-  applyLaunchOnStartup(backend.getConfig().launch_on_startup === true);
+  syncTray(lastTrayEnabled);
+  applyLaunchOnStartup(lastLaunchOnStartup);
 
   try {
     await backend.start();
@@ -201,9 +229,26 @@ function showWindow(): void {
 
 // ── Tray ──
 
-function createTray(): void {
-  if (backend?.getConfig().tray_enabled === false) return;
+/**
+ * Bring the tray icon into line with the setting, creating or destroying it.
+ *
+ * Idempotent, because it runs both at startup and on every config change, and
+ * most config changes have nothing to do with the tray.
+ */
+function syncTray(enabled: boolean): void {
+  if (enabled === !!tray) return;
+  if (!enabled) {
+    tray?.destroy();
+    tray = null;
+    return;
+  }
+  createTray();
+  // The tooltip is set from trackUpdate, which will not fire again until the
+  // song changes — so seed it with whatever is playing right now.
+  tray?.setToolTip(trayTooltip(backend?.getCurrentTrack() ?? null));
+}
 
+function createTray(): void {
   const icon = nativeImage.createFromPath(resourcePath('assets/icon.ico'));
   tray = new Tray(icon.isEmpty() ? nativeImage.createEmpty() : icon);
   tray.setToolTip('Vybecord');

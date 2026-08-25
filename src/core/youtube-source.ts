@@ -14,6 +14,7 @@
 
 import { performance } from 'node:perf_hooks';
 import { createLogger } from './logger.js';
+import { asBool, asId, asNonNegativeInt, asRecord, asText, asUrl } from './utils.js';
 import type { TrackData } from './types.js';
 
 const log = createLogger('YouTubeSource');
@@ -39,6 +40,30 @@ export interface YouTubePayload {
   stream_start_time_ms?: number;
 }
 
+/** Coerce a push into the shape above, whatever actually arrived. */
+export function normalizeYouTubePayload(raw: unknown): YouTubePayload {
+  const d = asRecord(raw);
+  return {
+    // Pasted into watch and thumbnail URLs, which become Discord button
+    // targets — so only the characters a real id uses survive.
+    video_id: asId(d.video_id, 64),
+    title: asText(d.title),
+    artist: asText(d.artist),
+    channel: asText(d.channel),
+    duration_ms: asNonNegativeInt(d.duration_ms),
+    progress_ms: asNonNegativeInt(d.progress_ms),
+    is_playing: asBool(d.is_playing),
+    is_live: asBool(d.is_live),
+    thumbnail_url: asUrl(d.thumbnail_url),
+    // This endpoint speaks for YouTube and nothing else. The value drives the
+    // per-platform detection gate, the pin check and which Discord application
+    // the presence is published under, so it is pinned to the two it may be
+    // rather than passed through.
+    source: asText(d.source, 32) === 'youtube_music' ? 'youtube_music' : 'youtube',
+    stream_start_time_ms: asNonNegativeInt(d.stream_start_time_ms),
+  };
+}
+
 const STALE_THRESHOLD_MS = 10_000; // Data older than 10s = userscript disconnected
 
 export class YouTubeSource {
@@ -52,7 +77,8 @@ export class YouTubeSource {
    * Ingest a push from the YouTube userscript.
    * Called by the web server on POST /api/youtube.
    */
-  update(data: YouTubePayload): void {
+  update(raw: unknown): YouTubePayload {
+    const data = normalizeYouTubePayload(raw);
     this.latestData = data;
     this.receivedAt = performance.now();
 
@@ -72,6 +98,7 @@ export class YouTubeSource {
     if (!data.is_live) {
       this.streamStartTime = 0;
     }
+    return data;
   }
 
   /**

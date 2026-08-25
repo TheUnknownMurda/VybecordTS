@@ -11,7 +11,8 @@ const LRC_LINE = /^((?:\[\d+:\d+(?:\.\d+)?])+)(.*)/;
  *   - Standard: [mm:ss.xx]text
  *   - Multi-timestamp: [01:30.00][02:45.00]same text (expands to 2 lines)
  *   - Sorts by time (not guaranteed in all LRC sources)
- *   - Merges consecutive identical lines (reduces wasted timer fires)
+ *   - Keeps consecutive identical lines: a repeated chorus line is a real line
+ *     of the song, and collapsing them would desync everything after it
  */
 export function parseLrc(lrcString: string): LyricLine[] {
   const lines: LyricLine[] = [];

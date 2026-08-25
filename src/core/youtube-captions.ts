@@ -568,30 +568,28 @@ export async function fetchYouTubeCaptions(
       '-o', path.join(tmpDir, '%(id)s'),
     ];
 
-    let isManualSub = false;
     let isAgeRestricted = false;
+    const noteAgeRestriction = (e: unknown, what: string): void => {
+      const errStr = String(e);
+      log.warn(`[CC] ${what} fetch error: ${errStr}`);
+      if (errStr.includes('Sign in to confirm your age') || errStr.includes('age')) {
+        isAgeRestricted = true;
+        log.warn('[CC] Video is age-restricted');
+      }
+    };
 
     await execFileAsync(ytDlpCommand, [
       ...baseArgs,
       '--write-sub',
       '--sub-lang', manualLangs,
-    ], { timeout: YT_DLP_TIMEOUT, signal }).catch((e) => {
-      const errStr = String(e);
-      log.warn(`[CC] Manual subs fetch error: ${errStr}`);
-      if (errStr.includes('Sign in to confirm your age') || errStr.includes('age')) {
-        isAgeRestricted = true;
-        log.warn('[CC] Video is age-restricted');
-      }
-    });
+    ], { timeout: YT_DLP_TIMEOUT, signal }).catch(e => noteAgeRestriction(e, 'Manual subs'));
 
-    let files = await readdir(tmpDir);
-    const manualFiles = files;
+    const manualFiles = await readdir(tmpDir);
     // Insist on a language the user can read; an Italian track for an English
     // talk is worse than that talk's auto-generated English.
-    let pick = files.length ? pickBestSubFile(files, sortOrder, true) : null;
+    let pick = manualFiles.length ? pickBestSubFile(manualFiles, sortOrder, true) : null;
 
     if (pick) {
-      isManualSub = true;
       log.info(`[CC] Found manual subtitles (${pick.lang}): ${pick.file}`);
     } else {
       // ── Step 2: No manual subs — fall back to auto-generated CC ──
@@ -600,27 +598,32 @@ export async function fetchYouTubeCaptions(
         ...baseArgs,
         '--write-auto-sub',
         '--sub-lang', autoLangs,
-      ], { timeout: YT_DLP_TIMEOUT, signal }).catch((e) => {
-        const errStr = String(e);
-        log.warn(`[CC] Auto-CC fetch error: ${errStr}`);
-        if (errStr.includes('Sign in to confirm your age') || errStr.includes('age')) {
-          isAgeRestricted = true;
-          log.warn('[CC] Video is age-restricted');
-        }
-      });
+      ], { timeout: YT_DLP_TIMEOUT, signal }).catch(e => noteAgeRestriction(e, 'Auto-CC'));
 
-      files = await readdir(tmpDir);
-      log.info(`[CC] Files in temp dir: ${files.join(', ') || '(none)'}`);
-      // Auto-CC is normally in the video's own language, which for a song is
-      // exactly what its lyrics are — so any language is accepted here.
-      pick = files.length ? pickBestSubFile(files, sortOrder) : null;
+      const allFiles = await readdir(tmpDir);
+      log.info(`[CC] Files in temp dir: ${allFiles.join(', ') || '(none)'}`);
+      /*
+       * Only what this second pass actually downloaded.
+       *
+       * Both passes write into the same temp directory, so re-scanning it here
+       * also returns whatever step 1 fetched — and pickBestSubFile ranks manual
+       * tracks above automatic ones. So the file step 1 had just rejected for
+       * being in an unreadable language won this pick straight back, every
+       * time, which is precisely what requireLang exists to prevent. Comparing
+       * against the step-1 listing is what keeps the two passes separate.
+       *
+       * Any language is accepted among these: auto-CC is in the video's own
+       * language, which for a song is the language its lyrics are in.
+       */
+      const manualSeen = new Set(manualFiles);
+      const autoFiles = allFiles.filter(f => !manualSeen.has(f));
+      pick = autoFiles.length ? pickBestSubFile(autoFiles, sortOrder) : null;
 
       // Still nothing: take the manual track in whatever language it came in,
       // rather than showing none at all.
       if (!pick && manualFiles.length) {
         pick = pickBestSubFile(manualFiles, sortOrder);
         if (pick) {
-          isManualSub = true;
           log.info(`[CC] Falling back to manual subtitles in ${pick.lang} — no track in a preferred language`);
         }
       }
@@ -638,6 +641,16 @@ export async function fetchYouTubeCaptions(
       return EMPTY;
     }
 
+    /*
+     * Manual or automatic is a property of the file that was chosen, so read it
+     * off the pick. It used to be a separate flag set only on the step-1 path,
+     * which meant a manual track selected by either fallback below was treated
+     * as auto-CC: run through the fragment-merging pipeline meant for
+     * one-word caption chunks, and tagged 'cc' so the engine applied auto-CC
+     * timing to properly authored subtitles. The error-recovery path further
+     * down already derived it this way; now both agree.
+     */
+    const isManualSub = !pick.isAuto;
     log.info(`[CC] Using ${isManualSub ? 'manual' : 'auto'} subs (${pick.lang}): ${pick.file}`);
 
     // Parse json3 into LyricLine[]

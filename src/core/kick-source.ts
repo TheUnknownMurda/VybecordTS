@@ -14,6 +14,7 @@
 
 import { performance } from 'node:perf_hooks';
 import { createLogger } from './logger.js';
+import { asBool, asNonNegativeInt, asRecord, asText, asUrl } from './utils.js';
 import type { TrackData } from './types.js';
 
 const log = createLogger('KickSource');
@@ -32,6 +33,23 @@ export interface KickPayload {
   stream_start_time_ms?: number;
 }
 
+/** Coerce a push into the shape above, whatever actually arrived. */
+export function normalizeKickPayload(raw: unknown): KickPayload {
+  const d = asRecord(raw);
+  return {
+    username: asText(d.username, 64),
+    display_name: asText(d.display_name, 64),
+    followers: asText(d.followers, 32),
+    category: asText(d.category, 64),
+    stream_title: asText(d.stream_title),
+    profile_url: asUrl(d.profile_url),
+    is_live: asBool(d.is_live),
+    thumbnail_url: asUrl(d.thumbnail_url),
+    profile_picture_url: asUrl(d.profile_picture_url),
+    stream_start_time_ms: asNonNegativeInt(d.stream_start_time_ms),
+  };
+}
+
 const STALE_THRESHOLD_MS = 10_000;
 
 export class KickSource {
@@ -44,7 +62,8 @@ export class KickSource {
    * Ingest a push from the Kick userscript.
    * Called by the web server on POST /api/kick.
    */
-  update(data: KickPayload): void {
+  update(raw: unknown): KickPayload {
+    const data = normalizeKickPayload(raw);
     this.latestData = data;
     this.receivedAt = performance.now();
 
@@ -66,6 +85,7 @@ export class KickSource {
     if (!data.is_live) {
       this.streamStartTime = 0;
     }
+    return data;
   }
 
   /**

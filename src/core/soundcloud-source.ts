@@ -13,6 +13,7 @@
 
 import { performance } from 'node:perf_hooks';
 import { createLogger } from './logger.js';
+import { asBool, asNonNegativeInt, asRecord, asText, asUrl } from './utils.js';
 import type { TrackData } from './types.js';
 
 const log = createLogger('SoundCloudSource');
@@ -34,6 +35,23 @@ export interface SoundCloudPayload {
   likes: number;
 }
 
+/** Coerce a push into the shape above, whatever actually arrived. */
+export function normalizeSoundCloudPayload(raw: unknown): SoundCloudPayload {
+  const d = asRecord(raw);
+  return {
+    track_id: asText(d.track_id, 64),
+    title: asText(d.title),
+    artist: asText(d.artist),
+    duration_ms: asNonNegativeInt(d.duration_ms),
+    progress_ms: asNonNegativeInt(d.progress_ms),
+    is_playing: asBool(d.is_playing),
+    art_url: asUrl(d.art_url),
+    track_url: asUrl(d.track_url),
+    artist_url: asUrl(d.artist_url),
+    likes: asNonNegativeInt(d.likes),
+  };
+}
+
 const STALE_THRESHOLD_MS = 10_000;
 
 export class SoundCloudSource {
@@ -45,7 +63,8 @@ export class SoundCloudSource {
    * Ingest a push from the SoundCloud userscript.
    * Called by the web server on POST /api/soundcloud.
    */
-  update(data: SoundCloudPayload): void {
+  update(raw: unknown): SoundCloudPayload {
+    const data = normalizeSoundCloudPayload(raw);
     this.latestData = data;
     this.receivedAt = performance.now();
 
@@ -53,6 +72,7 @@ export class SoundCloudSource {
       this._wasActive = true;
       log.info('SoundCloud userscript connected ✓ — using as primary SoundCloud source');
     }
+    return data;
   }
 
   /**

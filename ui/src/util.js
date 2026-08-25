@@ -177,14 +177,21 @@ export function platformInfo(source) {
   return map[source] || [source || 'Unknown', '🎵'];
 }
 
-let toastTimer = 0;
-/** Transient message in the corner. `kind` is 'ok' | 'err' | ''. */
+/**
+ * Transient message in the corner. `kind` is 'ok' | 'err' | ''.
+ *
+ * Every toast owns its own removal timer, so several can stack and each leaves
+ * when its time is up. There used to be a module-level `toastTimer` cleared on
+ * each call, but the new timer was never assigned to it — so the clear was
+ * always a no-op against 0. Wiring it up would have been the wrong repair: it
+ * would cancel the *previous* toast's removal and pin that one on screen
+ * forever. The behaviour the dead line never had is not the behaviour wanted.
+ */
 export function toast(message, kind = '') {
   const host = $('#toasts');
   if (!host) return;
   const node = el('div', { class: `toast ${kind}`.trim(), text: message });
   host.append(node);
-  clearTimeout(toastTimer);
   setTimeout(() => node.remove(), kind === 'err' ? 6000 : 3200);
 }
 

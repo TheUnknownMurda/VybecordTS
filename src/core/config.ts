@@ -39,6 +39,10 @@ const DEFAULTS: VybecordConfig = {
   blue_rad_mode: false,
   random_icon_mode: false,
   hide_small_icon: false,
+  // Accepted by CONFIG_SCHEMA and read by getRpcConfig()/the icon-mode ladder,
+  // so it belongs here too — without it the key was simply absent from a fresh
+  // config.json and the settings form had nothing to bind to.
+  lrc_off_mode: false,
   cc_enabled: true,
   cc_lang: 'auto',
   cc_cookies_file: '', // Path to cookies.txt for age-restricted videos
@@ -233,6 +237,8 @@ export class ConfigManager {
   private watcher: fs.FSWatcher | null = null;
   private closed = false;
   private skipNextReload = false;
+  /** Increments per save; the newest issued is the only one allowed to land. */
+  private saveSeq = 0;
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private onChange?: (config: VybecordConfig) => void;
 
@@ -285,21 +291,40 @@ export class ConfigManager {
    * Persist the config atomically: the full JSON is written to a temp file first,
    * then renamed over config.json. A crash mid-write can no longer leave a
    * truncated file behind (which would silently reset every setting to defaults).
+   *
+   * Two things make that hold when saves overlap, which they do — dragging the
+   * lyrics-offset slider while the settings form posts, say.
+   *
+   *   - The temp file is named per save. Sharing one path meant two async writes
+   *     truncating and filling the *same* file, then both renaming it: the file
+   *     that landed could be a splice of two snapshots rather than either one.
+   *   - Only the newest save issued is allowed to rename. The JSON is captured
+   *     synchronously here, so a later call always carries the newer state;
+   *     without this guard the two renames could land in either order and an
+   *     older snapshot could win the race and quietly undo the newer setting.
    */
   private save(config: VybecordConfig): void {
     this.skipNextReload = true;
-    const tmpPath = `${this.configPath}.${process.pid}.tmp`;
+    const seq = ++this.saveSeq;
+    const tmpPath = `${this.configPath}.${process.pid}.${seq}.tmp`;
+    const cleanup = () => fs.unlink(tmpPath, () => { /* best-effort */ });
     const fail = (msg: string) => {
       log.error(msg);
       this.skipNextReload = false; // no rename happened — don't swallow a real edit
-      fs.unlink(tmpPath, () => { /* best-effort cleanup */ });
+      cleanup();
     };
+    const json = JSON.stringify(config, null, 2);
     fs.mkdir(path.dirname(this.configPath), { recursive: true }, (err) => {
       if (err) return fail(`Failed to create config directory: ${err}`);
-      fs.writeFile(tmpPath, JSON.stringify(config, null, 2), 'utf-8', (writeErr) => {
+      if (seq !== this.saveSeq) return cleanup();  // superseded before we wrote
+      fs.writeFile(tmpPath, json, 'utf-8', (writeErr) => {
         if (writeErr) return fail(`Failed to save config: ${writeErr}`);
+        // A newer save is already carrying this change and more besides —
+        // let it be the one that lands, and leave skipNextReload set for it.
+        if (seq !== this.saveSeq) return cleanup();
         fs.rename(tmpPath, this.configPath, (renameErr) => {
           if (renameErr) return fail(`Failed to save config: ${renameErr}`);
+          if (seq !== this.saveSeq) return;  // a newer save will rearm instead
           this.rearmWatcher();
         });
       });
@@ -361,7 +386,7 @@ export class ConfigManager {
 
   private startWatcher(): void {
     try {
-      this.watcher = fs.watch(this.configPath, () => {
+      const watcher = fs.watch(this.configPath, () => {
         // Debounce: editors often fire multiple events per save
         if (this.debounceTimer) clearTimeout(this.debounceTimer);
         this.debounceTimer = setTimeout(() => {
@@ -373,6 +398,25 @@ export class ConfigManager {
           }
         }, 200);
       });
+      /*
+       * An FSWatcher that fails *after* it was created emits 'error', and an
+       * 'error' with no listener is rethrown by EventEmitter as an uncaught
+       * exception — the try/catch above only covers the call that made it. It
+       * happens for ordinary reasons: the folder goes away, a network or
+       * synced drive drops, permissions change under it.
+       *
+       * The app survives that (the main process logs uncaught exceptions), but
+       * the watcher is dead either way, so hot-reloading config.json quietly
+       * stopped working for the rest of the session with nothing said. Handle
+       * it, and say so.
+       */
+      watcher.on('error', (err) => {
+        log.warn(`Config watcher stopped (${(err as Error).message}) — edits to config.json `
+          + 'made outside the app will not be picked up until it restarts.');
+        watcher.close();
+        if (this.watcher === watcher) this.watcher = null;
+      });
+      this.watcher = watcher;
     } catch { /* ignore — file might not exist yet */ }
   }
 

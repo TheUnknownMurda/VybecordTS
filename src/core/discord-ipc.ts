@@ -39,6 +39,15 @@ export class DiscordIPC {
   private _onError?: (err: Error) => void;
   private _onDisconnect?: () => void;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * Wakes connectWithRetry() out of its wait when the socket is being closed.
+   *
+   * Clearing the timer alone is not enough: the retry loop awaits a promise the
+   * timer was going to resolve, so cancelling it left that promise pending
+   * forever and the loop suspended with it. Every App ID switch closes an
+   * instance, so one of those was stranded on each change of player.
+   */
+  private reconnectWake: (() => void) | null = null;
   private shouldReconnect = true;
 
   // Hot-path optimization: monotonic nonce counter (cheaper than randomUUID)
@@ -98,13 +107,30 @@ export class DiscordIPC {
       try {
         await this.connect();
         return;
-      } catch (e) {
+      } catch {
         log.warn(`Discord not available, retrying in ${intervalMs / 1000}s...`);
-        await new Promise(r => {
-          this.reconnectTimer = setTimeout(r, intervalMs);
+        await new Promise<void>(resolve => {
+          this.reconnectWake = resolve;
+          this.reconnectTimer = setTimeout(() => {
+            this.reconnectTimer = null;
+            this.reconnectWake = null;
+            resolve();
+          }, intervalMs);
         });
       }
     }
+  }
+
+  /** Stop retrying, and release anything waiting on the retry timer. */
+  private cancelReconnect(): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    // Resolve rather than drop: the loop re-checks shouldReconnect and exits.
+    const wake = this.reconnectWake;
+    this.reconnectWake = null;
+    wake?.();
   }
 
   private tryPipe(n: number): Promise<void> {
@@ -471,10 +497,7 @@ export class DiscordIPC {
    */
   async gracefulClose(): Promise<void> {
     this.shouldReconnect = false;
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
+    this.cancelReconnect();
     if (this.connected && this.socket) {
       // Send clear and wait for Discord's response
       await this.clearActivity();
@@ -486,10 +509,7 @@ export class DiscordIPC {
 
   close(): void {
     this.shouldReconnect = false;
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
+    this.cancelReconnect();
     this.closeSocket();
   }
 
@@ -498,7 +518,10 @@ export class DiscordIPC {
       const sock = this.socket;
       this.socket = null;
       sock.end(() => sock.destroy());
-      setTimeout(() => { if (!sock.destroyed) sock.destroy(); }, 500);
+      // Backstop for a pipe that never finishes flushing. Unref'd so it cannot
+      // hold the process open for half a second on the way out.
+      const hardClose = setTimeout(() => { if (!sock.destroyed) sock.destroy(); }, 500);
+      hardClose.unref?.();
     }
     this.connected = false;
     this.rejectPending('IPC closed');

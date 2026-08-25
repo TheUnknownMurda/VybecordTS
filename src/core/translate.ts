@@ -8,6 +8,46 @@ const log = createLogger('Translate');
 // ── Persistent disk cache ──
 const cache = new Map<string, string>();
 const CACHE_MAX = 5000;
+
+/**
+ * Lines a provider had nothing to add for, and when we last asked.
+ *
+ * A miss that never gets remembered is asked again on every single emit. The
+ * RPC path is the one that makes that expensive: buildActivity() fires up to
+ * seven lookups per push (current, next, and a five-line look-ahead), and a
+ * push happens every couple of lyric lines — sub-second for CC captions. Any
+ * line the providers decline stays uncached, so those seven requests are
+ * re-issued at that rate for the whole song.
+ *
+ * Declining is the *common* case, not the edge: `translate_target_lang`
+ * defaults to 'en' and most lyrics are already English, so every line takes the
+ * "identical to input, don't cache" path below. That turned the feature on into
+ * roughly ten requests a second to a public endpoint, which is how it gets rate
+ * limited into not working at all.
+ *
+ * Remembered with a timestamp rather than forever, so a genuine provider
+ * outage — as opposed to "this line needs no translation" — heals on its own.
+ * Aborts are deliberately not recorded: a track change is not a verdict on the
+ * line.
+ */
+const noTranslation = new Map<string, number>();
+const NEGATIVE_TTL_MS = 10 * 60_000;
+const NEGATIVE_MAX = 2000;
+
+/** Remember that this line came back with nothing to show. */
+function markNoTranslation(key: string): void {
+  noTranslation.set(key, Date.now());
+  evictOldest(noTranslation, NEGATIVE_MAX);
+}
+
+/** True while a recent lookup for this line is known to have produced nothing. */
+function recentlyDeclined(key: string): boolean {
+  const at = noTranslation.get(key);
+  if (at === undefined) return false;
+  if (Date.now() - at < NEGATIVE_TTL_MS) return true;
+  noTranslation.delete(key);
+  return false;
+}
 let cacheFile = '';
 let cacheDirty = false;
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -66,7 +106,24 @@ function scheduleCacheFlush(): void {
 // ── Concurrency limiter (async semaphore — zero polling) ──
 let activeRequests = 0;
 const MAX_CONCURRENT = 12;
-const waitQueue: (() => void)[] = [];
+
+/**
+ * One caller waiting for a slot.
+ *
+ * `cancelled` is what keeps the semaphore honest. A caller whose signal aborts
+ * while it is queued gives up and returns immediately — so handing it a slot
+ * afterwards increments `activeRequests` for a caller that will never release
+ * it. Twelve of those and the counter is pinned at MAX_CONCURRENT forever:
+ * every later translation queues behind a slot nobody holds, and the feature is
+ * dead until restart. Track changes abort queued batches routinely, so this is
+ * not a rare path.
+ */
+interface Waiter {
+  cancelled: boolean;
+  /** Take the slot. False when the caller had already given up. */
+  grant(): boolean;
+}
+const waitQueue: Waiter[] = [];
 
 // ── Supported languages ──
 export const TRANSLATE_LANGS: Record<string, string> = {
@@ -229,22 +286,29 @@ function acquireSlot(signal?: AbortSignal): Promise<boolean> {
     return Promise.resolve(true);
   }
   return new Promise<boolean>(resolve => {
-    const onAbort = () => { resolve(false); };
     if (signal?.aborted) { resolve(false); return; }
+    const waiter: Waiter = {
+      cancelled: false,
+      grant() {
+        signal?.removeEventListener('abort', onAbort);
+        if (this.cancelled) return false;
+        activeRequests++;
+        resolve(true);
+        return true;
+      },
+    };
+    const onAbort = () => { waiter.cancelled = true; resolve(false); };
     signal?.addEventListener('abort', onAbort, { once: true });
-    waitQueue.push(() => {
-      signal?.removeEventListener('abort', onAbort);
-      activeRequests++;
-      resolve(true);
-    });
+    waitQueue.push(waiter);
   });
 }
 
 function releaseSlot(): void {
   activeRequests--;
-  if (waitQueue.length > 0) {
-    const next = waitQueue.shift()!;
-    next();
+  // Skip waiters that gave up while queued — see Waiter.cancelled. The slot
+  // stays free rather than being charged to a caller that already returned.
+  while (waitQueue.length > 0) {
+    if (waitQueue.shift()!.grant()) return;
   }
 }
 
@@ -292,6 +356,11 @@ export async function translateText(
   targetLang: string,
   signal?: AbortSignal,
 ): Promise<TranslateResult | null> {
+  // Already abandoned — the track moved on before this call was even made.
+  // Without this the aborted request still walks all three providers, each
+  // fetch rejecting on the dead signal in turn.
+  if (signal?.aborted) return null;
+
   // Skip empty/trivial text
   const trimmed = text.trim();
   if (!trimmed || trimmed.length < 2 || /^[♪♫🎵\s]+$/.test(trimmed)) return null;
@@ -302,21 +371,30 @@ export async function translateText(
   if (cached !== undefined) {
     return { translation: cached, cached: true };
   }
+  // Asked recently, and the answer was "nothing" — see noTranslation.
+  if (recentlyDeclined(key)) return null;
 
   // Skip if detected language matches target (don't translate EN→EN)
   const detected = detectScriptLang(trimmed);
-  if (detected === targetLang) return null;
+  if (detected === targetLang) { markNoTranslation(key); return null; }
 
   const result = await translateOne(trimmed, targetLang, detected, signal);
-  if (!result) return null;
+  if (!result) {
+    // An abort is not a verdict on the line — the track simply moved on.
+    if (!signal?.aborted) markNoTranslation(key);
+    return null;
+  }
 
   // A provider that recognised the line as already being in the target language
   // has nothing to add, and caching its echo would leave the original sitting
   // under itself for the rest of the song.
-  if (result.detected && result.detected.split('-')[0] === targetLang) return null;
+  if (result.detected && result.detected.split('-')[0] === targetLang) { markNoTranslation(key); return null; }
 
   // Don't cache if translation is identical to input (same language)
-  if (result.text.toLowerCase() === trimmed.toLowerCase()) return null;
+  if (result.text.toLowerCase() === trimmed.toLowerCase()) { markNoTranslation(key); return null; }
+
+  // It answered after all — drop any stale verdict so the hit stands.
+  noTranslation.delete(key);
 
   evictOldest(cache, CACHE_MAX - 1);
   cache.set(key, result.text);
@@ -355,6 +433,7 @@ export async function translateBatch(
 /** Clear the translation cache (memory + disk). */
 export function clearTranslationCache(): void {
   cache.clear();
+  noTranslation.clear();
   cacheDirty = true;
   flushDiskCache();
 }

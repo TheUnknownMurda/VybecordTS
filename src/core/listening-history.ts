@@ -260,17 +260,35 @@ function flushSave(): void {
   saveToDisk();
 }
 
+/**
+ * Write the log out, atomically and synchronously.
+ *
+ * Both properties are load-bearing, and neither held before.
+ *
+ * Atomic: the whole file is rewritten on every save, so an interrupted write
+ * left a truncated JSON array — which the loader cannot parse, so it starts
+ * from empty and the user's entire listening history is gone. A temp file plus
+ * a rename means the old file stands until a complete new one exists. This is
+ * the same shape saveStatsHistory() already uses next door.
+ *
+ * Synchronous: the shutdown path is `historyTrackEnd()` → here → `app.exit(0)`
+ * a moment later. An async write racing process exit is exactly the write worth
+ * not losing — it is the one holding the track that just finished. It also
+ * means two saves can never be in flight at once and interleave.
+ *
+ * The cost is a write of a few hundred KB at most once per five seconds, and in
+ * practice once a song, since only a finished track schedules one.
+ */
 function saveToDisk(): void {
   if (!historyPath) return;
+  const tmpPath = `${historyPath}.${process.pid}.tmp`;
   try {
-    fs.mkdir(path.dirname(historyPath), { recursive: true }, (err) => {
-      if (err) return log.warn(`Failed to create history directory: ${err}`);
-      fs.writeFile(historyPath, JSON.stringify(entries), 'utf-8', (writeErr) => {
-        if (writeErr) log.warn(`Failed to save history: ${writeErr}`);
-      });
-    });
+    fs.mkdirSync(path.dirname(historyPath), { recursive: true });
+    fs.writeFileSync(tmpPath, JSON.stringify(entries), 'utf-8');
+    fs.renameSync(tmpPath, historyPath);
   } catch (e) {
     log.warn(`Failed to save history: ${e}`);
+    try { fs.unlinkSync(tmpPath); } catch { /* nothing to clean up */ }
   }
 }
 

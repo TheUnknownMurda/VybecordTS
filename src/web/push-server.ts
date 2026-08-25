@@ -122,8 +122,14 @@ export class PushServer {
 
   stop(): void {
     if (!this.server) return;
-    this.server.close();
+    const server = this.server;
     this.server = null;
+    // The extension holds the connection open between pushes, and close() only
+    // stops accepting — it waits for every live socket to end on its own. That
+    // left the port bound after the setting was turned off, so turning it back
+    // on hit EADDRINUSE against ourselves.
+    server.closeAllConnections?.();
+    server.close();
     log.info('Extension endpoint stopped');
   }
 
@@ -184,8 +190,21 @@ export class PushServer {
     res.end('{"ok":true}');
   }
 
-  /** Hand the payload to the matching source. Shapes are validated downstream. */
-  private dispatch(path: string, data: any): void {
+  /**
+   * Hand the payload to the matching source.
+   *
+   * `unknown`, not `any`: each handler coerces every field it uses before
+   * touching it (see the normalize* functions beside each payload type), so
+   * nothing downstream depends on this body having the shape it claims.
+   */
+  private dispatch(path: string, data: unknown): void {
+    // `JSON.parse` happily returns null, a number or a string for a valid body.
+    // The handlers cope, but there is nothing in such a body worth dispatching,
+    // and saying so once here beats six silent no-ops.
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      log.debug(`Ignored a push to ${path} whose body was not an object`);
+      return;
+    }
     switch (path) {
       case '/api/spicetify': this.backend.handleSpicetifyPush(data); break;
       case '/api/youtube': this.backend.handleYouTubePush(data); break;
@@ -198,10 +217,18 @@ export class PushServer {
   }
 }
 
-/** Read a bounded request body. An oversized one is dropped, not buffered. */
+/**
+ * Read a bounded request body. An oversized one is dropped, not buffered.
+ *
+ * Chunks are kept as bytes and decoded once at the end. Decoding each chunk as
+ * it arrived split any multi-byte character that happened to straddle a chunk
+ * boundary into two replacement characters — which is exactly the class of
+ * title this app sees most (Japanese, Korean, accented Latin), and it corrupted
+ * the track name for the whole song.
+ */
 function readBody(req: http.IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
-    let body = '';
+    const chunks: Buffer[] = [];
     let size = 0;
     const timer = setTimeout(() => { req.destroy(); reject(new Error('body timeout')); }, 5_000);
 
@@ -213,9 +240,9 @@ function readBody(req: http.IncomingMessage): Promise<string> {
         reject(new Error('body too large'));
         return;
       }
-      body += chunk.toString('utf8');
+      chunks.push(chunk);
     });
-    req.on('end', () => { clearTimeout(timer); resolve(body); });
+    req.on('end', () => { clearTimeout(timer); resolve(Buffer.concat(chunks).toString('utf8')); });
     req.on('error', (e) => { clearTimeout(timer); reject(e); });
   });
 }

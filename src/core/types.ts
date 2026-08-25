@@ -138,6 +138,8 @@ export interface VybecordConfig {
   bleeding_mode: boolean;
   /** Blue Rad mode: blue animated GIF as small icon (all platforms) */
   blue_rad_mode: boolean;
+  /** LRC-off mode: dedicated small icon used when lyrics are turned off */
+  lrc_off_mode: boolean;
   /** Random icon mode: pick a random small icon each track */
   random_icon_mode: boolean;
   /** Hide small icon: remove the small image entirely */

@@ -13,6 +13,7 @@
 
 import { performance } from 'node:perf_hooks';
 import { createLogger } from './logger.js';
+import { asBool, asNonNegativeInt, asRecord, asText, asUrl } from './utils.js';
 import type { TrackData } from './types.js';
 
 const log = createLogger('BandcampSource');
@@ -32,6 +33,24 @@ export interface BandcampPayload {
   album_url: string;
 }
 
+/** Coerce a push into the shape above, whatever actually arrived. */
+export function normalizeBandcampPayload(raw: unknown): BandcampPayload {
+  const d = asRecord(raw);
+  return {
+    track_id: asText(d.track_id, 64),
+    title: asText(d.title),
+    artist: asText(d.artist),
+    album: asText(d.album),
+    duration_ms: asNonNegativeInt(d.duration_ms),
+    progress_ms: asNonNegativeInt(d.progress_ms),
+    is_playing: asBool(d.is_playing),
+    art_url: asUrl(d.art_url),
+    track_url: asUrl(d.track_url),
+    artist_url: asUrl(d.artist_url),
+    album_url: asUrl(d.album_url),
+  };
+}
+
 const STALE_THRESHOLD_MS = 10_000;
 
 export class BandcampSource {
@@ -43,7 +62,8 @@ export class BandcampSource {
    * Ingest a push from the Bandcamp userscript.
    * Called by the web server on POST /api/bandcamp.
    */
-  update(data: BandcampPayload): void {
+  update(raw: unknown): BandcampPayload {
+    const data = normalizeBandcampPayload(raw);
     this.latestData = data;
     this.receivedAt = performance.now();
 
@@ -51,6 +71,7 @@ export class BandcampSource {
       this._wasActive = true;
       log.info('Bandcamp userscript connected ✓ — using as primary Bandcamp source');
     }
+    return data;
   }
 
   /**
