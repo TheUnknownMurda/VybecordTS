@@ -2,7 +2,7 @@
 
 # Vybecord
 
-**Discord Rich Presence with real-time synced lyrics — a single desktop app, nothing to install into anything else.**
+**Discord Rich Presence with real-time synced lyrics — one desktop app, working from the first track.**
 
 </div>
 
@@ -12,15 +12,18 @@
 
 Vybecord watches whatever is playing on your PC and puts it on your Discord profile, with the current lyric line updating as the song plays.
 
-It reads the **Windows media session API** — the same one behind the volume-key overlay. Anything that publishes to it is detected automatically: Spotify, a browser tab, VLC, foobar2000, MusicBee, AIMP, Apple Music, Deezer, Tidal. No browser extension, no Spotify mod, no userscript, no config file to hand-edit.
+It reads the **Windows media session API** — the same one behind the volume-key overlay. Anything that publishes to it is detected automatically: Spotify, a browser tab, VLC, foobar2000, MusicBee, AIMP, Apple Music, Deezer, Tidal. Nothing to set up and no config file to hand-edit.
+
+Two optional extensions go further where the OS falls short: [Spicetify](#the-spicetify-extension) for the Spotify client, and [the browser extension](#the-browser-extension) for music in a tab. Neither is required, and nothing changes if you skip them.
 
 ## Features
 
-- **Zero-setup detection** — install, run, done. Nothing to add to Spotify or your browser.
+- **Zero-setup detection** — install, run, done. Detection is native, with nothing to configure.
 - **Real-time synced lyrics** — millisecond-accurate scheduling, shown in the window and on your Discord presence.
-- **Local lyrics library** — import your own `.lrc` files; they always beat anything fetched online.
+- **Local lyrics library** — import your own `.lrc` files; they beat every online provider.
 - **Player picker** — several things playing at once? Pin the presence to the one you mean.
 - **Spotify ad filter** — your status clears during ad breaks instead of announcing the advertiser.
+- **Optional Spicetify extension** — Spotify's own timed lyrics, event-driven track changes, and artwork straight from the client. One button in Settings installs it.
 - **Optional browser extension** — adds what Windows cannot report: which site a tab is on, track links, exact position, live-stream uptime.
 - **Listening history & stats** — session top tracks, a persistent log, and a "wrapped" summary over any range.
 - **Last.fm scrobbling** — optional.
@@ -37,7 +40,7 @@ It reads the **Windows media session API** — the same one behind the volume-ke
 
 Grab `Vybecord-<version>-setup.exe` from the [releases page](https://github.com/TheUnknownMurda/VybecordTS/releases) and run it. Start playing music; the presence appears on its own.
 
-Everything else is in the window — settings, lyrics library, history, Last.fm. There is no web dashboard and no localhost port.
+Everything else is in the window — settings, lyrics library, history, Last.fm. There is no web dashboard to open; the loopback port the extensions push to is opened only while you have them enabled.
 
 ---
 
@@ -78,6 +81,16 @@ The trade is deliberate and it runs the opposite way from the obvious one: this 
 
 While an ad plays the window says so explicitly, so the gap in your status does not look like a bug.
 
+### The Spicetify extension
+
+Windows says Spotify is playing and little else. [Spicetify](https://spicetify.app/) loads code inside the Spotify client itself, which is the only place some of this can be read at all.
+
+The extension in [`spicetify-extension/`](spicetify-extension/) reports the track the moment it changes — an event, not a 400ms poll — along with exact progress, every artist, playlist context, and the album-art CDN URL, so no cover has to be looked up on a public catalogue.
+
+It also supplies **Spotify's own timed lyrics**. That endpoint answers only from inside the client, which is exactly where this runs. Only line-synced lyrics are taken: an unsynced blob stamps every line at zero and would show the whole song at once. Tracks with no lyrics answer 404 — the normal case for a good part of the catalogue — and pass silently to the other sources.
+
+**Settings → Spotify via Spicetify** does the setup in one press: it copies the file, runs `spicetify config extensions vybecord.js`, then `spicetify apply`. All three matter, and stopping after one of them looks exactly like "it does not work". Installing Spicetify itself is left to you — its installer is a script downloaded and executed from the internet, and the app will not run that on your behalf.
+
 ### The browser extension
 
 Windows reports *what* is playing but never *where*: a SoundCloud tab and a YouTube tab are indistinguishable, both arriving as "MSEdge" with the page title as the track and the uploading account as the artist.
@@ -96,10 +109,13 @@ When several sessions play at once, the highest priority wins: Spotify (10) → 
 
 Tried in order, first match wins:
 
-1. **Your local library** — custom lyrics you imported.
-2. **Local LRCLIB dump** — optional offline database (set its path in Settings).
-3. **Online race** — LRCLib, Netease and Musixmatch queried in parallel; the first good answer is used.
-4. **YouTube captions** — fallback for YouTube playback, when enabled.
+1. **Spotify's own lyrics** — only when the Spicetify extension is installed and Spotify has line-synced lyrics for that track. Much of the catalogue has none, and those fall straight through to the next source.
+2. **Your local library** — custom lyrics you imported.
+3. **Local LRCLIB dump** — optional offline database (set its path in Settings).
+4. **Online race** — LRCLib, Netease and Musixmatch queried in parallel; the first good answer is used.
+5. **YouTube captions** — fallback for YouTube playback, when enabled.
+
+Note that (1) really does sit above your own library: the pushed lyrics are folded into the cache before the provider chain runs, so on a Spotify track that Spotify has lyrics for, an imported `.lrc` is not consulted.
 
 Flagged a bad match with **Wrong lyrics**? That result is never reused for that track. Clear flags under Lyrics → Flagged.
 
@@ -202,11 +218,11 @@ The window itself always shows the artwork straight from the player, which is co
 
 ## Migrating from VybecordTS 1.x
 
-The console edition detected playback through a Spicetify extension, Tampermonkey userscripts, and a PowerShell SMTC reader, and was configured through a dashboard served on `localhost:8888`. All of that is gone: detection is native and the UI is the window.
+The console edition detected playback through a Spicetify extension, Tampermonkey userscripts, and a PowerShell SMTC reader, and was configured through a dashboard served on `localhost:8888`. All of that is gone: detection is native and the UI is the window. A Spicetify extension returned in 2.0.3, but as an optional enhancement rather than the way Spotify is detected.
 
-What that costs: playlist context, shuffle/repeat state, artist images and canonical track URLs are not exposed by the OS, so those fields are empty now. Presence buttons that relied on them fall back or are omitted. Everything the lyrics pipeline needs — title, artist, album, duration, position — is exposed, so synced lyrics are unaffected.
+What that costs: playlist context, shuffle/repeat state, artist images and canonical track URLs are not exposed by the OS, so those fields are empty unless one of the optional extensions supplies them. Presence buttons that relied on them fall back or are omitted. Everything the lyrics pipeline needs — title, artist, album, duration, position — is exposed, so synced lyrics are unaffected.
 
-Your `config.json`, lyrics database, listening history and flagged list all carry over unchanged. You can uninstall the Spicetify extension and the userscripts.
+Your `config.json`, lyrics database, listening history and flagged list all carry over unchanged. The Tampermonkey userscripts can go, and so can the 1.x Spicetify extension — the one shipped from 2.0.3 does a different job and is installed from Settings rather than by hand.
 
 ## License
 

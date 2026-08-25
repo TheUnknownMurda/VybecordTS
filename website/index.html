@@ -3,465 +3,638 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VybecordTS — Discord Rich Presence & Synced Lyrics</title>
-  <meta name="description" content="Enhanced Discord Rich Presence with real-time synced lyrics for Spotify, YouTube, and more.">
+
+  <title>Vybecord — Discord Rich Presence with synced lyrics</title>
+  <meta name="description" content="Vybecord puts whatever is playing on your PC onto your Discord profile, with the current lyric line updating as the song plays. Working from the first track, and sharper still with the Spicetify and browser extensions.">
+  <meta name="theme-color" content="#06060a">
+  <link rel="canonical" href="https://theunknownmurda.github.io/VybecordTS/">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Vybecord — Discord Rich Presence with synced lyrics">
+  <meta property="og:description" content="Whatever is playing on your PC, on your Discord profile, line by line. One Windows app, plus optional Spicetify and browser extensions.">
+  <meta property="og:url" content="https://theunknownmurda.github.io/VybecordTS/">
+  <meta name="twitter:card" content="summary">
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <!-- Navigation -->
-  <nav class="navbar">
-    <div class="nav-container">
-      <a href="#" class="logo">
-        <div class="logo-icon">🎵</div>
-        <span>VybecordTS</span>
+
+<!-- ================================================================ nav -->
+<nav class="nav" id="nav">
+  <div class="nav-inner">
+    <a href="#top" class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+        </svg>
+      </span>
+      Vybecord
+    </a>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#how">How it works</a></li>
+      <li><a href="#lyrics">Lyrics</a></li>
+      <li><a href="#extensions">Extensions</a></li>
+      <li><a href="https://github.com/TheUnknownMurda/VybecordTS" target="_blank" rel="noopener">GitHub</a></li>
+    </ul>
+    <a href="#download" class="btn btn-primary nav-cta">Download</a>
+  </div>
+</nav>
+
+<!-- ================================================================ hero -->
+<header class="hero" id="top">
+  <div class="wrap hero-grid">
+    <div class="hero-text">
+      <a class="hero-badge" href="https://github.com/TheUnknownMurda/VybecordTS/releases" target="_blank" rel="noopener">
+        <span class="dot" aria-hidden="true"></span>
+        <span id="heroRelease">Free and open source</span>
       </a>
-      <ul class="nav-links">
-        <li><a href="#features">Features</a></li>
-        <li><a href="#showcase">Showcase</a></li>
-        <li><a href="#download">Download</a></li>
-        <li><a href="https://github.com/TheUnknownMurda/VybecordTS" target="_blank">GitHub</a></li>
-      </ul>
-      <a href="#download" class="btn btn-primary">Download</a>
-    </div>
-  </nav>
 
-  <!-- Hero Section -->
-  <section class="hero">
-    <div class="hero-bg">
-      <div class="gradient-orb orb-1"></div>
-      <div class="gradient-orb orb-2"></div>
+      <h1>Your music.<br>On Discord.<br><em>Line by line.</em></h1>
+
+      <p class="hero-sub">
+        Vybecord watches whatever is playing on your PC and puts it on your profile,
+        with the current lyric updating as the song plays.
+        It works from the first track, and the
+        <strong>Spicetify and browser extensions make it sharper still.</strong>
+      </p>
+
+      <div class="hero-actions">
+        <a href="download/" id="dlHero" class="btn btn-primary btn-lg">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Download for Windows
+        </a>
+        <a href="#how" class="btn btn-ghost btn-lg">See how it works</a>
+      </div>
+
+      <p class="hero-meta">
+        <span>Windows 10 (1809) or later</span>
+        <span class="sep">&middot;</span>
+        <span>MIT licensed</span>
+        <span class="sep">&middot;</span>
+        <span>No account, no telemetry</span>
+      </p>
     </div>
-    <div class="container">
-      <div class="hero-content">
-        <div class="hero-badge">
-          <span class="badge-dot"></span>
-          Now with Spotify Local Files support
+
+    <!--
+      The window is drawn in CSS rather than screenshotted: it stays sharp on
+      every display, needs no third-party image host, and cannot rot out of date
+      the way a captured PNG does. The track and the lines are fictional.
+    -->
+    <div class="mock" aria-hidden="true">
+      <div class="mock-window">
+        <div class="mock-bar">
+          <div class="mock-dots"><i></i><i></i><i></i></div>
+          <span class="mock-title"><span class="live"></span> Vybecord</span>
         </div>
-        <h1 class="hero-title">
-          Your music.<br>
-          <span class="gradient-text">Beautifully shared.</span>
-        </h1>
-        <p class="hero-subtitle">
-          Enhanced Discord Rich Presence with real-time synced lyrics.
-          <br>Supports Spotify, YouTube, SoundCloud, Bandcamp, and more.
+        <div class="mock-body">
+          <div class="np">
+            <div class="np-art">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+              </svg>
+              <span class="eq"><i></i><i></i><i></i></span>
+            </div>
+            <div class="np-meta">
+              <div class="np-title">Midnight Signal</div>
+              <div class="np-artist">Neon Harbour</div>
+              <div class="track"><i style="width:38%"></i></div>
+              <div class="np-time"><span>1:12</span><span>3:07</span></div>
+            </div>
+          </div>
+          <div class="lyr">
+            <p>Every street we ever walked at three</p>
+            <p class="on">Say it once more before the signal drops</p>
+            <p>The city hums the rest of it for us</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="presence floats">
+        <div class="pr-head">
+          <span class="pr-avatar">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.79 19.79 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.099.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
+          </span>
+          <div>
+            <div class="pr-name">You</div>
+            <div class="pr-status">Listening to Spotify</div>
+          </div>
+        </div>
+        <div class="pr-body">
+          <div class="pr-art">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+            </svg>
+            <span class="chip">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+            </span>
+          </div>
+          <div class="pr-lines">
+            <div class="t">Midnight Signal</div>
+            <div class="a">Neon Harbour</div>
+            <div class="s">&#127908; Say it once more before&hellip;</div>
+            <div class="e">1:12 elapsed</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ================================================================ sources -->
+<section class="strip">
+  <div class="wrap strip-inner">
+    <span class="strip-label">Detected automatically:</span>
+    <ul class="strip-list">
+      <li>Spotify</li>
+      <li>YouTube</li>
+      <li>Apple Music</li>
+      <li>Tidal</li>
+      <li>Deezer</li>
+      <li>VLC</li>
+      <li>foobar2000</li>
+      <li>MusicBee</li>
+      <li>AIMP</li>
+      <li class="more">anything else that reaches the volume overlay</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ================================================================ features -->
+<section class="sec" id="features">
+  <div class="wrap">
+    <div class="sec-head center reveal">
+      <span class="eyebrow">Features</span>
+      <h2>Everything in one window</h2>
+      <p>No web dashboard, no browser tab to keep open. Install it, play something, and it is already working.</p>
+    </div>
+
+    <div class="feat-grid reveal">
+      <article class="feat">
+        <div class="feat-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+        <h3>Zero-setup detection</h3>
+        <p>It reads the Windows media session &mdash; the same thing behind your volume-key overlay. Whatever publishes to it shows up, with nothing to configure.</p>
+      </article>
+
+      <article class="feat">
+        <div class="feat-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+        </div>
+        <h3>Real-time synced lyrics</h3>
+        <p>Millisecond-accurate scheduling, shown in the window and on your presence. Position is extrapolated between updates, so nothing stutters.</p>
+      </article>
+
+      <article class="feat">
+        <div class="feat-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="M4 4h10l6 6v6"/><path d="M14 4v6h6"/></svg>
+        </div>
+        <h3>Your own lyrics library</h3>
+        <p>Import your <code class="mono">.lrc</code> files and they always beat anything fetched online. Flag a bad match once and it is never reused.</p>
+      </article>
+
+      <article class="feat">
+        <div class="feat-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/></svg>
+        </div>
+        <h3>Spotify ad filter</h3>
+        <p>Your status clears during an ad break instead of announcing the advertiser, and the window says why the gap is there.</p>
+      </article>
+
+      <article class="feat">
+        <div class="feat-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 20h8"/><path d="M9 9l5 2-5 2z"/></svg>
+        </div>
+        <h3>Player picker</h3>
+        <p>Several things playing at once? Priority sorts it out on its own &mdash; or pin the presence to the one you actually mean.</p>
+      </article>
+
+      <article class="feat">
+        <div class="feat-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/></svg>
+        </div>
+        <h3>History, stats &amp; wrapped</h3>
+        <p>A persistent log of what you played, session top tracks, and a wrapped-style summary over any range you pick. Last.fm scrobbling optional.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ how -->
+<section class="sec how" id="how">
+  <div class="wrap">
+    <div class="sec-head center reveal">
+      <span class="eyebrow">How it works</span>
+      <h2>Three hops, no middleman</h2>
+      <p>Nothing is uploaded and nothing is accounted for. The track never leaves your machine except as a name, looked up for cover art.</p>
+    </div>
+
+    <div class="pipe reveal">
+      <div class="pipe-node">
+        <span class="k">Source</span>
+        <span class="v">Windows media session</span>
+        <span class="d">Metadata, timeline and playback events, straight from the OS.</span>
+      </div>
+      <div class="pipe-arrow" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="12" x2="19" y2="12"/><polyline points="13 6 19 12 13 18"/></svg>
+      </div>
+      <div class="pipe-node is-us">
+        <span class="k">Vybecord</span>
+        <span class="v">Priority, cleanup, lyric timing</span>
+        <span class="d">Picks the player that matters, tidies the title, schedules every line.</span>
+      </div>
+      <div class="pipe-arrow" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="12" x2="19" y2="12"/><polyline points="13 6 19 12 13 18"/></svg>
+      </div>
+      <div class="pipe-node">
+        <span class="k">Destination</span>
+        <span class="v">Discord, over local IPC</span>
+        <span class="d">The desktop app&rsquo;s own pipe on your machine. No server in between.</span>
+      </div>
+    </div>
+
+    <div class="notes reveal">
+      <div class="note">
+        <h4>Smooth, not polled</h4>
+        <p>Players publish a timeline update only every few seconds &mdash; Spotify every 4.5. Each one becomes an anchor, position is extrapolated from it, and a resync every three seconds catches seeks nobody announced. That is why the progress bar climbs instead of sawtoothing.</p>
+      </div>
+      <div class="note">
+        <h4>Off the main thread</h4>
+        <p>The media session addon runs on its own worker thread. Electron&rsquo;s main thread is a single-threaded COM apartment, and WinRT&rsquo;s session calls simply never return there. Its own apartment, its own thread, and the window stays responsive.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ add-ons -->
+<section class="sec" id="extensions">
+  <div class="wrap">
+    <div class="sec-head center reveal">
+      <span class="eyebrow">Optional</span>
+      <h2>Two ways to go further</h2>
+      <p>The window works on its own from the first track. Where these apply, they hand it things Windows cannot report.</p>
+    </div>
+
+    <div class="addons reveal">
+      <article class="addon">
+        <div class="addon-top">
+          <div class="addon-ico">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M7.5 14.4c3-.7 5.6-.4 7.7.9"/><path d="M6.8 10.9c3.6-1 7.2-.5 9.9 1.2"/><path d="M6.4 7.4c4.2-1 8.4-.4 11.4 1.5"/></svg>
+          </div>
+          <div>
+            <h3>Spicetify extension</h3>
+            <span class="for">For the Spotify desktop client</span>
+          </div>
+        </div>
+        <ul>
+          <li><strong>Spotify&rsquo;s own timed lyrics</strong> &mdash; the client&rsquo;s lyrics endpoint answers only from inside the client, which is exactly where this runs.</li>
+          <li>Track changes arrive as events, not on a poll, so the presence turns over the instant the song does.</li>
+          <li>Exact progress, with no delay to compensate for.</li>
+          <li>Artwork and every artist straight from Spotify &mdash; no catalogue lookup needed to find a cover.</li>
+        </ul>
+        <p class="addon-foot"><strong>One button in Settings</strong> installs it and applies Spicetify for you.</p>
+      </article>
+
+      <article class="addon">
+        <div class="addon-top">
+          <div class="addon-ico">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18Z"/></svg>
+          </div>
+          <div>
+            <h3>Browser extension</h3>
+            <span class="for">For music playing in a tab</span>
+          </div>
+        </div>
+        <ul>
+          <li><strong>Which site the tab is actually on.</strong> Windows reports every tab as the browser, so SoundCloud and YouTube arrive indistinguishable.</li>
+          <li>The canonical link to the track, so your presence points at the real thing.</li>
+          <li>Position read from the page&rsquo;s own audio element, rather than inferred.</li>
+          <li>Live-stream uptime on Twitch and Kick.</li>
+        </ul>
+        <p class="addon-foot">Spotify web, YouTube and YouTube&nbsp;Music, SoundCloud, Bandcamp, Twitch and Kick &mdash; <strong>each with its own switch.</strong></p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ lyrics -->
+<section class="sec" id="lyrics">
+  <div class="wrap split">
+    <div class="reveal">
+      <span class="eyebrow">Lyrics</span>
+      <h2 style="font-size:clamp(1.85rem,3.6vw,2.6rem);margin-bottom:14px">Four sources, first match wins</h2>
+      <p style="color:var(--fg-3);margin-bottom:32px">Tried in order, top to bottom. Yours always come first, and an offset control fixes the stubborn cases.</p>
+      <ol class="steps">
+        <li>
+          <h4>Your local library</h4>
+          <p>Any <code class="mono">.lrc</code> file you imported, for that track.</p>
+        </li>
+        <li>
+          <h4>Local LRCLIB dump</h4>
+          <p>An optional offline database. Point Settings at it and matching never touches the network.</p>
+        </li>
+        <li>
+          <h4>An online race</h4>
+          <p>LRCLib, Netease and Musixmatch queried in parallel; the first good answer wins.</p>
+        </li>
+        <li>
+          <h4>YouTube captions</h4>
+          <p>The fallback for YouTube playback, when you enable it.</p>
+        </li>
+      </ol>
+      <p class="aside">
+        <strong>Wrong lyrics?</strong> One button blacklists that match for that track, permanently.
+        Translation and romanisation for Japanese, Korean and Chinese are a switch away.
+      </p>
+    </div>
+
+    <div class="reveal">
+      <div class="lrc-view">
+        <div class="lrc-head">
+          <span class="mono">midnight-signal.lrc</span>
+          <span class="lrc-src">Your library</span>
+        </div>
+        <div class="lrc-row"><span class="ts">01:02.40</span><span class="tx">Every street we ever walked at three</span></div>
+        <div class="lrc-row on"><span class="ts">01:08.10</span><span class="tx">Say it once more before the signal drops</span></div>
+        <div class="lrc-row"><span class="ts">01:13.90</span><span class="tx">The city hums the rest of it for us</span></div>
+        <div class="lrc-row"><span class="ts">01:19.55</span><span class="tx">And I keep the frequency open</span></div>
+        <div class="lrc-foot">
+          <span>Scheduled to the millisecond &mdash; not polled.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ ad filter -->
+<section class="sec how">
+  <div class="wrap split">
+    <div class="reveal">
+      <span class="eyebrow">Ad filter</span>
+      <h2 style="font-size:clamp(1.85rem,3.6vw,2.6rem);margin-bottom:14px">Your status should not run adverts</h2>
+      <p style="color:var(--fg-3);margin-bottom:18px">
+        Spotify publishes no flag for an ad break. It swaps the media session&rsquo;s metadata for
+        the advertiser&rsquo;s, which is how an unfiltered presence ends up announcing an energy
+        drink as though it were a song.
+      </p>
+      <p style="color:var(--fg-3)">
+        Vybecord keys on duration, the one thing every ad has in common, and protects genuine
+        short tracks by checking whether they belong to the album playing around them. An
+        interlude does; an advert never does.
+      </p>
+      <p class="aside">
+        <strong>On by default</strong>, under Settings &rarr; Detection. While an ad plays, the
+        window says so &mdash; so the gap in your status never looks like a bug.
+      </p>
+    </div>
+
+    <div class="compare reveal" aria-hidden="true">
+      <div class="compare-row bad">
+        <span class="compare-tag">Without</span>
+        <div class="presence flat">
+          <div class="pr-body" style="padding-top:0">
+            <div class="pr-art" style="background:linear-gradient(145deg,#3a2020,#241618);color:#f87171">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 11v3a1 1 0 0 0 1 1h3l4 4V6L7 10H4a1 1 0 0 0-1 1Z"/><path d="M16 9a4 4 0 0 1 0 6"/></svg>
+            </div>
+            <div class="pr-lines">
+              <div class="t">Zephyr Energy &mdash; 50% off this week</div>
+              <div class="a">Zephyr Energy</div>
+              <div class="e">0:11 elapsed</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="compare-row good">
+        <span class="compare-tag">With</span>
+        <div class="presence flat">
+          <div class="pr-body" style="padding-top:0;align-items:center">
+            <div class="cleared">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="8.5 12.5 11 15 15.5 9.5"/></svg>
+              <span>Presence cleared &middot; ad break &middot; back in a moment</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ download -->
+<section class="sec" id="download">
+  <div class="wrap">
+    <div class="dl-card reveal">
+      <h2>Put it on your profile</h2>
+      <p>
+        One installer, about a minute. Start playing something and the presence appears on
+        its own &mdash; there is nothing to sign in to.
+      </p>
+
+      <div class="dl-actions">
+        <a href="download/" id="dlPrimary" class="btn btn-primary btn-stack">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          <span>
+            <span class="l1">Download for Windows</span>
+            <span class="l2" id="dlVersion">Latest release</span>
+          </span>
+        </a>
+
+        <a href="https://github.com/TheUnknownMurda/VybecordTS" class="btn btn-ghost btn-stack" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+          <span>
+            <span class="l1">View the source</span>
+            <span class="l2">on GitHub</span>
+          </span>
+        </a>
+      </div>
+
+      <div class="dl-meta" id="dlMeta">
+        <span>Windows 10/11</span>
+        <span>&middot;</span>
+        <span>Discord desktop app required</span>
+        <span>&middot;</span>
+        <span>Runs in the tray</span>
+      </div>
+
+      <!--
+        The installer is not code-signed, so Windows warns the first time it
+        runs. Saying so here, plainly, is the difference between "this looks
+        sketchy" and "right, they told me".
+      -->
+      <details class="dl-note">
+        <summary>Windows will warn you the first time &mdash; here is why</summary>
+        <div class="body">
+          <p>
+            This installer is not signed with a paid code-signing certificate, so SmartScreen shows
+            <em>&ldquo;Windows protected your PC&rdquo;</em>. Choose <strong>More info</strong>, then
+            <strong>Run anyway</strong>. To be sure you have the genuine file, compare its SHA-256
+            with the one below and with the checksum on the release page.
+          </p>
+          <code id="dlHash">Checking the latest release&hellip;</code>
+        </div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ footer -->
+<footer class="footer">
+  <div class="wrap">
+    <div class="footer-top">
+      <div class="footer-brand">
+        <a href="#top" class="brand">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+            </svg>
+          </span>
+          Vybecord
+        </a>
+        <p class="footer-blurb">
+          Discord Rich Presence with real-time synced lyrics, as a single Windows app.
+          Free, MIT licensed, and not affiliated with Discord or Spotify.
         </p>
-        <div class="hero-buttons">
-          <a href="#download" class="btn btn-large btn-primary">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="7 10 12 15 17 10"/>
-              <line x1="12" y1="15" x2="12" y2="3"/>
-            </svg>
-            Download for Windows
-          </a>
-          <a href="#showcase" class="btn btn-large btn-secondary">See it in action</a>
-        </div>
-        <div class="hero-stats">
-          <div class="stat">
-            <span class="stat-value">5+</span>
-            <span class="stat-label">Music Sources</span>
-          </div>
-          <div class="stat">
-            <span class="stat-value">LRCLib</span>
-            <span class="stat-label">Lyrics Database</span>
-          </div>
-          <div class="stat">
-            <span class="stat-value">Real-time</span>
-            <span class="stat-label">Sync</span>
-          </div>
-        </div>
       </div>
-      <div class="hero-visual">
-        <div class="app-preview">
-          <div class="app-header">
-            <div class="window-controls">
-              <span></span><span></span><span></span>
-            </div>
-            <span class="app-title">VybecordTS</span>
-          </div>
-          <div class="app-content">
-            <div class="now-playing">
-              <div class="album-art">
-                <div class="album-placeholder">🎵</div>
-                <div class="playing-indicator">
-                  <span></span><span></span><span></span>
-                </div>
-              </div>
-              <div class="track-info">
-                <h3>Lost It / Still Here</h3>
-                <p>Lil Yachty</p>
-                <div class="progress-bar">
-                  <div class="progress" style="width: 35%"></div>
-                </div>
-                <div class="time">
-                  <span>0:44</span>
-                  <span>2:13</span>
-                </div>
-              </div>
-            </div>
-            <div class="lyrics-panel">
-              <div class="lyric-line prev">I lost it all, but I'm still here</div>
-              <div class="lyric-line active">🎤 Still here, still standing</div>
-              <div class="lyric-line next">Through the pain and the fear</div>
-            </div>
-          </div>
-        </div>
-        <div class="floating-card discord-card">
-          <div class="discord-header">
-            <img src="https://cdn.discordapp.com/embed/avatars/0.png" alt="User" class="avatar">
-            <div class="discord-user">
-              <span class="username">You</span>
-              <span class="status">Listening to Spotify</span>
-            </div>
-          </div>
-          <div class="discord-activity">
-            <img src="https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/zkR9FspOnC79sb6532RdH.gif" alt="Album" class="activity-art">
-            <div class="activity-info">
-              <div class="activity-name">Lost It / Still Here</div>
-              <div class="activity-details">Lil Yachty</div>
-              <div class="activity-state">🎼 Local Files</div>
-              <div class="activity-time">0:44 elapsed</div>
-            </div>
-          </div>
-        </div>
+
+      <div class="footer-col">
+        <h4>Product</h4>
+        <a href="#features">Features</a>
+        <a href="#how">How it works</a>
+        <a href="#extensions">Extensions</a>
+        <a href="download/">Download</a>
+        <a href="https://github.com/TheUnknownMurda/VybecordTS/releases">Releases</a>
+      </div>
+
+      <div class="footer-col">
+        <h4>Project</h4>
+        <a href="https://github.com/TheUnknownMurda/VybecordTS">GitHub</a>
+        <a href="https://github.com/TheUnknownMurda/VybecordTS/issues">Report an issue</a>
+        <a href="privacy/">Privacy</a>
+        <a href="https://github.com/TheUnknownMurda/VybecordTS/blob/main/LICENSE">Licence</a>
       </div>
     </div>
-  </section>
 
-  <!-- Features Section -->
-  <section id="features" class="features">
-    <div class="container">
-      <div class="section-header">
-        <span class="section-tag">Features</span>
-        <h2>Everything you need</h2>
-        <p>Rich presence that actually enhances your music experience</p>
-      </div>
-      <div class="features-grid">
-        <div class="feature-card">
-          <div class="feature-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 2a3 3 0 0 0-3 3v14a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
-              <path d="M19 10v4a3 3 0 0 0 6 0v-4a3 3 0 0 0-6 0Z"/>
-              <path d="M2 10v4a3 3 0 0 0 6 0v-4a3 3 0 0 0-6 0Z"/>
-            </svg>
-          </div>
-          <h3>Multi-Platform Support</h3>
-          <p>Spotify, YouTube, YouTube Music, SoundCloud, Bandcamp, and desktop players via SMTC.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M9 18V5l12-2v13"/>
-              <circle cx="6" cy="18" r="3"/>
-              <circle cx="18" cy="16" r="3"/>
-            </svg>
-          </div>
-          <h3>Synced Lyrics</h3>
-          <p>Real-time lyrics from LRCLib with precise timing. Romanization and translation support.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-              <line x1="8" y1="21" x2="16" y2="21"/>
-              <line x1="12" y1="17" x2="12" y2="21"/>
-            </svg>
-          </div>
-          <h3>Rich Presence</h3>
-          <p>Show what you're listening to on Discord with beautiful, detailed status updates.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-            </svg>
-          </div>
-          <h3>Lightweight</h3>
-          <p>Built with TypeScript and minimal resource usage. No bloat, just vibes.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="2" y1="12" x2="22" y2="12"/>
-              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-            </svg>
-          </div>
-          <h3>Web Dashboard</h3>
-          <p>Built-in web interface to manage settings, view stats, and control your experience.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-            </svg>
-          </div>
-          <h3>Open Source</h3>
-          <p>Free and open source. Self-host or contribute. Community-driven development.</p>
-        </div>
-      </div>
+    <div class="footer-bottom">
+      <span>&copy; 2026 Vybecord</span>
+      <span>Built for Windows 10 (1809) and later</span>
     </div>
-  </section>
+  </div>
+</footer>
 
-  <!-- Showcase Section -->
-  <section id="showcase" class="showcase">
-    <div class="container">
-      <div class="showcase-content">
-        <div class="showcase-text">
-          <span class="section-tag">Showcase</span>
-          <h2>Your status, elevated</h2>
-          <p>See exactly what your friends see when you're vibing to your favorite tracks. Detailed context, album art, and playback state — all automatically synced.</p>
-          <ul class="showcase-list">
-            <li>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                <polyline points="20 6 9 17 4 12"/>
-              </svg>
-              Automatic source detection
-            </li>
-            <li>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                <polyline points="20 6 9 17 4 12"/>
-              </svg>
-              Playlist & album context
-            </li>
-            <li>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                <polyline points="20 6 9 17 4 12"/>
-              </svg>
-              Local files support
-            </li>
-            <li>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                <polyline points="20 6 9 17 4 12"/>
-              </svg>
-              Liked Songs detection
-            </li>
-          </ul>
-        </div>
-        <div class="showcase-visual">
-          <div class="showcase-card">
-            <div class="discord-rich-presence">
-              <div class="presence-header">
-                <div class="presence-app">
-                  <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/84/Spotify_icon.svg/48px-Spotify_icon.svg.png" alt="Spotify" class="app-icon">
-                  <span>Listening to Spotify</span>
-                </div>
-              </div>
-              <div class="presence-body">
-                <div class="presence-art">
-                  <div class="album-cover">🎵</div>
-                </div>
-                <div class="presence-details">
-                  <div class="track-name">Throwed Off</div>
-                  <div class="artist-name">Bingz</div>
-                  <div class="album-name">🎼 Local Files</div>
-                  <div class="progress-container">
-                    <div class="progress-bar">
-                      <div class="progress-fill" style="width: 45%"></div>
-                    </div>
-                    <div class="time-labels">
-                      <span>1:24</span>
-                      <span>3:06</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
+<script>
+  /* Navbar gets a background only once the hero has scrolled under it. */
+  const nav = document.getElementById('nav');
+  const onScroll = () => nav.classList.toggle('is-stuck', window.scrollY > 24);
+  addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
 
-  <!-- Download Section -->
-  <section id="download" class="download">
-    <div class="container">
-      <div class="download-card">
-        <div class="download-content">
-          <h2>Ready to enhance your vibe?</h2>
-          <p>Download the latest version and get started in minutes. Requires Discord Desktop and Windows 10/11.</p>
-          <div class="download-buttons">
-            <a href="download/" id="dlPrimary" class="btn btn-download btn-primary">
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                <polyline points="7 10 12 15 17 10"/>
-                <line x1="12" y1="15" x2="12" y2="3"/>
-              </svg>
-              <div class="btn-text">
-                <span class="btn-label">Download for Windows</span>
-                <span class="btn-version" id="dlVersion">Latest release</span>
-              </div>
-            </a>
-            <a href="https://github.com/TheUnknownMurda/VybecordTS" class="btn btn-download btn-secondary" target="_blank">
-              <svg class="icon" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-              </svg>
-              <div class="btn-text">
-                <span class="btn-label">View Source</span>
-                <span class="btn-version">on GitHub</span>
-              </div>
-            </a>
-          </div>
-          <div class="download-meta" id="dlMeta">
-            <span>Windows 10/11</span>
-            <span>•</span>
-            <span>Requires Discord Desktop</span>
-            <span>•</span>
-            <span>Spotify/YouTube optional</span>
-          </div>
-
-          <!--
-            The installer is not code-signed, so Windows warns the first time it
-            runs. Saying so here, plainly, is the difference between "this looks
-            sketchy" and "right, they told me".
-          -->
-          <details class="dl-note">
-            <summary>Windows will warn you the first time — here is why</summary>
-            <p>
-              This installer is not signed with a paid code-signing certificate, so SmartScreen shows
-              <em>&ldquo;Windows protected your PC&rdquo;</em>. Choose <strong>More info</strong>, then
-              <strong>Run anyway</strong>. To be sure you have the genuine file, compare its SHA-256 with
-              the one below and with the checksum on the release page.
-            </p>
-            <code id="dlHash">Checking the latest release&hellip;</code>
-          </details>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Footer -->
-  <footer class="footer">
-    <div class="container">
-      <div class="footer-content">
-        <div class="footer-brand">
-          <div class="logo">
-            <div class="logo-icon">🎵</div>
-            <span>VybecordTS</span>
-          </div>
-          <p>Enhanced Discord Rich Presence with synced lyrics.</p>
-        </div>
-        <div class="footer-links">
-          <div class="link-group">
-            <h4>Product</h4>
-            <a href="#features">Features</a>
-            <a href="#download">Download</a>
-            <a href="https://github.com/TheUnknownMurda/VybecordTS/releases">Changelog</a>
-          </div>
-          <div class="link-group">
-            <h4>Resources</h4>
-            <a href="https://github.com/TheUnknownMurda/VybecordTS">GitHub</a>
-            <a href="https://github.com/TheUnknownMurda/VybecordTS/issues">Issues</a>
-            <a href="https://github.com/TheUnknownMurda/VybecordTS/wiki">Wiki</a>
-          </div>
-        </div>
-      </div>
-      <div class="footer-bottom">
-        <p>&copy; 2026 VybecordTS. Not affiliated with Discord or Spotify.</p>
-      </div>
-    </div>
-  </footer>
-
-  <script>
-    // Smooth scroll for navigation links
-    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-      anchor.addEventListener('click', function (e) {
-        e.preventDefault();
-        const target = document.querySelector(this.getAttribute('href'));
-        if (target) {
-          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
+  /* Fade sections in as they arrive. Anything without IntersectionObserver, or
+     with reduced motion asked for, simply starts visible. */
+  const reveals = document.querySelectorAll('.reveal');
+  if (!('IntersectionObserver' in window) || matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    reveals.forEach((el) => el.classList.add('in'));
+  } else {
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        if (!e.isIntersecting) return;
+        e.target.classList.add('in');
+        io.unobserve(e.target);
       });
-    });
+    }, { rootMargin: '0px 0px -12% 0px', threshold: 0.08 });
+    reveals.forEach((el) => io.observe(el));
+  }
 
-    /*
-     * Fill the download button from the latest GitHub release.
-     *
-     * The release is the source of truth, so publishing one updates this page
-     * with no edit and no build step. Everything degrades to the /download
-     * redirect if the API is unreachable or rate-limited, which it will be for
-     * anyone browsing from an address that has been hammering github.com.
-     */
-    const REPO = 'TheUnknownMurda/VybecordTS';
+  /*
+   * Fill the download buttons from the latest GitHub release.
+   *
+   * The release is the source of truth, so publishing one updates this page
+   * with no edit and no build step. Everything degrades to the /download
+   * redirect if the API is unreachable or rate-limited, which it will be for
+   * anyone browsing from an address that has been hammering github.com.
+   */
+  const REPO = 'TheUnknownMurda/VybecordTS';
 
-    const prettySize = (bytes) => (bytes / 1048576).toFixed(1) + ' MB';
-    const prettyDate = (iso) => new Date(iso).toLocaleDateString(undefined, {
-      year: 'numeric', month: 'long', day: 'numeric',
-    });
+  const prettySize = (bytes) => (bytes / 1048576).toFixed(1) + ' MB';
+  const prettyDate = (iso) => new Date(iso).toLocaleDateString(undefined, {
+    year: 'numeric', month: 'long', day: 'numeric',
+  });
 
-    async function fillLatestRelease() {
-      const button = document.getElementById('dlPrimary');
-      const versionLabel = document.getElementById('dlVersion');
-      const meta = document.getElementById('dlMeta');
-      const hash = document.getElementById('dlHash');
-      if (!button) return;
+  async function fillLatestRelease() {
+    const primary = document.getElementById('dlPrimary');
+    const heroBtn = document.getElementById('dlHero');
+    const versionLabel = document.getElementById('dlVersion');
+    const badge = document.getElementById('heroRelease');
+    const meta = document.getElementById('dlMeta');
+    const hash = document.getElementById('dlHash');
 
-      let release;
-      try {
-        const res = await fetch('https://api.github.com/repos/' + REPO + '/releases/latest', {
-          headers: { Accept: 'application/vnd.github+json' },
-        });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        release = await res.json();
-      } catch {
-        // Leave the button pointing at /download; it redirects to the release.
-        if (hash) hash.textContent = 'Checksum is on the release page.';
-        return;
-      }
-
-      const installer = (release.assets || []).find((a) => /-setup\.exe$/i.test(a.name));
-      if (!installer) {
-        if (hash) hash.textContent = 'Checksum is on the release page.';
-        return;
-      }
-
-      button.href = installer.browser_download_url;
-      if (versionLabel) versionLabel.textContent = release.tag_name || release.name || 'Latest release';
-
-      if (meta) {
-        meta.innerHTML = '';
-        const parts = [
-          'Windows 10/11',
-          prettySize(installer.size),
-          release.published_at ? prettyDate(release.published_at) : null,
-          'Requires Discord Desktop',
-        ].filter(Boolean);
-        parts.forEach((text, i) => {
-          if (i) {
-            const dot = document.createElement('span');
-            dot.textContent = '•';
-            meta.appendChild(dot);
-          }
-          const span = document.createElement('span');
-          span.textContent = text;
-          meta.appendChild(span);
-        });
-      }
-
-      if (hash) {
-        // GitHub exposes a digest on assets only on newer API versions; when it
-        // is missing there is nothing honest to print, so say where to look.
-        const digest = installer.digest || '';
-        hash.textContent = digest.startsWith('sha256:')
-          ? 'SHA-256  ' + digest.slice(7)
-          : 'The checksum is published with the release on GitHub.';
-      }
+    let release;
+    try {
+      const res = await fetch('https://api.github.com/repos/' + REPO + '/releases/latest', {
+        headers: { Accept: 'application/vnd.github+json' },
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      release = await res.json();
+    } catch {
+      // Both buttons still point at /download, which redirects to the release.
+      if (hash) hash.textContent = 'The checksum is published with the release on GitHub.';
+      return;
     }
 
-    fillLatestRelease();
+    const tag = release.tag_name || release.name || '';
+    if (badge && tag) badge.textContent = tag + ' is out \u2014 free and open source';
 
-    // Navbar background on scroll
-    const navbar = document.querySelector('.navbar');
-    window.addEventListener('scroll', () => {
-      if (window.scrollY > 50) {
-        navbar.classList.add('scrolled');
-      } else {
-        navbar.classList.remove('scrolled');
-      }
-    });
-  </script>
+    const installer = (release.assets || []).find((a) => /-setup\.exe$/i.test(a.name));
+    if (!installer) {
+      if (hash) hash.textContent = 'The checksum is published with the release on GitHub.';
+      return;
+    }
+
+    if (primary) primary.href = installer.browser_download_url;
+    if (heroBtn) heroBtn.href = installer.browser_download_url;
+    if (versionLabel && tag) versionLabel.textContent = tag;
+
+    if (meta) {
+      const parts = [
+        'Windows 10/11',
+        prettySize(installer.size),
+        release.published_at ? prettyDate(release.published_at) : null,
+        'Discord desktop app required',
+      ].filter(Boolean);
+
+      meta.replaceChildren();
+      parts.forEach((text, i) => {
+        if (i) {
+          const dot = document.createElement('span');
+          dot.textContent = '\u00b7';
+          meta.appendChild(dot);
+        }
+        const span = document.createElement('span');
+        span.textContent = text;
+        meta.appendChild(span);
+      });
+    }
+
+    if (hash) {
+      // GitHub exposes a digest on assets only on newer API versions; when it
+      // is missing there is nothing honest to print, so say where to look.
+      const digest = installer.digest || '';
+      hash.textContent = digest.startsWith('sha256:')
+        ? 'SHA-256  ' + digest.slice(7)
+        : 'The checksum is published with the release on GitHub.';
+    }
+  }
+
+  fillLatestRelease();
+</script>
+
 </body>
 </html>

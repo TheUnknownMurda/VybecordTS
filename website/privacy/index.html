@@ -8,51 +8,88 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml">
+  <meta name="theme-color" content="#06060a">
   <style>
+    /* Same tokens as the landing page, kept inline so this page stands alone. */
     :root {
-      --bg-primary: #0a0a0f;
-      --bg-card: rgba(26, 26, 36, 0.6);
-      --accent-primary: #5865f2;
-      --text-primary: #ffffff;
-      --text-secondary: #b5bac1;
-      --text-muted: #6d6f78;
-      --border-color: rgba(255, 255, 255, 0.08);
+      --bg: #06060a;
+      --fg: #fafafa;
+      --fg-2: #c9c9d3;
+      --fg-3: #9090a0;
+      --fg-4: #63636f;
+      --accent: #10b981;
+      --accent-2: #34d399;
+      --line: rgba(255, 255, 255, 0.07);
       color-scheme: dark;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      background: var(--bg-primary);
-      color: var(--text-secondary);
+      background: var(--bg);
+      color: var(--fg-2);
       font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       line-height: 1.7;
-      padding: 4rem 1.5rem 6rem;
+      padding: 3.5rem 1.5rem 6rem;
+      -webkit-font-smoothing: antialiased;
     }
-    .wrap { max-width: 46rem; margin: 0 auto; }
-    a { color: var(--accent-primary); }
-    h1 { color: var(--text-primary); font-size: 2.25rem; line-height: 1.2; margin-bottom: .5rem; }
+    body::before {
+      content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+      background: radial-gradient(46rem 28rem at 78% -6%, rgba(16, 185, 129, .1), transparent 62%);
+    }
+    .wrap { max-width: 44rem; margin: 0 auto; }
+    a { color: var(--accent-2); text-decoration-color: rgba(52, 211, 153, .4); }
+    .home {
+      display: inline-flex; align-items: center; gap: .55rem; margin-bottom: 2.75rem;
+      font-size: .875rem; font-weight: 500; color: var(--fg-3); text-decoration: none;
+    }
+    .home:hover { color: var(--accent-2); }
+    .home .mark {
+      width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center;
+      color: #04120c; background: linear-gradient(150deg, var(--accent-2), var(--accent) 55%, #0e9f6e);
+    }
+    .home .mark svg { width: 15px; height: 15px; }
+    h1 {
+      color: var(--fg); font-size: clamp(2rem, 5vw, 2.5rem); line-height: 1.15;
+      letter-spacing: -.03em; font-weight: 700; margin-bottom: .5rem;
+    }
     h2 {
-      color: var(--text-primary); font-size: 1.25rem; margin: 2.5rem 0 .75rem;
-      padding-top: 2rem; border-top: 1px solid var(--border-color);
+      color: var(--fg); font-size: 1.2rem; font-weight: 650; letter-spacing: -.02em;
+      margin: 2.75rem 0 .75rem; padding-top: 2rem; border-top: 1px solid var(--line);
     }
     h2:first-of-type { border-top: 0; padding-top: 0; }
-    p, li { margin-bottom: .75rem; }
+    p, li { margin-bottom: .75rem; text-wrap: pretty; }
     ul { padding-left: 1.25rem; }
-    strong { color: var(--text-primary); font-weight: 600; }
-    .date { color: var(--text-muted); font-size: .9rem; margin-bottom: 3rem; }
+    li::marker { color: var(--accent-2); }
+    strong { color: var(--fg); font-weight: 600; }
+    .date { color: var(--fg-4); font-size: .875rem; margin-bottom: 2.5rem; }
     .callout {
-      background: var(--bg-card); border: 1px solid var(--border-color);
-      border-radius: 12px; padding: 1.25rem 1.5rem; margin: 1.5rem 0;
+      border: 1px solid var(--line);
+      border-left: 2px solid rgba(16, 185, 129, .55);
+      background: linear-gradient(180deg, rgba(16, 185, 129, .06), rgba(255, 255, 255, .012));
+      border-radius: 14px; padding: 1.35rem 1.6rem; margin: 1.75rem 0;
     }
     .callout p:last-child { margin-bottom: 0; }
     code {
-      background: rgba(255,255,255,.06); border-radius: 5px;
-      padding: .15em .45em; font-size: .9em; color: var(--text-primary);
+      background: rgba(255, 255, 255, .06); border: 1px solid var(--line); border-radius: 5px;
+      padding: .1em .4em; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: .85em; color: var(--fg);
     }
-    footer { margin-top: 4rem; padding-top: 2rem; border-top: 1px solid var(--border-color); font-size: .9rem; }
+    footer {
+      margin-top: 4rem; padding-top: 2rem; border-top: 1px solid var(--line);
+      font-size: .875rem; color: var(--fg-4);
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
+    <a class="home" href="../">
+      <span class="mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+        </svg>
+      </span>
+      Vybecord
+    </a>
     <h1>Privacy Policy</h1>
     <p class="date">Vybecord browser extension and desktop app · Last updated 20 August 2026</p>
 
