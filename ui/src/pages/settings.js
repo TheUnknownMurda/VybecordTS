@@ -139,14 +139,6 @@ function presenceTab(body) {
     ]),
 
     coverImagesCard(),
-
-    el('div', { class: 'card' }, [
-      el('h2', { text: 'Advanced' }),
-      el('div', { style: 'margin-top:8px' }, [
-        inputRow('Discord application ID', 'Overrides the built-in per-platform IDs. Leave empty unless you run your own Discord app.',
-          cfg('discord_app_id', ''), (v) => put('discord_app_id', v.trim())),
-      ]),
-    ]),
   );
 }
 
@@ -175,9 +167,6 @@ function coverImagesCard() {
       toggleRow('Publish artwork that exists only on this PC',
         'Turn this off and local-only tracks fall back to the default placeholder.',
         cfg('art_upload_enabled', true) !== false, (v) => put('art_upload_enabled', v)),
-      inputRow('Cover store', 'Leave as provided, or point this at your own if you would rather host it yourself.',
-        cfg('art_upload_url', ''), (v) => put('art_upload_url', v.trim()),
-        { placeholder: 'https://vybecord-art.vybecord.workers.dev' }),
     ]),
   ]);
 }

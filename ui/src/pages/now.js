@@ -21,7 +21,6 @@ export function render(root) {
           el('div', { class: 'np-artist', id: 'npArtist' }),
           el('div', { class: 'np-album', id: 'npAlbum' }),
           el('div', { class: 'np-badges', id: 'npBadges' }),
-          el('div', { class: 'np-cover-src', id: 'npCoverSrc' }),
           el('div', { class: 'np-progress' }, [
             el('div', { class: 'np-bar' }, [el('div', { class: 'np-fill', id: 'npFill' })]),
             el('div', { class: 'np-times' }, [
@@ -212,7 +211,6 @@ function paintTrack(track) {
       ...(ad ? [statusChip('ad', 'Spotify ad')] : []),
     );
     art.src = BLANK_ART;
-    $('#npCoverSrc').replaceChildren();
     // A pin is exclusive, so nothing playing may simply mean the pinned player
     // is paused or closed. Saying which one avoids the app looking broken when
     // it is doing exactly what it was told.
@@ -230,34 +228,6 @@ function paintTrack(track) {
 
   // Resolving local art needs a round trip, so the tint follows the image.
   setArt(art, track.album_art_url, track.track_id).then(setAmbient, () => setAmbient(null));
-
-  /*
-   * The exact URL handed to Discord.
-   *
-   * Discord will happily accept an activity and then quietly fail to load its
-   * image — the profile shows a "?" and nothing anywhere says why. Surfacing the
-   * URL turns that into something checkable in one click: if it opens in a
-   * browser but Discord still shows "?", the host is the problem, not the app.
-   */
-  const srcLine = $('#npCoverSrc');
-  const artUrlSent = track.album_art_url || '';
-  if (/^https?:\/\//.test(artUrlSent)) {
-    let host = '?';
-    try { host = new URL(artUrlSent).host; } catch { /* keep the placeholder */ }
-    srcLine.replaceChildren(
-      el('span', { text: `Cover sent to Discord via ${host} — ` }),
-      el('a', {
-        href: '#', text: 'open it',
-        onclick: (e) => { e.preventDefault(); api.openExternal(artUrlSent); },
-      }),
-    );
-  } else {
-    srcLine.replaceChildren(el('span', {
-      text: artUrlSent === '/api/thumbnail'
-        ? 'Cover is local only — not uploaded yet, so Discord has none'
-        : '',
-    }));
-  }
 
   const badges = [];
   if (track.is_live) badges.push(['live', 'Live broadcast', true]);
