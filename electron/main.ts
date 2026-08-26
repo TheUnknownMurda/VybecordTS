@@ -17,6 +17,7 @@ import { initUpdater, stopUpdater } from './updater.js';
 import { setYtDlpSearchDir, setYtDlpBundled } from '../src/core/youtube-captions.js';
 import { VybecordBackend } from '../src/backend.js';
 import { registerIpc } from './ipc.js';
+import { startAwayWatch } from './away-watch.js';
 import { PushServer } from '../src/web/push-server.js';
 import type { TrackData } from '../src/core/types.js';
 
@@ -44,6 +45,7 @@ let win: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let backend: VybecordBackend | null = null;
 let pushServer: PushServer | null = null;
+let stopAwayWatch: (() => void) | null = null;
 /** Set once the user really means to exit, so 'close' stops hiding to tray. */
 let quitting = false;
 
@@ -83,6 +85,15 @@ async function start(): Promise<void> {
 
   backend = new VybecordBackend(baseDir, mediaWorkerPath(), lrclibWorkerPath());
   registerIpc(backend, () => win);
+
+  // Follow the machine's idle clock, so the presence comes down when Discord
+  // marks the account away and goes back up on the first keypress — the same
+  // manners Discord's own Spotify integration has. The setting is read on every
+  // check, so changing it applies immediately.
+  stopAwayWatch = startAwayWatch(
+    () => Number(backend?.getConfig().away_after_minutes ?? 10),
+    (away) => backend?.setUserAway(away),
+  );
 
   // Checks on a delay and again every few hours; installs on the way out, so a
   // long tray session is never interrupted mid-song.
@@ -292,6 +303,8 @@ async function quitApp(): Promise<void> {
   log.info('Shutting down...');
   flushTranslationCache();
   stopUpdater();
+  stopAwayWatch?.();
+  stopAwayWatch = null;
   pushServer?.stop();
   pushServer = null;
   tray?.destroy();

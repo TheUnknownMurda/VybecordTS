@@ -13,6 +13,10 @@ const STATUS_DISPLAY = [
   ['artist_title', 'Artist — Title'], ['artist', 'Artist'], ['album', 'Album'],
   ['details', 'Details field'], ['state', 'State field'], ['custom', 'Custom template'],
 ];
+const AWAY_DELAYS = [
+  [5, 'After 5 minutes'], [10, 'After 10 minutes (Discord)'], [15, 'After 15 minutes'],
+  [30, 'After 30 minutes'], [60, 'After 1 hour'],
+];
 const URL_TARGETS = [['auto', 'Automatic'], ['track', 'Track'], ['artist', 'Artist'], ['album', 'Album'], ['context', 'Playlist / context']];
 
 /**
@@ -100,6 +104,12 @@ function presenceTab(body) {
           cfg('rpc_enabled', true) !== false, (v) => put('rpc_enabled', v)),
         toggleRow('Hide when paused', 'Remove the status as soon as playback stops, instead of leaving the last track up.',
           cfg('rpc_only_when_playing') === true, (v) => put('rpc_only_when_playing', v)),
+        toggleRow('Hide when away', 'Take the status down once Discord marks you idle, and put it back the moment you touch the keyboard — the way Spotify behaves.',
+          cfg('rpc_hide_when_away', true) !== false, (v) => put('rpc_hide_when_away', v)),
+        cfg('rpc_hide_when_away', true) !== false
+          ? selectRow('Away after', 'Inactivity before the status is hidden. Discord itself goes idle after 10 minutes.',
+              cfg('away_after_minutes', 10), AWAY_DELAYS, (v) => put('away_after_minutes', Number(v)))
+          : null,
         selectRow('Activity type', 'The verb Discord shows before the activity.',
           cfg('rpc_activity_type', 2), ACTIVITY_TYPES, (v) => put('rpc_activity_type', Number(v))),
         selectRow('Status line', 'What the one-line status in the member list shows.',

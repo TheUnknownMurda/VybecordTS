@@ -17,7 +17,10 @@ export const state = {
   stats: { topTracks: [], topArtists: [] },
   players: [],
   preferredPlayer: null,
-  status: { discordConnected: false, mediaSourceReady: false, adPlaying: false, showLyrics: true },
+  status: {
+    discordConnected: false, mediaSourceReady: false, adPlaying: false, showLyrics: true,
+    userAway: false, hideWhenAway: true,
+  },
   version: '',
 };
 

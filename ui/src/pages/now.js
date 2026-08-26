@@ -124,7 +124,9 @@ export function render(root) {
     subscribe('config', () => { paintOffset(); paintTrSlot(); }),
     // An ad produces no track, so the idle state has to be redrawn to explain
     // itself rather than sit there reading "Nothing playing".
-    subscribe('status', () => { if (!state.track) paintTrack(null); }),
+    // Being away hides the presence without the song changing at all, so the
+    // chip that says so cannot wait for the next trackUpdate to appear.
+    subscribe('status', () => (state.track ? paintBadges(state.track) : paintTrack(null))),
   ];
 
   const ticker = setInterval(() => {
@@ -177,7 +179,13 @@ const ICONS = {
     + '<rect x="13.6" y="5" width="3.4" height="14" rx="1.2"/></svg>',
   ad: '<svg viewBox="0 0 24 24"><path d="M4 10.5v3a1 1 0 001 1h2.2l6.8 4V5.5l-6.8 4H5a1 1 0 00-1 1z"/>'
     + '<path d="M17.5 9.2a4 4 0 010 5.6"/><path d="M20 6.6a7.6 7.6 0 010 10.8"/></svg>',
+  away: '<svg viewBox="0 0 24 24"><path d="M20.5 13.4A8.6 8.6 0 0110.6 3.5a8.6 8.6 0 109.9 9.9z"/></svg>',
 };
+
+/** True while the presence is being withheld because the user is idle. */
+function hiddenForAway() {
+  return state.status?.userAway === true && state.status?.hideWhenAway !== false;
+}
 
 /**
  * A status chip: the glyph on screen, the words in the tooltip.
@@ -202,13 +210,17 @@ function paintTrack(track) {
 
   if (!track) {
     const ad = state.status?.adPlaying === true;
+    const away = !ad && hiddenForAway();
     $('#npTitle').textContent = ad ? 'Advertisement' : 'Nothing playing';
-    $('#npArtist').textContent = ad ? 'Your Discord status is hidden until the ad is over.' : '';
+    $('#npArtist').textContent = ad
+      ? 'Your Discord status is hidden until the ad is over.'
+      : away ? 'You are away — your Discord status is hidden until you come back.' : '';
     $('#npAlbum').textContent = '';
     // Spread a list rather than passing a conditional: replaceChildren() has no
     // filtering of its own, so a bare null lands on screen as the text "null".
     $('#npBadges').replaceChildren(
       ...(ad ? [statusChip('ad', 'Spotify ad')] : []),
+      ...(away ? [statusChip('away', 'Away — Discord status hidden')] : []),
     );
     art.src = BLANK_ART;
     // A pin is exclusive, so nothing playing may simply mean the pinned player
@@ -229,7 +241,18 @@ function paintTrack(track) {
   // Resolving local art needs a round trip, so the tint follows the image.
   setArt(art, track.album_art_url, track.track_id).then(setAmbient, () => setAmbient(null));
 
+  paintBadges(track);
+}
+
+/**
+ * The chips under the title.
+ *
+ * Split out of paintTrack because the first of them answers to the status
+ * rather than to the track — see the 'status' subscription above.
+ */
+function paintBadges(track) {
   const badges = [];
+  if (hiddenForAway()) badges.push(['away', 'Away — Discord status hidden until you come back', true]);
   if (track.is_live) badges.push(['live', 'Live broadcast', true]);
   if (track.is_local) badges.push(['local', 'Local file', false]);
   if (track.is_shuffle) badges.push(['shuffle', 'Shuffle is on', false]);

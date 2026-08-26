@@ -23,6 +23,7 @@ Two optional extensions go further where the OS falls short: [Spicetify](#the-sp
 - **Local lyrics library** — import your own `.lrc` files; they beat every online provider.
 - **Player picker** — several things playing at once? Pin the presence to the one you mean.
 - **Spotify ad filter** — your status clears during ad breaks instead of announcing the advertiser.
+- **Away-aware** — the presence comes down once Discord marks you idle and goes back up on the first keypress, the way Discord's own Spotify integration behaves.
 - **Optional Spicetify extension** — Spotify's own timed lyrics, event-driven track changes, and artwork straight from the client. One button in Settings installs it.
 - **Optional browser extension** — adds what Windows cannot report: which site a tab is on, track links, exact position, live-stream uptime.
 - **Listening history & stats** — session top tracks, a persistent log, and a "wrapped" summary over any range.
@@ -213,6 +214,8 @@ The window itself always shows the artwork straight from the player, which is co
 **Wrong lyrics.** Hit **Wrong lyrics** to blacklist that match, or import the correct `.lrc` under Lyrics → Import.
 
 **Lyrics never load.** Check that Show lyrics is on, and that the track is actually identifiable — browser tabs publish whatever the page says, which is often a video title rather than an artist and a song.
+
+**The presence vanishes when I step away.** That is **Settings → Presence → Hide when away**, on by default: after ten minutes without keyboard or mouse input — the same delay after which Discord flips you to Idle — the status is taken down, and touching the machine puts it straight back. Change the delay there, or turn it off.
 
 ---
 

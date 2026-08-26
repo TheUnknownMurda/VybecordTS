@@ -91,6 +91,15 @@ export interface VybecordConfig {
   show_lyrics: boolean;
   /** When true, Discord status disappears as soon as music stops */
   rpc_only_when_playing: boolean;
+  /**
+   * Take the presence down once the machine has been idle long enough for
+   * Discord to mark the account away, and put it back on the first keypress —
+   * the behaviour Discord's own Spotify integration has.
+   */
+  rpc_hide_when_away: boolean;
+  /** Minutes without keyboard or mouse input before the presence is hidden.
+   *  10 is Discord's own auto-idle delay. */
+  away_after_minutes: number;
   /** Master toggle: detect non-Spotify media sources (YouTube, SoundCloud, etc.) */
   detect_all_media: boolean;
   /** Per-platform detection toggles (only apply when detect_all_media is true) */

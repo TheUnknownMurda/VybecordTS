@@ -97,6 +97,14 @@ Album interludes and skits are spared: an interlude belongs to the album already
 
 While an ad plays the window says "Advertisement", so you know it is not a bug. You can turn the filter off under **Settings → Detection**.
 
+### My status disappears when I step away
+
+Deliberate, and adjustable. After ten minutes without keyboard or mouse input — the same delay after which Discord itself flips you to Idle — Vybecord takes the presence down, exactly as Discord's own Spotify integration does. Touch the machine and it comes straight back on whichever line the song has reached.
+
+The music is never interrupted; only the publishing to Discord is paused. **Now playing** shows a crescent moon while that is the case, so an empty profile is never a mystery.
+
+The delay lives in **Settings → Presence → Away after**, and the switch just above it, **Hide when away**, turns the whole thing off.
+
 ### The cover does not show on Discord (but shows in the window)
 
 The window reads the artwork straight off your disk. Discord cannot — it needs a URL, so Vybecord looks the album up on a public music CDN and hands Discord that.

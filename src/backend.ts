@@ -169,6 +169,10 @@ export class VybecordBackend extends EventEmitter {
   /** Thumbnail the last art resolution acted on — see resolveDiscordArt(). */
   private artThumbSig = '';
   private shuttingDown = false;
+  /** True while the OS has seen no input for longer than away_after_minutes —
+   *  the same window in which Discord flips the account to Idle. Driven from
+   *  the main process; see setUserAway(). */
+  private userAway = false;
   private idleSince = 0;  // grace period timestamp (prevent SMTC flicker)
   private lastAdState = false;  // so the ad status is pushed on change, not every poll
   private configDir: string;
@@ -237,6 +241,14 @@ export class VybecordBackend extends EventEmitter {
       this.emitStatus();
 
       if (!this.discord.isConnected) return;
+
+      // Answered first, and without looking at what is playing: turning "hide
+      // when away" on while already idle has to take the presence down, and
+      // turning it off has to bring it straight back.
+      if (this.presenceHidden) {
+        this.discord.clearActivity().catch(() => {});
+        return;
+      }
 
       if (!cfg.rpc_enabled) {
         // RPC disabled → clear everything
@@ -1775,6 +1787,8 @@ export class VybecordBackend extends EventEmitter {
       preferredPlayer: this.media?.getPreferredSource() ?? null,
       adPlaying: this.media?.isAdPlaying() ?? false,
       showLyrics: this.config.get('show_lyrics') !== false,
+      userAway: this.userAway,
+      hideWhenAway: this.config.get('rpc_hide_when_away') !== false,
     });
   }
 
@@ -1804,7 +1818,10 @@ export class VybecordBackend extends EventEmitter {
         return this.discord.lastWriteLatencyMs;
       },
       onRpcUpdate: (activity) => {
-        if (this.config.get('rpc_enabled')) {
+        // The engine keeps running while the user is away — it owns the lyric
+        // clock, and stopping it would mean re-seeking on every return. Only
+        // the publish is dropped.
+        if (this.config.get('rpc_enabled') && !this.presenceHidden) {
           this.discord.setActivity(activity);
         }
       },
@@ -1987,6 +2004,54 @@ export class VybecordBackend extends EventEmitter {
     this.emit('statsUpdate', this.getSessionStats());
   }
 
+  // ── Away (Discord auto-idle parity) ──
+
+  /**
+   * Report whether the machine has been idle long enough for Discord to show
+   * the account as away.
+   *
+   * Discord's own Spotify integration drops the "Listening to" card when that
+   * happens, and this is what gives our presence the same manners. The signal
+   * has to be pushed in: it comes from Electron's powerMonitor, and this class
+   * is plain Node on purpose. Note the presence is hidden on the *machine's*
+   * idle clock, which is what Discord reads too — the account's actual status
+   * is not something a third-party app can ask the IPC socket for.
+   */
+  setUserAway(away: boolean): void {
+    if (away === this.userAway) return;
+    this.userAway = away;
+    this.emitStatus();
+    if (this.config.get('rpc_hide_when_away') === false) return;
+    log.info(away ? '[AWAY] Idle — presence hidden' : '[AWAY] Back — presence restored');
+    this.refreshPresence();
+  }
+
+  isUserAway(): boolean { return this.userAway; }
+
+  /** Whether the presence must stay off the profile whatever is playing. */
+  private get presenceHidden(): boolean {
+    return this.userAway && this.config.get('rpc_hide_when_away') !== false;
+  }
+
+  /**
+   * Publish whatever the presence should be right now.
+   *
+   * For when something other than playback changed the answer — coming back
+   * from idle, mainly. Republishing a live track goes through the engine rather
+   * than being rebuilt here: the engine owns which lyric line is on screen, and
+   * anything built from the track alone would snap the presence back to the
+   * first line of the song.
+   */
+  private refreshPresence(): void {
+    if (!this.discord.isConnected) return;
+    if (this.presenceHidden || !this.config.get('rpc_enabled')) {
+      this.discord.clearActivity().catch(() => {});
+      return;
+    }
+    if (this.currentTrack && this.lyricsEngine.pushRpcNow()) return;
+    this.setIdlePresence();
+  }
+
   // ── RPC helpers ──
 
   private getRpcConfig(): Record<string, unknown> {
@@ -2020,6 +2085,10 @@ export class VybecordBackend extends EventEmitter {
 
   private setIdlePresence(): void {
     if (!this.discord.isConnected) return;
+    if (this.presenceHidden) {
+      this.discord.clearActivity().catch(() => {});
+      return;
+    }
     if (!this.config.get('rpc_enabled')) {
       this.discord.clearActivity().catch(() => {});
       return;

@@ -97,6 +97,14 @@ Les interludes et skits d'album sont épargnés : un interlude appartient à l'a
 
 Pendant une pub, la fenêtre affiche « Advertisement » pour que tu saches que ce n'est pas un bug. Tu peux désactiver le filtre dans **Settings → Detection**.
 
+### Mon statut disparaît quand je m'absente
+
+C'est voulu, et c'est réglable. Au bout de dix minutes sans clavier ni souris — le délai au bout duquel Discord te passe lui-même en « Absent » — Vybecord retire ta présence, exactement comme le fait l'intégration Spotify de Discord. Dès que tu touches la machine, elle revient sur la ligne où la chanson en est.
+
+La musique, elle, n'est jamais interrompue : seule la publication vers Discord est suspendue. La page **Now playing** affiche un croissant de lune pendant ce temps, pour que tu saches pourquoi ton profil est vide.
+
+Le délai se change dans **Settings → Presence → Away after**, et l'option se coupe juste au-dessus avec **Hide when away**.
+
 ### La pochette s'affiche dans la fenêtre mais pas sur Discord
 
 La fenêtre lit l'image directement sur ton disque. Discord ne peut pas : il lui faut une URL. Vybecord cherche donc l'album sur un CDN musical public et transmet cette URL à Discord.

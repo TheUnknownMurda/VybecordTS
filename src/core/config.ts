@@ -9,6 +9,8 @@ const DEFAULTS: VybecordConfig = {
   rpc_enabled: true,
   show_lyrics: true,
   rpc_only_when_playing: false,
+  rpc_hide_when_away: true,
+  away_after_minutes: 10,
   detect_all_media: true,
   detect_spotify: true,
   detect_youtube: true,
@@ -99,6 +101,10 @@ export const CONFIG_SCHEMA: Record<string, FieldSpec> = {
   rpc_enabled: { type: 'boolean' },
   show_lyrics: { type: 'boolean' },
   rpc_only_when_playing: { type: 'boolean' },
+  rpc_hide_when_away: { type: 'boolean' },
+  // Under a minute the presence would blink off between two sentences; over two
+  // hours it is indistinguishable from having the setting off.
+  away_after_minutes: { type: 'number', min: 1, max: 120 },
   detect_all_media: { type: 'boolean' },
   detect_spotify: { type: 'boolean' },
   detect_youtube: { type: 'boolean' },

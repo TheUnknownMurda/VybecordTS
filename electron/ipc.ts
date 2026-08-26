@@ -136,6 +136,8 @@ export function registerIpc(backend: VybecordBackend, getWindow: () => BrowserWi
       mediaSourceReady: backend.isMediaSourceReady(),
       adPlaying: backend.isAdPlaying(),
       showLyrics: backend.getConfig().show_lyrics !== false,
+      userAway: backend.isUserAway(),
+      hideWhenAway: backend.getConfig().rpc_hide_when_away !== false,
     },
     version: app.getVersion(),
   }));
