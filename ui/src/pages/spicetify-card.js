@@ -112,7 +112,8 @@ export function spicetifyCard() {
         'Windows tells Vybecord that Spotify is playing, but not much else. Spicetify reads the Spotify client '
         + 'itself, so the track changes the instant it changes and brings the real album art, every artist, the '
         + 'playlist you are in, exact progress, and Spotify’s own synced lyrics. Spotify works without it — '
-        + 'this is what makes it good.'),
+        + 'this is what makes it good. It is also the only thing that can see a private session, so hiding '
+        + 'the presence during one needs it installed.'),
 
       allDone
         ? el('div', { class: 'notice' }, [

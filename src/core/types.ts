@@ -100,6 +100,15 @@ export interface VybecordConfig {
   /** Minutes without keyboard or mouse input before the presence is hidden.
    *  10 is Discord's own auto-idle delay. */
   away_after_minutes: number;
+  /**
+   * Hide the presence while Spotify is in a private session.
+   *
+   * Reported by the Spicetify extension and by nothing else — the switch is
+   * invisible from outside the client. Worth being able to turn off: a private
+   * session is as often about keeping a listen out of Spotify's
+   * recommendations as it is about privacy.
+   */
+  hide_in_private_session: boolean;
   /** Master toggle: detect non-Spotify media sources (YouTube, SoundCloud, etc.) */
   detect_all_media: boolean;
   /** Per-platform detection toggles (only apply when detect_all_media is true) */

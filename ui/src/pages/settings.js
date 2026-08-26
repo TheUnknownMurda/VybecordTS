@@ -110,6 +110,9 @@ function presenceTab(body) {
           ? selectRow('Away after', 'Inactivity before the status is hidden. Discord itself goes idle after 10 minutes.',
               cfg('away_after_minutes', 10), AWAY_DELAYS, (v) => put('away_after_minutes', Number(v)))
           : null,
+        toggleRow('Hide during a Spotify private session',
+          'Needs the Spicetify extension — that switch is invisible from outside the Spotify client. Turn this off if you use private sessions to keep a listen out of your Spotify recommendations rather than for privacy.',
+          cfg('hide_in_private_session', true) !== false, (v) => put('hide_in_private_session', v)),
         selectRow('Activity type', 'The verb Discord shows before the activity.',
           cfg('rpc_activity_type', 2), ACTIVITY_TYPES, (v) => put('rpc_activity_type', Number(v))),
         selectRow('Status line', 'What the one-line status in the member list shows.',

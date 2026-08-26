@@ -180,11 +180,25 @@ const ICONS = {
   ad: '<svg viewBox="0 0 24 24"><path d="M4 10.5v3a1 1 0 001 1h2.2l6.8 4V5.5l-6.8 4H5a1 1 0 00-1 1z"/>'
     + '<path d="M17.5 9.2a4 4 0 010 5.6"/><path d="M20 6.6a7.6 7.6 0 010 10.8"/></svg>',
   away: '<svg viewBox="0 0 24 24"><path d="M20.5 13.4A8.6 8.6 0 0110.6 3.5a8.6 8.6 0 109.9 9.9z"/></svg>',
+  private: '<svg viewBox="0 0 24 24"><path d="M2.5 12S6 5.9 12 5.9c1.5 0 2.9.4 4.1 1"/>'
+    + '<path d="M21.5 12S18 18.1 12 18.1c-1.6 0-3-.4-4.2-1.1"/>'
+    + '<path d="M9.9 9.9a3 3 0 004.2 4.2"/><path d="M3.5 3.5l17 17"/></svg>',
 };
 
 /** True while the presence is being withheld because the user is idle. */
 function hiddenForAway() {
   return state.status?.userAway === true && state.status?.hideWhenAway !== false;
+}
+
+/**
+ * True while this track is being withheld because Spotify was told not to
+ * broadcast. Takes the track, because the rule only covers Spotify: anything
+ * else playing is announced as usual.
+ */
+function hiddenForPrivate(track) {
+  return state.status?.privateSession === true
+    && state.status?.hideInPrivate !== false
+    && track?.media_source === 'spotify';
 }
 
 /**
@@ -253,6 +267,7 @@ function paintTrack(track) {
 function paintBadges(track) {
   const badges = [];
   if (hiddenForAway()) badges.push(['away', 'Away — Discord status hidden until you come back', true]);
+  if (hiddenForPrivate(track)) badges.push(['private', 'Spotify private session — this track is not on your Discord status', true]);
   if (track.is_live) badges.push(['live', 'Live broadcast', true]);
   if (track.is_local) badges.push(['local', 'Local file', false]);
   if (track.is_shuffle) badges.push(['shuffle', 'Shuffle is on', false]);

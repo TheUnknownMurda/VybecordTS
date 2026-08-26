@@ -20,6 +20,7 @@ export const state = {
   status: {
     discordConnected: false, mediaSourceReady: false, adPlaying: false, showLyrics: true,
     userAway: false, hideWhenAway: true,
+    privateSession: false, hideInPrivate: true,
   },
   version: '',
 };

@@ -97,6 +97,16 @@ Album interludes and skits are spared: an interlude belongs to the album already
 
 While an ad plays the window says "Advertisement", so you know it is not a bug. You can turn the filter off under **Settings → Detection**.
 
+### My status disappears when I turn on a Spotify private session
+
+Deliberate: you told Spotify not to broadcast what you are listening to, and Vybecord follows. The track keeps playing and the lyrics keep scrolling in the window — only the publishing to Discord stops, and it resumes the moment you leave the private session. **Now playing** shows a crossed-out eye while that is the case.
+
+Anything else you play is unaffected: a YouTube video is still announced during a Spotify private session, which is a statement about Spotify and nothing else.
+
+**This needs the Spicetify extension.** The switch is invisible from outside the client — the media session Spotify publishes to Windows is identical either way — so without the extension Vybecord has no way to know, and the presence stays up. One button installs it, under **Settings → Spotify via Spicetify**.
+
+If you use private sessions to keep a listen out of your Spotify recommendations rather than for privacy, turn the setting off under **Settings → Presence → Hide during a Spotify private session**.
+
 ### My status disappears when I step away
 
 Deliberate, and adjustable. After ten minutes without keyboard or mouse input — the same delay after which Discord itself flips you to Idle — Vybecord takes the presence down, exactly as Discord's own Spotify integration does. Touch the machine and it comes straight back on whichever line the song has reached.
