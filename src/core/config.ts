@@ -29,7 +29,6 @@ const DEFAULTS: VybecordConfig = {
   rpc_large_url: 'auto',
   rpc_button1_label: '',
   rpc_button1_url: '',
-  rpc_button2_label: '🎵 Listen on {platform}',
   rpc_activity_type: 2, // LISTENING
   rpc_status_display: 'app', // status line keeps showing the app name by default
   rpc_status_template: '{title} - {artist}',
@@ -124,7 +123,6 @@ export const CONFIG_SCHEMA: Record<string, FieldSpec> = {
   // limit here only guards against absurd payloads (emojis cost 2 UTF-16 units).
   rpc_button1_label: { type: 'string', maxLength: 128 },
   rpc_button1_url: { type: 'string', maxLength: 512 },
-  rpc_button2_label: { type: 'string', maxLength: 128 },
   // Discord only accepts Playing(0) / Listening(2) / Watching(3) / Competing(5)
   rpc_activity_type: { type: 'number', min: 0, max: 5 },
   rpc_status_display: { type: 'string', values: STATUS_DISPLAY_CHOICES },
@@ -181,6 +179,11 @@ const OBSOLETE_KEYS: readonly string[] = [
   // Cover art is looked up on a music CDN now. Uploading it to a webhook was
   // tried and abandoned: Discord's image proxy would not render the result.
   'image_webhook',
+  // The platform button's label is fixed — see PLATFORM_BUTTON_LABEL in
+  // backend.ts. The key was already being ignored before it was removed, so
+  // leaving a stale copy in config.json would only suggest it still did
+  // something.
+  'rpc_button2_label',
 ];
 
 /** Placeholder returned in place of a configured secret. */

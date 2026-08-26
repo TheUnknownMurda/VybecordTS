@@ -137,14 +137,15 @@ function presenceTab(body) {
       el('h2', { text: 'Clickable links' }),
       el('div', { class: 'row-desc', style: 'margin-top:6px;max-width:none' },
         'The OS media session does not expose track, album or playlist URLs, so most of these only resolve '
-        + 'when the lyrics provider supplies a link. Buttons with an empty label are omitted.'),
+        + 'when the lyrics provider supplies a link. Button 1 is yours and is left off the presence while its '
+        + 'label is empty. The second button is fixed: it points at whatever is playing and names that platform '
+        + 'itself.'),
       el('div', { style: 'margin-top:8px' }, [
         selectRow('Title links to', null, cfg('rpc_details_url', 'auto'), URL_TARGETS, (v) => put('rpc_details_url', v)),
         selectRow('Artist links to', null, cfg('rpc_state_url', 'auto'), URL_TARGETS, (v) => put('rpc_state_url', v)),
         selectRow('Cover links to', null, cfg('rpc_large_url', 'auto'), URL_TARGETS, (v) => put('rpc_large_url', v)),
         inputRow('Button 1 label', 'Leave empty to hide.', cfg('rpc_button1_label', ''), (v) => put('rpc_button1_label', v)),
         inputRow('Button 1 URL', null, cfg('rpc_button1_url', ''), (v) => put('rpc_button1_url', v), { placeholder: 'https://…' }),
-        inputRow('Button 2 label', 'Supports {platform}.', cfg('rpc_button2_label', ''), (v) => put('rpc_button2_label', v)),
       ]),
     ]),
 

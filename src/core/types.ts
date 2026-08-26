@@ -125,7 +125,6 @@ export interface VybecordConfig {
   rpc_large_url: string;
   rpc_button1_label: string;
   rpc_button1_url: string;
-  rpc_button2_label: string;
   rpc_activity_type: number;
   /**
    * What the "Listening to …" status line shows (member list / profile), independent

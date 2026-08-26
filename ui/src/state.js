@@ -43,6 +43,22 @@ function emit(key, value) {
   }
 }
 
+/**
+ * The bar a track should be showing the moment it arrives — its own position,
+ * or an empty bar when there is no track at all.
+ *
+ * Progress reaches the window as its own event, which only ever fires while
+ * something is playing: stopping produces no final "back to zero" tick, because
+ * there is nothing left to report a position for. So the last position of the
+ * last track stayed in the state after it ended, and any repaint that read the
+ * state rather than the event -- opening the page again, most of all -- put that
+ * dead bar back under "Nothing playing".
+ */
+const trackProgress = (track) => ({
+  progress_ms: track?.progress_ms || 0,
+  duration_ms: track?.duration_ms || 0,
+});
+
 /** Merge a patch into state and notify the affected keys. */
 export function set(patch) {
   Object.assign(state, patch);
@@ -61,9 +77,7 @@ export async function init() {
     preferredPlayer: snap.preferredPlayer,
     status: snap.status || state.status,
     version: snap.version || '',
-    progress: snap.track
-      ? { progress_ms: snap.track.progress_ms, duration_ms: snap.track.duration_ms }
-      : { progress_ms: 0, duration_ms: 0 },
+    progress: trackProgress(snap.track),
   });
 
   /*
@@ -77,7 +91,11 @@ export async function init() {
    */
   api.on('trackUpdate', (track) => {
     const same = (track?.track_id || '') === (state.track?.track_id || '');
-    set(same ? { track } : { track, lyrics: null });
+    // A different track means the bar belongs to the new one -- at its own
+    // position, or empty when playback simply stopped. Same reasoning as the
+    // lyrics beside it: what the previous track left behind is not an
+    // approximation of the new state, it is the wrong state.
+    set(same ? { track } : { track, lyrics: null, progress: trackProgress(track) });
   });
   api.on('progressUpdate', (progress) => set({ progress }));
   api.on('lyricsUpdate', (lyrics) => set({ lyrics }));

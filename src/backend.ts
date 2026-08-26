@@ -77,6 +77,18 @@ const WEB_SOURCES = ['browser_', 'soundcloud', 'bandcamp', 'youtube'];
 const VIDEO_SOURCES = ['browser_', 'youtube'];
 const ARTIST_SPLIT_RE = /[,]/;  // Precompiled — used in recordPlay + artist key extraction
 
+/**
+ * The second presence button, which is not the user's to change.
+ *
+ * It is the one that points at whatever is playing, and its wording has to
+ * agree with where it leads: {platform} becomes the player's name, and the verb
+ * follows suit — "Watch on YouTube" for video, "Listen on" for everything else
+ * (see platformButtonLabel in the lyrics engine). A label of one's own choosing
+ * had no way to keep that agreement, so the setting behind it was overridden
+ * here long before it was taken out of the interface. Button 1 remains free.
+ */
+const PLATFORM_BUTTON_LABEL = '🎵 Listen on {platform}';
+
 /** Ceiling on lyric lines accepted from one push. Longer than any real song. */
 const MAX_PUSHED_LYRIC_LINES = 2000;
 
@@ -2063,7 +2075,7 @@ export class VybecordBackend extends EventEmitter {
       rpc_large_url: cfg.rpc_large_url,
       rpc_button1_label: cfg.rpc_button1_label,
       rpc_button1_url: cfg.rpc_button1_url,
-      rpc_button2_label: '🎵 Listen on {platform}',
+      rpc_button2_label: PLATFORM_BUTTON_LABEL,
       rpc_activity_type: cfg.rpc_activity_type,
       rpc_status_display: cfg.rpc_status_display,
       rpc_status_template: cfg.rpc_status_template,
