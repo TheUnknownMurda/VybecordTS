@@ -84,6 +84,10 @@ body {
   color: var(--text-secondary);
   height: 100vh;
   overflow: hidden;
+  /* A column, so the update strip can take the room it needs between the title
+     bar and the shell rather than the shell having to know its height. */
+  display: flex;
+  flex-direction: column;
   -webkit-font-smoothing: antialiased;
   user-select: none;
 }
@@ -125,6 +129,7 @@ html[data-theme='light'] .orb {
 #titlebar {
   position: relative;
   z-index: 10;
+  flex: none;
   height: var(--titlebar-h);
   display: flex;
   align-items: stretch;
@@ -211,7 +216,35 @@ html[data-theme='light'] .orb {
   position: relative;
   z-index: 1;
   display: flex;
-  height: calc(100vh - var(--titlebar-h));
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── The update offer (ui/src/update-banner.js) ── */
+#updateBar {
+  z-index: 9;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px 9px 22px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  background: rgba(var(--accent), 0.09);
+  border-bottom: 1px solid var(--border-a);
+}
+/* The attribute alone would lose to display:flex above. */
+#updateBar[hidden] {
+  display: none;
+}
+#updateBar .ub-text {
+  flex: 1;
+  min-width: 0;
+}
+#updateBar b {
+  color: var(--accent-hex);
+  font-weight: 600;
 }
 
 #sidebar {

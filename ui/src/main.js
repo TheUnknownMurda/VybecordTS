@@ -10,6 +10,7 @@
 import { $, $$, el, toast } from './util.js';
 import { state, subscribe, init } from './state.js';
 import { setNavigator } from './router.js';
+import { mountUpdateBanner } from './update-banner.js';
 
 import * as now from './pages/now.js';
 import * as players from './pages/players.js';
@@ -133,6 +134,7 @@ async function main() {
 
   paintStatus();
   subscribe('status', paintStatus);
+  mountUpdateBanner();
 
   navigate('now');
 }

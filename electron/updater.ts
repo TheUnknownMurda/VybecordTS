@@ -8,6 +8,12 @@
  * Deliberately quiet: the download happens in the background and the new version
  * is installed when the app is next closed. An app whose whole job is to sit in
  * the tray while music plays should not interrupt to ask about updates.
+ *
+ * Quiet is not the same as silent, though. Once the download is finished there
+ * is something worth offering, and a tray app can go weeks without the quit
+ * that would install it — so the window shows a strip proposing a restart (see
+ * ui/src/update-banner.js). Nothing is forced and nothing steals focus: the
+ * offer waits in the window until someone looks at it.
  */
 
 import { app, type BrowserWindow } from 'electron';
@@ -20,8 +26,16 @@ const log = createLogger('Updater');
 // bundle, so it comes off the default object.
 const { autoUpdater } = electronUpdater;
 
-/** First check after startup — late enough not to compete with the real work. */
-const FIRST_CHECK_DELAY_MS = 30_000;
+/**
+ * First check after startup.
+ *
+ * Long enough to be out of the way of the work that matters at launch — the
+ * media monitor, the lyrics database, the Discord socket — and short enough
+ * that the answer arrives while the window someone just opened is still in
+ * front of them. Thirty seconds was neither: the check landed long after they
+ * had gone back to their music.
+ */
+const FIRST_CHECK_DELAY_MS = 5_000;
 /** And again on a long cycle, for the tray copy that runs for days. */
 const RECHECK_INTERVAL_MS = 6 * 60 * 60_000;
 
