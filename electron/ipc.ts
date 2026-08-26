@@ -138,8 +138,6 @@ export function registerIpc(backend: VybecordBackend, getWindow: () => BrowserWi
       showLyrics: backend.getConfig().show_lyrics !== false,
       userAway: backend.isUserAway(),
       hideWhenAway: backend.getConfig().rpc_hide_when_away !== false,
-      privateSession: backend.isSpotifyPrivateSession(),
-      hideInPrivate: backend.getConfig().hide_in_private_session !== false,
     },
     version: app.getVersion(),
   }));

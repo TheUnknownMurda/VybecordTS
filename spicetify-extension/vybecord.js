@@ -26,7 +26,6 @@
   const ENDPOINT = 'http://127.0.0.1:8888/api/spicetify';
   const LYRICS_ENDPOINT = 'http://127.0.0.1:8888/api/spotify-lyrics';
   const PROGRESS_INTERVAL_MS = 2000; // Sync progress every 2s (for drift correction)
-  const PRIVATE_POLL_MS = 5000;      // How often the private-session switch is read
 
   // Spotify's own lyrics endpoint — the one the client's lyrics panel uses.
   // Reachable only from inside the client, which is the whole reason this lives
@@ -38,123 +37,6 @@
   let lastSentUri = '';
   let lastSentPlaying = null;
   let lastLyricsTrackId = '';
-  let privateSession = false;
-
-  /*
-   * Reading the private-session switch.
-   *
-   * Nothing outside the Spotify client can see it — the media session Windows
-   * publishes is identical either way — so this extension is the only thing
-   * that can tell Vybecord about it.
-   *
-   * Inside the client it is not one stable API either. It has lived on the
-   * product-state service and on the scrobble service behind the name
-   * "incognito mode", under paths that have moved between Spotify versions and
-   * that Spicetify does not document. So rather than assert one, both are tried
-   * and the first that answers wins, the key is matched by shape instead of
-   * being spelled out, and whatever answered is written to the console once so
-   * it can be checked on a client this was never run against.
-   */
-
-  /** Key names the switch has gone by. Matched, not assumed. */
-  const PRIVATE_KEY_RE = /private[-_ ]?session|incognito/i;
-
-  /** A switch value in any of the shapes these services return it in. */
-  function coercePrivate(value) {
-    if (typeof value === 'boolean') return value;
-    if (typeof value === 'number') return value === 1;
-    if (typeof value === 'string') return value === '1' || value.toLowerCase() === 'true';
-    if (value && typeof value === 'object') {
-      for (const [k, v] of Object.entries(value)) {
-        if (PRIVATE_KEY_RE.test(k)) return coercePrivate(v);
-      }
-    }
-    return null;
-  }
-
-  /** Spotify's product-state service, wherever this client keeps it. */
-  function productState() {
-    const p = Spicetify?.Platform;
-    return p?.ProductStateAPI?.productStateApi
-      || p?.UserAPI?._product_state
-      || p?.UserAPI?._product_state_service
-      || null;
-  }
-
-  async function readFromProductState() {
-    const api = productState();
-    if (!api?.getValues) return null;
-    let res;
-    try {
-      // The signature takes an argument on some builds and none on others.
-      res = await (api.getValues.length ? api.getValues({}) : api.getValues());
-    } catch {
-      return null;
-    }
-    // Older builds return the pairs themselves, newer ones wrap them.
-    return coercePrivate(res?.pairs || res || {});
-  }
-
-  async function readFromScrobble() {
-    const api = Spicetify?.Platform?.PrivateSessionAPI?._scrobble;
-    if (!api?.getIncognitoMode) return null;
-    try {
-      return coercePrivate(await api.getIncognitoMode({}));
-    } catch {
-      return null;
-    }
-  }
-
-  const PRIVATE_READERS = [
-    ['product state', readFromProductState],
-    ['scrobble incognito', readFromScrobble],
-  ];
-  let privateReader = null;
-
-  /** true / false, or null when no route on this build answers. */
-  async function readPrivateSession() {
-    // Once one has answered, stay with it: a second route waking up later and
-    // disagreeing would flip the presence for no reason the user can see.
-    if (privateReader) return privateReader[1]();
-    for (const reader of PRIVATE_READERS) {
-      const value = await reader[1]();
-      if (value === null) continue;
-      privateReader = reader;
-      console.log(`[VybecordTS] Private session read from the ${reader[0]} API.`);
-      return value;
-    }
-    return null;
-  }
-
-  /**
-   * Follow the switch for as long as the client runs.
-   *
-   * Polled rather than subscribed: the subscription API is named differently
-   * across versions, while getValues() has been stable, and reading a local
-   * value every five seconds inside the client costs nothing.
-   *
-   * A change pushes immediately and regardless of playback. The progress sync
-   * below stays silent while paused, and the presence disappearing at the click
-   * rather than at the next song is the entire point.
-   */
-  async function watchPrivateSession() {
-    const first = await readPrivateSession();
-    if (first === null) {
-      console.log('[VybecordTS] This Spotify build does not expose the private-session switch — the presence cannot follow it.');
-      return;
-    }
-    privateSession = first;
-    console.log(`[VybecordTS] Private session: ${first ? 'on' : 'off'}`);
-
-    setInterval(async () => {
-      const now = await readPrivateSession();
-      if (now === null || now === privateSession) return;
-      privateSession = now;
-      console.log(`[VybecordTS] Private session: ${now ? 'on' : 'off'}`);
-      const data = getTrackData();
-      if (data) send(data);
-    }, PRIVATE_POLL_MS);
-  }
 
   /** Extract full track data from Spicetify Player. */
   function getTrackData() {
@@ -292,9 +174,6 @@
         ? ['off', 'context', 'track'][Spicetify.Player.getRepeat()]
         : 'off',
       is_local: isLocal,
-      // Rides along on every push, so Vybecord's copy of it is refreshed
-      // constantly while something plays rather than only when it changes.
-      private_session: privateSession,
     };
   }
 
@@ -388,9 +267,6 @@
   Spicetify.Player.addEventListener('songchange', onSongChange);
   Spicetify.Player.addEventListener('onplaypause', onPlayPause);
   startProgressSync();
-  // Seeded before the first push below, so the very first presence of the
-  // session already knows whether it is allowed to exist.
-  await watchPrivateSession();
 
   // ── Initial push (extension loaded while music is already playing) ──
   const initial = getTrackData();

@@ -24,7 +24,6 @@ Two optional extensions go further where the OS falls short: [Spicetify](#the-sp
 - **Player picker** — several things playing at once? Pin the presence to the one you mean.
 - **Spotify ad filter** — your status clears during ad breaks instead of announcing the advertiser.
 - **Away-aware** — the presence comes down once Discord marks you idle and goes back up on the first keypress, the way Discord's own Spotify integration behaves.
-- **Private sessions are respected** — turn one on in Spotify and the presence disappears with it. Needs the Spicetify extension: nothing outside the client can see that switch.
 - **Optional Spicetify extension** — Spotify's own timed lyrics, event-driven track changes, and artwork straight from the client. One button in Settings installs it.
 - **Optional browser extension** — adds what Windows cannot report: which site a tab is on, track links, exact position, live-stream uptime.
 - **Listening history & stats** — session top tracks, a persistent log, and a "wrapped" summary over any range.
@@ -215,8 +214,6 @@ The window itself always shows the artwork straight from the player, which is co
 **Wrong lyrics.** Hit **Wrong lyrics** to blacklist that match, or import the correct `.lrc` under Lyrics → Import.
 
 **Lyrics never load.** Check that Show lyrics is on, and that the track is actually identifiable — browser tabs publish whatever the page says, which is often a video title rather than an artist and a song.
-
-**The presence vanishes when I turn on a Spotify private session.** Deliberate, under **Settings → Presence → Hide during a Spotify private session**. It only works with the Spicetify extension installed, because the media session Windows publishes is identical either way — the switch exists nowhere the app can otherwise reach. Turn the setting off if you use private sessions to keep a listen out of your Spotify recommendations rather than for privacy.
 
 **The presence vanishes when I step away.** That is **Settings → Presence → Hide when away**, on by default: after ten minutes without keyboard or mouse input — the same delay after which Discord flips you to Idle — the status is taken down, and touching the machine puts it straight back. Change the delay there, or turn it off.
 

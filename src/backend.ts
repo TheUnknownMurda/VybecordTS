@@ -185,8 +185,6 @@ export class VybecordBackend extends EventEmitter {
    *  the same window in which Discord flips the account to Idle. Driven from
    *  the main process; see setUserAway(). */
   private userAway = false;
-  /** Last private-session state acted on, so the switch is answered once. */
-  private lastPrivateSession = false;
   private idleSince = 0;  // grace period timestamp (prevent SMTC flicker)
   private lastAdState = false;  // so the ad status is pushed on change, not every poll
   private configDir: string;
@@ -465,25 +463,6 @@ export class VybecordBackend extends EventEmitter {
     // below reads that rather than whatever arrived on the socket.
     const data = this.spicetify.update(raw);
     log.debug(`[SPICETIFY-PUSH] track="${data.track_name}" album="${data.album_name}" context="${data.context_name}" ctx_type="${data.context_type}" shuffle=${data.is_shuffle} repeat=${data.repeat_mode}`);
-
-    /*
-     * Answered before the gates below, and before anything about the track.
-     *
-     * The extension pushes the instant the switch is flipped, whatever is
-     * playing and whether or not it is playing at all. Handling it here is what
-     * makes the presence go the moment the user clicks, rather than at the next
-     * song. It also has to survive the early returns underneath: a pin on
-     * another player, or Spotify detection turned off, does not stop the user
-     * from having asked Spotify not to broadcast.
-     */
-    if (this.spicetify.isPrivateSession !== this.lastPrivateSession) {
-      this.lastPrivateSession = this.spicetify.isPrivateSession;
-      log.info(this.lastPrivateSession
-        ? '[PRIVATE] Spotify private session — presence hidden'
-        : '[PRIVATE] Private session over — presence restored');
-      this.emitStatus();
-      this.refreshPresence();
-    }
 
     if (!this.config.get('detect_spotify')) return;
     if (!this.mayOwnPresence('spotify')) return;
@@ -1822,8 +1801,6 @@ export class VybecordBackend extends EventEmitter {
       showLyrics: this.config.get('show_lyrics') !== false,
       userAway: this.userAway,
       hideWhenAway: this.config.get('rpc_hide_when_away') !== false,
-      privateSession: this.spicetify.isPrivateSession,
-      hideInPrivate: this.config.get('hide_in_private_session') !== false,
     });
   }
 
@@ -2065,27 +2042,8 @@ export class VybecordBackend extends EventEmitter {
 
   /** Whether the presence must stay off the profile whatever is playing. */
   private get presenceHidden(): boolean {
-    return (this.userAway && this.config.get('rpc_hide_when_away') !== false)
-      || this.spotifyPrivate;
+    return this.userAway && this.config.get('rpc_hide_when_away') !== false;
   }
-
-  /**
-   * Whether what is playing right now must not be announced, because Spotify
-   * was told not to broadcast it.
-   *
-   * Scoped to the track rather than applied outright: a private session is a
-   * statement about Spotify, and nothing about it says a YouTube video playing
-   * in a browser tab has to be kept quiet too. With nothing playing there is
-   * nothing to hide either, so the idle presence stands — it names no track.
-   */
-  private get spotifyPrivate(): boolean {
-    return this.spicetify.isPrivateSession
-      && this.config.get('hide_in_private_session') !== false
-      && this.currentTrack?.media_source === 'spotify';
-  }
-
-  /** Whether the Spotify client reports a private session (extension only). */
-  isSpotifyPrivateSession(): boolean { return this.spicetify.isPrivateSession; }
 
   /**
    * Publish whatever the presence should be right now.

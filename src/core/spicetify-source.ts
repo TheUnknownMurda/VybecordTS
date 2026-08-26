@@ -39,8 +39,6 @@ export interface SpicetifyPayload {
   is_shuffle?: boolean;
   repeat_mode?: string;
   is_local?: boolean;
-  /** The Spotify client is in a private session — see isPrivateSession. */
-  private_session?: boolean;
 }
 
 /**
@@ -75,35 +73,15 @@ export function normalizeSpicetifyPayload(raw: unknown): SpicetifyPayload {
     is_shuffle: asBool(d.is_shuffle),
     repeat_mode: repeat === 'track' || repeat === 'context' ? repeat : 'off',
     is_local: asBool(d.is_local),
-    private_session: asBool(d.private_session),
   };
 }
 
 const STALE_THRESHOLD_MS = 10_000; // Data older than 10s = extension disconnected
 
-/**
- * How long the private-session flag is trusted after the last push.
- *
- * Longer than the playback staleness above, and deliberately so: those ten
- * seconds answer "is the extension still driving the presence", which stops
- * being true the moment music pauses. Whether the user asked Spotify not to
- * broadcast does not stop being true then — it is a setting, not a playback
- * state, and forgetting it after ten seconds of silence would put the presence
- * back up the instant they pressed play.
- *
- * It does expire, though. Without that, an extension removed or a client closed
- * mid-session would leave the flag stuck on and Spotify permanently unable to
- * show a presence again. A minute is long enough to cover any pause worth
- * covering — a resumed track pushes within milliseconds — and short enough that
- * a genuinely departed extension is forgotten quickly.
- */
-const PRIVATE_TTL_MS = 60_000;
-
 export class SpicetifySource {
   private latestData: SpicetifyPayload | null = null;
   private receivedAt = 0;
   private _wasActive = false; // Track activation for logging
-  private privateSession = false;
 
   /**
    * Ingest a push from the Spicetify extension.
@@ -117,7 +95,6 @@ export class SpicetifySource {
     const data = normalizeSpicetifyPayload(raw);
     this.latestData = data;
     this.receivedAt = performance.now();
-    this.privateSession = data.private_session ?? false;
 
     if (!this._wasActive) {
       this._wasActive = true;
@@ -186,19 +163,6 @@ export class SpicetifySource {
   get isPaused(): boolean {
     if (!this.latestData || !this.isActive) return true;
     return !this.latestData.is_playing;
-  }
-
-  /**
-   * Whether the Spotify client is in a private session.
-   *
-   * Only the extension can answer this — a private session plays, publishes to
-   * Windows and sounds exactly like any other, so an install without the
-   * extension always reads false here. That is the honest answer rather than a
-   * guess: there is nothing else to read.
-   */
-  get isPrivateSession(): boolean {
-    if (!this.privateSession) return false;
-    return (performance.now() - this.receivedAt) <= PRIVATE_TTL_MS;
   }
 
   /** The raw latest payload (for direct field access by backend). */

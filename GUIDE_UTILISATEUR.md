@@ -97,16 +97,6 @@ Les interludes et skits d'album sont épargnés : un interlude appartient à l'a
 
 Pendant une pub, la fenêtre affiche « Advertisement » pour que tu saches que ce n'est pas un bug. Tu peux désactiver le filtre dans **Settings → Detection**.
 
-### Mon statut disparaît quand je passe en session privée sur Spotify
-
-C'est voulu : vous avez dit à Spotify de ne pas diffuser ce que vous écoutez, Vybecord s'aligne. Le morceau continue de jouer et les paroles continuent de défiler dans la fenêtre — seule la publication vers Discord s'arrête, et elle reprend dès que vous quittez la session privée. La page **Now playing** affiche un œil barré pendant ce temps.
-
-Ce que vous écoutez ailleurs n'est pas concerné : une vidéo YouTube reste annoncée normalement pendant une session privée Spotify, qui ne parle que de Spotify.
-
-**Cela demande l'extension Spicetify.** Ce réglage est invisible depuis l'extérieur du client : la session média que Spotify publie à Windows est rigoureusement identique dans les deux cas. Sans l'extension, Vybecord n'a aucun moyen de savoir, et la présence reste affichée. L'installation tient en un bouton dans **Réglages → Spotify via Spicetify**.
-
-Si vous utilisez les sessions privées pour garder une écoute hors de vos recommandations Spotify plutôt que par discrétion, coupez l'option dans **Réglages → Présence → Hide during a Spotify private session**.
-
 ### Mon statut disparaît quand je m'absente
 
 C'est voulu, et c'est réglable. Au bout de dix minutes sans clavier ni souris — le délai au bout duquel Discord te passe lui-même en « Absent » — Vybecord retire ta présence, exactement comme le fait l'intégration Spotify de Discord. Dès que tu touches la machine, elle revient sur la ligne où la chanson en est.

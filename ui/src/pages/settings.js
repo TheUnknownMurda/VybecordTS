@@ -110,9 +110,6 @@ function presenceTab(body) {
           ? selectRow('Away after', 'Inactivity before the status is hidden. Discord itself goes idle after 10 minutes.',
               cfg('away_after_minutes', 10), AWAY_DELAYS, (v) => put('away_after_minutes', Number(v)))
           : null,
-        toggleRow('Hide during a Spotify private session',
-          'Needs the Spicetify extension — that switch is invisible from outside the Spotify client. Turn this off if you use private sessions to keep a listen out of your Spotify recommendations rather than for privacy.',
-          cfg('hide_in_private_session', true) !== false, (v) => put('hide_in_private_session', v)),
         selectRow('Activity type', 'The verb Discord shows before the activity.',
           cfg('rpc_activity_type', 2), ACTIVITY_TYPES, (v) => put('rpc_activity_type', Number(v))),
         selectRow('Status line', 'What the one-line status in the member list shows.',
@@ -449,12 +446,6 @@ function detectionTab(body) {
 
     el('div', { class: 'card' }, [
       el('h2', { text: 'Spotify advertisements' }),
-      el('div', { class: 'row-desc', style: 'margin-top:6px;max-width:none' },
-        'Spotify does not mark ad breaks — it just swaps the track metadata for the advertiser’s. '
-        + 'Every ad observed ran 30 seconds, while the shortest of 44 real tracks sampled ran 83, so Vybecord '
-        + 'treats a Spotify track under a minute as an ad. A short track that belongs to the album already '
-        + 'playing is left alone, so album interludes and skits still show. '
-        + 'It depends on how Spotify fills these fields, so it may need adjusting if Spotify changes them.'),
       el('div', { style: 'margin-top:8px' }, [
         toggleRow('Hide the presence during ads', 'Your Discord status clears for the length of the ad, then comes back.',
           cfg('filter_spotify_ads', true) !== false, (v) => put('filter_spotify_ads', v)),
