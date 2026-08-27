@@ -15,7 +15,7 @@ import { performance } from 'node:perf_hooks';
 import { findLyricIndex } from '../core/lrc-parser.js';
 import { createLogger } from '../core/logger.js';
 import { romanize } from '../core/romanize.js';
-import { getCachedTranslation, translateText } from '../core/translate.js';
+import { getCachedTranslation, isTranslationWorthFetching, translateText } from '../core/translate.js';
 import { evictOldest } from '../core/utils.js';
 import type { LyricLine, DiscordActivity, TrackData } from '../core/types.js';
 
@@ -36,6 +36,9 @@ const CC_UPDATE_INTERVAL_MS = 250;   // Fast updates for YouTube CC (lines chang
 const RPC_HEARTBEAT_MS = 5_000;       // Force RPC push every 5s even if text unchanged (keeps Discord UI fresh)
 const EMA_ALPHA = 0.3;            // Exponential moving average weight for latency
 const LYRIC_GAP_MS = 25_000;      // Switch to no-lyrics RPC display during gaps longer than this
+// Floor between a normal push and the extra one a late-arriving translation
+// asks for — see onTranslationArrived().
+const TRANSLATION_REPUSH_MIN_MS = 400;
 
 // ── Default album art (animated GIF) ──
 const DEFAULT_ART = 'https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/zkR9FspOnC79sb6532RdH.gif';
@@ -1106,8 +1109,35 @@ export class LyricsEngine {
 
     if (hasLyrics && currentText && currentText !== '♪♪' && !this.inLyricGap) {
       // Lyrics mode: details = current lyric, state = → next lyric
-      let cur = this.cfgRomanize ? this.cachedRomanize(currentText) : currentText;
-      let nxt = this.cfgRomanize && nextText ? this.cachedRomanize(nextText) : nextText;
+      //
+      // Translation goes first, on the raw line, before anything is added to
+      // it. The cache is keyed on the text itself, and what the backend warms
+      // when a track loads is the raw lyric — so decorating first (romanising,
+      // prefixing the note, appending the repeat count) built a key that warm
+      // cache never holds. Every displayed line missed, opened its own request,
+      // and handed the note characters to the translator along with the words;
+      // the (xN) suffix made the key different again on every repeat. Order
+      // also settles romanisation: a line that came back translated is already
+      // in the target script and must not be romanised on top of that.
+      let cur = currentText;
+      let nxt = nextText;
+      let curTranslated = false;
+      let nxtTranslated = false;
+
+      if (this.cfgRpcTranslate && this.cfgTranslateLang) {
+        const lang = this.cfgTranslateLang;
+        const tCur = this.translateForRpc(currentText, lang);
+        if (tCur) { cur = tCur; curTranslated = true; }
+        if (nextText) {
+          const tNxt = this.translateForRpc(nextText, lang);
+          if (tNxt) { nxt = tNxt; nxtTranslated = true; }
+        }
+      }
+
+      if (this.cfgRomanize) {
+        if (!curTranslated) cur = this.cachedRomanize(cur);
+        if (!nxtTranslated && nxt) nxt = this.cachedRomanize(nxt);
+      }
 
       // Add music notes for Spotify and SoundCloud (Discord RPC only)
       const source = this.trackData?.media_source || '';
@@ -1120,29 +1150,6 @@ export class LyricsEngine {
           const nextIdx = this.currentIdx + 1;
           const nextMultiplier = this.groupMultiplier[nextIdx] || 0;
           nxt = nxt + ' ♪' + (nextMultiplier > 0 ? ` (x${nextMultiplier})` : '');
-        }
-      }
-
-      // RPC translate mode: use cached translations, fire async for misses
-      if (this.cfgRpcTranslate && this.cfgTranslateLang) {
-        const lang = this.cfgTranslateLang;
-        const tCur = getCachedTranslation(cur, lang);
-        if (tCur) cur = tCur;
-        else translateText(cur, lang).catch(() => {});
-        if (nxt) {
-          const tNxt = getCachedTranslation(nxt, lang);
-          if (tNxt) nxt = tNxt;
-          else translateText(nxt, lang).catch(() => {});
-        }
-        // Look-ahead: pre-translate upcoming lines so they're cached before display
-        const idx = this.currentIdx;
-        if (idx >= 0) {
-          for (let i = 2; i <= 6 && idx + i < this.lyrics.length; i++) {
-            const txt = this.lyrics[idx + i]?.text;
-            if (txt && txt.length >= 2 && !getCachedTranslation(txt, lang)) {
-              translateText(txt, lang).catch(() => {});
-            }
-          }
         }
       }
 
@@ -1302,6 +1309,61 @@ export class LyricsEngine {
         }
         break;
     }
+  }
+
+  /**
+   * The translated form of a lyric line, when it is already to hand.
+   *
+   * Cache only. This runs on the emit path, and awaiting a round trip here
+   * would hold the line itself off Discord — the whole point of the engine is
+   * that the line lands on the beat. A miss starts one fetch and asks for a
+   * re-push when it arrives, so the translation shows a moment later instead of
+   * never: the presence pushes only every other line, so a line whose
+   * translation landed after its own push would otherwise stay in the original
+   * for as long as it is on screen.
+   *
+   * Nothing is fetched for a line the providers have already declined, or one
+   * somebody else is already asking about — that check is what keeps an English
+   * song with the target left at English from opening a request per line.
+   */
+  private translateForRpc(text: string, lang: string): string | null {
+    const trimmed = text.trim();
+    const hit = getCachedTranslation(trimmed, lang);
+    if (hit) return hit;
+    if (!isTranslationWorthFetching(trimmed, lang)) return null;
+
+    translateText(trimmed, lang)
+      .then(res => { if (res) this.onTranslationArrived(trimmed); })
+      .catch(() => {});
+    return null;
+  }
+
+  /**
+   * A translation landed after the line it belongs to had already been pushed.
+   *
+   * Only the line on screen earns a second push: a translation for the next
+   * line is read straight from the cache when that line's own push comes round.
+   * The dedup fields are cleared because from buildActivity's point of view
+   * nothing has changed — the index is the same and it has no way to know the
+   * text it is about to build differs from the text it built last time.
+   *
+   * Guarded on the last push so a burst of arrivals cannot turn into a burst of
+   * RPC writes; anything that lands inside that window rides the next line's
+   * push instead. After the batch warm-up at track load this path is rare — it
+   * covers captions that stream in mid-song and lines the warm-up missed.
+   */
+  private onTranslationArrived(trimmed: string): void {
+    if (!this.running || !this.callbacks || !this.trackData) return;
+    if (performance.now() - this.lastRpcPushTime < TRANSLATION_REPUSH_MIN_MS) return;
+
+    const [current, next] = this.displayPair();
+    if (current.trim() !== trimmed) return;
+
+    this.lastRpcDetails = '';
+    this.lastRpcState = '';
+    this.lastRpcIdx = -1;
+    const activity = this.buildActivity(current, next);
+    if (activity) this.callbacks.onRpcUpdate(activity);
   }
 
   /** Romanize with per-text memoization. Cache cleared on track change. */

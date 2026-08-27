@@ -44,7 +44,7 @@ import { configureArtUpload, uploadCoverArt, thumbnailSignature } from './core/a
 import { extractLocalArt, extractArtFromPath } from './core/local-art.js';
 import { initBlacklist, flagLyrics, isLyricsFlagged, clearFlags, listFlaggedTracks, clearFlagsByKey } from './core/lyrics-blacklist.js';
 import { initHistory, historyTrackStart, historyTrackPause, historyTrackResume, historyTrackEnd, historyUpdateArt, getHistoryPage, getWrappedStats } from './core/listening-history.js';
-import { translateBatch, translateText, getCachedTranslation } from './core/translate.js';
+import { translateBatch, translateText, getCachedTranslation, isTranslationWorthFetching } from './core/translate.js';
 import { asNonNegativeInt, asRecord, asText, evictOldest, evictUntil } from './core/utils.js';
 import type { TrackData, LyricLine, VybecordConfig } from './core/types.js';
 
@@ -175,8 +175,6 @@ export class VybecordBackend extends EventEmitter {
   private currentCacheKey = '';
   private lyricsCache = new Map<string, LyricLine[]>();
   private lastLyricsState: { current: string; next: string; prev: string; progress_ms: number; duration_ms: number; translation?: string } | null = null;
-  /** Line a translation is already in flight for, so one miss starts one fetch. */
-  private pendingTranslation = '';
   private fetchAbort: AbortController | null = null;  // cancel in-flight fetches on track skip
   /** Thumbnail the last art resolution acted on — see resolveDiscordArt(). */
   private artThumbSig = '';
@@ -283,12 +281,9 @@ export class VybecordBackend extends EventEmitter {
         } else {
           this.lyricsEngine.startTrack(cachedLyrics, this.currentTrack, rpcConfig);
 
-          // Re-translate lyrics for RPC when language/toggle changes
-          if (cfg.rpc_translate_lyrics && cachedLyrics.length > 0) {
-            const tgtLang = (cfg.translate_target_lang as string) || 'en';
-            const lines = cachedLyrics.map((l: LyricLine) => l.text).filter((t: string) => t && t.trim().length >= 2);
-            translateBatch(lines, tgtLang).catch(() => {});
-          }
+          // Re-warm for the language that was just picked, or for the toggle
+          // that was just switched on.
+          this.warmTranslations(cachedLyrics);
         }
       }
     });
@@ -768,6 +763,9 @@ export class VybecordBackend extends EventEmitter {
         const cacheKey = this.currentCacheKey;
         this.lyricsCache.set(cacheKey, lines);
         this.lyricsEngine.injectLyrics(lines, this.currentTrack);
+        // These arrive after the track's own warm-up has already run over
+        // whatever lyrics were found first, so they need one of their own.
+        this.warmTranslations(lines);
         log.info(`[SPOTIFY-LYRICS] Hot-injected ${lines.length} official lyrics for current track (${directMatch ? 'id' : 'name'} match)`);
       }
     }
@@ -1386,15 +1384,7 @@ export class VybecordBackend extends EventEmitter {
     if (lyrics.length > 0) {
       this.lyricsEngine.injectLyrics(lyrics, trackData);
       log.info(`[LYRICS] Injected ${lyrics.length} lines into running engine`);
-
-      // Warm the cache for the whole song up front, so the window and the
-      // presence both read a hit on the tick instead of waiting on a request
-      // per line. Either destination being switched on is reason enough.
-      if ((this.config.get('rpc_translate_lyrics') || this.config.get('translate_lyrics')) && !signal.aborted) {
-        const tgtLang = this.config.get('translate_target_lang') || 'en';
-        const lines = lyrics.map(l => l.text).filter(t => t && t.trim().length >= 2);
-        translateBatch(lines, tgtLang, signal).catch(() => {});
-      }
+      this.warmTranslations(lyrics, signal);
     } else {
       // No lyrics found
       const isYt = trackData.media_source === 'youtube' || trackData.media_source === 'youtube_music'
@@ -1775,11 +1765,15 @@ export class VybecordBackend extends EventEmitter {
     const hit = getCachedTranslation(trimmed, lang);
     if (hit) return hit;
 
-    if (this.pendingTranslation === trimmed) return '';
-    this.pendingTranslation = trimmed;
+    // Nothing to gain from asking: already on the wire, already declined, or
+    // not something a translator can work with. The de-duplication that used to
+    // live here as a single "pending line" slot now sits in the translate
+    // module, where the presence path shares it — the two were opening separate
+    // requests for the same line, every line.
+    if (!isTranslationWorthFetching(trimmed, lang)) return '';
+
     translateText(trimmed, lang)
       .then(res => {
-        this.pendingTranslation = '';
         // The song moves on while this is in flight; a late answer must not be
         // pinned under whatever line is showing by then.
         if (!res || this.lastLyricsState?.current?.trim() !== trimmed) return;
@@ -1787,8 +1781,22 @@ export class VybecordBackend extends EventEmitter {
         this.lastLyricsState = merged;
         this.emit('lyricsUpdate', merged);
       })
-      .catch(() => { this.pendingTranslation = ''; });
+      .catch(() => {});
     return '';
+  }
+
+  /**
+   * Warm the whole song's translations in one go.
+   *
+   * Called wherever lyrics reach the engine, so the window and the presence
+   * both read a cache hit on the tick instead of waiting on a request per line.
+   * Either destination being switched on is reason enough — the cache is shared.
+   */
+  private warmTranslations(lyrics: LyricLine[], signal?: AbortSignal): void {
+    if (lyrics.length === 0 || signal?.aborted) return;
+    if (!this.config.get('rpc_translate_lyrics') && !this.config.get('translate_lyrics')) return;
+    const tgtLang = this.config.get('translate_target_lang') || 'en';
+    translateBatch(lyrics.map(l => l.text), tgtLang, signal).catch(() => {});
   }
 
   /** Push connection status to the window. */
