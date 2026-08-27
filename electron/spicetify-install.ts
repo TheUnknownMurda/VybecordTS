@@ -54,6 +54,15 @@ export interface SpicetifyInfo {
   installed: boolean;
   /** vybecord.js is sitting in the Extensions folder. */
   extensionCopied: boolean;
+  /**
+   * The copy in place is byte-for-byte the one this build ships.
+   *
+   * "The file exists" is not the same as "the file is current": the copy is
+   * only refreshed when the setup button is pressed, so an app update leaves
+   * the previous version running inside Spotify while the checklist shows a
+   * green tick. That is how a fixed bug goes on happening.
+   */
+  extensionCurrent: boolean;
   /** config-xpui.ini lists it, so `spicetify apply` will include it. */
   extensionEnabled: boolean;
   /** The app has a copy to install from. */
@@ -94,18 +103,43 @@ function isEnabledInConfig(): boolean {
   }
 }
 
+/**
+ * Whether the copy in the Extensions folder is the one this build ships.
+ *
+ * Compared by content rather than by mtime: the copy is written by
+ * copyFileSync, and an install restored from a backup or copied between
+ * machines carries timestamps that say nothing useful. Both files are a few
+ * kilobytes, so reading them is cheaper than being wrong.
+ *
+ * An unreadable pair counts as current — this only ever downgrades a tick to a
+ * warning, and a warning nobody can act on is worse than none.
+ */
+function isExtensionCurrent(target: string): boolean {
+  try {
+    const source = bundledExtension();
+    if (!fs.existsSync(source) || !fs.existsSync(target)) return true;
+    return fs.readFileSync(source).equals(fs.readFileSync(target));
+  } catch {
+    return true;
+  }
+}
+
 export function spicetifyInfo(): SpicetifyInfo {
   const extensionsDir = spicetifyExtensionsDir();
   let installed = false;
   let extensionCopied = false;
+  let extensionCurrent = true;
   try {
     installed = fs.existsSync(spicetifyRoot());
-    extensionCopied = fs.existsSync(path.join(extensionsDir, EXTENSION_FILE));
+    const target = path.join(extensionsDir, EXTENSION_FILE);
+    extensionCopied = fs.existsSync(target);
+    extensionCurrent = !extensionCopied || isExtensionCurrent(target);
   } catch { /* treated as not installed */ }
 
   return {
     installed,
     extensionCopied,
+    extensionCurrent,
     extensionEnabled: isEnabledInConfig(),
     bundled: fs.existsSync(bundledExtension()),
     extensionsDir,

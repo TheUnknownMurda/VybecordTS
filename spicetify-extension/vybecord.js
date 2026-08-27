@@ -253,11 +253,21 @@
     send(data);
   }
 
-  /** Periodic progress sync (for lyrics drift correction). */
+  /**
+   * Periodic progress sync (for lyrics drift correction), and the heartbeat
+   * that proves the extension is still loaded.
+   *
+   * A paused Spotify used to send nothing at all. Vybecord treats ten seconds
+   * of silence as the extension being gone, so pausing for that long dropped it
+   * back to the Windows media session — and the settings card, which reads the
+   * same signal, went on saying "Waiting for Spotify" over a green checklist
+   * however many times you pressed Check again. Pausing is not disconnecting,
+   * so the push keeps going; `is_playing` already carries the difference, and
+   * every reader downstream gates on it.
+   */
   function startProgressSync() {
     if (progressTimer) clearInterval(progressTimer);
     progressTimer = setInterval(() => {
-      if (Spicetify.Player.data?.isPaused) return; // Skip when paused
       const data = getTrackData();
       if (data) send(data);
     }, PROGRESS_INTERVAL_MS);

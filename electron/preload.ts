@@ -58,7 +58,8 @@ const api = {
 
   // ── Spicetify ──
   spicetifyInfo: () => invoke<{
-    installed: boolean; extensionCopied: boolean; extensionEnabled: boolean;
+    installed: boolean; extensionCopied: boolean; extensionCurrent: boolean;
+    extensionEnabled: boolean;
     bundled: boolean; connected: boolean; extensionsDir: string;
     commands: { install: string; enable: string; apply: string };
   }>('spicetify:info'),
