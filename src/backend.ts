@@ -38,7 +38,7 @@ import { LyricsEngine } from './sync/lyrics-engine.js';
 import { fetchLyrics, fetchPlainLyrics } from './core/provider.js';
 import { fetchYouTubeCaptions, clearCCCache } from './core/youtube-captions.js';
 import { initLocalDb, closeLocalDb, insertCustomLyrics, listCustomLyrics, getCustomLyrics, updateCustomLyrics, deleteCustomLyrics, findExistingCustomLyrics, searchLrclibDump as searchLrclibDumpDb, getLrclibTrackLyrics as getLrclibTrackLyricsDb, lrclibDumpStatus } from './core/local-lyrics-db.js';
-import { initLastFm, scrobbleTrackStart, checkAndScrobble, scrobbleTrackEnd } from './core/lastfm.js';
+import { initLastFm, scrobbleTrackStart, checkAndScrobble, scrobblePause, scrobbleTrackEnd } from './core/lastfm.js';
 import { lookupCoverArt } from './core/cover-art.js';
 import { configureArtUpload, uploadCoverArt, thumbnailSignature } from './core/art-upload.js';
 import { extractLocalArt, extractArtFromPath } from './core/local-art.js';
@@ -309,11 +309,7 @@ export class VybecordBackend extends EventEmitter {
       log.info('Local lyrics database initialized successfully');
     }
 
-    initLastFm(
-      (this.config.getAll().lastfm_api_key as string | undefined) || process.env.LASTFM_API_KEY,
-      (this.config.getAll().lastfm_api_secret as string | undefined) || process.env.LASTFM_API_SECRET,
-      this.configDir,
-    );
+    this.applyLastFmConfig();
 
     this.applyArtUploadConfig();
 
@@ -489,7 +485,7 @@ export class VybecordBackend extends EventEmitter {
         return;
       }
 
-      this.syncTrackProgress(track, true);
+      this.syncTrackProgress(track);
       // Update artist image if it arrived asynchronously (Tampermonkey fetches after first push)
       if (track.artist_art_url) {
         const primaryArtist = track.artist_name.split(ARTIST_SPLIT_RE)[0].trim().toLowerCase();
@@ -623,7 +619,7 @@ export class VybecordBackend extends EventEmitter {
       log.debug(`[BANDCAMP] Same track detected: ${track.track_name} — ${track.artist_name} (key: ${trackKey})`);
       // Same track — sync progress
       if (this.checkRepeatLoop(track)) return;
-      this.syncTrackProgress(track, true);
+      this.syncTrackProgress(track);
       return;
     }
 
@@ -784,7 +780,6 @@ export class VybecordBackend extends EventEmitter {
     configKey: keyof VybecordConfig;
     keyPrefix: string;
     isLive?: boolean;  // live-stream sources skip checkRepeatLoop
-    scrobble?: boolean; // track scrobble eligibility
   }[] = [];
 
   /** Initialised lazily because the sources are set in the constructor body. */
@@ -793,7 +788,7 @@ export class VybecordBackend extends EventEmitter {
     this.pollSources.push(
       { source: this.youtubeSource,    configKey: 'detect_youtube',     keyPrefix: 'yt:' },
       { source: this.soundcloudSource, configKey: 'detect_soundcloud',  keyPrefix: 'sc:' },
-      { source: this.bandcampSource,   configKey: 'detect_other_apps',  keyPrefix: 'bc:',     scrobble: true },
+      { source: this.bandcampSource,   configKey: 'detect_other_apps',  keyPrefix: 'bc:' },
       { source: this.kickSource,       configKey: 'detect_kick',        keyPrefix: 'kick:',   isLive: true },
       { source: this.twitchSource,     configKey: 'detect_twitch',      keyPrefix: 'twitch:', isLive: true },
     );
@@ -805,7 +800,7 @@ export class VybecordBackend extends EventEmitter {
    * actively playing or because its paused state stopped the current track).
    */
   private pollWebSources(): boolean {
-    for (const { source, configKey, keyPrefix, isLive, scrobble } of this.pollSources) {
+    for (const { source, configKey, keyPrefix, isLive } of this.pollSources) {
       if (!source.isActive || this.config.get(configKey) === false) continue;
       const track = source.getCurrentTrack();
       if (track) {
@@ -820,7 +815,7 @@ export class VybecordBackend extends EventEmitter {
             this.currentTrack = track;
             this.lyricsEngine.syncProgress(track.progress_ms, track);
           } else if (!this.checkRepeatLoop(track)) {
-            this.syncTrackProgress(track, scrobble);
+            this.syncTrackProgress(track);
           }
         }
         // Whether same or new track, this source claims the tick.
@@ -873,7 +868,7 @@ export class VybecordBackend extends EventEmitter {
               this.emit('trackUpdate', spTrack);
               this.onNewTrack(spTrack).catch(e => log.error(`[REPEAT] Error: ${e}`));
             } else {
-              this.syncTrackProgress(spTrack, true);
+              this.syncTrackProgress(spTrack);
             }
           }
           return;
@@ -1065,7 +1060,10 @@ export class VybecordBackend extends EventEmitter {
   private onTrackStopped(): void {
     if (this.currentTrack) {
       log.info('Music paused');
-      scrobbleTrackEnd();
+      // Parked, not ended: the play stays open so resuming this same song keeps
+      // the listening time it already earned instead of starting the Last.fm
+      // clock over — a song paused past halfway would otherwise never scrobble.
+      scrobblePause();
       // Stop the history clock rather than letting it run until the next track
       // starts — otherwise a pause banks its whole length as listening. The
       // entry stays open so resuming this same track continues it.
@@ -1106,10 +1104,13 @@ export class VybecordBackend extends EventEmitter {
   }
 
   /** Common fast-path: sync progress + emit update. Called from 14 poll/push sites. */
-  private syncTrackProgress(track: TrackData, scrobble = false): void {
+  private syncTrackProgress(track: TrackData): void {
     this.currentTrack = track;
     this.lyricsEngine.syncProgress(track.progress_ms, track);
-    if (scrobble) checkAndScrobble();
+    // Every source, not a chosen few: the position reported here is how the
+    // scrobbler tells listening apart from a player sitting on a paused song,
+    // and a source that never reaches it can only ever scrobble at track end.
+    checkAndScrobble(track.progress_ms);
     this.emit('progressUpdate', { progress_ms: track.progress_ms, duration_ms: track.duration_ms });
 
     // Detect track end: engine stopped but progress is at the end (not a repeat loop)
@@ -1617,6 +1618,11 @@ export class VybecordBackend extends EventEmitter {
     if ('art_upload_enabled' in accepted || 'art_upload_url' in accepted) {
       this.applyArtUploadConfig();
     }
+    // Picked up live, so pasting the credentials in and connecting Last.fm is
+    // one visit to the page rather than a save, a restart, and a second visit.
+    if ('lastfm_api_key' in accepted || 'lastfm_api_secret' in accepted) {
+      this.applyLastFmConfig();
+    }
     // Before the emit: the listener re-fetches the playing track only when it
     // finds nothing cached, which is what this clears.
     if ('cc_lang' in accepted) this.syncCcLanguage(accepted.cc_lang as string | undefined);
@@ -1634,6 +1640,16 @@ export class VybecordBackend extends EventEmitter {
   private applyArtUploadConfig(): void {
     const cfg = this.config.getAll();
     configureArtUpload(cfg.art_upload_enabled ? String(cfg.art_upload_url || '') : '');
+  }
+
+  /** Point Last.fm at the configured credentials, falling back to the env vars. */
+  private applyLastFmConfig(): void {
+    const cfg = this.config.getAll();
+    initLastFm(
+      (cfg.lastfm_api_key as string | undefined) || process.env.LASTFM_API_KEY,
+      (cfg.lastfm_api_secret as string | undefined) || process.env.LASTFM_API_SECRET,
+      this.configDir,
+    );
   }
   getCurrentTrack() { return this.currentTrack; }
   getCurrentLyricsState() { return this.lastLyricsState; }
@@ -1976,17 +1992,22 @@ export class VybecordBackend extends EventEmitter {
       });
     }
 
-    // Last.fm is told either way: scrobbleTrackEnd() cleared its now-playing
-    // when playback stopped, so a resumed track needs it set again or the
-    // scrobble is lost.
-    scrobbleTrackStart(t.track_name, t.artist_name, t.album_name, t.duration_ms);
+    // A stream is kept in the log but never counted: its title is a banner and
+    // its "artist" is a streamer, so one afternoon would own every top list.
+    // The same reasoning keeps it off Last.fm, where the damage is permanent —
+    // a scrobbled stream title is a play on the user's public profile.
+    const isStream = STREAM_SOURCES.has(t.media_source);
+
+    // Last.fm is told either way: scrobblePause() stopped its clock when
+    // playback stopped, so a resumed track needs the now-playing set again.
+    if (!isStream) {
+      scrobbleTrackStart(t.track_name, t.artist_name, t.album_name, t.duration_ms);
+    }
 
     // The session counters already have this play.
     if (resumed) return;
 
-    // A stream is kept in the log but never counted: its title is a banner and
-    // its "artist" is a streamer, so one afternoon would own every top list.
-    if (STREAM_SOURCES.has(t.media_source)) return;
+    if (isStream) return;
 
     this.statsDirty = true;
     // Extract primary artist once (used for both track and artist stats)

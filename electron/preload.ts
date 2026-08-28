@@ -107,7 +107,10 @@ const api = {
   translateBatch: (lines: string[], target?: string) => invoke('translate:batch', lines, target),
 
   // ── Last.fm ──
-  lastfmStatus: () => invoke<{ scrobbling: boolean; canAuth: boolean }>('lastfm:status'),
+  lastfmStatus: () => invoke<{
+    scrobbling: boolean; canAuth: boolean; configured: boolean;
+    user: string | null; pending: number;
+  }>('lastfm:status'),
   lastfmBeginAuth: () => invoke<{ token: string }>('lastfm:beginAuth'),
   lastfmComplete: (token: string) => invoke('lastfm:complete', token),
   lastfmDisconnect: () => invoke('lastfm:disconnect'),

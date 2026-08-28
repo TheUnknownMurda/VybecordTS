@@ -24,7 +24,7 @@ import os from 'node:os';
 import { createLogger } from '../src/core/logger.js';
 import type { VybecordBackend } from '../src/backend.js';
 import {
-  isScrobbleEnabled, canAuth, requestAuthToken, getAuthUrlForToken,
+  scrobbleStatus, requestAuthToken, getAuthUrlForToken,
   completeAuth, disconnectScrobble,
 } from '../src/core/lastfm.js';
 import {
@@ -293,7 +293,7 @@ export function registerIpc(backend: VybecordBackend, getWindow: () => BrowserWi
   });
 
   // ── Last.fm ──
-  handle('lastfm:status', () => ({ scrobbling: isScrobbleEnabled(), canAuth: canAuth() }));
+  handle('lastfm:status', () => scrobbleStatus());
   /**
    * Step 1+2 of the desktop flow: take a token, then send the user to Last.fm to
    * approve it. The token is handed back so the renderer can pass it to
@@ -312,9 +312,9 @@ export function registerIpc(backend: VybecordBackend, getWindow: () => BrowserWi
     if (!token) throw new Error('Missing token');
     const ok = await completeAuth(token);
     if (!ok) throw new Error('Last.fm rejected the token — approve the page in your browser first, then retry');
-    return { ok, scrobbling: isScrobbleEnabled() };
+    return { ok, ...scrobbleStatus() };
   });
-  handle('lastfm:disconnect', () => { disconnectScrobble(); return { ok: true, scrobbling: false }; });
+  handle('lastfm:disconnect', () => { disconnectScrobble(); return { ok: true, ...scrobbleStatus() }; });
 
   // ── Bug report ──
   /** Whether a report can be sent at all. Deliberately a boolean, not the URL. */
