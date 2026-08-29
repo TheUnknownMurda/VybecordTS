@@ -426,6 +426,17 @@ h2 {
   opacity: 0.45;
   cursor: not-allowed;
 }
+/*
+ * The most numerous control in the app was the only one without a focus style
+ * of its own. It was never invisible — .btn does not clear the outline, so the
+ * browser's default ring survived — but every sibling control (nav items,
+ * fields, switches, the lyrics block) wears the accent, and the buttons did not.
+ * :focus-visible rather than :focus, so a mouse click does not draw it.
+ */
+.btn:focus-visible {
+  outline: 2px solid var(--accent-hex);
+  outline-offset: 2px;
+}
 .btn-primary {
   background: rgba(var(--accent), 0.14);
   border-color: var(--border-a);
@@ -1388,4 +1399,35 @@ label.field > span {
 /* Pinned left while it is there; hiding it must not drag Close over with it. */
 .lyr-full-follow {
   margin-right: auto;
+}
+
+/* ── Reduced motion ───────────────────────────────────────────────────────── */
+/*
+ * "Reduce motion" is a system setting people turn on for vestibular disorders
+ * and for migraine, and this stylesheet had no media query of any kind — so it
+ * had no way to honour it. The pulse dot is the one that matters most: it is
+ * `infinite`, so it never stops on its own.
+ *
+ * Animations are not merely slowed. A 0.01ms duration lets an animation still
+ * *run* — so anything that relies on an animation completing still fires its
+ * `animationend` — while nothing perceptible moves. Transitions get the same
+ * treatment, and scroll behaviour goes back to instant.
+ *
+ * `!important` is used here, and nowhere else in this file, deliberately: this
+ * block has to beat whatever specificity a rule above it happened to need.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  /* The live dot conveys "this is live" by pulsing. With motion off it has to
+     say it some other way, so it settles at full opacity rather than mid-fade. */
+  .pulse {
+    opacity: 1;
+  }
 }
