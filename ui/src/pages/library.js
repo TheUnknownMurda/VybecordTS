@@ -652,9 +652,12 @@ const MIN_DUMP_QUERY = 3;
 function renderDump(body) {
   const results = el('div', { class: 'list' });
   const status = el('div', { class: 'notice', text: 'Checking for a dump…' });
-  // The search runs on the backend's main thread, so two of them cannot overlap
-  // — they queue. This only guards against an earlier answer landing after a
-  // later one and painting stale results over fresh ones.
+  // The dump has its own worker thread, which takes one message at a time, so
+  // two searches cannot run at once — they queue. (This comment used to say
+  // "the backend's main thread", from before the dump moved off it; the
+  // conclusion held, the reason did not.) The counter only guards against an
+  // earlier answer landing after a later one and painting stale results over
+  // fresh ones.
   let searchSeq = 0;
   const input = el('input', {
     type: 'search', placeholder: 'Search the local LRCLIB dump…',

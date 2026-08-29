@@ -62,7 +62,26 @@ function searchAttempts(name: string, artist: string): [string, string][] {
   const [cleanName, primaryArtist] = cleanForSearch(name, artist);
   const attempts: [string, string][] = [[cleanName, primaryArtist], [name, primaryArtist]];
   if (artist !== primaryArtist) attempts.push([cleanName, artist], [name, artist]);
-  return attempts;
+  /*
+   * Cleaning a title that needed no cleaning gives the title back, and the
+   * list then holds the same pair twice — which every caller walks in order,
+   * asking the same question of the store and of a 124 GB file a second time
+   * to get the same answer. A plain title with several artists produced four
+   * attempts covering two distinct pairs.
+   *
+   * Deduplicating cannot change what is found: identical inputs return
+   * identical results. It only stops the second ask.
+   */
+  const seen = new Set<string>();
+  return attempts.filter(([n, a]) => {
+    // Keyed on the pair itself rather than on a joined string: any separator
+    // can also occur inside a title or an artist, and "Song Two"+"Artist"
+    // must not collapse into "Song"+"Two Artist".
+    const key = JSON.stringify([n, a]);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 /**
