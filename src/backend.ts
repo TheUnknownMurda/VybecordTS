@@ -45,7 +45,7 @@ import { extractLocalArt, extractArtFromPath } from './core/local-art.js';
 import { initBlacklist, flagLyrics, isLyricsFlagged, clearFlags, listFlaggedTracks, clearFlagsByKey } from './core/lyrics-blacklist.js';
 import { initHistory, historyTrackStart, historyTrackPause, historyTrackResume, historyTrackEnd, historyUpdateArt, getHistoryPage, getWrappedStats } from './core/listening-history.js';
 import { translateBatch, translateText, getCachedTranslation, isTranslationWorthFetching } from './core/translate.js';
-import { asNonNegativeInt, asRecord, asText, evictOldest, evictUntil } from './core/utils.js';
+import { asNonNegativeInt, asRecord, asText, evictLeast, evictOldest, evictUntil } from './core/utils.js';
 import type { TrackData, LyricLine, VybecordConfig } from './core/types.js';
 
 const log = createLogger('Backend');
@@ -259,6 +259,10 @@ export class VybecordBackend extends EventEmitter {
   private _lastCcLang: string | undefined;
   private statsHistory: SessionSnapshot[] = [];
   private statsHistoryPath: string;
+  /** When this session began — the identity of its row in the stats history. */
+  private readonly sessionStartedAt = new Date().toISOString();
+  /** Whether this session's row is already at the head of statsHistory. */
+  private sessionRowSaved = false;
   /** Album of the last play accepted as real — lets recordPlay() tell an
    *  interlude from an advertisement, the same way the media source does. */
   private lastRecordedAlbum = '';
@@ -1787,23 +1791,42 @@ export class VybecordBackend extends EventEmitter {
     }
   }
 
-  /** Persist the current session's top 3 into the history file. */
+  /**
+   * Persist this session's top 3 into the history file.
+   *
+   * Called on every play now, not only on the way out. It used to run from
+   * shutdown() alone, so a crash, a power cut or an End Task took the whole
+   * session's listening with it — while the listening *history* next door had
+   * been saving continuously all along, which left the two views of the same
+   * afternoon disagreeing with each other.
+   *
+   * The session owns one row and rewrites it, rather than adding one per call:
+   * the file holds the last ten *sessions*, and it would otherwise hold the
+   * last ten songs of this one. `sessionStartedAt` is fixed at the first save
+   * so the row keeps saying when the session began rather than when it was last
+   * touched.
+   */
   private saveCurrentSession(): void {
     const stats = this.getSessionStats();
     if (!stats.topTracks.length && !stats.topArtists.length) return;
 
     const snapshot: SessionSnapshot = {
-      date: new Date().toISOString(),
+      date: this.sessionStartedAt,
       topTracks: stats.topTracks,
       topArtists: stats.topArtists,
     };
 
-    this.statsHistory.unshift(snapshot);
-    if (this.statsHistory.length > MAX_HISTORY_SESSIONS) {
-      this.statsHistory = this.statsHistory.slice(0, MAX_HISTORY_SESSIONS);
+    if (this.sessionRowSaved && this.statsHistory[0]?.date === this.sessionStartedAt) {
+      this.statsHistory[0] = snapshot;
+    } else {
+      this.statsHistory.unshift(snapshot);
+      this.sessionRowSaved = true;
+      if (this.statsHistory.length > MAX_HISTORY_SESSIONS) {
+        this.statsHistory = this.statsHistory.slice(0, MAX_HISTORY_SESSIONS);
+      }
+      log.info(`Saved current session to stats history (${this.statsHistory.length} total)`);
     }
     this.saveStatsHistory();
-    log.info(`Saved current session to stats history (${this.statsHistory.length} total)`);
   }
 
   /** Get previous sessions top 3 (excludes current session). */
@@ -2112,10 +2135,15 @@ export class VybecordBackend extends EventEmitter {
       this.sessionArtistPlays.set(artistKey, { name: artistDisplay, art: t.album_art_url || '', artist_art: t.artist_art_url || '', count: 1 });
     }
 
-    evictOldest(this.sessionTrackPlays, 500);
-    evictOldest(this.sessionArtistPlays, 500);
+    // Bounded by plays, not by arrival. These two feed the "top 3" lists, and
+    // evicting by insertion order dropped the session's first track — which is
+    // disproportionately the one on repeat.
+    evictLeast(this.sessionTrackPlays, 500, t => t.count);
+    evictLeast(this.sessionArtistPlays, 500, a => a.count);
 
     this.emit('statsUpdate', this.getSessionStats());
+    // Banked now rather than at shutdown alone — see saveCurrentSession().
+    this.saveCurrentSession();
   }
 
   // ── Away (Discord auto-idle parity) ──

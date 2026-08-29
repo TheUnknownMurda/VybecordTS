@@ -15,6 +15,30 @@ export function evictOldest<K, V>(map: Map<K, V>, maxSize: number): void {
 }
 
 /**
+ * Drop the least valuable entry once a Map passes `maxSize`.
+ *
+ * For the maps where insertion order is the wrong thing to lose. The session
+ * stats are that case: evicting the oldest entry drops the first track of the
+ * session, which is very often the one played most — the cap is meant to bound
+ * memory, not to quietly delete the answer the page exists to show.
+ *
+ * Ties keep the earlier entry's claim, so equal counts evict oldest-first and
+ * the behaviour degrades to the old one exactly where weight says nothing.
+ *
+ * O(n) on the one insertion that crosses the cap, and nothing before it.
+ */
+export function evictLeast<K, V>(map: Map<K, V>, maxSize: number, weight: (value: V) => number): void {
+  if (map.size <= maxSize) return;
+  let worstKey: K | undefined;
+  let worstWeight = Infinity;
+  for (const [key, value] of map) {
+    const w = weight(value);
+    if (w < worstWeight) { worstWeight = w; worstKey = key; }
+  }
+  if (worstKey !== undefined) map.delete(worstKey);
+}
+
+/**
  * Evict entries from the front of a Map until its size is at most `maxSize`.
  * Use for bulk eviction (e.g. cache trim after batch inserts).
  */
