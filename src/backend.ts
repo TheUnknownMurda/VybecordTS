@@ -156,6 +156,52 @@ function platformConfigKey(src: string): keyof import('./core/types.js').Vybecor
   return null; // unknown — allow by default
 }
 
+/**
+ * What one pushed source needs beyond the shape all six of them share.
+ *
+ * The handlers used to be six near-copies of the same twenty-line sequence:
+ * coerce the payload, gate on the setting, check the pin, stop if paused,
+ * compare against the current track, announce. Near-copies, not copies — and
+ * the drift between them is what let a real bug live: the guard that stops a
+ * paused Spotify taking the presence down for everything else was present in
+ * five of the six, and the sixth flickered the presence every two seconds.
+ *
+ * So the sequence lives in ingestPush() and each source supplies only what
+ * genuinely differs. Everything a source can vary is a field here, which also
+ * means a new source cannot silently omit a step.
+ */
+interface PushSpec<T> {
+  source: {
+    /** Coerce and store the raw payload; hand back the checked object. */
+    update(raw: unknown): T;
+    getCurrentTrack(): TrackData | null;
+  };
+  /** The per-platform detection setting. Only an explicit `false` disables. */
+  configKey: keyof VybecordConfig;
+  /** Whether the payload reports playback, however that source words it. */
+  playing(data: T): boolean;
+  /** The name a pin is matched against — see mayOwnPresence(). */
+  presenceSource(data: T): string;
+  /** Whether the presence currently on air belongs to this source. */
+  owns(): boolean;
+  /** What the [NEW TRACK] line calls this source. */
+  label: string;
+  /** Counts as web playback — see cachedIsWebSource. */
+  web: boolean;
+  /** A broadcast: no length to loop against, so no repeat detection. */
+  live?: boolean;
+  /** Anything extra worth putting on the [NEW TRACK] line. */
+  detail?(track: TrackData): string;
+  /**
+   * Fields worth a debug line that only this source has.
+   *
+   * Spicetify is the one that carries playlist context, shuffle and repeat, and
+   * those are exactly what a "the presence says the wrong playlist" report
+   * needs. The others have nothing the shared lines do not already show.
+   */
+  debug?(data: T): string;
+}
+
 export class VybecordBackend extends EventEmitter {
   private config: ConfigManager;
   private media: NativeMediaSource | null = null;
@@ -465,282 +511,211 @@ export class VybecordBackend extends EventEmitter {
     return pinned.startsWith('browser_') && BROWSER_PUSH_SOURCES.has(mediaSource);
   }
 
-  // ── Spicetify push handler (event-driven, called by web server) ──
+  // ── Browser-extension push handlers ──────────────────────────────────────
 
-  handleSpicetifyPush(raw: unknown): void {
+  /**
+   * Take one push from a browser-extension or Spicetify source.
+   *
+   * The whole sequence, once, for all six. See PushSpec for why.
+   *
+   * Two things here are not what the six copies did, and both are corrections
+   * rather than tidying:
+   *
+   *   - The detection gate is `=== false` everywhere. Three of the handlers
+   *     spelled it `!config.get(key)`, which also refuses a key that is simply
+   *     absent — a config written before that platform existed would have
+   *     switched it off rather than defaulted it on. The poll path already
+   *     read it as `!== false`.
+   *   - A track that reaches its end and starts again is picked up for every
+   *     source, not only Spotify. See resumeSameTrack().
+   */
+  private ingestPush<T>(raw: unknown, spec: PushSpec<T>): void {
     // The source coerces the push and hands back the checked object; everything
     // below reads that rather than whatever arrived on the socket.
-    const data = this.spicetify.update(raw);
-    log.debug(`[SPICETIFY-PUSH] track="${data.track_name}" album="${data.album_name}" context="${data.context_name}" ctx_type="${data.context_type}" shuffle=${data.is_shuffle} repeat=${data.repeat_mode}`);
+    const data = spec.source.update(raw);
+    if (spec.debug) log.debug(`[${spec.label}] ${spec.debug(data)}`);
 
-    if (!this.config.get('detect_spotify')) return;
-    if (!this.mayOwnPresence('spotify')) return;
+    if (this.config.get(spec.configKey) === false) return;
+    if (!this.mayOwnPresence(spec.presenceSource(data))) return;
 
-    if (!data.is_playing) {
+    if (!spec.playing(data)) {
       /*
-       * Paused via Spicetify — clear immediately (push is authoritative, no
-       * grace period needed), but only when the presence is actually Spotify's.
+       * Paused, and the push is authoritative — no grace period needed.
        *
-       * The extension pushes every two seconds whether or not anything is
-       * playing, precisely so that pausing is not mistaken for the extension
-       * being gone. Stopping unconditionally therefore took the presence down
-       * every two seconds for whatever *else* was playing — a YouTube tab, a
-       * local player — and the next poll brought it straight back, so a paused
-       * Spotify in the background made the profile flicker and re-logged the
-       * other track as a new play on every cycle. Every other push handler
-       * already checks whose track this is; this one did not.
+       * Only when the presence is actually this source's, though. The
+       * extensions push on a timer whether or not anything is playing, so a
+       * paused player in the background would otherwise take down whatever
+       * else is on air, every couple of seconds, for as long as it sat there.
        */
-      if (this.currentTrack?.media_source === 'spotify') this.onTrackStopped();
+      if (spec.owns()) this.onTrackStopped();
       return;
     }
 
-    const track = this.spicetify.getCurrentTrack();
+    const track = spec.source.getCurrentTrack();
     if (!track) return;
 
     this.idleSince = 0;
     const trackKey = this.buildTrackKey(track);
 
     if (trackKey === this.currentTrackKey) {
-      log.debug(`[SPOTIFY] Same track detected: ${track.track_name} — ${track.artist_name} (key: ${trackKey})`);
-      // Same track — sync progress to lyrics engine (instant, no poll delay)
-      if (this.checkRepeatLoop(track)) return;
-
-      // Engine stopped (track duration reached) but same track still playing → repeat loop restart
-      if (!this.lyricsEngine.isRunning() && track.progress_ms < 5000) {
-        log.info(`[REPEAT] Engine stopped but track restarted (progress=${track.progress_ms}ms) — re-starting`);
-        this.currentTrack = track;
-        this.recordPlay(track);
-        this.emit('trackUpdate', track);
-        this.onNewTrack(track).catch(e => log.error(`[REPEAT] Error: ${e}`));
-        return;
-      }
-
-      this.syncTrackProgress(track);
-      // Update artist image if it arrived asynchronously (Tampermonkey fetches after first push)
-      if (track.artist_art_url) {
-        const primaryArtist = track.artist_name.split(ARTIST_SPLIT_RE)[0].trim().toLowerCase();
-        const aEntry = this.sessionArtistPlays.get(primaryArtist);
-        if (aEntry && !aEntry.artist_art) {
-          aEntry.artist_art = track.artist_art_url;
-          this.statsDirty = true;
-          this.emit('statsUpdate', this.getSessionStats());
-        }
-      }
+      log.debug(`[${spec.label}] Same track: ${track.track_name} — ${track.artist_name} (${trackKey})`);
+      // Per track, not per source: Kick and Twitch are always a broadcast, but
+      // YouTube is one only when the video is, and a premiere sitting in the
+      // same tab as ordinary videos has to be read from the track itself.
+      this.resumeSameTrack(track, !!spec.live || track.is_live === true);
       return;
     }
 
-    // New track detected — instant response (no 3s poll delay!)
     this.currentTrackKey = trackKey;
     this.currentTrack = track;
-    this.cachedIsWebSource = false; // Spicetify is Spotify — never a web source
-    log.info(`[NEW TRACK] ${track.track_name} — ${track.artist_name} (spicetify)${track.is_local ? ' [local]' : ''}${track.context_name ? ` [${track.context_name}]` : ''}`);
+    this.cachedIsWebSource = spec.web;
+    log.info(`[NEW TRACK] ${track.track_name} — ${track.artist_name} (${spec.label})${spec.detail?.(track) ?? ''}`);
     this.recordPlay(track);
     this.emit('trackUpdate', track);
     this.onNewTrack(track).catch(e => log.error(`[NEW TRACK] Error: ${e}`));
   }
 
-  // ── YouTube push handler (event-driven, called by web server) ──
+  /**
+   * The same track pushed again — keep the engine's clock on the player's.
+   *
+   * A live stream takes the short path: it has no length, so there is no repeat
+   * to detect, and what the engine needs from the fresh object is
+   * stream_start_time_ms rather than a position to compare against.
+   *
+   * The restart branch used to exist for Spotify alone, and its absence
+   * elsewhere was a real gap. When a track reaches its end the engine stops; if
+   * the player then loops the same song, checkRepeatLoop cannot see it — a
+   * stopped engine reports zero elapsed, so nothing exceeds the duration — and
+   * syncTrackProgress's end-detection does not fire either. The lyrics simply
+   * stayed dead for the whole of the repeat. It now applies to every source
+   * that reports a duration.
+   */
+  private resumeSameTrack(track: TrackData, live: boolean): void {
+    this.currentTrack = track;
+
+    if (live) {
+      this.lyricsEngine.syncProgress(track.progress_ms, track);
+      return;
+    }
+
+    if (this.checkRepeatLoop(track)) return;
+
+    if (!this.lyricsEngine.isRunning() && track.duration_ms > 0 && track.progress_ms < 5000) {
+      log.info(`[REPEAT] Engine stopped but track restarted (progress=${track.progress_ms}ms) — re-starting`);
+      this.recordPlay(track);
+      this.emit('trackUpdate', track);
+      this.onNewTrack(track).catch(e => log.error(`[REPEAT] Error: ${e}`));
+      return;
+    }
+
+    this.syncTrackProgress(track);
+
+    /*
+     * The artist image arrives late when it arrives at all — the extension
+     * fetches it after its first push — so the stats row created at track start
+     * has none. Backfill it rather than leaving that artist blank for the rest
+     * of the session. Only Spicetify supplies one today; the test costs nothing
+     * for the sources that never will.
+     */
+    if (track.artist_art_url) {
+      const primaryArtist = track.artist_name.split(ARTIST_SPLIT_RE)[0].trim().toLowerCase();
+      const entry = this.sessionArtistPlays.get(primaryArtist);
+      if (entry && !entry.artist_art) {
+        entry.artist_art = track.artist_art_url;
+        this.statsDirty = true;
+        this.emit('statsUpdate', this.getSessionStats());
+      }
+    }
+  }
+
+  handleSpicetifyPush(raw: unknown): void {
+    this.ingestPush(raw, {
+      source: this.spicetify,
+      configKey: 'detect_spotify',
+      playing: d => d.is_playing,
+      presenceSource: () => 'spotify',
+      owns: () => this.currentTrack?.media_source === 'spotify',
+      label: 'spicetify',
+      web: false,   // Spicetify runs inside the Spotify client, not a browser tab
+      detail: t => `${t.is_local ? ' [local]' : ''}${t.context_name ? ` [${t.context_name}]` : ''}`,
+      debug: d => `track="${d.track_name}" album="${d.album_name}" context="${d.context_name}"`
+        + ` ctx_type="${d.context_type}" shuffle=${d.is_shuffle} repeat=${d.repeat_mode}`,
+    });
+  }
 
   handleYouTubePush(raw: unknown): void {
-    const data = this.youtubeSource.update(raw);
-
-    if (!this.config.get('detect_youtube')) return;
-    if (!this.mayOwnPresence(data.source || 'youtube')) return;
-
-    if (!data.is_playing) {
-      // Paused via userscript — clear immediately (push is authoritative)
-      if (this.currentTrack?.media_source === 'youtube' || this.currentTrack?.media_source === 'youtube_music') {
-        this.onTrackStopped();
-      }
-      return;
-    }
-
-    const track = this.youtubeSource.getCurrentTrack();
-    if (!track) return;
-
-    this.idleSince = 0;
-    const trackKey = this.buildTrackKey(track);
-
-    if (trackKey === this.currentTrackKey) {
-      log.debug(`[YOUTUBE] Same track detected: ${track.track_name} — ${track.artist_name} (key: ${trackKey})`);
-      // Same track — update to ensure stream_start_time_ms is passed to lyrics-engine
-      this.currentTrack = track;
-      if (this.checkRepeatLoop(track)) return;
-      // For live streams, force syncProgress to update trackData with stream_start_time_ms
-      if (track.is_live) {
-        this.lyricsEngine.syncProgress(track.progress_ms, track);
-      } else {
-        this.syncTrackProgress(track);
-      }
-      return;
-    }
-
-    // New video detected — instant response
-    this.currentTrackKey = trackKey;
-    this.currentTrack = track;
-    this.cachedIsWebSource = true; // YouTube is a web source
-    log.info(`[NEW TRACK] ${track.track_name} — ${track.artist_name} (youtube-userscript)`);
-    this.recordPlay(track);
-    this.emit('trackUpdate', track);
-    this.onNewTrack(track).catch(e => log.error(`[NEW TRACK] Error: ${e}`));
+    this.ingestPush(raw, {
+      source: this.youtubeSource,
+      configKey: 'detect_youtube',
+      playing: d => d.is_playing,
+      // YouTube Music announces itself separately, and a pin must be able to
+      // tell the two apart.
+      presenceSource: d => d.source || 'youtube',
+      owns: () => this.currentTrack?.media_source === 'youtube'
+        || this.currentTrack?.media_source === 'youtube_music',
+      label: 'youtube-userscript',
+      web: true,
+    });
   }
 
   isYouTubeSourceActive(): boolean { return this.youtubeSource.isActive; }
 
-  // ── SoundCloud push handler (event-driven, called by web server) ──
-
   handleSoundCloudPush(raw: unknown): void {
-    const data = this.soundcloudSource.update(raw);
-
-    if (!this.config.get('detect_soundcloud')) return;
-    if (!this.mayOwnPresence('soundcloud')) return;
-
-    if (!data.is_playing) {
-      if (this.currentTrackKey.startsWith('sc:')) this.onTrackStopped();
-      return;
-    }
-
-    const track = this.soundcloudSource.getCurrentTrack();
-    if (!track) return;
-
-    this.idleSince = 0;
-    const trackKey = this.buildTrackKey(track);
-
-    if (trackKey === this.currentTrackKey) {
-      log.debug(`[SOUNDCLOUD] Same track detected: ${track.track_name} — ${track.artist_name} (key: ${trackKey})`);
-      // Same track — sync progress
-      if (this.checkRepeatLoop(track)) return;
-      this.syncTrackProgress(track);
-      return;
-    }
-
-    // New track detected
-    this.currentTrackKey = trackKey;
-    this.currentTrack = track;
-    this.cachedIsWebSource = true; // SoundCloud is a web source
-    log.info(`[NEW TRACK] ${track.track_name} — ${track.artist_name} (soundcloud-userscript)`);
-    this.recordPlay(track);
-    this.emit('trackUpdate', track);
-    this.onNewTrack(track).catch(e => log.error(`[NEW TRACK] Error: ${e}`));
+    this.ingestPush(raw, {
+      source: this.soundcloudSource,
+      configKey: 'detect_soundcloud',
+      playing: d => d.is_playing,
+      presenceSource: () => 'soundcloud',
+      owns: () => this.currentTrackKey.startsWith('sc:'),
+      label: 'soundcloud-userscript',
+      web: true,
+    });
   }
 
   isSoundCloudSourceActive(): boolean { return this.soundcloudSource.isActive; }
 
-  // ── Bandcamp push handler (event-driven, called by web server) ──
-
   handleBandcampPush(raw: unknown): void {
-    const data = this.bandcampSource.update(raw);
-
-    if (this.config.get('detect_other_apps') === false) return;
-    if (!this.mayOwnPresence('bandcamp')) return;
-
-    if (!data.is_playing) {
-      if (this.currentTrackKey.startsWith('bc:')) this.onTrackStopped();
-      return;
-    }
-
-    const track = this.bandcampSource.getCurrentTrack();
-    if (!track) return;
-
-    this.idleSince = 0;
-    const trackKey = this.buildTrackKey(track);
-
-    if (trackKey === this.currentTrackKey) {
-      log.debug(`[BANDCAMP] Same track detected: ${track.track_name} — ${track.artist_name} (key: ${trackKey})`);
-      // Same track — sync progress
-      if (this.checkRepeatLoop(track)) return;
-      this.syncTrackProgress(track);
-      return;
-    }
-
-    // New track detected
-    this.currentTrackKey = trackKey;
-    this.currentTrack = track;
-    this.cachedIsWebSource = true; // Bandcamp is a web source
-    log.info(`[NEW TRACK] ${track.track_name} — ${track.artist_name} (bandcamp-userscript)`);
-    this.recordPlay(track);
-    this.emit('trackUpdate', track);
-    this.onNewTrack(track).catch(e => log.error(`[NEW TRACK] Error: ${e}`));
+    this.ingestPush(raw, {
+      source: this.bandcampSource,
+      // Bandcamp has no switch of its own; it rides the "other apps" one.
+      configKey: 'detect_other_apps',
+      playing: d => d.is_playing,
+      presenceSource: () => 'bandcamp',
+      owns: () => this.currentTrackKey.startsWith('bc:'),
+      label: 'bandcamp-userscript',
+      web: true,
+    });
   }
 
   isBandcampSourceActive(): boolean { return this.bandcampSource.isActive; }
 
-  // ── Kick push handler (event-driven, called by web server) ──
-
   handleKickPush(raw: unknown): void {
-    const data = this.kickSource.update(raw);
-
-    if (this.config.get('detect_kick') === false) return;
-    if (!this.mayOwnPresence('kick')) return;
-
-    if (!data.is_live) {
-      if (this.currentTrackKey.startsWith('kick:')) this.onTrackStopped();
-      return;
-    }
-
-    const track = this.kickSource.getCurrentTrack();
-    if (!track) return;
-
-    this.idleSince = 0;
-    const trackKey = this.buildTrackKey(track);
-
-    if (trackKey === this.currentTrackKey) {
-      log.debug(`[KICK] Same stream detected: ${track.track_name} — ${track.artist_name} (key: ${trackKey})`);
-      // Same stream — update track to ensure stream_start_time_ms is passed to lyrics-engine
-      this.currentTrack = track;
-      // Force syncProgress to update trackData in lyrics-engine (even for live streams)
-      this.lyricsEngine.syncProgress(track.progress_ms, track);
-      return;
-    }
-
-    // New stream detected
-    this.currentTrackKey = trackKey;
-    this.currentTrack = track;
-    this.cachedIsWebSource = true; // Kick is a web source
-    log.info(`[NEW TRACK] ${track.track_name} — ${track.artist_name} (kick-userscript)`);
-    this.recordPlay(track);
-    this.emit('trackUpdate', track);
-    this.onNewTrack(track).catch(e => log.error(`[NEW TRACK] Error: ${e}`));
+    this.ingestPush(raw, {
+      source: this.kickSource,
+      configKey: 'detect_kick',
+      // A stream is live or it is not; there is no pause to report.
+      playing: d => d.is_live,
+      presenceSource: () => 'kick',
+      owns: () => this.currentTrackKey.startsWith('kick:'),
+      label: 'kick-userscript',
+      web: true,
+      live: true,
+    });
   }
 
   isKickSourceActive(): boolean { return this.kickSource.isActive; }
 
-  // ── Twitch push handler (event-driven, called by web server) ──
-
   handleTwitchPush(raw: unknown): void {
-    const data = this.twitchSource.update(raw);
-
-    if (this.config.get('detect_twitch') === false) return;
-    if (!this.mayOwnPresence('twitch')) return;
-
-    if (!data.is_live) {
-      if (this.currentTrackKey.startsWith('twitch:')) this.onTrackStopped();
-      return;
-    }
-
-    const track = this.twitchSource.getCurrentTrack();
-    if (!track) return;
-
-    this.idleSince = 0;
-    const trackKey = this.buildTrackKey(track);
-
-    if (trackKey === this.currentTrackKey) {
-      log.debug(`[TWITCH] Same stream detected: ${track.track_name} — ${track.artist_name} (key: ${trackKey})`);
-      // Same stream — update track to ensure stream_start_time_ms is passed to lyrics-engine
-      this.currentTrack = track;
-      // Force syncProgress to update trackData in lyrics-engine (even for live streams)
-      this.lyricsEngine.syncProgress(track.progress_ms, track);
-      return;
-    }
-
-    // New stream detected
-    this.currentTrackKey = trackKey;
-    this.currentTrack = track;
-    this.cachedIsWebSource = true; // Twitch is a web source
-    log.info(`[NEW TRACK] ${track.track_name} — ${track.artist_name} (twitch-userscript)`);
-    this.recordPlay(track);
-    this.emit('trackUpdate', track);
-    this.onNewTrack(track).catch(e => log.error(`[NEW TRACK] Error: ${e}`));
+    this.ingestPush(raw, {
+      source: this.twitchSource,
+      configKey: 'detect_twitch',
+      playing: d => d.is_live,
+      presenceSource: () => 'twitch',
+      owns: () => this.currentTrackKey.startsWith('twitch:'),
+      label: 'twitch-userscript',
+      web: true,
+      live: true,
+    });
   }
 
   isTwitchSourceActive(): boolean { return this.twitchSource.isActive; }
@@ -872,14 +847,12 @@ export class VybecordBackend extends EventEmitter {
         // media session — would never get one.
         if (!this.mayOwnPresence(track.media_source)) continue;
         const trackKey = this.buildTrackKey(track);
+        // Same decision as a push arriving for the track already on air, so it
+        // is the same code. The poll used to carry its own shorter copy, which
+        // is why a looping track never restarted the lyrics when the poll was
+        // the one to notice rather than a push.
         if (trackKey === this.currentTrackKey) {
-          if (isLive) {
-            // Live streams: update trackData (stream_start_time_ms) without checkRepeatLoop
-            this.currentTrack = track;
-            this.lyricsEngine.syncProgress(track.progress_ms, track);
-          } else if (!this.checkRepeatLoop(track)) {
-            this.syncTrackProgress(track);
-          }
+          this.resumeSameTrack(track, !!isLive || track.is_live === true);
         }
         // Whether same or new track, this source claims the tick.
         // New-track detection is handled by the push handler, not poll.
@@ -922,18 +895,9 @@ export class VybecordBackend extends EventEmitter {
         const spTrack = this.spicetify.getCurrentTrack();
         if (spTrack && this.config.get('detect_spotify') !== false) {
           const trackKey = this.buildTrackKey(spTrack);
-          if (trackKey === this.currentTrackKey && !this.checkRepeatLoop(spTrack)) {
-            // Engine stopped while the track still plays → the track repeated.
-            if (!this.lyricsEngine.isRunning() && spTrack.progress_ms < 5000) {
-              log.info(`[REPEAT] Engine stopped but track restarted via poll (progress=${spTrack.progress_ms}ms)`);
-              this.currentTrack = spTrack;
-              this.recordPlay(spTrack);
-              this.emit('trackUpdate', spTrack);
-              this.onNewTrack(spTrack).catch(e => log.error(`[REPEAT] Error: ${e}`));
-            } else {
-              this.syncTrackProgress(spTrack);
-            }
-          }
+          // The third copy of the same decision, now the same code as the other
+          // two. Spotify never reports a broadcast, so this one is never live.
+          if (trackKey === this.currentTrackKey) this.resumeSameTrack(spTrack, false);
           return;
         }
         // Paused or disabled — fall through, and let the table walk below hand
