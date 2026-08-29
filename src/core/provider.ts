@@ -1,20 +1,18 @@
 /**
- * Multi-provider lyrics engine — 4-phase lookup for maximum speed + coverage.
+ * Multi-provider lyrics engine — 3-phase lookup for maximum speed + coverage.
  *
  * Phase 0:   Imported lyrics (~1ms) — the user's own copy, before anything else
  * Phase 0.5: Local LRCLib SQLite dump (~1ms) — instant, offline
  * Phase 1:   Promise.any([LRCLib API direct, Netease Cloud Music, Musixmatch]) (~200-300ms)
- * Phase 1.5: Last.fm autocorrect → retry Phase 0+1 with corrected names (~300-500ms)
  * Phase 2:   LRCLib fuzzy search + scoring (~400-800ms fallback)
  *
- * Album art: Last.fm → Deezer → iTunes (with corrected query variants)
+ * Album art: Deezer → iTunes (with cleaned query variants)
  */
 
 import { createLogger } from './logger.js';
 import { parseLrc } from './lrc-parser.js';
 import { similarity, batchScore } from './similarity.js';
 import { hasLocalDb, searchCustomLyrics, searchDumpLyrics, customLyricsIndex, getCustomLyrics } from './local-lyrics-db.js';
-import { hasLastFm, getCorrection } from './lastfm.js';
 import type { LyricLine, LrcLibResult } from './types.js';
 
 const log = createLogger('Provider');
@@ -418,7 +416,7 @@ async function searchMusixmatch(
 
 /**
  * Fetch synced lyrics for a track.
- * Strategy: Local DB → Parallel race (LRCLib | Netease | Musixmatch) → Last.fm corrected retry → Fuzzy fallback
+ * Strategy: Local DB → Parallel race (LRCLib | Netease | Musixmatch) → Fuzzy fallback
  * Returns parsed LyricLine[] or empty array.
  */
 export async function fetchLyrics(
@@ -516,85 +514,6 @@ export async function fetchLyrics(
     log.info(`[LYRICS] Phase 1 failed after ${phase1Duration}ms (all racers timed out)`);
   } finally {
     raceAbort.abort(); // Ensure cleanup
-  }
-
-  // ── PHASE 1.5: LAST.FM AUTOCORRECT RETRY ──
-  // If raw names failed, ask Last.fm to fix misspellings and retry
-  const phase15Start = Date.now();
-  if (hasLastFm()) {
-    const correction = await getCorrection(cleanName, primaryArtist, combinedSignal);
-    if (correction) {
-      const cTrack = correction.track;
-      const cArtist = correction.artist;
-      const cAlbum = correction.album || albumClean;
-      const cDur = correction.durationMs && correction.durationMs > 0
-        ? Math.round(correction.durationMs / 1000)
-        : durationSec;
-
-      // Only retry if Last.fm actually changed something
-      const changed = cTrack.toLowerCase() !== cleanName.toLowerCase()
-        || cArtist.toLowerCase() !== primaryArtist.toLowerCase();
-
-      if (changed) {
-        // Try the local databases with corrected names first, imported before dump
-        const importedCorrected = findCustomLyrics(cTrack, cArtist);
-        if (importedCorrected) {
-          log.info(`[LYRICS] Imported lyrics hit after Last.fm correction (${importedCorrected.length} lines)`);
-          return importedCorrected;
-        }
-        if (hasLocalDb()) {
-          const localCorrected = await searchDumpLyrics(cTrack, cArtist, cDur);
-          if (localCorrected) {
-            log.info(`[LYRICS] LRCLIB dump hit after Last.fm correction (${localCorrected.length} lines)`);
-            return localCorrected;
-          }
-        }
-
-        // Parallel race with corrected names
-        const corrAbort = new AbortController();
-        const corrSignal = combinedSignal ? AbortSignal.any([combinedSignal, corrAbort.signal]) : corrAbort.signal;
-        const corrRacers: Promise<{ source: string; lines: LyricLine[] }>[] = [];
-        const [corrClean] = cleanForSearch(cTrack, cArtist);
-        corrRacers.push(
-          tryDirectLookup(cTrack, corrClean, cArtist, cArtist, cAlbum, cDur, corrSignal)
-            .then(lines => {
-              if (!lines) throw new Error('no result');
-              return { source: 'LRCLib-corrected', lines };
-            }),
-        );
-        corrRacers.push(
-          searchNetease(cTrack, cArtist, cDur, corrSignal)
-            .then(lines => {
-              if (!lines) throw new Error('no result');
-              return { source: 'Netease-corrected', lines };
-            }),
-        );
-        corrRacers.push(
-          searchMusixmatch(cTrack, cArtist, cDur, corrSignal)
-            .then(lines => {
-              if (!lines) throw new Error('no result');
-              return { source: 'Musixmatch-corrected', lines };
-            }),
-        );
-        try {
-          const winner = await Promise.any(corrRacers);
-          corrAbort.abort();
-          const phase15Duration = Date.now() - phase15Start;
-          log.info(`[LYRICS] ${winner.source} won race (${winner.lines.length} lines) in ${phase15Duration}ms (Last.fm corrected)`);
-          return winner.lines;
-        } catch {
-          // corrected names also failed
-          const phase15Duration = Date.now() - phase15Start;
-          log.info(`[LYRICS] Phase 1.5 failed after ${phase15Duration}ms (Last.fm correction failed)`);
-        } finally {
-          corrAbort.abort();
-        }
-      }
-    }
-    const phase15Duration = Date.now() - phase15Start;
-    if (phase15Duration > 100) {
-      log.info(`[LYRICS] Phase 1.5 skipped after ${phase15Duration}ms (no correction needed)`);
-    }
   }
 
   // ── PHASE 2: FALLBACK — LRCLib fuzzy search + scoring ──
@@ -952,15 +871,6 @@ export async function fetchTrackMetadata(
   if (album && album.trim()) {
     const cleanAlbum = album.replace(RE_BRACKET_TAG, '').replace(RE_VERSION_SUFFIX, '').trim();
     if (cleanAlbum) queries.add(`${primaryArtist} ${cleanAlbum}`);
-  }
-
-  // Last.fm corrected names — often fixes noisy YouTube/SoundCloud metadata
-  if (hasLastFm()) {
-    const correction = await getCorrection(cleanTrack, primaryArtist, signal);
-    if (correction) {
-      // Insert corrected query early so Deezer/iTunes use the fixed names
-      queries.add(`${correction.track} ${correction.artist}`);
-    }
   }
 
   queries.add(artTrack); // Aggressively cleaned track name only — last resort

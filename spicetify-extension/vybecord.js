@@ -6,7 +6,7 @@
 //   - Event-driven (instant track change detection, no 400ms poll)
 //   - Full metadata: Spotify ID, album art URL, all artists, Spotify URIs
 //   - Accurate progress_ms (no SMTC delay compensation)
-//   - Eliminates need for Deezer/iTunes/Last.fm metadata enrichment
+//   - Eliminates need for Deezer/iTunes metadata enrichment
 //   - Spotify's own timed lyrics, which only the client itself can read
 
 (async function vybecord() {

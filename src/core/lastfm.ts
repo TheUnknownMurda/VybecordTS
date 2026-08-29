@@ -1,9 +1,9 @@
 /**
- * Last.fm API integration — metadata autocorrection + album art + scrobbling.
+ * Last.fm API integration — scrobbling only.
  *
- * Uses `track.getInfo` with `autocorrect=1` to fix misspelled artist/track names
- * from browser sources (YouTube, SoundCloud) before lyrics lookup.
- * Also provides album art as an additional source.
+ * The app sends plays and nothing else: Last.fm is never asked about a track,
+ * so no metadata, album art or name correction comes back from it. Lyrics and
+ * cover art are resolved entirely by the other providers.
  *
  * Scrobbling follows Last.fm's own rule: a track longer than 30 seconds, played
  * for half its length or four minutes — whichever comes first. "Played" means
@@ -23,7 +23,6 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createLogger } from './logger.js';
-import { evictOldest } from './utils.js';
 
 const log = createLogger('LastFM');
 
@@ -51,8 +50,6 @@ const QUEUE_MAX = 500;
 const RETRYABLE_ERRORS = new Set([8, 11, 16, 29]);
 /** "Invalid session key — please re-authenticate." */
 const ERR_INVALID_SESSION = 9;
-/** "Invalid parameters" — what track.getInfo returns for a track it doesn't know. */
-const ERR_NOT_FOUND = 6;
 
 let apiKey: string | null = null;
 let apiSecret: string | null = null;
@@ -61,22 +58,9 @@ let sessionUser: string | null = null;
 let sessionPath: string | null = null;
 let scrobbleEnabled = false;
 
-/** Corrected metadata returned by Last.fm. */
-export interface LastFmCorrection {
-  track: string;
-  artist: string;
-  album?: string;
-  albumArtUrl?: string;
-  durationMs?: number;
-}
-
-// In-memory cache: "rawTrack|rawArtist" → correction (or null if no result)
-const correctionCache = new Map<string, LastFmCorrection | null>();
-const inflight = new Map<string, Promise<LastFmCorrection | null>>();
-const MAX_CACHE = 200;
-
 /**
- * Initialize with an API key (+ optional secret for scrobbling).
+ * Initialize with an API key + shared secret. Both are required: every
+ * scrobbling method is a signed call, and signing needs the secret.
  *
  * Safe to call again when the credentials change in the settings, which is what
  * spares the user a restart after pasting them in. Swapping in a *different* key
@@ -98,8 +82,8 @@ export function initLastFm(key: string | undefined, secret?: string, cfgDir?: st
   }
 
   if (!apiKey) {
-    if (previousKey) log.info('Last.fm API key removed — autocorrect and scrobbling are off');
-    else log.info('No LASTFM_API_KEY found — Last.fm autocorrect disabled (optional)');
+    if (previousKey) log.info('Last.fm API key removed — scrobbling is off');
+    else log.info('No LASTFM_API_KEY found — Last.fm scrobbling disabled (optional)');
     forgetSession(false);
     return false;
   }
@@ -110,11 +94,11 @@ export function initLastFm(key: string | undefined, secret?: string, cfgDir?: st
   if (previousKey !== apiKey) log.info('Last.fm API initialized ✓');
 
   if (!apiSecret) {
-    // The key alone still buys autocorrect and album art; only signed calls need
-    // the secret, and every scrobbling method is a signed call.
+    // The key on its own buys nothing: every scrobbling method is a signed call,
+    // and signing needs the secret.
     forgetSession(false);
-    log.info('No Last.fm shared secret — autocorrect only, scrobbling disabled');
-    return true;
+    log.info('No Last.fm shared secret — scrobbling disabled');
+    return false;
   }
 
   loadSession();
@@ -127,150 +111,6 @@ export function initLastFm(key: string | undefined, secret?: string, cfgDir?: st
     log.info('Last.fm scrobbling available but not authenticated — connect it from the Last.fm page');
   }
   return true;
-}
-
-/** Check if Last.fm is available. */
-export function hasLastFm(): boolean {
-  return apiKey !== null;
-}
-
-interface LastFmTrackInfo {
-  track?: {
-    name?: string;
-    artist?: { name?: string };
-    album?: {
-      title?: string;
-      image?: { '#text'?: string; size?: string }[];
-    };
-    duration?: string;
-  };
-}
-
-/**
- * Query Last.fm `track.getInfo` with autocorrect=1.
- * Returns corrected track/artist names + album info, or null.
- * Results are cached to avoid repeated API calls for the same track.
- */
-export async function getCorrection(
-  rawTrack: string,
-  rawArtist: string,
-  signal?: AbortSignal,
-): Promise<LastFmCorrection | null> {
-  if (!apiKey) return null;
-
-  const track = rawTrack.trim();
-  const artist = rawArtist.trim();
-  if (!track || !artist) return null;
-
-  const cacheKey = `${track.toLowerCase()}|${artist.toLowerCase()}`;
-  const cached = correctionCache.get(cacheKey);
-  if (cached !== undefined) return cached;
-
-  /*
-   * The lyrics lookup and the cover-art lookup both ask for the correction of
-   * the same track within milliseconds of each other on every new song. Sharing
-   * one promise turns that into a single request.
-   *
-   * The shared request deliberately runs on its own timeout rather than the
-   * caller's signal: one racer giving up must not cancel the answer the other
-   * one is still waiting for. A caller that aborts simply stops waiting — see
-   * the race below — while the request finishes and fills the cache.
-   */
-  let request = inflight.get(cacheKey);
-  if (!request) {
-    request = fetchCorrection(track, artist, cacheKey).finally(() => inflight.delete(cacheKey));
-    inflight.set(cacheKey, request);
-  }
-
-  if (!signal) return request;
-  return Promise.race([request, nullOnAbort(signal)]);
-}
-
-/** Resolves null as soon as `signal` aborts, leaving the shared request running. */
-function nullOnAbort(signal: AbortSignal): Promise<null> {
-  if (signal.aborted) return Promise.resolve(null);
-  return new Promise(resolve => {
-    signal.addEventListener('abort', () => resolve(null), { once: true });
-  });
-}
-
-async function fetchCorrection(
-  track: string,
-  artist: string,
-  cacheKey: string,
-): Promise<LastFmCorrection | null> {
-  try {
-    const params = new URLSearchParams({
-      method: 'track.getInfo',
-      api_key: apiKey!,
-      artist,
-      track,
-      autocorrect: '1',
-      format: 'json',
-    });
-
-    const resp = await fetch(`${LASTFM_BASE}?${params}`, {
-      headers: { 'User-Agent': USER_AGENT },
-      signal: AbortSignal.timeout(LASTFM_TIMEOUT),
-    });
-
-    const data = await resp.json().catch(() => null) as (LastFmTrackInfo & { error?: number }) | null;
-
-    if (!resp.ok || !data) {
-      /*
-       * Only a track Last.fm genuinely does not know is remembered as "no
-       * result". A 500 or a rate limit is about this minute, not about this
-       * song, and caching it would poison the entry for the whole session.
-       */
-      if (resp.status === 404 || data?.error === ERR_NOT_FOUND) remember(cacheKey, null);
-      return null;
-    }
-
-    const t = data.track;
-    if (!t?.name || !t?.artist?.name) {
-      remember(cacheKey, null);
-      return null;
-    }
-
-    // Extract album art (prefer extralarge → large)
-    let albumArtUrl: string | undefined;
-    if (t.album?.image?.length) {
-      for (const size of ['extralarge', 'large', 'medium']) {
-        const img = t.album.image.find(i => i.size === size);
-        if (img?.['#text'] && !img['#text'].includes('2a96cbd8b46e442fc41c2b86b821562f')) {
-          // Skip Last.fm's default "no image" placeholder
-          albumArtUrl = img['#text'];
-          break;
-        }
-      }
-    }
-
-    const durationMs = t.duration ? parseInt(t.duration, 10) : 0;
-    const correction: LastFmCorrection = {
-      track: t.name,
-      artist: t.artist.name,
-      album: t.album?.title || undefined,
-      albumArtUrl,
-      durationMs: durationMs > 0 ? durationMs : undefined,
-    };
-
-    // Only log when something actually changed
-    const trackChanged = correction.track.toLowerCase() !== track.toLowerCase();
-    const artistChanged = correction.artist.toLowerCase() !== artist.toLowerCase();
-    if (trackChanged || artistChanged) {
-      log.info(`[CORRECT] "${artist} - ${track}" → "${correction.artist} - ${correction.track}"`);
-    }
-
-    remember(cacheKey, correction);
-    return correction;
-  } catch {
-    return null;
-  }
-}
-
-function remember(cacheKey: string, value: LastFmCorrection | null): void {
-  correctionCache.set(cacheKey, value);
-  evictOldest(correctionCache, MAX_CACHE);
 }
 
 // ══════════════════════════════════════════════════

@@ -24,9 +24,9 @@
  *
  * The feature is covered elsewhere regardless. The desktop app fetches lyrics
  * itself in src/core/provider.ts — LRCLib, Netease and Musixmatch raced in
- * parallel, a Last.fm-corrected retry, a fuzzy fallback and a local SQLite
- * database — which works for every source rather than only the Spotify web
- * player, and is not gated behind Premium the way color-lyrics is.
+ * parallel, a fuzzy fallback and a local SQLite database — which works for
+ * every source rather than only the Spotify web player, and is not gated
+ * behind Premium the way color-lyrics is.
  *
  * So this script scrapes the page and posts to 127.0.0.1, and nothing else.
  */

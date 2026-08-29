@@ -24,8 +24,8 @@ export function render(root) {
   /**
    * Clearing the credentials is its own button, because the form cannot tell
    * "remove these" from "this field never got filled in" — and guessing wrong
-   * silently switches Last.fm off, autocorrect included, with the saved session
-   * still sitting on disk looking connected.
+   * silently switches scrobbling off, with the saved session still sitting on
+   * disk looking connected.
    */
   const forget = el('button', {
     class: 'btn btn-sm btn-danger', text: 'Remove credentials',
@@ -67,7 +67,7 @@ export function render(root) {
             // back, so an empty one means untouched; the key is rendered back,
             // but an empty one is far more often a form that opened without the
             // config than a deliberate wipe — and a wiped key takes scrobbling
-            // and autocorrect down with it. "Remove credentials" says so out loud.
+            // down with it. "Remove credentials" says so out loud.
             const patch = {};
             if (apiKey.value.trim()) patch.lastfm_api_key = apiKey.value.trim();
             if (apiSecret.value.trim()) patch.lastfm_api_secret = apiSecret.value.trim();
