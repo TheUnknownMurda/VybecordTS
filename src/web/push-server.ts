@@ -111,7 +111,12 @@ export class PushServer {
       } else {
         log.error(`Push server error: ${e.message}`);
       }
+      // Dropping the reference alone left the failed server object alive with
+      // its listeners attached, and a later start() would build a second one
+      // beside it. Close it, so the field and reality agree.
+      const failed = this.server;
       this.server = null;
+      failed?.close();
     });
 
     // Loopback only. Binding the wildcard would put this on the local network.

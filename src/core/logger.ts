@@ -234,28 +234,99 @@ export function setLogSink(sink: ((level: LogLevel, name: string, msg: string) =
 
 const MAX_LOG_SIZE = 5 * 1024 * 1024; // 5 MB — rotate when exceeded
 
+/** Where the log lives, kept so rotation can run without being handed it again. */
+let logDir = '';
+let logPathCurrent = '';
+/**
+ * Bytes in the current log file: what it held when it was opened, plus
+ * everything handed to the stream since.
+ *
+ * Counted rather than stat'ed. A WriteStream queues in memory and drains on the
+ * event loop, so the file on disk trails what has actually been logged —
+ * statting it reports a size that is minutes stale under load, which is exactly
+ * when rotation matters. Counting is also free, where a stat per flush is not.
+ */
+let logBytesWritten = 0;
+/** True while the file is being moved and there is no stream to write to. */
+let rotating = false;
+
+/**
+ * Roll the log over once it passes the cap.
+ *
+ * Rotation used to happen only in initLogFile, which is to say once per launch.
+ * This app's whole shape is to sit in the tray for days, and it writes a line
+ * per lyric — so the one process that most needed rotating was the one that
+ * never got it, and the 5 MB cap only ever applied to whatever the *previous*
+ * session had left behind. Checked against a byte counter rather than on every
+ * line, so the common path costs an addition.
+ *
+ * The rename waits for 'close', not 'finish': 'finish' fires when the last
+ * write is handed over, while the descriptor is still open, and Windows refuses
+ * to rename a file that something still holds. Meanwhile `logFileStream` is
+ * null, which makes flushLogBuffer leave the buffer alone — so the lines
+ * written during the move are queued rather than lost, and go out with the
+ * flush at the end.
+ */
+function maybeRotate(): void {
+  if (rotating || !logFileStream || !logPathCurrent || logBytesWritten <= MAX_LOG_SIZE) return;
+
+  rotating = true;
+  const stream = logFileStream;
+  logFileStream = null;
+  stream.once('close', () => {
+    try {
+      rotateFile(logDir, logPathCurrent);
+      logBytesWritten = 0;
+    } catch (e) {
+      // Could not move it — reopen the same file rather than stopping. An
+      // oversized log beats a silent one, but the counter must not stay over
+      // the cap or every flush from here on would try to rotate again.
+      process.stderr.write(`[Logger] Could not rotate the log: ${(e as Error).message}\n`);
+      logBytesWritten = 0;
+    }
+    logFileStream = openLogStream(logPathCurrent);
+    rotating = false;
+    flushLogBuffer();
+  });
+  stream.end();
+}
+
+/** Move the current log aside, replacing any previous archive. */
+function rotateFile(dir: string, logPath: string): void {
+  const oldPath = path.join(dir, 'vybecord.old.log');
+  if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+  fs.renameSync(logPath, oldPath);
+}
+
+function openLogStream(logPath: string): fs.WriteStream {
+  const stream = fs.createWriteStream(logPath, { flags: 'a' });
+  stream.on('error', (err) => {
+    // Disable file logging on write error (disk full, permission, etc.)
+    process.stderr.write(`[Logger] File write error: ${err.message}\n`);
+    if (logFileStream === stream) logFileStream = null;
+  });
+  return stream;
+}
+
 export function initLogFile(dir: string): void {
   fs.mkdirSync(dir, { recursive: true });
   const logPath = path.join(dir, 'vybecord.log');
+  logDir = dir;
+  logPathCurrent = logPath;
 
-  // Rotate if existing log exceeds max size
+  // Rotate if the log left by the previous session exceeds max size, and start
+  // the byte count from whatever it is carrying over — a session that appends
+  // to a 4 MB log has 1 MB of headroom, not 5.
+  logBytesWritten = 0;
   try {
     if (fs.existsSync(logPath)) {
-      const stats = fs.statSync(logPath);
-      if (stats.size > MAX_LOG_SIZE) {
-        const oldPath = path.join(dir, 'vybecord.old.log');
-        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
-        fs.renameSync(logPath, oldPath);
-      }
+      const carried = fs.statSync(logPath).size;
+      if (carried > MAX_LOG_SIZE) rotateFile(dir, logPath);
+      else logBytesWritten = carried;
     }
   } catch { /* ignore rotation errors */ }
 
-  logFileStream = fs.createWriteStream(logPath, { flags: 'a' });
-  logFileStream.on('error', (err) => {
-    // Disable file logging on write error (disk full, permission, etc.)
-    process.stderr.write(`[Logger] File write error: ${err.message}\n`);
-    logFileStream = null;
-  });
+  logFileStream = openLogStream(logPath);
 
   // Start buffered flush timer
   logFlushTimer = setInterval(flushLogBuffer, 200);
@@ -269,14 +340,28 @@ const LOG_FLUSH_THRESHOLD = 4096; // Flush immediately if buffer exceeds 4KB
 
 function flushLogBuffer(): void {
   if (!logBuffer || !logFileStream) return;
-  logFileStream.write(logBuffer);
+  const chunk = logBuffer;
   logBuffer = '';
+  logFileStream.write(chunk);
+  // byteLength, not length: a log of lyrics is full of multi-byte characters,
+  // and counting UTF-16 units would let the file grow well past the cap.
+  logBytesWritten += Buffer.byteLength(chunk, 'utf-8');
+  maybeRotate();
 }
 
 /** Flush remaining buffer and close the log file. Call before process.exit(). */
 export function flushAndClose(): void {
   if (logFlushTimer) { clearInterval(logFlushTimer); logFlushTimer = null; }
   flushLogBuffer();
+  // A rotation caught mid-flight leaves no stream to flush into, and the caller
+  // is on its way to process.exit — so write the tail straight to the file
+  // rather than dropping the last thing the app had to say.
+  if (logBuffer && logPathCurrent) {
+    try {
+      fs.appendFileSync(logPathCurrent, logBuffer);
+      logBuffer = '';
+    } catch { /* nothing further to try on the way out */ }
+  }
   if (logFileStream) { logFileStream.end(); logFileStream = null; }
 }
 

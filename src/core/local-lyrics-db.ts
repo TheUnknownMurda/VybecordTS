@@ -583,9 +583,10 @@ interface CustomRow {
 export function searchCustomLyrics(trackName: string, artistName: string): LyricLine[] | null {
   try {
     if (!customDb || !stmtCustomExact) return null;
-    const customRows = stmtCustomExact.all(trackName, artistName, artistName, artistName) as CustomRow[];
-    if (customRows.length === 0) return null;
-    const lines = parseLrc(customRows[0].synced_lyrics);
+    // LIMIT 1 in the statement, so one row is all there ever is to fetch.
+    const row = stmtCustomExact.get(trackName, artistName, artistName, artistName) as CustomRow | undefined;
+    if (!row) return null;
+    const lines = parseLrc(row.synced_lyrics);
     if (lines.length < 2) return null;
     log.info(`[LOCAL] Custom lyrics hit for "${trackName}" (${lines.length} lines)`);
     return lines;
@@ -696,10 +697,27 @@ export function insertCustomLyrics(
     if (existingTrack) {
       // Update existing track with new lyrics
       trackId = existingTrack.id;
+      /*
+       * The row this one replaces, so it can be dropped.
+       *
+       * Re-importing a track inserts a fresh `lyrics` row and re-points the
+       * track at it; the previous row was simply left behind, referenced by
+       * nothing. Nothing reads an orphan, so this was invisible — but the store
+       * grew by a full copy of the lyrics on every correction, forever, and
+       * `custom-lyrics.sqlite3` is the one file here that cannot be
+       * re-downloaded, so it is the one worth keeping tidy.
+       */
+      const previous = customDb!.prepare('SELECT last_lyrics_id AS id FROM tracks WHERE id = ?')
+        .get(trackId) as { id: number | null } | undefined;
       const lyricsResult = stmtInsertLyrics!.run(syncedLyrics, now, now);
       const lyricsId = lyricsResult.lastInsertRowid as number;
       stmtUpdateTrack!.run(lyricsId, now, trackName, artistName, albumName, durationSec ?? null);
       stmtBacklinkLyrics!.run(trackId, lyricsId);
+      // Only ever our own rows — an LRCLib row reaching this store is not ours
+      // to delete, whatever the track happens to point at.
+      if (previous?.id != null && previous.id !== lyricsId) {
+        customDb!.prepare(`DELETE FROM lyrics WHERE id = ? AND source = 'custom'`).run(previous.id);
+      }
     } else {
       // Insert new track
       const lyricsResult = stmtInsertLyrics!.run(syncedLyrics, now, now);
@@ -867,23 +885,33 @@ export function deleteCustomLyrics(trackId: number): boolean {
       return false;
     }
 
-    // Step-by-step deletion with logging
-    log.info(`[LOCAL] Step 1: Clearing last_lyrics_id reference`);
-    customDb.prepare('UPDATE tracks SET last_lyrics_id = NULL WHERE id = ?').run(trackId);
-
-    log.info(`[LOCAL] Step 2: Clearing track_id in lyrics`);
-    customDb.prepare('UPDATE lyrics SET track_id = NULL WHERE id = ?').run(row.last_lyrics_id);
-
-    log.info(`[LOCAL] Step 3: Deleting FTS entry`);
-    try { customDb.prepare('DELETE FROM tracks_fts WHERE rowid = ?').run(trackId); } catch (e) {
-      log.debug(`[LOCAL] FTS deletion failed (non-critical): ${e}`);
-    }
-
-    log.info(`[LOCAL] Step 4: Deleting lyrics`);
-    customDb.prepare('DELETE FROM lyrics WHERE id = ?').run(row.last_lyrics_id);
-
-    log.info(`[LOCAL] Step 5: Deleting track`);
-    customDb.prepare('DELETE FROM tracks WHERE id = ?').run(trackId);
+    /*
+     * All of it or none of it.
+     *
+     * These five statements used to run bare, one after another. A failure
+     * partway through — a locked database, a disk that filled up — left the
+     * entry half-removed: a track with no lyrics, or lyrics with no track,
+     * either of which shows up in the library as a row that cannot be opened
+     * and cannot be deleted again. A transaction makes the failure a no-op.
+     */
+    const tx = customDb.transaction(() => {
+      // Break the two references first: the track points at the lyrics and the
+      // lyrics point back, so neither can be dropped while the other holds it.
+      customDb!.prepare('UPDATE tracks SET last_lyrics_id = NULL WHERE id = ?').run(trackId);
+      customDb!.prepare('UPDATE lyrics SET track_id = NULL WHERE id = ?').run(row.last_lyrics_id);
+      // The FTS index is a mirror, not the record — losing a row from it costs
+      // a search hit, not the entry, so it stays best-effort.
+      try { customDb!.prepare('DELETE FROM tracks_fts WHERE rowid = ?').run(trackId); } catch (e) {
+        log.debug(`[LOCAL] FTS deletion failed (non-critical): ${e}`);
+      }
+      // Every lyrics row filed against this track, not only the current one:
+      // an install predating the cleanup in insertCustomLyrics still holds a
+      // superseded copy per re-import, and deleting the track would strand them.
+      customDb!.prepare(`DELETE FROM lyrics WHERE (id = ? OR track_id = ?) AND source = 'custom'`)
+        .run(row.last_lyrics_id, trackId);
+      customDb!.prepare('DELETE FROM tracks WHERE id = ?').run(trackId);
+    });
+    tx();
 
     log.info(`[LOCAL] Successfully deleted custom lyrics track #${trackId}`);
     return true;
