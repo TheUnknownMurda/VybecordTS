@@ -50,6 +50,8 @@ export type UpdateState =
 
 let state: UpdateState = { status: 'idle' };
 let timer: ReturnType<typeof setInterval> | null = null;
+/** The one-shot first check — cancellable, so stopUpdater() really stops it. */
+let firstCheck: ReturnType<typeof setTimeout> | null = null;
 let notify: ((s: UpdateState) => void) | null = null;
 
 export function updateState(): UpdateState {
@@ -113,7 +115,7 @@ export function initUpdater(getWindow: () => BrowserWindow | null): void {
     setState({ status: 'error', message: e?.message ?? 'Update check failed' });
   });
 
-  setTimeout(() => void check(), FIRST_CHECK_DELAY_MS);
+  firstCheck = setTimeout(() => { firstCheck = null; void check(); }, FIRST_CHECK_DELAY_MS);
   timer = setInterval(() => void check(), RECHECK_INTERVAL_MS);
 }
 
@@ -140,5 +142,8 @@ export function installNow(): void {
 
 export function stopUpdater(): void {
   if (timer) { clearInterval(timer); timer = null; }
+  // The recurring check was cancelled and the first one was not, so quitting
+  // inside the startup window still fired a network request on the way out.
+  if (firstCheck) { clearTimeout(firstCheck); firstCheck = null; }
   notify = null;
 }

@@ -79,10 +79,28 @@ const SPICETIFY_ORIGIN = 'https://xpui.app.spotify.com';
  */
 const SPICETIFY_PATHS = new Set(['/api/spicetify', '/api/spotify-lyrics']);
 
+/**
+ * How long to wait before trying the port again, and how many times.
+ *
+ * The address is almost never taken by something that means to keep it: it is
+ * a copy of Vybecord that has just been closed and whose socket is still in
+ * the kernel's hands for a few seconds, or an update installing itself over
+ * the running app. Giving up on the first refusal meant the extension stayed
+ * unreachable for the whole session, with one line in a log nobody reads and a
+ * settings card that went on saying "waiting" — a permanent failure caused by
+ * a transient condition.
+ */
+const RETRY_DELAY_MS = 4_000;
+const RETRY_LIMIT = 5;
+
 export class PushServer {
   private server: http.Server | null = null;
   private backend: VybecordBackend;
   private port: number;
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private retries = 0;
+  /** False once the port has been given up on, so callers can say why. */
+  private available = true;
 
   constructor(backend: VybecordBackend, port = PUSH_PORT) {
     this.backend = backend;
@@ -93,7 +111,24 @@ export class PushServer {
     return !!this.server?.listening;
   }
 
+  /**
+   * Whether the endpoint is up, or still expects to be.
+   *
+   * False only after the retries have run out — which is the one case worth
+   * telling somebody about, because it means another program holds the port.
+   */
+  get isAvailable(): boolean {
+    return this.available;
+  }
+
   start(): void {
+    if (this.server) return;
+    this.retries = 0;
+    this.available = true;
+    this.listen();
+  }
+
+  private listen(): void {
     if (this.server) return;
 
     this.server = http.createServer((req, res) => {
@@ -105,18 +140,35 @@ export class PushServer {
     });
 
     this.server.on('error', (e: NodeJS.ErrnoException) => {
-      if (e.code === 'EADDRINUSE') {
-        log.error(`Port ${this.port} is already in use — the extension cannot connect. `
-          + 'Another copy of Vybecord may be running.');
-      } else {
-        log.error(`Push server error: ${e.message}`);
-      }
       // Dropping the reference alone left the failed server object alive with
       // its listeners attached, and a later start() would build a second one
       // beside it. Close it, so the field and reality agree.
       const failed = this.server;
       this.server = null;
       failed?.close();
+
+      if (e.code !== 'EADDRINUSE') {
+        log.error(`Push server error: ${e.message}`);
+        this.available = false;
+        return;
+      }
+
+      if (this.retries < RETRY_LIMIT) {
+        this.retries++;
+        log.warn(`Port ${this.port} is busy — retrying in ${RETRY_DELAY_MS / 1000}s `
+          + `(${this.retries}/${RETRY_LIMIT}). A copy of Vybecord that has just closed `
+          + 'usually releases it within a few seconds.');
+        this.retryTimer = setTimeout(() => {
+          this.retryTimer = null;
+          this.listen();
+        }, RETRY_DELAY_MS);
+        this.retryTimer.unref?.();
+        return;
+      }
+
+      this.available = false;
+      log.error(`Port ${this.port} is still in use after ${RETRY_LIMIT} attempts — the browser `
+        + 'extension cannot reach this app. Another copy of Vybecord is probably running.');
     });
 
     // Loopback only. Binding the wildcard would put this on the local network.
@@ -126,6 +178,13 @@ export class PushServer {
   }
 
   stop(): void {
+    // A retry may be queued with no server to show for it — switching the
+    // setting off has to cancel that too, or the port would be grabbed back
+    // seconds after the user turned the endpoint off.
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
     if (!this.server) return;
     const server = this.server;
     this.server = null;

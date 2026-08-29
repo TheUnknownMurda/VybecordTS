@@ -182,29 +182,13 @@ export const CONFIG_SECRET_KEYS: readonly string[] = [
   'bug_report_webhook',
 ];
 
-/**
- * Settings removed when the Spotify Web API ("premium") mode was dropped.
- * They are stripped from config.json on load rather than left in place: a
- * config file predating the removal still holds `spotify_client_secret`, and
- * since that key is no longer in CONFIG_SECRET_KEYS it would otherwise be
- * served to the dashboard in clear text by redactConfig().
+/*
+ * There used to be an OBSOLETE_KEYS list here, naming the settings left behind
+ * by removed features — the Spotify Web API credentials, the cover-art webhook,
+ * the fixed platform-button label, the private-session gate. loadOrCreate now
+ * keeps only what DEFAULTS or CONFIG_SCHEMA still describes, which covers all
+ * of them and everything nobody thought to add to the list.
  */
-const OBSOLETE_KEYS: readonly string[] = [
-  'user_tier',
-  'spotify_client_id',
-  'spotify_client_secret',
-  // Cover art is looked up on a music CDN now. Uploading it to a webhook was
-  // tried and abandoned: Discord's image proxy would not render the result.
-  'image_webhook',
-  // The platform button's label is fixed — see PLATFORM_BUTTON_LABEL in
-  // backend.ts. The key was already being ignored before it was removed, so
-  // leaving a stale copy in config.json would only suggest it still did
-  // something.
-  'rpc_button2_label',
-  // The private-session gate was dropped after 2.0.11. Nothing reads this key
-  // now, and a stale copy would suggest the setting still did something.
-  'hide_in_private_session',
-];
 
 /** Placeholder returned in place of a configured secret. */
 export const CONFIG_SECRET_MASK = '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022';
@@ -293,20 +277,32 @@ export class ConfigManager {
       // Merge with defaults (add missing keys)
       let dirty = false;
       const merged = { ...DEFAULTS };
+      /*
+       * Only keys the app still has a use for.
+       *
+       * The merge used to copy everything the file held, so a setting belonging
+       * to a removed feature stayed in config.json for good — and every one of
+       * them had to be named in a hand-kept list to be cleared. Two problems
+       * with that: the list is one more thing to remember, and a key nobody
+       * remembered to list sat there looking like a setting that still did
+       * something. `spotify_client_secret` was exactly that, and it was a
+       * secret.
+       *
+       * Known means "in DEFAULTS or in the schema". The schema is the wider of
+       * the two on purpose: the credentials have no default worth shipping but
+       * are perfectly legitimate keys.
+       */
       for (const [key, val] of Object.entries(parsed)) {
+        if (!(key in DEFAULTS) && !(key in CONFIG_SCHEMA)) {
+          dirty = true;
+          log.info(`Dropping config key the app no longer has: ${key}`);
+          continue;
+        }
         (merged as Record<string, unknown>)[key] = val;
       }
       for (const key of Object.keys(DEFAULTS)) {
         if (!(key in parsed)) {
           dirty = true;
-        }
-      }
-      // Drop settings belonging to removed features (see OBSOLETE_KEYS)
-      for (const key of OBSOLETE_KEYS) {
-        if (key in merged) {
-          delete (merged as Record<string, unknown>)[key];
-          dirty = true;
-          log.info(`Removed obsolete config key: ${key}`);
         }
       }
       if (dirty) this.save(merged);
