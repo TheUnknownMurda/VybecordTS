@@ -520,11 +520,55 @@ function openCustomDb(dbPath: string): boolean {
 
     const count = (customDb.prepare('SELECT COUNT(*) as c FROM tracks').get() as { c: number })?.c ?? 0;
     log.info(`Opened custom lyrics DB: ${dbPath} (${count} custom tracks)`);
+    sweepOrphanedLyrics();
     return true;
   } catch (e) {
     log.warn(`Failed to open custom DB ${dbPath}: ${e}`);
     customDb = null;
     return false;
+  }
+}
+
+/**
+ * Delete imported lyrics that no track points at.
+ *
+ * Re-importing a track used to insert a fresh `lyrics` row and re-point the
+ * track at it without removing the one it replaced. That is fixed at the
+ * source — insertCustomLyrics drops the superseded row now — but every store
+ * written before the fix still carries one leftover per correction ever made,
+ * and nothing was going to clear them: the delete path only sweeps the
+ * leftovers of a track being deleted, so they survive precisely on the tracks
+ * somebody kept.
+ *
+ * They are unreachable rather than merely unused. Nothing in the app reads a
+ * `lyrics` row except through `tracks.last_lyrics_id`, so a row no track names
+ * cannot be shown, edited or restored — there is no version history here to
+ * lose.
+ *
+ * Runs on every open rather than once behind a flag. It is one indexed-ish
+ * query over a table with tens of rows, a flag would be one more piece of state
+ * to keep honest, and repeating it means anything a future bug strands gets
+ * cleared too.
+ *
+ * `source = 'custom'` is the guard that matters: an LRCLIB row that somehow
+ * reached this store is not ours to delete, whatever the tracks point at.
+ */
+function sweepOrphanedLyrics(): void {
+  if (!customDb) return;
+  try {
+    const { changes } = customDb.prepare(`
+      DELETE FROM lyrics
+      WHERE source = 'custom'
+        AND NOT EXISTS (SELECT 1 FROM tracks t WHERE t.last_lyrics_id = lyrics.id)
+    `).run();
+    // Silent when there is nothing to do, which is every start after the first.
+    if (changes > 0) {
+      log.info(`[LOCAL] Removed ${changes} superseded lyrics row(s) left by earlier re-imports`);
+    }
+  } catch (e) {
+    // Never fatal: the store opens and works either way, and a sweep that
+    // cannot run costs some dead rows and nothing else.
+    log.debug(`[LOCAL] Could not sweep orphaned lyrics: ${e}`);
   }
 }
 
