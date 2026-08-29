@@ -24,7 +24,7 @@ import type { TrackData } from '../src/core/types.js';
 const log = createLogger('Main');
 const startTime = Date.now();
 
-// The main process is bundled as ESM (Electron 43 loads it natively), so the
+// The main process is bundled as ESM (Electron loads it natively), so the
 // CommonJS __dirname is not defined — derive it from the module URL instead.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

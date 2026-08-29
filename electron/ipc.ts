@@ -22,7 +22,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { createLogger } from '../src/core/logger.js';
+import { redactConfig } from '../src/core/config.js';
 import type { VybecordBackend } from '../src/backend.js';
+import type { VybecordConfig } from '../src/core/types.js';
 import {
   scrobbleStatus, requestAuthToken, getAuthUrlForToken,
   completeAuth, disconnectScrobble,
@@ -97,11 +99,30 @@ function sanitizeDiscord(text: string): string {
 }
 
 export function registerIpc(backend: VybecordBackend, getWindow: () => BrowserWindow | null): void {
+  /**
+   * The config as the window is allowed to see it.
+   *
+   * Every path that hands the config to the renderer goes through here. The
+   * renderer only ever asks whether a secret is *set* — the Last.fm page shows
+   * "•••••••• (saved)" and offers a Remove button — so a mask answers it just
+   * as well as the value, and `sanitizeConfigUpdate` already drops the mask on
+   * the way back in so re-saving the form cannot overwrite a real secret with
+   * the placeholder. That round trip was built for this and then never wired
+   * up: redactConfig had no callers, and the shared secret and the bug-report
+   * webhook were being handed to the window in clear text on every snapshot,
+   * every config read and every config change.
+   */
+  const safeConfig = () => redactConfig(backend.getConfig() as VybecordConfig);
+
   // ── Backend → renderer ──
   for (const event of FORWARDED_EVENTS) {
     backend.on(event, (payload: unknown) => {
       const win = getWindow();
-      if (win && !win.isDestroyed()) win.webContents.send(`backend:${event}`, payload);
+      if (!win || win.isDestroyed()) return;
+      // configUpdate carries the whole config, secrets included — the backend's
+      // own listeners need those, the window does not.
+      const out = event === 'configUpdate' ? redactConfig(payload as VybecordConfig) : payload;
+      win.webContents.send(`backend:${event}`, out);
     });
   }
 
@@ -125,7 +146,7 @@ export function registerIpc(backend: VybecordBackend, getWindow: () => BrowserWi
   // One call the window makes on load, so it paints a complete state instead of
   // an empty shell waiting for the first event to arrive.
   handle('app:snapshot', () => ({
-    config: backend.getConfig(),
+    config: safeConfig(),
     track: backend.getCurrentTrack(),
     lyrics: backend.getCurrentLyricsState(),
     stats: backend.getSessionStats(),
@@ -143,10 +164,10 @@ export function registerIpc(backend: VybecordBackend, getWindow: () => BrowserWi
   }));
 
   // ── Config ──
-  handle('config:get', () => backend.getConfig());
+  handle('config:get', () => safeConfig());
   handle('config:set', (updates: Record<string, unknown>) => {
     backend.updateConfig(updates);
-    return backend.getConfig();
+    return safeConfig();
   });
 
   // ── Now playing ──

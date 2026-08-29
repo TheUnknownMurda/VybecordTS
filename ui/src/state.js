@@ -107,16 +107,34 @@ export async function init() {
     if (status && 'preferredPlayer' in status) set({ preferredPlayer: status.preferredPlayer });
   });
 
-  // The player list has no push channel — WinRT reports sessions, not a
-  // "session list changed" event we could forward cheaply — so it is polled.
-  // It is a plain in-memory read on the main side, so the cost is negligible.
-  setInterval(async () => {
+  /*
+   * The player list has no push channel — WinRT reports sessions, not a
+   * "session list changed" event we could forward cheaply — so it is polled.
+   *
+   * Only while somebody can see it, though. This app's normal state is hidden
+   * in the tray with the window still alive behind it, and the poll ran there
+   * too: an IPC round trip, a walk of every media session and a state emit,
+   * every two seconds, for hours, painting a window nobody was looking at.
+   * Nothing else in the renderer polls the main process, so this was the whole
+   * of the app's idle cost.
+   *
+   * Refreshed on the way back rather than waiting for the next tick, so the
+   * picker is right the instant the window opens.
+   */
+  const refreshPlayers = async () => {
     try {
       set({ players: await api.listPlayers() });
     } catch {
       /* main process is shutting down */
     }
+  };
+  setInterval(() => {
+    if (document.visibilityState === 'hidden') return;
+    void refreshPlayers();
   }, 2000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') void refreshPlayers();
+  });
 }
 
 /** Write config keys through to the backend, updating local state optimistically. */

@@ -1,7 +1,7 @@
 /**
  * Build the Electron app into dist-electron/.
  *
- *   main.mjs     ESM bundle of the main process (Electron 43 loads ESM natively)
+ *   main.mjs     ESM bundle of the main process (Electron loads ESM natively)
  *   preload.js   CJS bundle — preload is the one place CJS is still the safe bet
  *   ui/          renderer assets, copied verbatim
  *
@@ -77,7 +77,7 @@ const external = [
 const common = {
   bundle: true,
   platform: 'node',
-  // Electron 43 ships Node 22; targeting it avoids needless downleveling.
+  // Electron 41 ships Node 22; targeting it avoids needless downleveling.
   target: 'node22',
   sourcemap: true,
   logLevel: 'info',
