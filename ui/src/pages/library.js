@@ -746,6 +746,22 @@ function renderDump(body) {
       return;
     }
     if (s?.loaded) {
+      // A dump is open, but not the one Settings asks for. Saying so here is the
+      // only chance the user gets: everything downstream just works, quietly, on
+      // the wrong file.
+      if (s.ignoredConfigured) {
+        status.className = 'notice is-warn';
+        status.replaceChildren(
+          el('b', { text: 'A dump is loaded — but not the one you configured. ' }),
+          el('span', {
+            text: `At startup “${s.ignoredConfigured}” could not be opened, so Vybecord fell back to ${s.path}. `
+              + (s.configured && s.configured !== s.ignoredConfigured
+                ? `Settings now points at “${s.configured}” — restart Vybecord to use it.`
+                : 'Check the path in Settings → LRCLIB dump path, then restart Vybecord.'),
+          }),
+        );
+        return;
+      }
       status.className = 'notice';
       status.replaceChildren(
         el('b', { text: 'Dump loaded. ' }),

@@ -87,8 +87,25 @@ const DEFAULTS: VybecordConfig = {
 // (or wrong types, which would crash the RPC builders downstream).
 type FieldSpec =
   | { type: 'boolean' }
-  | { type: 'string'; maxLength?: number; values?: readonly string[] }
+  | { type: 'string'; maxLength?: number; values?: readonly string[]; path?: true }
   | { type: 'number'; min: number; max: number };
+
+/**
+ * Clean up a filesystem path a person pasted in.
+ *
+ * Windows Explorer's "Copy as path" wraps the path in double quotes, and a
+ * quoted path is not a path any filesystem call will find — the setting then
+ * looks correct in the form while the app silently behaves as if it were empty.
+ * Stripping one matching pair of quotes costs nothing and is never wrong: no
+ * real path is quoted at both ends.
+ */
+export function normalizeUserPath(value: string): string {
+  const trimmed = value.trim();
+  const quoted = trimmed.length >= 2
+    && ((trimmed.startsWith('"') && trimmed.endsWith('"'))
+      || (trimmed.startsWith("'") && trimmed.endsWith("'")));
+  return (quoted ? trimmed.slice(1, -1) : trimmed).trim();
+}
 
 const URL_CHOICES = ['auto', 'track', 'artist', 'album', 'context'] as const;
 const STATUS_DISPLAY_CHOICES = [
@@ -138,14 +155,14 @@ export const CONFIG_SCHEMA: Record<string, FieldSpec> = {
   hide_small_icon: { type: 'boolean' },
   cc_enabled: { type: 'boolean' },
   cc_lang: { type: 'string', maxLength: 16 },
-  cc_cookies_file: { type: 'string', maxLength: 512 },
+  cc_cookies_file: { type: 'string', maxLength: 512, path: true },
   lyrics_offset_ms: { type: 'number', min: -60_000, max: 60_000 },
   romanize_lyrics: { type: 'boolean' },
   translate_lyrics: { type: 'boolean' },
   rpc_translate_lyrics: { type: 'boolean' },
   translate_target_lang: { type: 'string', maxLength: 8 },
   poll_interval_ms: { type: 'number', min: 400, max: 60_000 },
-  lrclib_dump_path: { type: 'string', maxLength: 1024 },
+  lrclib_dump_path: { type: 'string', maxLength: 1024, path: true },
   lastfm_api_key: { type: 'string', maxLength: 128 },
   lastfm_api_secret: { type: 'string', maxLength: 128 },
   bug_report_webhook: { type: 'string', maxLength: 512 },
@@ -225,9 +242,10 @@ export function sanitizeConfigUpdate(
         break;
       case 'string': {
         if (typeof value !== 'string') { rejected.push(key); continue; }
-        if (spec.values && !spec.values.includes(value)) { rejected.push(key); continue; }
-        if (spec.maxLength !== undefined && value.length > spec.maxLength) { rejected.push(key); continue; }
-        accepted[key] = value;
+        const str = spec.path ? normalizeUserPath(value) : value;
+        if (spec.values && !spec.values.includes(str)) { rejected.push(key); continue; }
+        if (spec.maxLength !== undefined && str.length > spec.maxLength) { rejected.push(key); continue; }
+        accepted[key] = str;
         break;
       }
       case 'number': {

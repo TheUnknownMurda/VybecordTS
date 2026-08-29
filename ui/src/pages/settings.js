@@ -91,6 +91,25 @@ export function render(root) {
 const cfg = (key, fallback) => state.config[key] ?? fallback;
 const put = (key, value) => saveConfig({ [key]: value });
 
+/**
+ * Save the LRCLIB dump path, and say what still has to happen.
+ *
+ * Everything else on this page takes effect as it is typed, so a setting that
+ * changes nothing until the next launch has to say so. The stored value is
+ * compared rather than the typed one: the backend strips the quotes Explorer's
+ * "Copy as path" wraps a path in, so what was typed and what was kept are not
+ * always the same string.
+ */
+async function saveDumpPath(value) {
+  const before = cfg('lrclib_dump_path', '');
+  const fresh = await put('lrclib_dump_path', value);
+  const after = fresh?.lrclib_dump_path ?? '';
+  if (after === before) return;
+  toast(after
+    ? 'Dump path saved — restart Vybecord to load it'
+    : 'Dump path cleared — restart Vybecord to apply', 'ok');
+}
+
 // ── Presence ──────────────────────────────────────────────────────────────────
 
 function presenceTab(body) {
@@ -309,8 +328,10 @@ async function lyricsTab(body) {
           cfg('romanize_lyrics') === true, (v) => put('romanize_lyrics', v)),
         inputRow('Timing offset (ms)', 'Negative shows lines earlier, positive later.',
           cfg('lyrics_offset_ms', 0), (v) => put('lyrics_offset_ms', Math.max(-60000, Math.min(60000, v))), { type: 'number', min: -60000, max: 60000 }),
-        inputRow('LRCLIB dump path', 'Optional offline database. Leave empty to use only online providers.',
-          cfg('lrclib_dump_path', ''), (v) => put('lrclib_dump_path', v.trim()), { placeholder: 'C:\\…\\lrclib-dump.sqlite3' }),
+        inputRow('LRCLIB dump path',
+          'Optional offline database. Leave empty to use only online providers. '
+          + 'The file is opened once at startup — restart Vybecord after changing this.',
+          cfg('lrclib_dump_path', ''), saveDumpPath, { placeholder: 'C:\\…\\lrclib-dump.sqlite3' }),
       ]),
     ]),
 

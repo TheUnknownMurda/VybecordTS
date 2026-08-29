@@ -41,6 +41,7 @@ if (IS_PKG) {
   }
 }
 import { createLogger, type LogLevel } from './logger.js';
+import { normalizeUserPath } from './config.js';
 import { parseLrc } from './lrc-parser.js';
 import type { LrclibSearchResult, LrclibTrackLyrics } from './lrclib-dump.js';
 import type { LyricLine } from './types.js';
@@ -86,6 +87,15 @@ let dumpWorker: Worker | null = null;
 /** Which file the dump was opened from; '' when none was found. */
 let lrclibDbPath = '';
 let dumpOpen = false;
+/**
+ * The configured dump path, when startup could not use it; '' otherwise.
+ *
+ * Falling back to auto-detection keeps lyrics working when a path goes stale,
+ * but silently: the window would say a dump is loaded while quietly searching a
+ * different file from the one in Settings. Remembering the rejected path lets
+ * the Lyrics library say which file it actually opened, and why.
+ */
+let ignoredDumpOverride = '';
 /** Set while we are the ones stopping the worker, so its exit is not reported as a fault. */
 let dumpClosing = false;
 let nextRequestId = 0;
@@ -224,9 +234,13 @@ function dumpCandidates(baseDir: string, dumpPathOverride?: string): string[] {
   };
 
   // A configured absolute path wins — that is the whole point of setting it.
-  if (dumpPathOverride && dumpPathOverride.trim()) {
-    if (fs.existsSync(dumpPathOverride)) add(dumpPathOverride);
-    else log.warn(`Configured LRCLIB dump path not found: ${dumpPathOverride} — falling back to auto-detection`);
+  // Normalised first: a path pasted from Explorer arrives wrapped in quotes,
+  // which no filesystem call resolves, and the fallback below would then look
+  // like the setting being ignored outright.
+  const override = normalizeUserPath(dumpPathOverride ?? '');
+  if (override) {
+    if (fs.existsSync(override)) add(override);
+    else log.warn(`Configured LRCLIB dump path not found: ${override} — falling back to auto-detection`);
   }
 
   // The documented spot, then anything else in that folder: the folder is the
@@ -278,6 +292,7 @@ export async function initLocalDb(
 ): Promise<boolean> {
   let lrclibLoaded = false;
 
+  const override = normalizeUserPath(dumpPathOverride ?? '');
   const candidates = dumpCandidates(baseDir, dumpPathOverride);
   if (candidates.length === 0) {
     log.debug(`initLocalDb: no LRCLIB dump found under ${baseDir}`);
@@ -304,6 +319,11 @@ export async function initLocalDb(
       }
     }
   }
+
+  // A path was set, and it is not the file we ended up on: either it is gone or
+  // it would not open. Kept so the window can say so rather than report a dump
+  // loaded and leave the mismatch to be discovered through missing lyrics.
+  ignoredDumpOverride = override && lrclibDbPath !== override ? override : '';
 
   // Always create/load custom lyrics database
   migrateCustomDbName(baseDir);
@@ -520,11 +540,14 @@ export function hasLocalDb(): boolean {
  * indistinguishable from "no match" unless it can say the dump is missing and
  * point at the folder to drop one into.
  */
-export function lrclibDumpStatus(baseDir: string): { loaded: boolean; path: string; folder: string } {
+export function lrclibDumpStatus(baseDir: string): {
+  loaded: boolean; path: string; folder: string; ignoredConfigured: string;
+} {
   return {
     loaded: dumpOpen,
     path: lrclibDbPath,
     folder: path.join(baseDir, LRCLIB_DUMP_FOLDER),
+    ignoredConfigured: ignoredDumpOverride,
   };
 }
 

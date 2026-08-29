@@ -25,7 +25,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { createLogger } from './core/logger.js';
-import { ConfigManager, sanitizeConfigUpdate } from './core/config.js';
+import { ConfigManager, sanitizeConfigUpdate, normalizeUserPath } from './core/config.js';
 import { NativeMediaSource, looksLikeSpotifyAd, type DetectedPlayer } from './core/native-media-source.js';
 import { SpicetifySource } from './core/spicetify-source.js';
 import { YouTubeSource } from './core/youtube-source.js';
@@ -1439,7 +1439,11 @@ export class VybecordBackend extends EventEmitter {
 
   /** Whether an LRCLIB dump is loaded, and the folder one can be dropped into. */
   getLrclibDumpStatus() {
-    return { ...lrclibDumpStatus(this.configDir), configured: this.config.get('lrclib_dump_path') || '' };
+    // Normalised on the way out as well as in: a config written before paths
+    // were cleaned up can still hold the quoted form Explorer hands out, and
+    // echoing that back would show the user a path they cannot match.
+    const configured = normalizeUserPath(String(this.config.get('lrclib_dump_path') || ''));
+    return { ...lrclibDumpStatus(this.configDir), configured };
   }
 
   /** Free-text search across the local LRCLIB dump, for the dashboard's search UI. */
