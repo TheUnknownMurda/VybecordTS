@@ -107,6 +107,8 @@ export class BandcampSource {
       album_url: d.album_url || '',
       media_source: 'bandcamp',
       _received_at: performance.now(),
+      // Read off the page's own audio element — exact, unlike an OS session's.
+      _from_push: true,
     };
   }
 

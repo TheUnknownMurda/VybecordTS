@@ -127,6 +127,22 @@ const PLATFORM_DISCORD_APP_IDS: Record<string, string> = {
   // Default falls back to config discord_app_id or env DISCORD_CLIENT_ID
 };
 
+/**
+ * Whether two titles name the same song.
+ *
+ * Not an equality test: the OS session and Spotify's own metadata disagree
+ * routinely on decoration — " - Remastered 2011", a "(feat. …)" one side spells
+ * out and the other does not. Containment in either direction covers that
+ * without admitting two different songs, which a similarity score would.
+ * Both empty is not a match; that is the "nobody told us" case.
+ */
+function titlesAgree(a: string, b: string): boolean {
+  const x = a.trim().toLowerCase();
+  const y = b.trim().toLowerCase();
+  if (!x || !y) return false;
+  return x === y || x.includes(y) || y.includes(x);
+}
+
 /** Map a media_source string to its per-platform config key. */
 function platformConfigKey(src: string): keyof import('./core/types.js').VybecordConfig | null {
   if (src === 'spotify') return 'detect_spotify';
@@ -341,7 +357,9 @@ export class VybecordBackend extends EventEmitter {
     });
 
     // 3. Start polling
-    const interval = this.config.get('poll_interval_ms') || 1500;
+    // The `||` is for a config that predates the key, not a second default —
+    // DEFAULTS in config.ts is the one that decides, and the two have to agree.
+    const interval = this.config.get('poll_interval_ms') || 1000;
     log.info(`Starting polling (every ${interval}ms)`);
     this.pollTimer = setInterval(() => this.poll(), interval);
 
@@ -459,8 +477,20 @@ export class VybecordBackend extends EventEmitter {
     if (!this.mayOwnPresence('spotify')) return;
 
     if (!data.is_playing) {
-      // Paused via Spicetify — clear immediately (push is authoritative, no grace period needed)
-      this.onTrackStopped();
+      /*
+       * Paused via Spicetify — clear immediately (push is authoritative, no
+       * grace period needed), but only when the presence is actually Spotify's.
+       *
+       * The extension pushes every two seconds whether or not anything is
+       * playing, precisely so that pausing is not mistaken for the extension
+       * being gone. Stopping unconditionally therefore took the presence down
+       * every two seconds for whatever *else* was playing — a YouTube tab, a
+       * local player — and the next poll brought it straight back, so a paused
+       * Spotify in the background made the profile flicker and re-logged the
+       * other track as a new play on every cycle. Every other push handler
+       * already checks whose track this is; this one did not.
+       */
+      if (this.currentTrack?.media_source === 'spotify') this.onTrackStopped();
       return;
     }
 
@@ -717,6 +747,20 @@ export class VybecordBackend extends EventEmitter {
 
   // ── Spotify Web lyrics handler (event-driven, called by web server) ──
 
+  /**
+   * The title Spotify is playing under this track id, as the extension reports
+   * it — or '' when the extension is not reporting, or has moved on.
+   *
+   * A Spotify track id means nothing to the rest of the app: the OS media
+   * session names a track by its title, never by an id. This is the only place
+   * the two can be reconciled, because the extension is the one side that holds
+   * both.
+   */
+  private spotifyPushedTitle(trackId: string): string {
+    const latest = this.spicetify.latest;
+    return latest && latest.track_id === trackId ? latest.track_name : '';
+  }
+
   handleSpotifyLyrics(raw: unknown): void {
     /*
      * Coerced the same way the six track sources are, and for the same reason:
@@ -752,9 +796,21 @@ export class VybecordBackend extends EventEmitter {
       const spotifyId = trackId;
       // Direct match (track_id identical) or Spicetify key starts with the Spotify ID
       const directMatch = currentId === spotifyId || this.currentTrackKey.startsWith(spotifyId + '|');
-      // Fallback: SMTC track (desktop: prefix) — match by name similarity
-      const nameMatch = !directMatch && currentId.startsWith('desktop:') &&
-        currentId.toLowerCase().includes(this.currentTrack.track_name.toLowerCase().slice(0, 20));
+      /*
+       * Fallback: the presence is on the OS media session (`desktop:` prefix)
+       * while Spicetify is the one that can read the lyrics. The two describe
+       * the same playback, so the push still applies — but only if they really
+       * are the same song, and only the extension can say which song this id
+       * belongs to.
+       *
+       * This used to test `currentId.includes(currentTrack.track_name)`, which
+       * is true by construction: the id *is* `desktop:<title>:<artist>`. So the
+       * test always passed, and any lyrics Spotify pushed were injected over
+       * whatever happened to be playing — a YouTube tab included.
+       */
+      const nameMatch = !directMatch
+        && currentId.startsWith('desktop:')
+        && titlesAgree(this.spotifyPushedTitle(spotifyId), this.currentTrack.track_name);
       if (directMatch || nameMatch) {
         // Not over the user's own copy. This push arrives for every track
         // Spotify has lyrics for, including the ones that were imported
@@ -1404,6 +1460,22 @@ export class VybecordBackend extends EventEmitter {
       }
     }
 
+    /*
+     * Has the song moved on while the providers were being asked?
+     *
+     * Answered *before* anything is published, not after. The staleness check
+     * used to sit below the two lines that follow it, so a skip mid-fetch had
+     * the losing track assign itself back over `currentTrack` and emit a
+     * trackUpdate for itself — the window snapped back to the previous song,
+     * and everything reading `currentTrack` (the art resolver among them) saw
+     * the wrong track until the next poll corrected it.
+     */
+    const expectedKey = this.buildTrackKey(trackData);
+    if (this.currentTrackKey !== expectedKey) {
+      log.debug(`[LYRICS] Track changed while fetching — abort (expected=${expectedKey}, current=${this.currentTrackKey})`);
+      return;
+    }
+
     // Persist enriched track + re-emit to dashboard
     // Restore original album_art_url to prevent losing local art during lyrics search
     // But preserve the public URL if resolveDiscordArt completed during lyrics search
@@ -1413,13 +1485,6 @@ export class VybecordBackend extends EventEmitter {
     trackData.album_art_url = uploadedUrl || localArtUrl || originalAlbumArtUrl;
     this.currentTrack = trackData;
     this.emit('trackUpdate', trackData);
-
-    // Check if track is still the same (user might have skipped)
-    const expectedKey = this.buildTrackKey(trackData);
-    if (this.currentTrackKey !== expectedKey) {
-      log.debug(`[LYRICS] Track changed while fetching — abort (expected=${expectedKey}, current=${this.currentTrackKey})`);
-      return;
-    }
 
     // Phase 3: Inject lyrics into the running engine (no restart = no gap)
     if (lyrics.length > 0) {

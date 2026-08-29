@@ -132,6 +132,10 @@ export class SoundCloudSource {
       artist_url: d.artist_url || '',
       media_source: 'soundcloud',
       _received_at: performance.now(),
+      // The extension reads currentTime off the page's own audio element, so
+      // this position is exact rather than a few seconds old — which is what
+      // _from_push tells the lyrics engine (see types.ts).
+      _from_push: true,
     };
   }
 

@@ -117,6 +117,7 @@ export class KickSource {
       context_type: 'live',
       media_source: 'kick',
       _received_at: performance.now(),
+      _from_push: true,
       video_url: d.profile_url || '',
     };
   }

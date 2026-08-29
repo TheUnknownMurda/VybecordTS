@@ -31,6 +31,22 @@ const CC_DRIFT_THRESHOLD_MS = 800; // YouTube CC: tolerate poll jitter, only rec
 // Push sources don't use a cooldown at all — they report exact player position,
 // so syncProgress() recalibrates on every drift above threshold (see syncProgress).
 const RECALIB_COOLDOWN_MS = 120_000;  // Max 1 recalibration per 2 minutes (SMTC/desktop)
+/**
+ * Disagreement large enough that the playhead moved, rather than the clock slipping.
+ *
+ * The cooldown above exists so a burst of coarse OS readings cannot cascade
+ * into a burst of re-seeks. It is the wrong answer for a user dragging the
+ * progress bar: the engine's own clock is free-running, so a seek leaves it
+ * describing a position the song left seconds ago, and under the cooldown the
+ * lyrics stayed wrong for up to two minutes — for the rest of most songs.
+ *
+ * Four seconds separates the two cases with room to spare. The monotonic timer
+ * drifts against a player by hundreds of milliseconds over a whole track, never
+ * by seconds; a seek, a stall or a buffering pause clears this on the first
+ * reading. isRepeatJump below catches the one shape this does not — a jump back
+ * to the very start, which is a repeat rather than a seek and resets more state.
+ */
+const SEEK_DRIFT_MS = 4_000;
 const MIN_UPDATE_INTERVAL_MS = 800;  // Discord rate-limit protection (~6 updates/5s)
 const CC_UPDATE_INTERVAL_MS = 250;   // Fast updates for YouTube CC (lines change every 200-500ms)
 const RPC_HEARTBEAT_MS = 5_000;       // Force RPC push every 5s even if text unchanged (keeps Discord UI fresh)
@@ -167,9 +183,10 @@ export class LyricsEngine {
 
   // CC-sourced lyrics use faster update interval
   private isCC = false;
-  // Push sources got a shorter recalibration cooldown. Nothing sets _from_push
-  // now that detection is OS-only, so this stays false — the branch is kept for
-  // any future source that pushes its own position.
+  // Push sources skip the recalibration cooldown entirely: they report the
+  // player's own position, so there is nothing to debounce. Set for every
+  // extension-fed source (Spicetify, YouTube, SoundCloud, Bandcamp, Kick,
+  // Twitch) — see _from_push in types.ts.
   private isPushSource = false;
   private lastRecalibTime = 0;
 
@@ -546,12 +563,24 @@ export class LyricsEngine {
       return;
     }
 
-    // Desktop/SMTC sources: cooldown to prevent poll-burst cascades
-    const cooldown = RECALIB_COOLDOWN_MS;
-    if (drift > threshold && now - this.lastRecalibTime >= cooldown) {
+    // Desktop/SMTC sources: cooldown to prevent poll-burst cascades — waived
+    // when the gap is too large to be drift. See SEEK_DRIFT_MS.
+    const cooldown = drift > SEEK_DRIFT_MS ? 0 : RECALIB_COOLDOWN_MS;
+    /*
+     * 0 means "not yet recalibrated on this track", which has to read as
+     * "the cooldown has expired", not as a timestamp.
+     *
+     * It was compared directly against `now`, which is performance.now() —
+     * milliseconds since the process started. For the first two minutes of the
+     * app's life `now - 0` is below the cooldown, so the very first drift
+     * correction of a session was refused whatever its size. Launch the app,
+     * start a song, seek: nothing happened, and it looked like seeking simply
+     * was not supported.
+     */
+    const sinceLast = this.lastRecalibTime === 0 ? Infinity : now - this.lastRecalibTime;
+    if (drift > threshold && sinceLast >= cooldown) {
       const direction = currentElapsed > progressMs ? 'AHEAD' : 'BEHIND';
-      const sinceLast = (now - this.lastRecalibTime) / 1000;
-      log.info(`[DRIFT] ${drift.toFixed(0)}ms ${direction} (engine=${currentElapsed.toFixed(0)} vs player=${progressMs}) after ${sinceLast.toFixed(1)}s — recalibrating`);
+      log.info(`[DRIFT] ${drift.toFixed(0)}ms ${direction} (engine=${currentElapsed.toFixed(0)} vs player=${progressMs}) after ${Number.isFinite(sinceLast) ? (sinceLast / 1000).toFixed(1) + "s" : "first sync"} — recalibrating`);
       this.lastRecalibTime = now;
       this.initialProgressMs = progressMs;
       this.trackStartHr = performance.now();

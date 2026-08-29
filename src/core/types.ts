@@ -34,9 +34,17 @@ export interface TrackData {
   is_local?: boolean;
   /** High-res timestamp (performance.now()) when this data was received */
   _received_at: number;
-  /** True if this track came from a push source. No source sets it since the
-   *  userscripts were removed; kept so the engine's recalibration branch stays
-   *  intact for any future push source. */
+  /**
+   * True when the position on this track was read from the player itself
+   * rather than extrapolated from an OS media session.
+   *
+   * Set by every browser-extension and Spicetify source, because those read
+   * `currentTime` off the page's own audio element — exact, and republished
+   * every couple of seconds. The lyrics engine trusts such a position
+   * immediately (see isPushSource in lyrics-engine.ts) instead of holding it
+   * behind the recalibration cooldown that stops an OS session's coarse,
+   * infrequent readings from cascading.
+   */
   _from_push?: boolean;
   /** Direct URL to the video (YouTube, etc.) */
   video_url?: string;

@@ -324,6 +324,11 @@ export class NativeMediaSource {
         // A new title means a new track: the old anchor described the old song.
         s.anchorPosMs = 0;
         s.anchorAt = performance.now();
+        // And the reading it was built from belonged to that song too. Leaving
+        // it in place let the new track's first timeline event be discarded as
+        // "the same reading again" whenever the two happened to coincide —
+        // which they do at 0 ms, exactly where a track most often starts.
+        s.lastRawPosMs = -1;
         this.invalidateTemplate();
         this.writeThumb(s);
         break;
