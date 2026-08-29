@@ -35,7 +35,7 @@ import { KickSource } from './core/kick-source.js';
 import { TwitchSource } from './core/twitch-source.js';
 import { DiscordIPC } from './core/discord-ipc.js';
 import { LyricsEngine } from './sync/lyrics-engine.js';
-import { fetchLyrics, fetchPlainLyrics } from './core/provider.js';
+import { fetchLyrics, fetchPlainLyrics, findCustomLyrics } from './core/provider.js';
 import { fetchYouTubeCaptions, clearCCCache } from './core/youtube-captions.js';
 import { initLocalDb, closeLocalDb, insertCustomLyrics, listCustomLyrics, getCustomLyrics, updateCustomLyrics, deleteCustomLyrics, findExistingCustomLyrics, searchLrclibDump as searchLrclibDumpDb, getLrclibTrackLyrics as getLrclibTrackLyricsDb, lrclibDumpStatus } from './core/local-lyrics-db.js';
 import { initLastFm, scrobbleTrackStart, checkAndScrobble, scrobblePause, scrobbleTrackEnd } from './core/lastfm.js';
@@ -756,6 +756,13 @@ export class VybecordBackend extends EventEmitter {
       const nameMatch = !directMatch && currentId.startsWith('desktop:') &&
         currentId.toLowerCase().includes(this.currentTrack.track_name.toLowerCase().slice(0, 20));
       if (directMatch || nameMatch) {
+        // Not over the user's own copy. This push arrives for every track
+        // Spotify has lyrics for, including the ones that were imported
+        // precisely because Spotify's version is the wrong one.
+        if (this.findImportedLyrics(this.currentTrack)) {
+          log.info('[SPOTIFY-LYRICS] Imported lyrics in use for this track — push ignored');
+          return;
+        }
         const cacheKey = this.currentCacheKey;
         this.lyricsCache.set(cacheKey, lines);
         this.lyricsEngine.injectLyrics(lines, this.currentTrack);
@@ -1128,6 +1135,24 @@ export class VybecordBackend extends EventEmitter {
     }
   }
 
+  /**
+   * Lyrics the user imported for this track, including under the song title a
+   * YouTube-style "Artist - Song (Official Video)" buries.
+   *
+   * The stripped form is tried here, and not only in the captions branch, for
+   * the same reason the import is consulted before the Spotify push: by the
+   * time that branch runs, fetchLyrics has already returned whatever an online
+   * provider had for the full title, and that would outrank an import filed
+   * under the song's real name.
+   */
+  private findImportedLyrics(t: TrackData): LyricLine[] | null {
+    const direct = findCustomLyrics(t.track_name, t.artist_name);
+    if (direct) return direct;
+    const dashIdx = t.track_name.indexOf(' - ');
+    if (dashIdx <= 0) return null;
+    return findCustomLyrics(t.track_name.slice(dashIdx + 3).trim(), t.track_name.slice(0, dashIdx).trim());
+  }
+
   // ── New track handler ──
 
   private async onNewTrack(trackData: TrackData): Promise<void> {
@@ -1217,6 +1242,21 @@ export class VybecordBackend extends EventEmitter {
      * opposite order. Folding them into the cache now is what makes an early
      * push count instead of being stored and forgotten.
      */
+    /*
+     * Lyrics the user imported for this track, ahead of everything else.
+     *
+     * They used to be reachable only through fetchLyrics, which the two paths
+     * below skip entirely whenever they have something: a Spotify track with an
+     * official synced version never reached the custom store at all, so an
+     * import made specifically to replace those lyrics did nothing. Asked here,
+     * the import wins the same way for every source.
+     */
+    const imported = this.findImportedLyrics(trackData);
+    if (imported) {
+      this.lyricsCache.set(cacheKey, imported);
+      log.info(`[LYRICS] Using ${imported.length} imported lines for this track`);
+    }
+
     const pushed = this.spotifyLyricsStore.get(trackData.track_id);
     if (pushed?.length && !this.lyricsCache.get(cacheKey)?.length) {
       this.lyricsCache.set(cacheKey, pushed);

@@ -1,7 +1,8 @@
 /**
  * Multi-provider lyrics engine — 4-phase lookup for maximum speed + coverage.
  *
- * Phase 0:   Local LRCLib SQLite (~1ms) — instant, offline
+ * Phase 0:   Imported lyrics (~1ms) — the user's own copy, before anything else
+ * Phase 0.5: Local LRCLib SQLite dump (~1ms) — instant, offline
  * Phase 1:   Promise.any([LRCLib API direct, Netease Cloud Music, Musixmatch]) (~200-300ms)
  * Phase 1.5: Last.fm autocorrect → retry Phase 0+1 with corrected names (~300-500ms)
  * Phase 2:   LRCLib fuzzy search + scoring (~400-800ms fallback)
@@ -12,7 +13,7 @@
 import { createLogger } from './logger.js';
 import { parseLrc } from './lrc-parser.js';
 import { similarity, batchScore } from './similarity.js';
-import { hasLocalDb, searchLocalDb } from './local-lyrics-db.js';
+import { hasLocalDb, searchCustomLyrics, searchDumpLyrics, customLyricsIndex, getCustomLyrics } from './local-lyrics-db.js';
 import { hasLastFm, getCorrection } from './lastfm.js';
 import type { LyricLine, LrcLibResult } from './types.js';
 
@@ -53,6 +54,60 @@ function cleanForSearch(name: string, artist: string): [cleanName: string, prima
   clean = clean.replace(/\s{2,}/g, ' ').replace(/[-–—]+\s*$/, '').trim();
   const primaryArtist = artist.split(RE_ARTIST_SPLIT)[0].replace(RE_TOPIC_SUFFIX, '').replace(RE_EMOJI, '').trim();
   return [clean, primaryArtist];
+}
+
+/**
+ * The name/artist pairs a local lookup is tried with, cleanest first: each is a
+ * fallback for the one before it.
+ */
+function searchAttempts(name: string, artist: string): [string, string][] {
+  const [cleanName, primaryArtist] = cleanForSearch(name, artist);
+  const attempts: [string, string][] = [[cleanName, primaryArtist], [name, primaryArtist]];
+  if (artist !== primaryArtist) attempts.push([cleanName, artist], [name, artist]);
+  return attempts;
+}
+
+/**
+ * Lyrics the user imported for this track, tried across every name variant.
+ *
+ * Exported because an import has to be able to win against sources that never
+ * reach fetchLyrics at all: Spotify pushes its own timed lyrics for whatever it
+ * is playing, and the backend used to take those without ever asking the store.
+ * The imported copy is the only one that exists because somebody chose it for
+ * this track, so nothing outranks it.
+ */
+export function findCustomLyrics(name: string, artist: string): LyricLine[] | null {
+  for (const [attemptName, attemptArtist] of searchAttempts(name, artist)) {
+    const hit = searchCustomLyrics(attemptName, attemptArtist);
+    if (hit) return hit;
+  }
+
+  /*
+   * Nothing matched as filed. Compare cleaned titles instead: the lookups above
+   * put a cleaned name against the *stored* one, so an entry imported as
+   * "Song (feat. X)" is invisible to a player that reports plain "Song" — the
+   * cleaning only ever ran on one side. Both sides get it here.
+   *
+   * Still an equality test, not a fuzzy one: same title once the decorations
+   * are off, same primary artist. The scan is over the user's own imports, and
+   * only reaches this point when the indexed lookups have all missed.
+   */
+  const [cleanName, primaryArtist] = cleanForSearch(name, artist);
+  const wantName = cleanName.toLowerCase();
+  const wantArtist = primaryArtist.toLowerCase();
+  if (!wantName || !wantArtist) return null;
+  for (const entry of customLyricsIndex()) {
+    const [entryName, entryArtist] = cleanForSearch(entry.name, entry.artist);
+    if (entryName.toLowerCase() !== wantName) continue;
+    if (entryArtist.toLowerCase() !== wantArtist) continue;
+    const stored = getCustomLyrics(entry.id);
+    if (!stored?.synced_lyrics) continue;
+    const lines = parseLrc(stored.synced_lyrics);
+    if (lines.length < 2) continue;
+    log.info(`[LYRICS] Imported lyrics matched "${entry.name}" by "${entry.artist}" on cleaned names`);
+    return lines;
+  }
+  return null;
 }
 
 async function fetchJson<T>(url: string, externalSignal?: AbortSignal): Promise<T | null> {
@@ -384,17 +439,27 @@ export async function fetchLyrics(
   const globalTimeout = AbortSignal.timeout(20_000);
   const combinedSignal = signal ? AbortSignal.any([signal, globalTimeout]) : globalTimeout;
 
-  // ── PHASE 0: LOCAL DB ──
+  // ── PHASE 0: IMPORTED LYRICS ──
+  // Every name variant is tried against the user's own store before the dump is
+  // asked about any of them. Sweeping the two together, variant by variant, let
+  // a dump match on the cleaned title beat an import filed under the title as
+  // the player reports it — the one lyric set that is there by choice losing to
+  // one that merely happened to be in a 100 GB file.
+  const imported = findCustomLyrics(name, artist);
+  if (imported) {
+    log.info(`[LYRICS] Imported lyrics hit (${imported.length} lines)`);
+    return imported;
+  }
+
+  // ── PHASE 0.5: LRCLIB DUMP ──
   // Tried in order, cleanest name first, and one at a time: each is a fallback
   // for the one before it, and the dump answers from a single worker thread, so
   // firing them together would only queue four queries to throw three away.
   if (hasLocalDb()) {
-    const attempts: [string, string][] = [[cleanName, primaryArtist], [name, primaryArtist]];
-    if (artist !== primaryArtist) attempts.push([cleanName, artist], [name, artist]);
-    for (const [attemptName, attemptArtist] of attempts) {
-      const localResult = await searchLocalDb(attemptName, attemptArtist, durationSec);
+    for (const [attemptName, attemptArtist] of searchAttempts(name, artist)) {
+      const localResult = await searchDumpLyrics(attemptName, attemptArtist, durationSec);
       if (localResult) {
-        log.info(`[LYRICS] Local DB hit (${localResult.length} lines)`);
+        log.info(`[LYRICS] LRCLIB dump hit (${localResult.length} lines)`);
         return localResult;
       }
     }
@@ -471,11 +536,16 @@ export async function fetchLyrics(
         || cArtist.toLowerCase() !== primaryArtist.toLowerCase();
 
       if (changed) {
-        // Try local DB with corrected names first
+        // Try the local databases with corrected names first, imported before dump
+        const importedCorrected = findCustomLyrics(cTrack, cArtist);
+        if (importedCorrected) {
+          log.info(`[LYRICS] Imported lyrics hit after Last.fm correction (${importedCorrected.length} lines)`);
+          return importedCorrected;
+        }
         if (hasLocalDb()) {
-          const localCorrected = await searchLocalDb(cTrack, cArtist, cDur);
+          const localCorrected = await searchDumpLyrics(cTrack, cArtist, cDur);
           if (localCorrected) {
-            log.info(`[LYRICS] Local DB hit after Last.fm correction (${localCorrected.length} lines)`);
+            log.info(`[LYRICS] LRCLIB dump hit after Last.fm correction (${localCorrected.length} lines)`);
             return localCorrected;
           }
         }

@@ -568,34 +568,71 @@ interface CustomRow {
 }
 
 /**
- * Find synced lyrics for the track that is playing.
+ * Lyrics the user imported for this exact name/artist pair, or null.
  *
- * Phase 0 is the custom store, in process: lyrics the user imported themselves
- * outrank anything the dump has to say, and the store is small enough that
- * querying it costs nothing.
- * Phases 1 and 2 are the dump, on its worker thread — an exact name+artist
- * match, then an FTS fallback on the title filtered by artist similarity.
+ * In process and synchronous, because the store is tiny and because a caller
+ * often has to decide *now* whether an imported version exists — before taking
+ * the lyrics Spotify pushed for the track it is playing, say — and cannot wait
+ * on the dump's worker thread to answer an unrelated question first.
+ *
+ * Kept separate from the dump lookup below so callers can ask the store about
+ * every name variant they know before the dump is asked about any of them.
+ * Interleaving the two let a dump match on the cleaned title beat an import
+ * filed under the title as the player reports it.
  */
-export async function searchLocalDb(
+export function searchCustomLyrics(trackName: string, artistName: string): LyricLine[] | null {
+  try {
+    if (!customDb || !stmtCustomExact) return null;
+    const customRows = stmtCustomExact.all(trackName, artistName, artistName, artistName) as CustomRow[];
+    if (customRows.length === 0) return null;
+    const lines = parseLrc(customRows[0].synced_lyrics);
+    if (lines.length < 2) return null;
+    log.info(`[LOCAL] Custom lyrics hit for "${trackName}" (${lines.length} lines)`);
+    return lines;
+  } catch (e) {
+    log.warn(`[LOCAL] Custom store query error: ${e}`);
+    return null;
+  }
+}
+
+/**
+ * Every imported entry's name and artist, id-keyed.
+ *
+ * For the matching SQL cannot express. The lookup above compares the stored
+ * title to the one the player reports, so an entry filed as "Song (feat. X)"
+ * is invisible to a player that reports plain "Song" — and the cleaning that
+ * reconciles the two lives with the providers, not here. So the rows go to it
+ * instead. This is the user's own store: tens or hundreds of entries, not the
+ * dump's tens of millions.
+ */
+export function customLyricsIndex(): { id: number; name: string; artist: string }[] {
+  try {
+    if (!customDb) return [];
+    return customDb.prepare(`
+      SELECT t.id AS id, t.name AS name, t.artist_name AS artist
+      FROM tracks t
+      JOIN lyrics l ON l.id = t.last_lyrics_id
+      WHERE l.source = 'custom'
+        AND l.has_synced_lyrics = 1
+        AND l.synced_lyrics IS NOT NULL
+        AND length(l.synced_lyrics) > 20
+    `).all() as { id: number; name: string; artist: string }[];
+  } catch (e) {
+    log.warn(`[LOCAL] Custom index query error: ${e}`);
+    return [];
+  }
+}
+
+/**
+ * The LRCLIB dump's answer for one name/artist pair, on its worker thread — an
+ * exact name+artist match, then an FTS fallback on the title filtered by artist
+ * similarity. Resolves null when no dump is open.
+ */
+export function searchDumpLyrics(
   trackName: string,
   artistName: string,
   durationSec: number | undefined,
 ): Promise<LyricLine[] | null> {
-  try {
-    if (customDb && stmtCustomExact) {
-      const customRows = stmtCustomExact.all(trackName, artistName, artistName, artistName) as CustomRow[];
-      if (customRows.length > 0) {
-        const lines = parseLrc(customRows[0].synced_lyrics);
-        if (lines.length >= 2) {
-          log.info(`[LOCAL] Custom lyrics hit for "${trackName}" (${lines.length} lines)`);
-          return lines;
-        }
-      }
-    }
-  } catch (e) {
-    log.warn(`[LOCAL] Custom store query error: ${e}`);
-  }
-
   return askDump<LyricLine[] | null>(
     { t: 'lookup', track: trackName, artist: artistName, duration: durationSec },
     null,
