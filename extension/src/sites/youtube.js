@@ -188,8 +188,14 @@
   }
 
   /**
-   * Push data to VybecordTS backend.
-   * Uses GM_xmlhttpRequest to bypass CORS restrictions.
+   * Push data to the VybecordTS desktop app.
+   *
+   * GM_xmlhttpRequest here is the shim in gm-shim.js, not Tampermonkey's: it
+   * relays through the service worker, which is what lets a content script
+   * reach 127.0.0.1 at all. It is *not* a CORS bypass — it refuses every URL
+   * that is not the app, loudly, on purpose. This comment used to say the
+   * opposite, which is an invitation to the exact mistake the shim was written
+   * to prevent.
    */
   function pushToVybecord(data) {
     if (!data) return;

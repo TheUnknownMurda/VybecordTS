@@ -111,7 +111,6 @@
 
     function pushToVybecord(data) {
         if (!data) return;
-        console.log('[VybecordTS Twitch] Pushing data:', data);
         try {
             GM_xmlhttpRequest({
                 method: 'POST',
@@ -120,7 +119,6 @@
                 data: JSON.stringify(data),
                 timeout: 1500,
                 onload: function () {
-                    console.log('[VybecordTS Twitch] Push successful ✓');
                     if (consecutiveFails > 0) { consecutiveFails = 0; reschedule(BASE_INTERVAL_MS); }
                 },
                 onerror: function () {
@@ -343,7 +341,6 @@
         
         info.profile_picture_url = profilePicUrl;
 
-        console.log('[VybecordTS Twitch] Extracted info:', info);
         return info;
     }
 

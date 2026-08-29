@@ -125,7 +125,6 @@
 
     function pushToVybecord(data) {
         if (!data) return;
-        console.log('[VybecordTS Kick] Pushing data:', data);
         try {
             GM_xmlhttpRequest({
                 method: 'POST',
@@ -134,7 +133,6 @@
                 data: JSON.stringify(data),
                 timeout: 1500,
                 onload: function () {
-                    console.log('[VybecordTS Kick] Push successful ✓');
                     if (consecutiveFails > 0) { consecutiveFails = 0; reschedule(BASE_INTERVAL_MS); }
                 },
                 onerror: function () {
@@ -353,7 +351,6 @@
             const metaSrc = metaImage.getAttribute('content');
             if (metaSrc && !metaSrc.includes('logo') && !metaSrc.includes('kick-logo')) {
                 profilePicUrl = metaSrc.startsWith('//') ? `https:${metaSrc}` : metaSrc;
-                console.log('[VybecordTS Kick] Profile picture from meta tag:', profilePicUrl);
             }
         }
         
@@ -392,7 +389,6 @@
                     // Only use if it looks like a real profile picture
                     if (src && !src.includes('thumbnail') && !src.includes('preview') && !src.includes('placeholder') && !src.includes('logo')) {
                         profilePicUrl = src.startsWith('//') ? `https:${src}` : src;
-                        console.log('[VybecordTS Kick] Profile picture from selector:', selector, profilePicUrl);
                         break;
                     }
                 }
@@ -417,7 +413,6 @@
                         const parent = el.closest('aside, footer, [class*="sidebar"], [class*="recommended"], [class*="sidebar"]');
                         if (!parent) {
                             profilePicUrl = src.startsWith('//') ? `https:${src}` : src;
-                            console.log('[VybecordTS Kick] Profile picture from general selector:', selector, profilePicUrl);
                             break;
                         }
                     }
@@ -435,7 +430,6 @@
                     const parent = img.closest('aside, footer, [class*="sidebar"], [class*="recommended"], [class*="sidebar"]');
                     if (!parent) {
                         profilePicUrl = src.startsWith('//') ? `https:${src}` : src;
-                        console.log('[VybecordTS Kick] Profile picture from fallback:', profilePicUrl);
                         break;
                     }
                 }
@@ -443,9 +437,7 @@
         }
         
         info.profile_picture_url = profilePicUrl;
-        console.log('[VybecordTS Kick] Final profile picture URL:', profilePicUrl);
 
-        console.log('[VybecordTS Kick] Extracted info:', info);
         return info;
     }
 
@@ -473,139 +465,9 @@
         }
     }
 
-    // ── Hide cookie banner ──
-    let cookieObserver = null;
-
-    function hideCookieBanner() {
-        // Inject CSS to hide cookie banners immediately
-        const style = document.createElement('style');
-        style.textContent = `
-            /* Hide cookie consent banners */
-            [id*="cookie"], [class*="cookie"], [id*="consent"], [class*="consent"],
-            [id*="banner"], [class*="banner"], .cookie-banner, .consent-banner,
-            .cookie-notice, .consent-notice, #onetrust-consent-sdk, #cookie-banner,
-            [data-testid*="cookie"], [data-testid*="consent"],
-            div[id*="onetrust"], div[class*="onetrust"],
-            #ot-sdk-btn-floating, #onetrust-banner-sdk,
-            .ot-sdk-container, .ot-floating-button,
-            [role="dialog"][aria-label*="cookie"], [role="dialog"][aria-label*="consent"] {
-                display: none !important;
-                visibility: hidden !important;
-                opacity: 0 !important;
-                height: 0 !important;
-                width: 0 !important;
-                position: absolute !important;
-                left: -9999px !important;
-                pointer-events: none !important;
-                z-index: -9999 !important;
-            }
-        `;
-        (document.head || document.documentElement).appendChild(style);
-        console.log('[VybecordTS Kick] Cookie banner CSS injected');
-
-        // Try to remove existing elements immediately
-        removeCookieElements();
-
-        // Set up observer when DOM is ready
-        if (document.body) {
-            startCookieObserver();
-        } else {
-            document.addEventListener('DOMContentLoaded', startCookieObserver);
-        }
-
-        // Also run periodically as fallback
-        setInterval(removeCookieElements, 2000);
-    }
-
-    function startCookieObserver() {
-        if (cookieObserver) return;
-        
-        cookieObserver = new MutationObserver(() => {
-            removeCookieElements();
-        });
-        cookieObserver.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
-        console.log('[VybecordTS Kick] Cookie banner observer started');
-    }
-
-    function removeCookieElements() {
-        const selectors = [
-            '[id*="cookie"]',
-            '[class*="cookie"]',
-            '[id*="consent"]',
-            '[class*="consent"]',
-            '#onetrust-consent-sdk',
-            '#cookie-banner',
-            '#ot-sdk-btn-floating',
-            '#onetrust-banner-sdk',
-            '.ot-sdk-container',
-            '.ot-floating-button',
-            '[role="dialog"][aria-label*="cookie"]',
-            '[role="dialog"][aria-label*="consent"]',
-            'div[id*="onetrust"]',
-            'div[class*="onetrust"]',
-            // Kick specific selectors
-            '[class*="Cookie"]',
-            '[class*="cookie-banner"]',
-            '[class*="consent-banner"]',
-            '[id*="Cookie"]',
-            '[id*="cookie-banner"]',
-            '[id*="consent-banner"]'
-        ];
-
-        selectors.forEach(selector => {
-            try {
-                const elements = document.querySelectorAll(selector);
-                elements.forEach(el => {
-                    // Check if element is actually a cookie/consent banner by looking at text content
-                    const text = el.textContent?.toLowerCase() || '';
-                    if (text.includes('cookie') || text.includes('consent') || 
-                        text.includes('necessary') || text.includes('functionality') ||
-                        text.includes('these cookies') ||
-                        selector.includes('cookie') || selector.includes('consent') ||
-                        selector.includes('onetrust')) {
-                        el.remove();
-                        console.log('[VybecordTS Kick] Removed cookie element:', selector);
-                    }
-                });
-            } catch (e) {
-                // Ignore errors during DOM manipulation
-            }
-        });
-
-        // Also check iframes for cookie banners
-        try {
-            const iframes = document.querySelectorAll('iframe');
-            iframes.forEach(iframe => {
-                try {
-                    const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-                    if (iframeDoc) {
-                        const iframeElements = iframeDoc.querySelectorAll('[id*="cookie"], [class*="cookie"], [id*="consent"], [class*="consent"]');
-                        iframeElements.forEach(el => {
-                            const text = el.textContent?.toLowerCase() || '';
-                            if (text.includes('cookie') || text.includes('consent')) {
-                                el.remove();
-                                console.log('[VybecordTS Kick] Removed cookie element from iframe');
-                            }
-                        });
-                    }
-                } catch (e) {
-                    // Cross-origin iframe access blocked - ignore
-                }
-            });
-        } catch (e) {
-            // Ignore errors
-        }
-    }
-
     function init() {
         reschedule(BASE_INTERVAL_MS);
         console.log('[VybecordTS] Kick integration initialized ✓');
-
-        // Hide cookie banner immediately
-        hideCookieBanner();
 
         setTimeout(() => {
             onStateChange();
