@@ -408,7 +408,17 @@ async function flushQueue(): Promise<void> {
       const batch = queue.slice(0, QUEUE_BATCH);
       const result = await submitBatch(batch);
       if (!result.ok && result.retry) break;
-      queue.splice(0, batch.length);
+      /*
+       * Drop the entries that were actually sent, by identity.
+       *
+       * Removing batch.length from the front assumes the front has not moved,
+       * and it can: enqueue() trims the queue from the front whenever a new
+       * play pushes it past QUEUE_MAX, which is exactly the state a drain
+       * starts in. One play earned during a batch's flight shifted everything
+       * by one, and the splice then discarded a scrobble that had never left.
+       */
+      const sent = new Set(batch);
+      queue = queue.filter(e => !sent.has(e));
       saveQueue();
     }
   } finally {
