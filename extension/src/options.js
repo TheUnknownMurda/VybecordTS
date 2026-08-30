@@ -58,10 +58,12 @@ async function render() {
 }
 
 /**
- * Ask the worker whether the last push reached the app.
+ * Ask the worker whether the desktop app is reachable.
  *
- * The worker only learns this by pushing, so before anything has played the
- * honest answer is "not known yet" rather than a red light.
+ * The worker answers by asking the app directly rather than by reporting the
+ * result of its last push. It used to do the latter, and a push it has not
+ * made yet reads exactly like one that failed -- so opening this page before
+ * playing anything said the app was not running, whether or not it was.
  */
 function refreshStatus() {
   chrome.runtime.sendMessage({ type: 'vybecord-status' }, (reply) => {

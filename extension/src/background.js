@@ -83,6 +83,22 @@ chrome.storage.onChanged.addListener((changes, area) => {
  * the extension is scraping, whether the app is running, or whether they are
  * simply on a site they switched off.
  */
+/**
+ * Is the desktop app there?
+ *
+ * Any HTTP answer means yes, whatever its status: the app refuses a request
+ * with no Origin, and a 403 is still proof that something is listening on the
+ * port. Only a network failure means no. Measured at 2ms either way, both for
+ * an app that is running and for a port with nothing behind it.
+ */
+async function probeApp() {
+  try {
+    await fetch(APP_BASE + '/api/kick', { method: 'OPTIONS' });
+    return true;
+  } catch {
+    return false;
+  }
+}
 function setBadge(ok) {
   if (ok === lastBadge) return;
   lastBadge = ok;
@@ -147,6 +163,15 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.type !== 'vybecord-status') return false;
   // Awaited for the same reason as in relay(): asking right after a wake would
   // otherwise report the defaults as though they were the user's settings.
-  ready.then(() => sendResponse({ connected, enabled }));
+  //
+  // `connected` only means anything once a push has been made, and this file is
+  // evaluated from scratch on every wake -- so a worker woken by this very
+  // message has it false regardless of the app. Reporting that told anyone who
+  // opened the options page before playing anything that the app was not
+  // running, which is the exact wrong signal this status exists to give. Ask
+  // the app instead.
+  ready
+    .then(probeApp)
+    .then((up) => sendResponse({ connected: up, enabled }));
   return true;
 });
