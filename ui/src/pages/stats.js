@@ -72,7 +72,7 @@ async function loadHistory(card) {
   if (!sessions.length) {
     card.replaceChildren(
       el('div', { class: 'card-head' }, [el('h2', { text: 'Past sessions' })]),
-      el('div', { class: 'empty', text: 'No past sessions saved yet — one is stored each time the app closes.' }),
+      el('div', { class: 'empty', text: 'No past sessions yet — this is the first one. It is saved as you listen, so closing the app is not what keeps it.' }),
     );
     return;
   }

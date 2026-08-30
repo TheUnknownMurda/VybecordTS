@@ -56,11 +56,6 @@
           <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="14" rx="2" /><path d="M8 21h8M12 18v3" /></svg>
           <span>Players</span>
         </button>
-        <!-- TEMPORARILY HIDDEN — Stats and History are parked while the rest of
-             the app is finished. The pages, the IPC and the recording all still
-             exist and still run; only the way in is gone. Restore by
-             uncommenting this block, the two <section>s below, and the matching
-             block in ui/src/main.js.
         <button class="nav-item" data-page="stats" title="Stats">
           <svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></svg>
           <span>Stats</span>
@@ -68,8 +63,7 @@
         <button class="nav-item" data-page="history" title="History">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
           <span>History</span>
-        </button>
-        -->
+        </button>
         <button class="nav-item" data-page="library" title="Lyrics library">
           <svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 012-2h13v18H6a2 2 0 01-2-2z" /><path d="M9 7h7M9 11h7" /></svg>
           <span>Lyrics</span>
@@ -97,10 +91,8 @@
       <main id="content">
         <section class="page" data-page="now"></section>
         <section class="page" data-page="players"></section>
-        <!-- TEMPORARILY HIDDEN — see the sidebar block above.
         <section class="page" data-page="stats"></section>
-        <section class="page" data-page="history"></section>
-        -->
+        <section class="page" data-page="history"></section>
         <section class="page" data-page="library"></section>
         <section class="page" data-page="settings"></section>
         <section class="page" data-page="account"></section>

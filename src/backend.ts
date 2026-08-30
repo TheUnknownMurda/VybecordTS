@@ -1852,9 +1852,21 @@ export class VybecordBackend extends EventEmitter {
     this.saveStatsHistory();
   }
 
-  /** Get previous sessions top 3 (excludes current session). */
+  /**
+   * Previous sessions — genuinely previous ones.
+   *
+   * This used to be able to return the list as-is, because the running session
+   * was only written on the way out. It saves on every play now (so a crash
+   * cannot take the afternoon with it), which put the live session at the head
+   * of the list — and the Stats page shows "This session" above "Past
+   * sessions", so it would have appeared twice, with the same numbers.
+   *
+   * Filtered on the session's own start time rather than by dropping the first
+   * row: the row only exists once something has played, so index 0 is not
+   * reliably ours.
+   */
   getStatsHistory(): SessionSnapshot[] {
-    return this.statsHistory;
+    return this.statsHistory.filter(s => s.date !== this.sessionStartedAt);
   }
 
   /** Get a page of the persistent listening history (most recent first). */

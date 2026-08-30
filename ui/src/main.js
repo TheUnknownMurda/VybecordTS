@@ -14,20 +14,15 @@ import { mountUpdateBanner } from './update-banner.js';
 
 import * as now from './pages/now.js';
 import * as players from './pages/players.js';
-// TEMPORARILY HIDDEN — Stats and History are parked while the rest of the app is
-// finished. Both pages still work; they are just unreachable. Restore by
-// uncommenting these two imports, their entries in PAGES, and the matching
-// blocks in ui/index.html. Nothing else has to change: the router, the IPC and
-// the listening-history recording are all untouched.
-// import * as stats from './pages/stats.js';
-// import * as history from './pages/history.js';
+import * as stats from './pages/stats.js';
+import * as history from './pages/history.js';
 import * as library from './pages/library.js';
 import * as settings from './pages/settings.js';
 import * as account from './pages/account.js';
 import * as report from './pages/report.js';
 
 const api = window.vybecord;
-const PAGES = { now, players, /* stats, history, */ library, settings, account, report };
+const PAGES = { now, players, stats, history, library, settings, account, report };
 
 let currentPage = '';
 let cleanup = null;
