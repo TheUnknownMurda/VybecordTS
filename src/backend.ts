@@ -1465,12 +1465,25 @@ export class VybecordBackend extends EventEmitter {
       // No lyrics found
       const isYt = trackData.media_source === 'youtube' || trackData.media_source === 'youtube_music'
         || trackData.media_source.startsWith('browser_');
-      const noLyricsSource = isYt ? 'CC fetch failed or empty' : 'LRCLib/Netease fetch failed';
+      // A live stream never reached a provider -- the fetch above is gated on
+      // is_live -- so reporting that the lookup failed puts a fault in the log
+      // that never happened, 41 times in one real session.
+      const noLyricsSource = trackData.is_live
+        ? 'live stream, not looked up'
+        : isYt ? 'CC fetch failed or empty' : 'LRCLib/Netease fetch failed';
       log.info(`[LYRICS] No lyrics found for "${trackData.track_name}" — ${noLyricsSource}`);
       this.lyricsEngine.updateTrackData(trackData);
 
-      // Async: fetch plain (unsynced) lyrics for dashboard display only (not RPC)
-      if (!signal.aborted) {
+      /*
+       * Async: plain (unsynced) lyrics for the dashboard only, never the RPC.
+       *
+       * Gated on is_live for the same reason the synced fetch above is: a
+       * stream's title is a channel banner and its artist a streamer, so the
+       * lookup is an LRCLib round-trip followed by a Genius search and a page
+       * scrape that cannot match anything. The synced path already knew that;
+       * this one was still asking, once per stream event.
+       */
+      if (!signal.aborted && !trackData.is_live) {
         fetchPlainLyrics(trackData.track_name, trackData.artist_name, trackData.album_name, trackData.duration_ms, signal)
           .then(lines => {
             if (lines && lines.length > 0 && this.currentTrackKey === expectedKey) {
