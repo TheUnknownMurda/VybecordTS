@@ -25,6 +25,7 @@ import { createLogger } from '../src/core/logger.js';
 import { redactConfig } from '../src/core/config.js';
 import type { VybecordBackend } from '../src/backend.js';
 import type { VybecordConfig } from '../src/core/types.js';
+import type { PushServer } from '../src/web/push-server.js';
 import {
   scrobbleStatus, requestAuthToken, getAuthUrlForToken,
   completeAuth, disconnectScrobble,
@@ -98,7 +99,17 @@ function sanitizeDiscord(text: string): string {
   return text.replace(DISCORD_PING_REGEX, '[ping removed]');
 }
 
-export function registerIpc(backend: VybecordBackend, getWindow: () => BrowserWindow | null): void {
+/**
+ * @param getPushServer the extension endpoint, once it exists. A getter rather
+ *   than the object because main.ts registers these handlers before it builds
+ *   the server — and because the server is torn down and rebuilt whenever the
+ *   setting is switched.
+ */
+export function registerIpc(
+  backend: VybecordBackend,
+  getWindow: () => BrowserWindow | null,
+  getPushServer: () => PushServer | null = () => null,
+): void {
   /**
    * The config as the window is allowed to see it.
    *
@@ -225,6 +236,16 @@ export function registerIpc(backend: VybecordBackend, getWindow: () => BrowserWi
     browsers: await detectBrowsers(),
     connected: backend.isExtensionConnected(),
     enabled: backend.getConfig().extension_enabled !== false,
+    /*
+     * Whether the endpoint the extension pushes to is actually open.
+     *
+     * Without this the card says "Not detected" for two unrelated problems:
+     * the extension is not installed, and the app could not open port 8888
+     * because something else holds it. The first is fixed by installing the
+     * extension, and telling someone to reinstall it when the port is the
+     * problem sends them round a loop that cannot work.
+     */
+    portBlocked: getPushServer()?.isAvailable === false,
   }));
   handle('extension:reveal', () => { revealExtensionFolder(); return { ok: true }; });
   handle('extension:copyUrl', (url: string) => { copyExtensionsUrl(url); return { ok: true }; });

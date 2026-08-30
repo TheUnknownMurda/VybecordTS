@@ -230,9 +230,19 @@ function extensionCard() {
       return;
     }
 
+    /*
+     * "Not detected" used to cover two unrelated problems. One is the extension
+     * not being installed, which the steps below fix. The other is the app not
+     * having been able to open the port the extension pushes to, which they
+     * cannot fix — and following them anyway is a loop that never closes.
+     */
     const status = info.connected
       ? el('span', { class: 'badge accent', text: 'Connected' })
-      : el('span', { class: 'badge', text: info.enabled ? 'Not detected' : 'Turned off' });
+      : !info.enabled
+        ? el('span', { class: 'badge', text: 'Turned off' })
+        : info.portBlocked
+          ? el('span', { class: 'badge', style: 'color:var(--red)', text: 'Port 8888 unavailable' })
+          : el('span', { class: 'badge', text: 'Not detected' });
 
     const chromium = info.browsers.filter(b => b.family === 'chromium');
     const firefox = info.browsers.filter(b => b.family === 'firefox');
@@ -241,6 +251,13 @@ function extensionCard() {
       el('div', { style: 'display:flex;align-items:center;gap:10px;margin-top:12px' }, [
         el('span', { class: 'row-label', text: 'Status' }), status,
       ]),
+
+      info.portBlocked
+        ? el('div', { class: 'row-desc', style: 'margin-top:10px;max-width:none' },
+            'Another program is holding 127.0.0.1:8888, so the extension has nowhere to send to. '
+            + 'A second copy of Vybecord is the usual cause — close it, then reopen this app. '
+            + 'Installing the extension again will not help.')
+        : null,
 
       !info.available
         ? el('div', { class: 'row-desc', style: 'margin-top:10px', text: 'The extension folder is missing from this install.' })

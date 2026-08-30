@@ -84,7 +84,7 @@ async function start(): Promise<void> {
   await app.whenReady();
 
   backend = new VybecordBackend(baseDir, mediaWorkerPath(), lrclibWorkerPath());
-  registerIpc(backend, () => win);
+  registerIpc(backend, () => win, () => pushServer);
 
   // Follow the machine's idle clock, so the presence comes down when Discord
   // marks the account away and goes back up on the first keypress — the same

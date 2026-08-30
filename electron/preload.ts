@@ -45,6 +45,8 @@ const api = {
   // ── Browser extension ──
   extensionInfo: () => invoke<{
     path: string; available: boolean; connected: boolean; enabled: boolean;
+    /** True when something else holds 127.0.0.1:8888 and the endpoint gave up. */
+    portBlocked: boolean;
     browsers: { id: string; name: string; extensionsUrl: string; family: string }[];
   }>('extension:info'),
   revealExtension: () => invoke('extension:reveal'),
