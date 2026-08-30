@@ -351,13 +351,29 @@ function loadQueue(): void {
   } catch { /* nothing queued, or the file is unreadable — start clean */ }
 }
 
+/**
+ * Write the queue out, atomically.
+ *
+ * The whole file is rewritten on every scrobble, so an interrupted write -- a
+ * crash, a power cut, a forced quit -- used to leave truncated JSON behind.
+ * loadQueue() cannot parse that, starts empty by design, and the next save
+ * overwrites it: everything still waiting to reach Last.fm, gone without a
+ * word. A temp file and a rename means the old queue stands until a complete
+ * new one exists, the same shape the history and the blacklist already use.
+ */
 function saveQueue(): void {
   if (!queuePath) return;
+  const queueTmp = `${queuePath}.${process.pid}.tmp`;
   try {
-    if (!queue.length) fs.rmSync(queuePath, { force: true });
-    else fs.writeFileSync(queuePath, JSON.stringify(queue), 'utf-8');
+    if (!queue.length) {
+      fs.rmSync(queuePath, { force: true });
+      return;
+    }
+    fs.writeFileSync(queueTmp, JSON.stringify(queue), 'utf-8');
+    fs.renameSync(queueTmp, queuePath);
   } catch (e: unknown) {
     log.warn(`[SCROBBLE] Could not write the queue: ${(e as Error).message}`);
+    try { fs.rmSync(queueTmp, { force: true }); } catch { /* nothing to clean up */ }
   }
 }
 
