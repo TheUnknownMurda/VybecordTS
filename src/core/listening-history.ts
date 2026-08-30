@@ -112,6 +112,15 @@ let currentTrackStart = 0;              // performance.now() when the clock last
 let currentTrackInfo: TrackStart | null = null;
 let currentTrackBankedMs = 0;           // listening already banked across earlier pauses of this same track
 let pausedAt = 0;                       // Date.now() when the clock stopped; 0 while running
+/**
+ * Date.now() when this listen began.
+ *
+ * Kept because an entry is written when the *next* track starts, which can be
+ * hours after a paused one was actually played. Counting backwards from the
+ * write by the time listened filed that play at the wrong end of the gap.
+ * A resume continues the same listen, so this is not touched there.
+ */
+let currentTrackStartedAt = 0;
 
 export function initHistory(configDir: string): void {
   historyPath = path.join(configDir, 'listening-history.json');
@@ -138,6 +147,7 @@ export function historyTrackStart(info: TrackStart): void {
   currentTrackInfo = { ...info };
   currentTrackBankedMs = 0;
   currentTrackStart = performance.now();
+  currentTrackStartedAt = Date.now();
   pausedAt = 0;
 }
 
@@ -207,9 +217,11 @@ function finaliseCurrentTrack(): void {
   // listen already banked. Zero while paused — that is the point.
   const running = currentTrackStart ? Math.round(performance.now() - currentTrackStart) : 0;
   const banked = currentTrackBankedMs;
+  const startedAt = currentTrackStartedAt;
   currentTrackInfo = null;
   currentTrackStart = 0;
   currentTrackBankedMs = 0;
+  currentTrackStartedAt = 0;
   pausedAt = 0;
 
   // A track cannot be listened to for longer than it lasts, so its own length is
@@ -228,7 +240,7 @@ function finaliseCurrentTrack(): void {
     album: info.album,
     art: info.art,
     source: info.source,
-    startedAt: new Date(Date.now() - listenedMs).toISOString(),
+    startedAt: new Date(startedAt || Date.now() - listenedMs).toISOString(),
     listenedMs,
   };
   if (STREAM_SOURCES.has(info.source)) entry.kind = 'stream';
