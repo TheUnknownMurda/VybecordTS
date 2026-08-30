@@ -305,11 +305,18 @@ export class TwitchSource {
    * has just ended, it can be confidently wrong. This is the one signal that
    * can overrule it, and it deliberately does not fire on a failed lookup:
    * being unable to reach Twitch is not evidence of anything.
+   *
+   * The verdict stands until another one replaces it. It used to expire after
+   * OFFLINE_RECHECK_MS, which dropped the only evidence there was a moment
+   * before the re-check could answer — so every 45 seconds an idle tab on an
+   * offline channel took the presence for one round-trip, and with a second
+   * stream source open each takeover started a fresh history entry. That
+   * constant still governs when resolveStreamStart() looks again, which is
+   * where a re-check belongs; it just no longer un-suppresses on its own.
    */
   private isKnownOffline(username: string): boolean {
     const entry = this.resolvedStarts.get(normaliseLogin(username));
-    if (!entry || entry.liveness !== 'offline') return false;
-    return Date.now() - entry.checkedAt < OFFLINE_RECHECK_MS;
+    return !!entry && entry.liveness === 'offline';
   }
 
   /** The verified start for `username`, or 0 if none has resolved yet. */
