@@ -44,6 +44,7 @@ import { configureArtUpload, uploadCoverArt, thumbnailSignature } from './core/a
 import { extractLocalArt, extractArtFromPath } from './core/local-art.js';
 import { initBlacklist, flagLyrics, isLyricsFlagged, clearFlags, listFlaggedTracks, clearFlagsByKey } from './core/lyrics-blacklist.js';
 import { initHistory, historyTrackStart, historyTrackPause, historyTrackResume, historyTrackEnd, historyUpdateArt, getHistoryPage, getWrappedStats } from './core/listening-history.js';
+import { releaseJapaneseTokenizer } from './core/romanize.js';
 import { translateBatch, translateText, getCachedTranslation, isTranslationWorthFetching } from './core/translate.js';
 import { asNonNegativeInt, asRecord, asText, evictLeast, evictOldest, evictUntil } from './core/utils.js';
 import type { TrackData, LyricLine, VybecordConfig } from './core/types.js';
@@ -1727,6 +1728,12 @@ export class VybecordBackend extends EventEmitter {
     }
     // Before the emit: the listener re-fetches the playing track only when it
     // finds nothing cached, which is what this clears.
+    // Turning romanisation off is the clearest statement anyone can make that
+    // the Japanese dictionary will not be needed. It is 150 MB; waiting out
+    // the idle timer after that would just be holding it for nothing.
+    if ('romanize_lyrics' in accepted && accepted.romanize_lyrics === false) {
+      releaseJapaneseTokenizer();
+    }
     if ('cc_lang' in accepted) this.syncCcLanguage(accepted.cc_lang as string | undefined);
     this.emit('configUpdate', this.config.getAll());
   }

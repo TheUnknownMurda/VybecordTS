@@ -126,6 +126,70 @@ let tokenizerBuilding = false;
 let tokenizerFailed = false;
 
 /**
+ * How long the tokenizer may sit unused before its memory goes back.
+ *
+ * Long enough that an album, or a session of skipping around one, never pays
+ * for a rebuild; short enough that a tray app which saw one Japanese track at
+ * lunchtime is not still carrying the dictionary at dinner.
+ */
+const TOKENIZER_IDLE_MS = 15 * 60_000;
+let tokenizerLastUsed = 0;
+let idleTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Drop the tokenizer, and the dictionary behind it.
+ *
+ * Measured: 90 MB of decompressed dictionary leaves the off-heap buffers at
+ * once and about 95 MB of resident memory goes with it. The heap half is
+ * freed for reuse rather than handed straight back to the OS, which is why
+ * the figure here is smaller than the 150 MB building it costs.
+ *
+ * The next line that needs kanji pays 260ms to build it again -- during which
+ * kana are romanised and kanji left standing, exactly as before the first
+ * build. One degraded line per rebuild, against carrying the dictionary for
+ * hours after the music that needed it stopped.
+ *
+ * The cache is deliberately kept. It holds finished romanisations, costs a few
+ * hundred short strings, and every hit it serves is a line that never has to
+ * wait for a rebuild at all.
+ *
+ * Exported because turning romanisation off is the clearest statement anyone
+ * can make that this will not be needed, and waiting out the idle timer after
+ * that is holding 150 MB for nothing.
+ */
+export function releaseJapaneseTokenizer(): void {
+  if (idleTimer) {
+    clearTimeout(idleTimer);
+    idleTimer = null;
+  }
+  if (!tokenizer) return;
+  tokenizer = null;
+  log.info('[ROMANIZE] Japanese tokenizer released — its memory is back until the next kanji');
+}
+
+/**
+ * Arm the idle release, once.
+ *
+ * One timer, not a poll: when it fires it checks the clock, and if the
+ * tokenizer was used in the meantime it re-arms for whatever is left rather
+ * than releasing something in use. unref so a tray app can still quit.
+ */
+function scheduleIdleRelease(): void {
+  if (idleTimer || !tokenizer) return;
+  const remaining = TOKENIZER_IDLE_MS - (Date.now() - tokenizerLastUsed);
+  idleTimer = setTimeout(() => {
+    idleTimer = null;
+    if (!tokenizer) return;
+    if (Date.now() - tokenizerLastUsed < TOKENIZER_IDLE_MS) {
+      scheduleIdleRelease();
+      return;
+    }
+    releaseJapaneseTokenizer();
+  }, Math.max(remaining, 1_000));
+  idleTimer.unref?.();
+}
+
+/**
  * Build the tokenizer, once, in the background.
  *
  * Deliberately not done at startup. Measured on the shipped dictionary, in a
@@ -137,9 +201,11 @@ let tokenizerFailed = false;
  * first line that actually needs kanji readings pays for it, and everything
  * after is 81µs a line.
  *
- * Nothing releases it once built. That is a deliberate simplification, not an
- * oversight: rebuilding costs 260ms on the emit path. Worth revisiting if the
- * resident cost ever matters more than the rebuild.
+ * It does not stay built. Fifteen minutes without a Japanese line and it is
+ * dropped, which is the whole 150 MB back for the far more common case: an
+ * app sitting in the tray long after the one Japanese track went by. The next
+ * one that needs it pays the 260ms again, and the line that triggers that
+ * rebuild degrades the same way the very first one does.
  *
  * The line that triggers the build does not wait for it: romanize() is called
  * from the lyric emit path, where holding the line back to read a dictionary
@@ -158,6 +224,8 @@ function ensureTokenizer(): void {
         });
       });
       log.info('[ROMANIZE] Japanese tokenizer ready — kanji now read as Japanese');
+        tokenizerLastUsed = Date.now();
+        scheduleIdleRelease();
     } catch (e) {
       // Once. A dictionary that will not load will not load on the next track
       // either, and the fallback below is a reasonable place to stay.
@@ -183,6 +251,10 @@ const JAPANESE_CACHE_LIMIT = 500;
  * punctuation does not drift away from what it belongs to.
  */
 function romanizeJapaneseText(text: string): string {
+  // Any Japanese line pushes the idle deadline out, cache hit or not: what
+  // decides is whether Japanese is still playing, not whether this particular
+  // line happened to need tokenising.
+  tokenizerLastUsed = Date.now();
   const cached = japaneseCache.get(text);
   if (cached !== undefined) return cached;
 
