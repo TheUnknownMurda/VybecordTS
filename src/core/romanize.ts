@@ -128,11 +128,18 @@ let tokenizerFailed = false;
 /**
  * Build the tokenizer, once, in the background.
  *
- * Deliberately not done at startup. Measured on the shipped dictionary it costs
- * 320ms and **77 MB of heap** — real money for an app whose normal state is
- * sitting in the tray, and wasted entirely on anyone who never plays a Japanese
- * track or never turns romanisation on. So the first line that actually needs
- * kanji readings pays for it, and everything after is 81µs a line.
+ * Deliberately not done at startup. Measured on the shipped dictionary, in a
+ * packaged build with the tokenizer held live: 260ms, and **150 MB resident**
+ * — 36 MB of heap plus 90 MB of decompressed dictionary in off-heap buffers,
+ * which is why a heap reading alone badly understates it. Real money for an
+ * app whose normal state is sitting in the tray, and wasted entirely on anyone
+ * who never plays a Japanese track or never turns romanisation on. So the
+ * first line that actually needs kanji readings pays for it, and everything
+ * after is 81µs a line.
+ *
+ * Nothing releases it once built. That is a deliberate simplification, not an
+ * oversight: rebuilding costs 260ms on the emit path. Worth revisiting if the
+ * resident cost ever matters more than the rebuild.
  *
  * The line that triggers the build does not wait for it: romanize() is called
  * from the lyric emit path, where holding the line back to read a dictionary
