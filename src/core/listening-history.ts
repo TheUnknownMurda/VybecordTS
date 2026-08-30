@@ -305,6 +305,21 @@ function saveToDisk(): void {
 }
 
 /** True for an entry that is a live stream rather than a track. */
+/**
+ * Day key in the calendar the user actually lives in.
+ *
+ * startedAt is UTC, and slicing its first ten characters counts by UTC days.
+ * Anyone listening in the evening west of Greenwich has one sitting straddle
+ * UTC midnight, which inflates activeDays and deflates the daily average that
+ * divides by it -- measured at 10% on a real log from UTC-4.
+ */
+function localDayKey(iso: string): string {
+  const d = new Date(iso);
+  const month = d.getMonth() + 1;
+  const day = d.getDate();
+  return `${d.getFullYear()}-${month < 10 ? '0' : ''}${month}-${day < 10 ? '0' : ''}${day}`;
+}
+
 function isStream(e: HistoryEntry): boolean {
   return e.kind === 'stream' || STREAM_SOURCES.has(e.source);
 }
@@ -344,7 +359,7 @@ export function getWrappedStats(days?: number): WrappedStats {
 
   for (const e of source) {
     totalMs += e.listenedMs;
-    daySet.add(e.startedAt.slice(0, 10));
+    daySet.add(localDayKey(e.startedAt));
 
     // Track aggregation
     const tKey = `${e.track.toLowerCase()}|${e.artist.toLowerCase().split(/[,]/)[0].trim()}`;
