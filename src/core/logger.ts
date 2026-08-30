@@ -94,9 +94,48 @@ export function rainbowText(text: string): string {
   return out + RESET;
 }
 
+/**
+ * Console output, and the switch that turns it off for good.
+ *
+ * A stdout that refuses writes -- the terminal that launched the app closed,
+ * output piped to something that has since exited -- fails every write with
+ * EPIPE. That escapes the logger and reaches the uncaughtException handler,
+ * whose whole job is to log it, straight back into the same broken stream.
+ * One real session recorded 4,140 rounds of that in 299ms, and 5 MB of log
+ * file holding nothing else.
+ *
+ * So the first refusal is the last. The log file keeps everything either way,
+ * and a console nobody is reading is not worth a loop.
+ */
+let consoleDead = false;
+
+function writeConsole(text: string, stream: NodeJS.WriteStream = process.stdout): void {
+  if (consoleDead) return;
+  try {
+    stream.write(text);
+  } catch {
+    consoleDead = true;
+  }
+}
+
+/** Same guard, for the two places that report the logger own failures. */
+function writeConsoleErr(text: string): void {
+  writeConsole(text, process.stderr);
+}
+
+// Depending on what stdout is attached to, EPIPE arrives as an 'error' event
+// rather than a throw. Same verdict -- and with no listener that event is an
+// uncaught exception in its own right, which is the loop again by another door.
+try {
+  process.stdout?.on('error', () => { consoleDead = true; });
+  process.stderr?.on('error', () => { consoleDead = true; });
+} catch {
+  /* no usable stdio on this thread; the guard above covers it */
+}
+
 /** Write a rainbow-gradient line to stdout. Log file gets the plain (uncolored) text. */
 export function writeRainbow(text: string): void {
-  process.stdout.write(rainbowText(text) + '\n');
+  writeConsole(rainbowText(text) + '\n');
   if (logFileStream) {
     logBuffer += text + '\n';
     if (logBuffer.length >= LOG_FLUSH_THRESHOLD) flushLogBuffer();
@@ -184,7 +223,7 @@ export function writeBigRainbow(text: string, scaleX = 2): void {
       if (idx >= RAINBOW.length) idx = RAINBOW.length - 1;
       colored += RAINBOW[idx] + ch + RESET;
     }
-    process.stdout.write(colored + '\n');
+    writeConsole(colored + '\n');
     if (logFileStream) {
       logBuffer += line + '\n'; // plain text (no ANSI) in the log file
       if (logBuffer.length >= LOG_FLUSH_THRESHOLD) flushLogBuffer();
@@ -281,7 +320,7 @@ function maybeRotate(): void {
       // Could not move it — reopen the same file rather than stopping. An
       // oversized log beats a silent one, but the counter must not stay over
       // the cap or every flush from here on would try to rotate again.
-      process.stderr.write(`[Logger] Could not rotate the log: ${(e as Error).message}\n`);
+      writeConsoleErr(`[Logger] Could not rotate the log: ${(e as Error).message}\n`);
       logBytesWritten = 0;
     }
     logFileStream = openLogStream(logPathCurrent);
@@ -302,7 +341,7 @@ function openLogStream(logPath: string): fs.WriteStream {
   const stream = fs.createWriteStream(logPath, { flags: 'a' });
   stream.on('error', (err) => {
     // Disable file logging on write error (disk full, permission, etc.)
-    process.stderr.write(`[Logger] File write error: ${err.message}\n`);
+    writeConsoleErr(`[Logger] File write error: ${err.message}\n`);
     if (logFileStream === stream) logFileStream = null;
   });
   return stream;
@@ -439,12 +478,12 @@ export function createLogger(name: string) {
 
     // Console: dim timestamp, pastel badge chip, faint separators, neutral module tag, plain message
     if (marked.indexOf('\n') === -1) {
-      process.stdout.write(TS_COLOR + ts + RESET + ' ' + mid[level] + marked + '\n');
+      writeConsole(TS_COLOR + ts + RESET + ' ' + mid[level] + marked + '\n');
     } else {
       const msgLines = marked.split('\n');
       let out = TS_COLOR + ts + RESET + ' ' + mid[level] + msgLines[0] + '\n';
       for (let i = 1; i < msgLines.length; i++) out += consoleIndent + msgLines[i] + '\n';
-      process.stdout.write(out);
+      writeConsole(out);
     }
 
     // File (buffered, uncolored, pipe-separated so it's still easy to scan or grep)
@@ -466,7 +505,7 @@ export function createLogger(name: string) {
     warn: (msg: string) => emit('warn', msg),
     error: (msg: string) => emit('error', msg),
     raw: (msg: string) => {
-      process.stdout.write(msg + '\n');
+      writeConsole(msg + '\n');
       if (logFileStream) {
         logBuffer += msg + '\n';
         if (logBuffer.length >= LOG_FLUSH_THRESHOLD) flushLogBuffer();
@@ -478,7 +517,7 @@ export function createLogger(name: string) {
     // prints — bypasses level filtering, like raw().
     lyrics: (msg: string) => {
       const ts = formatTime();
-      process.stdout.write(TS_COLOR + ts + RESET + ' ' + lyricsMid + rainbowText(msg) + '\n');
+      writeConsole(TS_COLOR + ts + RESET + ' ' + lyricsMid + rainbowText(msg) + '\n');
       if (logFileStream) {
         logBuffer += ts + ' | ' + LYRICS_TAG + ' | ' + paddedName + ' | ' + msg + '\n';
         if (logBuffer.length >= LOG_FLUSH_THRESHOLD) flushLogBuffer();
