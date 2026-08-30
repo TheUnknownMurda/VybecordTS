@@ -110,6 +110,8 @@ position and duration of what is playing, from the page the user already has
 open. This is the data the extension exists to report; without access to these
 sites there is nothing to read. No other site is matched, and the extension
 does not read credentials, cookies, or anything the user has typed.
+It reads these pages and never writes to them: nothing is inserted, hidden,
+removed or restyled.
 
 On kick.com only, the content script also makes one same-origin request, to
 Kick's own /api/v1/channels/<channel> endpoint, to read the stream's start
@@ -139,6 +141,16 @@ the detailed description above, and the privacy policy at
 `website/privacy/index.html` — the policy states the extension is *technically
 incapable* of reaching anything else, which is a stronger claim than a
 permission list and a worse one to leave stale.
+
+**"Reads these pages and never writes to them."** Holds as long as no site
+script touches the DOM. Today none does: the only `.style` reference in
+`src/sites/` reads a background-image URL to find the artwork, and there is no
+`appendChild`, `innerHTML`, `remove()`, `setAttribute` or `classList` write
+anywhere. It was not always so -- `sites/kick.js` used to strip cookie banners,
+including inside iframes, which was both undeclared and well outside a metadata
+reporter's single purpose. Anything that changes a page again makes this
+sentence false, and moves the extension into a category reviewers read
+differently.
 
 **"Does not read credentials."** Holds as long as no script lifts a session
 token out of a page. The Tampermonkey originals did exactly that on Spotify, to
