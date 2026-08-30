@@ -160,6 +160,11 @@ export function platformInfo(source) {
     deezer: ['Deezer', '🎵'],
     tidal: ['Tidal', '🌊'],
     amazon_music: ['Amazon Music', '📦'],
+    // Live streams. The history logs them and a pin can name them, so they
+    // need entries here as much as the music services do -- without one, a
+    // Twitch stream showed as a lowercase "twitch" under a generic note.
+    twitch: ['Twitch', '🟣'],
+    kick: ['Kick', '🥊'],
     vlc: ['VLC', '🔶'],
     foobar2000: ['foobar2000', '🎛️'],
     musicbee: ['MusicBee', '🐝'],
