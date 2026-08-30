@@ -22,7 +22,22 @@ const enum Opcode {
 
 /** Strip control chars that Discord's JSON parser rejects (U+0000–001F, U+007F–009F, line/para separators). */
 const RE_CONTROL = /[\x00-\x1f\x7f-\x9f\u2028\u2029]/g;
-function sanitize(s: string): string { return s.replace(RE_CONTROL, ''); }
+/**
+ * Half an emoji, left behind by something that cut a string by UTF-16 unit.
+ *
+ * A high surrogate with no low after it \u2014 or a low with no high before it \u2014 is
+ * not a character. JSON.stringify writes it as a bare `\ud83d`, which no
+ * encoder can turn into valid UTF-8, so this is the last place to catch one
+ * before the bytes go down the pipe.
+ *
+ * The truncation in lyrics-engine.ts no longer produces these, but it is not
+ * the only thing that shortens a string on the way here, and this is the point
+ * where being wrong costs the whole presence update rather than one field.
+ */
+const RE_LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+function sanitize(s: string): string {
+  return s.replace(RE_CONTROL, '').replace(RE_LONE_SURROGATE, '');
+}
 
 /** Discord requires details/state to be at least 2 characters — pad with a trailing space if needed. */
 function padMin2(s: string): string { return s.length < 2 ? s + ' ' : s; }

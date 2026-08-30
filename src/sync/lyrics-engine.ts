@@ -1464,7 +1464,28 @@ function truncate(text: string, max: number): string {
   const lastPunct = Math.max(cut.lastIndexOf('.'), cut.lastIndexOf(','), cut.lastIndexOf(';'), cut.lastIndexOf(':'), cut.lastIndexOf('!'), cut.lastIndexOf('?'));
   const boundary = Math.max(lastSpace, lastPunct);
   const trimmed = boundary > max * 0.7 ? cut.slice(0, boundary) : cut.trim();
-  return trimmed + '...';
+  return dropLoneSurrogate(trimmed) + '...';
+}
+
+/**
+ * Remove a trailing half of an emoji.
+ *
+ * `slice` counts UTF-16 units, and everything outside the basic plane — every
+ * emoji, and a good deal else — is two of them. Cutting a line at unit 125
+ * therefore lands inside a pair once in every two positions, leaving a lone
+ * high surrogate at the end. That is not a character: JSON.stringify writes it
+ * as a bare `\ud83d`, which is not valid UTF-8, and what Discord does with it
+ * is its business rather than something to rely on.
+ *
+ * Emoji in titles are not an edge case here — stream titles are full of them,
+ * and the app puts one in front of every Kick and Twitch name itself.
+ *
+ * Dropping the orphan rather than widening to include its partner keeps the
+ * result inside the caller's limit, which is the whole point of truncating.
+ */
+function dropLoneSurrogate(s: string): string {
+  const last = s.charCodeAt(s.length - 1);
+  return last >= 0xd800 && last <= 0xdbff ? s.slice(0, -1) : s;
 }
 
 /** Returns true if context_name is redundant (same as artist, album, or track name). */
