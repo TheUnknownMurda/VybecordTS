@@ -35,8 +35,22 @@ const RE_CONTROL = /[\x00-\x1f\x7f-\x9f\u2028\u2029]/g;
  * where being wrong costs the whole presence update rather than one field.
  */
 const RE_LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+/**
+ * Explicit bidirectional embedding and override codes.
+ *
+ * Every string that reaches here came from a web page the app does not own:
+ * a stream title, a video title, whatever a tab put in its metadata. One
+ * RIGHT-TO-LEFT OVERRIDE reverses the display of everything after it, so
+ * "Just Chatting \u202Emoc.tfarcnim\u202C" reads as a different domain entirely --
+ * in a presence other people see.
+ *
+ * Only this range goes. Arabic and Hebrew titles need none of it: the bidi
+ * algorithm derives direction from the characters themselves, and UAX #9
+ * deprecates these five in favour of the isolates, which are left alone.
+ */
+const RE_BIDI_OVERRIDE = /[\u202A-\u202E]/g;
 function sanitize(s: string): string {
-  return s.replace(RE_CONTROL, '').replace(RE_LONE_SURROGATE, '');
+  return s.replace(RE_CONTROL, '').replace(RE_LONE_SURROGATE, '').replace(RE_BIDI_OVERRIDE, '');
 }
 
 /** Discord requires details/state to be at least 2 characters — pad with a trailing space if needed. */
