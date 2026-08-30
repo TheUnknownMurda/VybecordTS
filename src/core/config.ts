@@ -292,14 +292,30 @@ export class ConfigManager {
        * the two on purpose: the credentials have no default worth shipping but
        * are perfectly legitimate keys.
        */
-      for (const [key, val] of Object.entries(parsed)) {
-        if (!(key in DEFAULTS) && !(key in CONFIG_SCHEMA)) {
-          dirty = true;
+      /*
+       * Values are checked, not only keys.
+       *
+       * config.json is a supported way in -- the app watches it and reloads on
+       * change -- but only the window ever validated what it carried. Straight
+       * off disk a value was taken at whatever type it happened to be, so
+       * `"poll_interval_ms": "fast"` reached setInterval as a string: NaN,
+       * clamped to 1ms, and the poll ran about 130 times a second instead of
+       * once. A boolean or a negative number got there the same way.
+       *
+       * sanitizeConfigUpdate is the check the window already applies, and the
+       * schema describes every key DEFAULTS has, so both doors now agree. What
+       * it turns down keeps its default instead of the file winning.
+       */
+      const { accepted, rejected } = sanitizeConfigUpdate(parsed as Record<string, unknown>);
+      for (const key of rejected) {
+        dirty = true;
+        if (key in DEFAULTS || key in CONFIG_SCHEMA) {
+          log.warn(`Ignoring a config value the app cannot use: ${key} -- keeping the default`);
+        } else {
           log.info(`Dropping config key the app no longer has: ${key}`);
-          continue;
         }
-        (merged as Record<string, unknown>)[key] = val;
       }
+      Object.assign(merged, accepted);
       for (const key of Object.keys(DEFAULTS)) {
         if (!(key in parsed)) {
           dirty = true;
