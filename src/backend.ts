@@ -36,7 +36,7 @@ import { TwitchSource } from './core/twitch-source.js';
 import { DiscordIPC } from './core/discord-ipc.js';
 import { LyricsEngine } from './sync/lyrics-engine.js';
 import { fetchLyrics, fetchPlainLyrics, findCustomLyrics } from './core/provider.js';
-import { fetchYouTubeCaptions, clearCCCache } from './core/youtube-captions.js';
+import { fetchYouTubeCaptions, clearCCCache, setCcCookiesFile } from './core/youtube-captions.js';
 import { initLocalDb, closeLocalDb, insertCustomLyrics, listCustomLyrics, getCustomLyrics, updateCustomLyrics, deleteCustomLyrics, findExistingCustomLyrics, searchLrclibDump as searchLrclibDumpDb, getLrclibTrackLyrics as getLrclibTrackLyricsDb, lrclibDumpStatus } from './core/local-lyrics-db.js';
 import { initLastFm, scrobbleTrackStart, checkAndScrobble, scrobblePause, scrobbleTrackEnd } from './core/lastfm.js';
 import { lookupCoverArt } from './core/cover-art.js';
@@ -378,6 +378,8 @@ export class VybecordBackend extends EventEmitter {
     this.applyLastFmConfig();
 
     this.applyArtUploadConfig();
+
+    this.applyCaptionsConfig();
 
     const blacklistInitialized = initBlacklist(this.configDir);
     if (blacklistInitialized) {
@@ -1700,6 +1702,16 @@ export class VybecordBackend extends EventEmitter {
     if ('lastfm_api_key' in accepted || 'lastfm_api_secret' in accepted) {
       this.applyLastFmConfig();
     }
+    // Same reasoning: a cookies file pasted in should work on the next track,
+    // not after a restart.
+    if ('cc_cookies_file' in accepted) {
+      this.applyCaptionsConfig();
+      // The cached results were fetched signed-out; an age-gated video that
+      // failed before can succeed now, and the cache would hand back the
+      // failure. Same argument as syncCcLanguage().
+      clearCCCache();
+      this.lyricsCache.clear();
+    }
     // Before the emit: the listener re-fetches the playing track only when it
     // finds nothing cached, which is what this clears.
     if ('cc_lang' in accepted) this.syncCcLanguage(accepted.cc_lang as string | undefined);
@@ -1714,6 +1726,17 @@ export class VybecordBackend extends EventEmitter {
    * session takes effect immediately — the uploader stops reading the local
    * thumbnail at all.
    */
+  /**
+   * Point the captions fetcher at the cookies file, or at nothing.
+   *
+   * yt-dlp cannot sign in to YouTube on its own, so an age-gated video has no
+   * captions to give a signed-out client. This is the one setting that changes
+   * that, and it went unread until 2.0.21.
+   */
+  private applyCaptionsConfig(): void {
+    setCcCookiesFile(String(this.config.get('cc_cookies_file') || ''));
+  }
+
   private applyArtUploadConfig(): void {
     const cfg = this.config.getAll();
     configureArtUpload(cfg.art_upload_enabled ? String(cfg.art_upload_url || '') : '');

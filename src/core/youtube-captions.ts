@@ -20,6 +20,7 @@
 
 import { execFile } from 'node:child_process';
 import { readdir, readFile, mkdtemp, rm } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createLogger } from './logger.js';
@@ -163,6 +164,46 @@ export function setYtDlpBundled(exe: string): void {
 /** Where yt-dlp should be dropped when it is not on PATH. */
 export function ytDlpDropDir(): string {
   return ytDlpExtraDir;
+}
+
+/**
+ * A Netscape cookies.txt, so age-restricted videos can be read.
+ *
+ * YouTube will not serve captions for an age-gated video to a signed-out
+ * client, and yt-dlp has no way to sign in on its own. The app already
+ * *detects* that case and puts "🔞 CC unavailable — age-restricted video" on
+ * the presence; `cc_cookies_file` was in the config and in the schema to solve
+ * it, and nothing read it. The app named the problem, shipped the switch, and
+ * never connected the two.
+ */
+let ccCookiesFile = '';
+/** So a path that is set but missing is complained about once, not per track. */
+let warnedMissingCookies = '';
+
+export function setCcCookiesFile(file: string): void {
+  if (file === ccCookiesFile) return;
+  ccCookiesFile = file;
+  warnedMissingCookies = '';
+  if (file) log.info(`[CC] Using cookies from ${file}`);
+}
+
+/**
+ * `--cookies <file>`, or nothing.
+ *
+ * A missing file is dropped rather than passed on: yt-dlp treats an unreadable
+ * cookies file as a fatal argument error, so forwarding a stale path would turn
+ * a setting meant to *add* coverage into one that removes all of it.
+ */
+function cookieArgs(): string[] {
+  if (!ccCookiesFile) return [];
+  if (!existsSync(ccCookiesFile)) {
+    if (warnedMissingCookies !== ccCookiesFile) {
+      warnedMissingCookies = ccCookiesFile;
+      log.warn(`[CC] Cookies file not found, ignoring it: ${ccCookiesFile}`);
+    }
+    return [];
+  }
+  return ['--cookies', ccCookiesFile];
 }
 
 /**
@@ -566,6 +607,7 @@ export async function fetchYouTubeCaptions(
       '--ignore-errors',
       '--js-runtimes', 'node',
       '-o', path.join(tmpDir, '%(id)s'),
+      ...cookieArgs(),
     ];
 
     let isAgeRestricted = false;

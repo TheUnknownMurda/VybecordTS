@@ -28,6 +28,9 @@ const ICON_MODES = [
   ['', 'Platform default'], ['dance_mode', 'Dance'], ['radiate_mode', 'Radiate'],
   ['purple_rad_mode', 'Purple'], ['blue_rad_mode', 'Blue'], ['rouge_mode', 'Red'],
   ['bleeding_mode', 'Bleeding'], ['random_icon_mode', 'Random each track'],
+  // The engine has always known this mode; the list simply never listed it, so
+  // it was the one icon nobody could pick.
+  ['lrc_off_mode', 'LRC off'],
   ['hide_small_icon', 'No small icon'],
 ];
 const ICON_KEYS = ICON_MODES.map(([k]) => k).filter(Boolean);
@@ -400,6 +403,12 @@ function captionsCard(langOptions) {
       toggleRow('Use captions as lyrics', null, cfg('cc_enabled', true) !== false, (v) => put('cc_enabled', v)),
       selectRow('Caption language', 'Automatic follows your system language, then English.',
         cfg('cc_lang', 'auto'), [['auto', 'Automatic'], ...langOptions], (v) => put('cc_lang', v)),
+      inputRow('Cookies file',
+        'YouTube will not give captions for an age-restricted video to a signed-out viewer. '
+        + 'Export your cookies to a cookies.txt with a browser extension and point this at it. '
+        + 'Leave empty if you do not watch age-restricted videos.',
+        cfg('cc_cookies_file', ''), (v) => put('cc_cookies_file', v),
+        { placeholder: 'C:\\Users\\you\\cookies.txt' }),
     ]),
   ]);
 
