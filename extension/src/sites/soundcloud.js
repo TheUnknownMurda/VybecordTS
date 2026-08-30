@@ -179,16 +179,32 @@
 
   // ── Scheduling ──
 
+  /**
+   * Whether this tab should keep reporting.
+   *
+   * Hiding a tab does not stop its audio, and the desktop app reads silence
+   * from a source as that source having gone away -- so pausing the loop on
+   * visibility alone took the presence off music that was still playing, and
+   * left the app to fall back to whatever Windows reports, without the artist
+   * and track link this script exists to add.
+   *
+   * A hidden tab with nothing playing still stops, which is what the gate was
+   * for: several SoundCloud tabs sitting open is the ordinary case.
+   */
+  function keepsPushing() {
+    return tabVisible || isPlaying();
+  }
+
   function scheduleNext() {
     if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
-    if (!tabVisible) return;
+    if (!keepsPushing()) return;
     const delay = backoffMs || (isPlaying() ? POLL_MS : POLL_PAUSED_MS);
     pollTimer = setTimeout(tick, delay);
   }
 
   function tick() {
     pollTimer = null;
-    if (!tabVisible) return;
+    if (!keepsPushing()) return;
 
     // Re-attach audio listeners if element changed
     attachAudio();
@@ -234,14 +250,14 @@
     _boundAudio = _audio;
   }
 
-  // ── Visibility (pause when tab hidden) ──
+  // ── Visibility (idle down when hidden, unless audio is still playing) ──
 
   function onVisibility() {
     tabVisible = !document.hidden;
     if (tabVisible) {
       _cacheTime = 0; // force fresh DOM query
       scheduleNext();
-    } else {
+    } else if (!isPlaying()) {
       if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
     }
   }
