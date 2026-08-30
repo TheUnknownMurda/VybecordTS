@@ -24,13 +24,14 @@
  * a null `stream` is the one thing that overrules it — see isKnownOffline(),
  * and note that failing to reach Twitch is not evidence of anything.
  *
- * Falls back to SMTC automatically if the userscript stops pushing (>10s stale).
+ * Falls back to SMTC automatically if the userscript stops pushing, judged against the cadence it had been keeping -- see push-freshness.ts.
  */
 
 import { performance } from 'node:perf_hooks';
 import { createLogger } from './logger.js';
 import { asBool, asNonNegativeInt, asRecord, asText, asUrl, evictOldest } from './utils.js';
 import type { TrackData } from './types.js';
+import { PushFreshness } from './push-freshness.js';
 
 const log = createLogger('TwitchSource');
 
@@ -65,8 +66,6 @@ export function normalizeTwitchPayload(raw: unknown): TwitchPayload {
     stream_start_time_ms: asNonNegativeInt(d.stream_start_time_ms),
   };
 }
-
-const STALE_THRESHOLD_MS = 10_000;
 
 // ── Stream start resolution ──
 
@@ -191,6 +190,7 @@ async function fetchStreamStart(username: string): Promise<StreamLookup> {
 export class TwitchSource {
   private latestData: TwitchPayload | null = null;
   private receivedAt = 0;
+  private readonly freshness = new PushFreshness();
   private _wasActive = false;
   private streamStartTime = 0; // The userscript's estimate
 
@@ -208,6 +208,7 @@ export class TwitchSource {
     const data = normalizeTwitchPayload(raw);
     this.latestData = data;
     this.receivedAt = performance.now();
+    this.freshness.seen(this.receivedAt);
 
     if (!this._wasActive) {
       this._wasActive = true;
@@ -361,13 +362,13 @@ export class TwitchSource {
     };
   }
 
-  /** True if the userscript has sent data recently (< 10s). */
+  /** True while pushes are still arriving at the cadence this source has been keeping. */
   get isActive(): boolean {
     if (!this.latestData) return false;
-    const stale = (performance.now() - this.receivedAt) > STALE_THRESHOLD_MS;
+    const stale = this.freshness.isStale(performance.now());
     if (stale && this._wasActive) {
       this._wasActive = false;
-      log.warn('Twitch userscript stale (>10s) — falling back to SMTC');
+      log.warn(`Twitch userscript stale (>${this.freshness.windowSeconds}s) — falling back to SMTC`);
     }
     return !stale;
   }

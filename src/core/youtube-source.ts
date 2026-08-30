@@ -9,13 +9,14 @@
  *   - Thumbnail URL available immediately
  *   - Proper title/artist from YouTube structured metadata
  *
- * Falls back to SMTC automatically if the userscript stops pushing (>10s stale).
+ * Falls back to SMTC automatically if the userscript stops pushing, judged against the cadence it had been keeping -- see push-freshness.ts.
  */
 
 import { performance } from 'node:perf_hooks';
 import { createLogger } from './logger.js';
 import { asBool, asId, asNonNegativeInt, asRecord, asText, asUrl } from './utils.js';
 import type { TrackData } from './types.js';
+import { PushFreshness } from './push-freshness.js';
 
 const log = createLogger('YouTubeSource');
 
@@ -64,11 +65,10 @@ export function normalizeYouTubePayload(raw: unknown): YouTubePayload {
   };
 }
 
-const STALE_THRESHOLD_MS = 10_000; // Data older than 10s = userscript disconnected
-
 export class YouTubeSource {
   private latestData: YouTubePayload | null = null;
   private receivedAt = 0;
+  private readonly freshness = new PushFreshness();
   private _wasActive = false;
   private _staleAt = 0;  // timestamp when userscript went stale
   private streamStartTime = 0; // Store stream start time once
@@ -81,6 +81,7 @@ export class YouTubeSource {
     const data = normalizeYouTubePayload(raw);
     this.latestData = data;
     this.receivedAt = performance.now();
+    this.freshness.seen(this.receivedAt);
 
     if (!this._wasActive) {
       this._wasActive = true;
@@ -154,14 +155,14 @@ export class YouTubeSource {
     };
   }
 
-  /** True if the userscript has sent data recently (< 10s). */
+  /** True while pushes are still arriving at the cadence this source has been keeping. */
   get isActive(): boolean {
     if (!this.latestData) return false;
-    const stale = (performance.now() - this.receivedAt) > STALE_THRESHOLD_MS;
+    const stale = this.freshness.isStale(performance.now());
     if (stale && this._wasActive) {
       this._wasActive = false;
       this._staleAt = performance.now();
-      log.warn('YouTube userscript stale (>10s) — falling back to SMTC');
+      log.warn(`YouTube userscript stale (>${this.freshness.windowSeconds}s) — falling back to SMTC`);
     }
     return !stale;
   }

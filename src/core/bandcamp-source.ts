@@ -8,13 +8,14 @@
  *   - Accurate progress/duration from the <audio> element
  *   - Track & artist URLs for Discord RPC buttons
  *
- * Falls back to SMTC automatically if the userscript stops pushing (>10s stale).
+ * Falls back to SMTC automatically if the userscript stops pushing, judged against the cadence it had been keeping -- see push-freshness.ts.
  */
 
 import { performance } from 'node:perf_hooks';
 import { createLogger } from './logger.js';
 import { asBool, asNonNegativeInt, asRecord, asText, asUrl } from './utils.js';
 import type { TrackData } from './types.js';
+import { PushFreshness } from './push-freshness.js';
 
 const log = createLogger('BandcampSource');
 
@@ -51,11 +52,10 @@ export function normalizeBandcampPayload(raw: unknown): BandcampPayload {
   };
 }
 
-const STALE_THRESHOLD_MS = 10_000;
-
 export class BandcampSource {
   private latestData: BandcampPayload | null = null;
   private receivedAt = 0;
+  private readonly freshness = new PushFreshness();
   private _wasActive = false;
 
   /**
@@ -66,6 +66,7 @@ export class BandcampSource {
     const data = normalizeBandcampPayload(raw);
     this.latestData = data;
     this.receivedAt = performance.now();
+    this.freshness.seen(this.receivedAt);
 
     if (!this._wasActive) {
       this._wasActive = true;
@@ -112,13 +113,13 @@ export class BandcampSource {
     };
   }
 
-  /** True if the userscript has sent data recently (< 10s). */
+  /** True while pushes are still arriving at the cadence this source has been keeping. */
   get isActive(): boolean {
     if (!this.latestData) return false;
-    const stale = (performance.now() - this.receivedAt) > STALE_THRESHOLD_MS;
+    const stale = this.freshness.isStale(performance.now());
     if (stale && this._wasActive) {
       this._wasActive = false;
-      log.warn('Bandcamp userscript stale (>10s) — falling back to SMTC');
+      log.warn(`Bandcamp userscript stale (>${this.freshness.windowSeconds}s) — falling back to SMTC`);
     }
     return !stale;
   }

@@ -8,13 +8,14 @@
  *   - Accurate progress (no SMTC delay compensation)
  *   - Eliminates need for Deezer/iTunes/Last.fm metadata enrichment
  *
- * Falls back to SMTC automatically if the extension stops pushing (>10s stale).
+ * Falls back to SMTC automatically if the extension stops pushing, judged against the cadence it had been keeping -- see push-freshness.ts.
  */
 
 import { performance } from 'node:perf_hooks';
 import { createLogger } from './logger.js';
 import { asBool, asNonNegativeInt, asRecord, asText, asUrl } from './utils.js';
 import type { TrackData } from './types.js';
+import { PushFreshness } from './push-freshness.js';
 
 const log = createLogger('Spicetify');
 
@@ -76,11 +77,10 @@ export function normalizeSpicetifyPayload(raw: unknown): SpicetifyPayload {
   };
 }
 
-const STALE_THRESHOLD_MS = 10_000; // Data older than 10s = extension disconnected
-
 export class SpicetifySource {
   private latestData: SpicetifyPayload | null = null;
   private receivedAt = 0;
+  private readonly freshness = new PushFreshness();
   private _wasActive = false; // Track activation for logging
 
   /**
@@ -95,6 +95,7 @@ export class SpicetifySource {
     const data = normalizeSpicetifyPayload(raw);
     this.latestData = data;
     this.receivedAt = performance.now();
+    this.freshness.seen(this.receivedAt);
 
     if (!this._wasActive) {
       this._wasActive = true;
@@ -148,13 +149,13 @@ export class SpicetifySource {
     return result;
   }
 
-  /** True if the extension has sent data recently (< 10s). */
+  /** True while pushes are still arriving at the cadence this source has been keeping. */
   get isActive(): boolean {
     if (!this.latestData) return false;
-    const stale = (performance.now() - this.receivedAt) > STALE_THRESHOLD_MS;
+    const stale = this.freshness.isStale(performance.now());
     if (stale && this._wasActive) {
       this._wasActive = false;
-      log.warn('Spicetify extension stale (>10s) — falling back to SMTC');
+      log.warn(`Spicetify extension stale (>${this.freshness.windowSeconds}s) — falling back to SMTC`);
     }
     return !stale;
   }
