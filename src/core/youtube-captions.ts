@@ -113,7 +113,10 @@ interface Json3Event {
 // Strip video noise from titles before searching YouTube
 const RE_VIDEO_NOISE = /\s*[(\[](official\s*(audio|video|music\s*video|lyric\s*video|visualizer)?|lyric(s)?\s*video|audio|mv|m\/v|4k|hd|hq|visualizer|lyrics?|with\s*lyrics?)[)\]]/gi;
 const RE_BRACKET_TAGS = /\s*[(\[](slowed|sped\s*up|reverb|slowed\s*\+\s*reverb|nightcore|bass\s*boosted|8d(\s*audio)?|lo-?fi|remix|acoustic|live|clean|explicit)[)\]]/gi;
-const RE_FEAT = /\s*\(?\s*feat\.?\s.*$/i;
+// The paren lives inside its own group so a run of trailing whitespace has one
+// way to be consumed rather than every possible split — see the note in
+// provider.ts, where the same pattern cost seconds on a long title.
+const RE_FEAT = /\s*(?:\(\s*)?feat\.?\s.*$/i;
 const RE_TOPIC = /\s*-\s*Topic\s*$/i;
 
 function cleanQuery(title: string, artist: string): [string, string] {

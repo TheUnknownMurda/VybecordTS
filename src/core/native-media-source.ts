@@ -319,7 +319,8 @@ export class NativeMediaSource {
       case 'media': {
         const s = this.sessions.get(msg.id);
         if (!s) break;
-        s.media = msg.media;
+        // The other door metadata comes in by — capped the same way as upsert's.
+        s.media = NativeMediaSource.capMeta(msg.media);
         s.hasThumb = !!msg.media.thumbnail?.length;
         // A new title means a new track: the old anchor described the old song.
         s.anchorPosMs = 0;
@@ -396,7 +397,32 @@ export class NativeMediaSource {
     }
   }
 
+  /**
+   * Longest title, artist or album kept from a media session.
+   *
+   * The same cap `asText` puts on anything the browser extension pushes, and
+   * for the same reason — except this side had none. A media session's metadata
+   * is whatever the playing application publishes, and for a browser tab that
+   * is whatever the *page* passed to `navigator.mediaSession.metadata`. So a
+   * page chooses this string, and it reaches the title-cleaning regexes, the
+   * advertisement heuristic and the log unbounded.
+   *
+   * Discord truncates to 128 and no real track is close; 300 simply matches the
+   * other door into the app.
+   */
+  private static readonly MAX_META_CHARS = 300;
+
+  /** A media session's text, bounded. Mutates the worker's own copy. */
+  private static capMeta(media: MediaProps): MediaProps {
+    const cap = NativeMediaSource.MAX_META_CHARS;
+    if (media.title.length > cap) media.title = media.title.slice(0, cap);
+    if (media.artist.length > cap) media.artist = media.artist.slice(0, cap);
+    if (media.albumTitle && media.albumTitle.length > cap) media.albumTitle = media.albumTitle.slice(0, cap);
+    return media;
+  }
+
   private upsert(info: MediaInfo): void {
+    NativeMediaSource.capMeta(info.media);
     const existing = this.sessions.get(info.sourceAppId);
     const state: SessionState = {
       appId: info.sourceAppId,

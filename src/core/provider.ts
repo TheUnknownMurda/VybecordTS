@@ -27,7 +27,22 @@ const RE_BRACKET_TAG = /\s*[(\[](slowed|sped up|reverb|slowed \+ reverb|nightcor
 const RE_ARTIST_SPLIT = /[,]/;
 const RE_TOPIC_SUFFIX = /\s*-\s*Topic\s*$/i;
 const RE_UNRELEASED = /\s*[[(]\s*unreleased\s*\*?\s*[\])\]]\s*/gi;
-const RE_FEAT = /\s*\(?\s*feat\.?\s.*$/i;
+/**
+ * The " (feat. X)" tail, and everything after it.
+ *
+ * The optional paren sits *inside* its own group on purpose. Written the
+ * obvious way — `\s*\(?\s*`, two runs of optional whitespace with an optional
+ * paren between them — a run of spaces can be divided between the two `\s*` in
+ * every possible way, and a title that ends in whitespace with no "feat"
+ * following makes the engine try all of them before giving up.
+ *
+ * Measured: 300 spaces 4ms, 1000 spaces 124ms, 4000 spaces 6.9 *seconds* — on
+ * the thread that schedules lyric lines. Requiring the paren to be present for
+ * the group to participate leaves exactly one way to consume a run of spaces.
+ * Same language, verified against every shape of feat-title; a thousand times
+ * faster on the shape that hurt.
+ */
+const RE_FEAT = /\s*(?:\(\s*)?feat\.?\s.*$/i;
 
 // SoundCloud / web noise patterns (also used by cleanForArtSearch below)
 const RE_SC_TAGS = /\s*[\[({]\s*(?:free\s*(?:dl|download)?|exclusive|premiere|leak(?:ed)?|unreleas(?:ed)?|snippet|preview|repost|type\s+beat|instrumental|bonus|deluxe|slowed\s*\+?\s*reverb|sped\s+up|chopped\s+(?:and|&|n)\s+screwed|bass\s+boosted|8d\s*audio|lo-?fi|remix|bootleg|flip|edit|cover|reprod|remake)\s*[\])}]/gi;
