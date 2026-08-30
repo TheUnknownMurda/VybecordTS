@@ -71,6 +71,8 @@ const external = [
   // Reads app-update.yml off disk relative to its own location and pulls in
   // optional transports; bundling it breaks both.
   'electron-updater',
+  // Reads its dictionary from disk by path, and that path differs packaged.
+  'kuromoji',
 ];
 
 /** @type {import('esbuild').BuildOptions} */

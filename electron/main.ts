@@ -15,6 +15,7 @@ import { initLogFile, createLogger, setLogLevel, flushAndClose } from '../src/co
 import { initTranslateCache, flushTranslationCache } from '../src/core/translate.js';
 import { initUpdater, stopUpdater } from './updater.js';
 import { setYtDlpSearchDir, setYtDlpBundled } from '../src/core/youtube-captions.js';
+import { setKuromojiDicPath } from '../src/core/romanize.js';
 import { VybecordBackend } from '../src/backend.js';
 import { registerIpc } from './ipc.js';
 import { startAwayWatch } from './away-watch.js';
@@ -77,6 +78,19 @@ async function start(): Promise<void> {
   setYtDlpBundled(app.isPackaged
     ? path.join(process.resourcesPath, ytDlpName)
     : path.join(process.cwd(), 'vendor', ytDlpName));
+
+  /*
+   * Where the Japanese dictionary lives, packaged or not.
+   *
+   * Shipped outside the asar (electron-builder extraResources) because kuromoji
+   * opens its .dat.gz files by path, and because it is 17 MB that has no
+   * business being read through an archive. Nothing is loaded here — the
+   * romaniser builds the tokenizer only when a line of Japanese with kanji in
+   * it actually needs one, since it costs 77 MB of heap.
+   */
+  setKuromojiDicPath(app.isPackaged
+    ? path.join(process.resourcesPath, 'kuromoji-dict')
+    : path.join(process.cwd(), 'node_modules', 'kuromoji', 'dict'));
 
   process.on('uncaughtException', (err) => log.error(`Uncaught exception: ${err.stack || err}`));
   process.on('unhandledRejection', (reason) => log.error(`Unhandled rejection: ${reason}`));

@@ -6,6 +6,9 @@
 
 import { pinyin } from 'pinyin-pro';
 import { evictOldest } from './utils.js';
+import { createLogger } from './logger.js';
+
+const log = createLogger('Romanize');
 
 // ── Japanese: Hiragana & Katakana → Romaji ──
 
@@ -102,6 +105,129 @@ function romanizeJapanese(text: string): string {
 const KR_INITIALS = ['g', 'kk', 'n', 'd', 'tt', 'r', 'm', 'b', 'pp', 's', 'ss', '', 'j', 'jj', 'ch', 'k', 't', 'p', 'h'];
 const KR_MEDIALS = ['a', 'ae', 'ya', 'yae', 'eo', 'e', 'yeo', 'ye', 'o', 'wa', 'wae', 'oe', 'yo', 'u', 'wo', 'we', 'wi', 'yu', 'eu', 'ui', 'i'];
 const KR_FINALS = ['', 'k', 'k', 'k', 'n', 'n', 'n', 't', 'l', 'l', 'l', 'l', 'l', 'l', 'l', 'l', 'm', 'p', 'p', 't', 't', 'ng', 't', 't', 'k', 't', 'p', 't'];
+
+// ── Japanese: kanji readings ─────────────────────────────────────────────────
+
+/**
+ * Where kuromoji's dictionary lives. Empty until the app says.
+ *
+ * The path cannot be derived here: packaged, the dictionary sits beside the app
+ * rather than under node_modules, and this module has no way to know which it
+ * is. Same arrangement as the worker bundles and yt-dlp.
+ */
+let kuromojiDicPath = '';
+export function setKuromojiDicPath(dir: string): void {
+  kuromojiDicPath = dir;
+}
+
+type Tokenizer = { tokenize(text: string): { surface_form: string; reading?: string }[] };
+let tokenizer: Tokenizer | null = null;
+let tokenizerBuilding = false;
+let tokenizerFailed = false;
+
+/**
+ * Build the tokenizer, once, in the background.
+ *
+ * Deliberately not done at startup. Measured on the shipped dictionary it costs
+ * 320ms and **77 MB of heap** — real money for an app whose normal state is
+ * sitting in the tray, and wasted entirely on anyone who never plays a Japanese
+ * track or never turns romanisation on. So the first line that actually needs
+ * kanji readings pays for it, and everything after is 81µs a line.
+ *
+ * The line that triggers the build does not wait for it: romanize() is called
+ * from the lyric emit path, where holding the line back to read a dictionary
+ * off disk would defeat the point of the engine. It comes out with its kana
+ * romanised and its kanji untouched, and the next line is right.
+ */
+function ensureTokenizer(): void {
+  if (tokenizer || tokenizerBuilding || tokenizerFailed || !kuromojiDicPath) return;
+  tokenizerBuilding = true;
+  void (async () => {
+    try {
+      const kuromoji = (await import('kuromoji')).default;
+      tokenizer = await new Promise<Tokenizer>((resolve, reject) => {
+        kuromoji.builder({ dicPath: kuromojiDicPath }).build((err: Error | null, t: Tokenizer) => {
+          if (err) reject(err); else resolve(t);
+        });
+      });
+      log.info('[ROMANIZE] Japanese tokenizer ready — kanji now read as Japanese');
+    } catch (e) {
+      // Once. A dictionary that will not load will not load on the next track
+      // either, and the fallback below is a reasonable place to stay.
+      tokenizerFailed = true;
+      log.warn(`[ROMANIZE] Japanese tokenizer unavailable, leaving kanji as they are: ${e}`);
+    } finally {
+      tokenizerBuilding = false;
+    }
+  })();
+}
+
+const japaneseCache = new Map<string, string>();
+const JAPANESE_CACHE_LIMIT = 500;
+
+/**
+ * Romanise Japanese text, kanji included.
+ *
+ * kuromoji gives each token a katakana reading; those go through the same
+ * kana table the rest of this module uses, so there is one romanisation style
+ * in the app rather than two.
+ *
+ * Tokens are joined with a space only where both sides are word-like, so
+ * punctuation does not drift away from what it belongs to.
+ */
+function romanizeJapaneseText(text: string): string {
+  const cached = japaneseCache.get(text);
+  if (cached !== undefined) return cached;
+
+  ensureTokenizer();
+
+  let out: string;
+  if (!tokenizer) {
+    /*
+     * Not ready (or unavailable). Romanise the kana and leave the kanji
+     * standing rather than reaching for pinyin: a Mandarin reading of a
+     * Japanese word is not a worse guess, it is a wrong answer that looks like
+     * a right one.
+     */
+    out = [...text].map(ch => (JP_REGEX.test(ch) ? romanizeJapanese(ch) : ch)).join('');
+  } else {
+    const parts: string[] = [];
+    for (const token of tokenizer.tokenize(text)) {
+      // No reading means kuromoji did not recognise it — latin, digits,
+      // punctuation, or a kanji outside its dictionary. Pass it through.
+      const reading = token.reading;
+      parts.push(reading ? romanizeJapanese(reading) : token.surface_form);
+    }
+    out = joinTokens(parts);
+  }
+
+  /*
+   * Only a real reading is worth remembering.
+   *
+   * Caching the fallback would pin the kanji-untouched version of the first few
+   * lines for the rest of the session — the tokenizer would come up thirty
+   * milliseconds later and never be asked about them again, so a repeated
+   * chorus would stay half-romanised while the verses around it were right.
+   */
+  if (tokenizer) {
+    japaneseCache.set(text, out);
+    evictOldest(japaneseCache, JAPANESE_CACHE_LIMIT);
+  }
+  return out;
+}
+
+/** Space between two word-like pieces, nothing around punctuation. */
+function joinTokens(parts: string[]): string {
+  let out = '';
+  for (const part of parts) {
+    if (!part) continue;
+    const needsSpace = out !== ''
+      && /[A-Za-z0-9]$/.test(out)
+      && /^[A-Za-z0-9]/.test(part);
+    out += needsSpace ? ` ${part}` : part;
+  }
+  return out.trim();
+}
 
 function romanizeKorean(text: string): string {
   let result = '';
@@ -392,6 +518,25 @@ export function needsRomanization(text: string): boolean {
  */
 export function romanize(text: string): string {
   if (!needsRomanization(text)) return text;
+
+  /*
+   * Japanese with kanji in it, which is most Japanese.
+   *
+   * A kanji and a hanzi are the same code point, so the per-character dispatch
+   * below cannot tell them apart and handed every kanji to pinyin: 君の名は came
+   * out "junnomingha" instead of "kimi no na wa", and 夜に駆ける came out
+   * "yeniqukeru". Confidently wrong, in the one language the setting names.
+   *
+   * Kana in the string is what settles it — no Chinese text contains kana — so
+   * this branch takes the whole string to the Japanese tokenizer, which knows
+   * how the kanji are actually read here.
+   *
+   * Text with kanji and *no* kana stays with pinyin below. It is genuinely
+   * ambiguous: 打上花火 is a Japanese title and 告白气球 a Chinese one, and
+   * nothing in the string says which. Guessing Japanese would break every
+   * Chinese title to fix some Japanese ones.
+   */
+  if (JP_REGEX.test(text) && ZH_REGEX.test(text)) return romanizeJapaneseText(text);
 
   // Pure Chinese (no kana, no hangul) — use pinyin for the whole string
   // (pinyin-pro handles contextual disambiguation better on full sentences)
