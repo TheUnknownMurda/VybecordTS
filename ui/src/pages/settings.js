@@ -157,11 +157,11 @@ function presenceTab(body) {
     el('div', { class: 'card' }, [
       el('h2', { text: 'Clickable links' }),
       el('div', { class: 'row-desc', style: 'margin-top:6px;max-width:none' },
-        'The title, artist and cover link to whatever they are showing — the track, the playlist or the artist, '
-        + 'the album — so there is nothing here to choose. The OS media session exposes no URLs of its own, so a '
-        + 'link only resolves when the lyrics provider supplies one, and falls back to a search otherwise. '
-        + 'Button 1 is yours and is left off the presence while its label is empty. The second button is fixed: '
-        + 'it points at whatever is playing and names that platform itself.'),
+        'The title, artist and cover are already links, each pointing at what it names. '
+        + 'When the exact address is not known, the link falls back to a search for it.'),
+      el('div', { class: 'row-desc', style: 'margin-top:12px;max-width:none' },
+        'Button 1 is yours, and stays off the presence while its label is empty. The second is fixed: '
+        + 'it points at what is playing and names that platform.'),
       el('div', { style: 'margin-top:8px' }, [
         inputRow('Button 1 label', 'Leave empty to hide.', cfg('rpc_button1_label', ''), (v) => put('rpc_button1_label', v)),
         inputRow('Button 1 URL', null, cfg('rpc_button1_url', ''), (v) => put('rpc_button1_url', v), { placeholder: 'https://…' }),
