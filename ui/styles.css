@@ -1431,3 +1431,10 @@ label.field > span {
     opacity: 1;
   }
 }
+
+/* A lyric offset saved for the playing track, rather than the global default.
+   Marked because otherwise the number looks like a setting that changed by
+   itself when a corrected song comes round. */
+#npOffset.per-track {
+  color: var(--accent-hex);
+}

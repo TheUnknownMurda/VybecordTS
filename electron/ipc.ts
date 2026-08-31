@@ -185,7 +185,10 @@ export function registerIpc(
   handle('track:current', () => backend.getCurrentTrack());
   handle('lyrics:current', () => backend.getCurrentLyricsState());
   handle('lyrics:lrc', () => backend.getCurrentLyricsLrc());
-  handle('lyrics:offset', (ms: number) => { backend.setLyricsOffset(ms); return { ok: true }; });
+  // Returns what was actually applied, and whether it belongs to the playing
+  // track or to the default -- the window shows the difference.
+  handle('lyrics:offset', (ms: number) => ({ ok: true, ...backend.setLyricsOffset(ms) }));
+  handle('lyrics:offsetCurrent', () => backend.effectiveLyricsOffset());
   handle('lyrics:flag', () => ({ ok: backend.flagCurrentLyrics() }));
   handle('lyrics:flagged', () => backend.listFlaggedTracks());
   handle('lyrics:unflag', (key: string) => ({ ok: backend.clearFlaggedTrack(key) }));

@@ -1,7 +1,7 @@
 /** Now playing — cover, metadata, progress and the live lyric line. */
 
 import { el, $, fmtTime, setArt, platformInfo, toast, modal, BLANK_ART } from '../util.js';
-import { state, subscribe, saveConfig } from '../state.js';
+import { state, subscribe } from '../state.js';
 import { goto } from '../router.js';
 
 const api = window.vybecord;
@@ -96,7 +96,7 @@ export function render(root) {
   paintTrack(state.track);
   paintProgress(state.progress);
   paintLyrics(state.lyrics);
-  paintOffset();
+  void refreshOffset();
   paintTrSlot();
 
   /*
@@ -121,7 +121,9 @@ export function render(root) {
     subscribe('track', paintTrack),
     subscribe('progress', onProgress),
     subscribe('lyrics', paintLyrics),
-    subscribe('config', () => { paintOffset(); paintTrSlot(); }),
+    subscribe('config', () => { void refreshOffset(); paintTrSlot(); }),
+    // A new track may carry its own correction, or none.
+    subscribe('track', () => { void refreshOffset(); }),
     // An ad produces no track, so the idle state has to be redrawn to explain
     // itself rather than sit there reading "Nothing playing".
     // Being away hides the presence without the song changing at all, so the
@@ -289,19 +291,54 @@ function paintTrSlot() {
   $('.lyr')?.classList.toggle('with-tr', state.config.translate_lyrics === true);
 }
 
+/**
+ * The offset in force, and whether it belongs to this track or is the default.
+ *
+ * Not read from config any more: a correction made here is stored against the
+ * playing track, because the drift belongs to the recording. The Settings
+ * control still moves the default, which is what tracks nobody has corrected
+ * run under.
+ */
+let offsetState = { offsetMs: 0, perTrack: false };
+
 function paintOffset() {
-  const ms = Number(state.config.lyrics_offset_ms) || 0;
-  $('#npOffset').textContent = `${ms > 0 ? '+' : ''}${ms} ms`;
+  const el = $('#npOffset');
+  if (!el) return;
+  const ms = offsetState.offsetMs;
+  el.textContent = `${ms > 0 ? '+' : ''}${ms} ms`;
+  // A corrected track is worth marking: otherwise the number looks like a
+  // global setting that has mysteriously changed on its own.
+  el.title = offsetState.perTrack
+    ? 'Saved for this track. Reset puts it back on the default from Settings.'
+    : 'The default from Settings. Adjusting it here saves it for this track only.';
+  el.classList.toggle('per-track', offsetState.perTrack && ms !== 0);
+}
+
+/** Ask what is in force. Called on load and whenever the track changes. */
+async function refreshOffset() {
+  try {
+    const got = await api.lyricsOffsetCurrent();
+    if (got && typeof got.offsetMs === 'number') offsetState = got;
+  } catch {
+    /* the backend will answer on the next track; the last value stands */
+  }
+  paintOffset();
 }
 
 async function setOffset(ms) {
   const clamped = Math.max(-60000, Math.min(60000, ms));
-  await api.setLyricsOffset(clamped);
-  await saveConfig({ lyrics_offset_ms: clamped });
+  const applied = await api.setLyricsOffset(clamped);
+  // Trust what came back rather than what was asked for: the backend clamps,
+  // and it is the side that knows whether this landed on a track or on the
+  // default.
+  if (applied && typeof applied.offsetMs === 'number') {
+    offsetState = { offsetMs: applied.offsetMs, perTrack: !!applied.perTrack };
+  }
+  paintOffset();
 }
 
 function nudgeOffset(delta) {
-  return setOffset((Number(state.config.lyrics_offset_ms) || 0) + delta);
+  return setOffset(offsetState.offsetMs + delta);
 }
 
 async function copyLrc() {

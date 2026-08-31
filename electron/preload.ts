@@ -34,6 +34,7 @@ const api = {
   getLrc: () => invoke<string | null>('lyrics:lrc'),
   getThumbnail: () => invoke<{ mime: string; bytes: Uint8Array } | null>('thumbnail:get'),
   setLyricsOffset: (ms: number) => invoke('lyrics:offset', ms),
+  lyricsOffsetCurrent: () => invoke('lyrics:offsetCurrent'),
   flagLyrics: () => invoke('lyrics:flag'),
   listFlagged: () => invoke('lyrics:flagged'),
   unflag: (key: string) => invoke('lyrics:unflag', key),
