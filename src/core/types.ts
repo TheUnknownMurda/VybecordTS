@@ -128,9 +128,6 @@ export interface VybecordConfig {
   discord_app_id: string;
   // RPC customization
   /** Which URL each clickable RPC field links to: 'track' | 'artist' | 'album' | 'context' | 'auto' */
-  rpc_details_url: string;
-  rpc_state_url: string;
-  rpc_large_url: string;
   rpc_button1_label: string;
   rpc_button1_url: string;
   rpc_activity_type: number;

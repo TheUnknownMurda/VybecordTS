@@ -154,7 +154,23 @@ export class LyricsEngine {
   private cachedIcon: [string, string] | null = null;
   private cachedPlatText = '';  // Pre-built "Playing on X" string (avoids concat per emit)
 
-  // Pre-resolved per-track URLs (avoid 3× resolveUrl + config lookups per emit)
+  // Pre-resolved per-track URLs — see the note on the three fields below.
+  /**
+   * Where each field points.
+   *
+   * Each one follows what the field shows rather than a setting, because the
+   * two used to be able to disagree: the state field shows the artist whenever
+   * the context is redundant, and shows a lyric line whenever lyrics are on,
+   * while its link went to the playlist in both cases. Clicking a name took
+   * you somewhere it did not name.
+   *
+   * cachedDetailsUrl is the track: the details field shows the title, or a
+   * line of that track's lyrics. cachedStateUrl is the metadata answer only --
+   * the context or the artist, matching the branch in rebuildNoLyricsCache;
+   * while lyrics are showing, the state field is a lyric line and takes the
+   * track link instead. cachedLargeUrl is the album, which is whose cover the
+   * image is.
+   */
   private cachedDetailsUrl = '';
   private cachedStateUrl = '';
   private cachedLargeUrl = '';
@@ -1037,17 +1053,20 @@ export class LyricsEngine {
     // Pre-resolve clickable URLs (avoids 3× config lookups + switch per emit)
     // Kick/Twitch: make only state non-clickable (details remains clickable to profile)
     // Local files: make both details and state non-clickable
+    // The details field shows the title, or a line of this track's lyrics, so
+    // it points at the track either way. The state link is settled in
+    // rebuildNoLyricsCache, where the choice between context and artist is made.
     if (d.is_local) {
       this.cachedDetailsUrl = '';
       this.cachedStateUrl = '';
     } else if (d.media_source === 'kick' || d.media_source === 'twitch') {
-      this.cachedDetailsUrl = this.resolveUrl(d, 'rpc_details_url', d.spotify_url || d.context_url || '');
+      this.cachedDetailsUrl = d.spotify_url || d.context_url || '';
+      // A stream's state field carries its category, which nothing links to.
       this.cachedStateUrl = '';
     } else {
-      this.cachedDetailsUrl = this.resolveUrl(d, 'rpc_details_url', d.spotify_url || this.cachedSpotifySearch);
-      this.cachedStateUrl = this.resolveUrl(d, 'rpc_state_url', d.context_url || d.artist_url || this.cachedArtistSearch);
+      this.cachedDetailsUrl = d.spotify_url || this.cachedSpotifySearch;
     }
-    this.cachedLargeUrl = this.resolveUrl(d, 'rpc_large_url', d.album_url || d.spotify_url || this.cachedSpotifySearch);
+    this.cachedLargeUrl = d.album_url || d.spotify_url || this.cachedSpotifySearch;
   }
 
   /** Pre-compute no-lyrics display parts (avoid deduplicateArtist + toLowerCase per emit). */
@@ -1060,6 +1079,14 @@ export class LyricsEngine {
     // Mark context as redundant if empty OR if it matches album name exactly
     const ctxMatchesAlbum = !!(this.cachedContextName && d.album_name && this.cachedContextName.toLowerCase() === d.album_name.toLowerCase());
     this.cachedIsRedundantCtx = !this.cachedContextName || ctxMatchesAlbum;
+    // The link follows that same test. With a context worth showing the state
+    // field shows it; without one it shows the artist, and used to link to the
+    // playlist anyway.
+    if (!d.is_local && d.media_source !== 'kick' && d.media_source !== 'twitch') {
+      this.cachedStateUrl = this.cachedIsRedundantCtx
+        ? (d.artist_url || this.cachedArtistSearch)
+        : (d.context_url || d.artist_url || this.cachedArtistSearch);
+    }
     // Shuffle / repeat indicator (appended to playlist/album, not track name)
     this.cachedPlayModeSuffix =
       d.is_shuffle ? ' | 🔀' :
@@ -1128,6 +1155,10 @@ export class LyricsEngine {
     let details: string;
     let state: string;
     let largeText: string;
+    // Which of the two things the state field ends up carrying. A lyric line
+    // belongs to the track; the metadata branch carries the context or the
+    // artist, and cachedStateUrl already points at whichever of those it chose.
+    let stateIsLyric = false;
 
     // Status message (shown alone when active — no extra text)
     // Use unified statusMessage system if active, fallback to legacy flags
@@ -1137,6 +1168,7 @@ export class LyricsEngine {
     }
 
     if (hasLyrics && currentText && currentText !== '♪♪' && !this.inLyricGap) {
+      stateIsLyric = true;
       // Lyrics mode: details = current lyric, state = → next lyric
       //
       // Translation goes first, on the raw line, before anything is added to
@@ -1266,7 +1298,7 @@ export class LyricsEngine {
       },
       buttons: this.cachedButtons.length > 0 ? this.cachedButtons : undefined,
       details_url: this.cachedDetailsUrl,
-      state_url: this.cachedStateUrl,
+      state_url: stateIsLyric ? this.cachedDetailsUrl : this.cachedStateUrl,
       large_url: this.cachedLargeUrl,
     };
 
@@ -1276,20 +1308,6 @@ export class LyricsEngine {
     return activity;
   }
 
-  /** Resolve a clickable URL from config choice. Falls back to autoUrl if the chosen source is empty. */
-  private resolveUrl(d: TrackData, configKey: string, autoUrl: string): string {
-    const choice = (this.rpcConfig[configKey] as string) || 'auto';
-    if (choice === 'auto') return autoUrl;
-    // Inline lookup — avoids object allocation on every call
-    let resolved: string | undefined;
-    switch (choice) {
-      case 'track':   resolved = d.spotify_url; break;
-      case 'artist':  resolved = d.artist_url; break;
-      case 'album':   resolved = d.album_url; break;
-      case 'context': resolved = d.context_url; break;
-    }
-    return resolved || ((choice === 'artist') ? this.cachedArtistSearch : this.cachedSpotifySearch) || autoUrl;
-  }
 
   /** Apply small icon to activity based on cached icon mode. */
   private applySmallIcon(activity: DiscordActivity, d: TrackData): void {

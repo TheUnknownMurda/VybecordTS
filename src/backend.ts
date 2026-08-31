@@ -2355,9 +2355,6 @@ export class VybecordBackend extends EventEmitter {
     const cfg = this.config.getAll();
     return {
       show_lyrics: cfg.show_lyrics,
-      rpc_details_url: cfg.rpc_details_url,
-      rpc_state_url: cfg.rpc_state_url,
-      rpc_large_url: cfg.rpc_large_url,
       rpc_button1_label: cfg.rpc_button1_label,
       rpc_button1_url: cfg.rpc_button1_url,
       rpc_button2_label: PLATFORM_BUTTON_LABEL,

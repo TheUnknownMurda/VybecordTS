@@ -24,9 +24,6 @@ const DEFAULTS: VybecordConfig = {
   /** Listen for pushes from the browser extension (opens 127.0.0.1:8888). */
   extension_enabled: true,
   discord_app_id: '',
-  rpc_details_url: 'auto',
-  rpc_state_url: 'auto',
-  rpc_large_url: 'auto',
   rpc_button1_label: '',
   rpc_button1_url: '',
   rpc_activity_type: 2, // LISTENING
@@ -107,7 +104,6 @@ export function normalizeUserPath(value: string): string {
   return (quoted ? trimmed.slice(1, -1) : trimmed).trim();
 }
 
-const URL_CHOICES = ['auto', 'track', 'artist', 'album', 'context'] as const;
 const STATUS_DISPLAY_CHOICES = [
   'app', 'title', 'title_artist', 'artist_title', 'artist', 'album', 'playlist',
   'custom', 'details', 'state',
@@ -133,9 +129,6 @@ export const CONFIG_SCHEMA: Record<string, FieldSpec> = {
   filter_spotify_ads: { type: 'boolean' },
   extension_enabled: { type: 'boolean' },
   discord_app_id: { type: 'string', maxLength: 32 },
-  rpc_details_url: { type: 'string', values: URL_CHOICES },
-  rpc_state_url: { type: 'string', values: URL_CHOICES },
-  rpc_large_url: { type: 'string', values: URL_CHOICES },
   // Labels are truncated to 32 chars when the activity is built; the generous
   // limit here only guards against absurd payloads (emojis cost 2 UTF-16 units).
   rpc_button1_label: { type: 'string', maxLength: 128 },
