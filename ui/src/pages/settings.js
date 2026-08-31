@@ -184,15 +184,10 @@ function coverImagesCard() {
   return el('div', { class: 'card' }, [
     el('h2', { text: 'Cover images' }),
     el('div', { class: 'row-desc', style: 'margin-top:6px;max-width:none' },
-      'Discord needs a URL for the artwork, and Windows only gives Vybecord a file on disk. '
-      + 'For anything that was ever released the album is looked up on a public music CDN — Deezer, then Apple. '
-      + 'Nothing leaves your machine but the track and artist name, and Discord loads those covers without trouble.'),
-    el('div', { class: 'row-desc', style: 'margin-top:12px;max-width:none' },
-      'That covers released music. Your own rips, demos and DJ sets are in no catalogue, so their artwork exists '
-      + 'nowhere but this machine and Discord has nothing to show. For those — and only those — the artwork itself '
-      + 'is published, never the audio and never anything already found above, so Discord can display it. '
-      + 'Covers are stored by their content, which means the same artwork is one shared file rather than one per '
-      + 'listener, and identifying metadata such as camera and GPS tags is stripped before anything is sent.'),
+      'Discord can only show a cover it can fetch from a URL, and Windows gives Vybecord a file on disk. '
+      + 'Released albums are looked up in a public catalogue, which sees nothing but the track and artist name. '
+      + 'Your own rips, demos and DJ sets are in no catalogue — so with this on, that artwork alone is published '
+      + 'for Discord to fetch. Never the audio, and camera and location tags are stripped first.'),
     el('div', { style: 'margin-top:8px' }, [
       toggleRow('Publish artwork that exists only on this PC',
         'Turn this off and local-only tracks fall back to the default placeholder.',
