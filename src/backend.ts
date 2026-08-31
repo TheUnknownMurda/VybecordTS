@@ -45,6 +45,7 @@ import { extractLocalArt, extractArtFromPath } from './core/local-art.js';
 import { initBlacklist, flagLyrics, isLyricsFlagged, clearFlags, listFlaggedTracks, clearFlagsByKey } from './core/lyrics-blacklist.js';
 import { initHistory, historyTrackStart, historyTrackPause, historyTrackResume, historyTrackEnd, historyUpdateArt, getHistoryPage, getWrappedStats } from './core/listening-history.js';
 import { releaseJapaneseTokenizer } from './core/romanize.js';
+import { initLyricsOffsets, getTrackOffset, setTrackOffset } from './core/lyrics-offsets.js';
 import { translateBatch, translateText, getCachedTranslation, isTranslationWorthFetching } from './core/translate.js';
 import { asNonNegativeInt, asRecord, asText, evictLeast, evictOldest, evictUntil } from './core/utils.js';
 import type { TrackData, LyricLine, VybecordConfig } from './core/types.js';
@@ -340,7 +341,7 @@ export class VybecordBackend extends EventEmitter {
       } else {
         // Track is playing → restart lyrics engine with new config
         // (handles show_lyrics toggle, template changes, button changes, etc.)
-        const rpcConfig = this.getRpcConfig();
+        const rpcConfig = this.rpcConfigForTrack(this.currentTrack);
         const cachedLyrics = this.lyricsCache.get(this.currentCacheKey);
         if (!cachedLyrics) {
           // Lyrics never fetched for this track — trigger a full fetch
@@ -390,6 +391,7 @@ export class VybecordBackend extends EventEmitter {
     }
 
     initHistory(this.configDir);
+    initLyricsOffsets(this.configDir);
 
     // 1. Start the native media monitor. It is now the only track source, so
     //    its failure leaves nothing to detect — but it must still not abort
@@ -1183,7 +1185,7 @@ export class VybecordBackend extends EventEmitter {
   // ── New track handler ──
 
   private async onNewTrack(trackData: TrackData): Promise<void> {
-    const rpcConfig = this.getRpcConfig();
+    const rpcConfig = this.rpcConfigForTrack(trackData);
 
     log.info(`[NEW TRACK] media_source: ${trackData.media_source}, track: ${trackData.track_name}`);
 
@@ -1398,7 +1400,15 @@ export class VybecordBackend extends EventEmitter {
                 return [{ time: 0, text: '🔞 CC unavailable — age-restricted video', source: 'cc' }];
               }
               
-              if (ccResult.lines.length > 0) {
+              // Captions the user has already rejected fall through to the
+              // providers below rather than being returned and discarded by the
+              // caller. Discarding them is what left a flagged video with no
+              // lyrics at all, every time it was played again -- the same dead
+              // end the provider phases now avoid for everything else.
+              if (ccResult.lines.length > 0
+                && isLyricsFlagged(trackData.track_name, trackData.artist_name, ccResult.lines)) {
+                log.info(`[CC] Captions for "${trackData.track_name}" were flagged — asking the providers instead`);
+              } else if (ccResult.lines.length > 0) {
                 log.info(`[CC] Using ${ccResult.lines.length} caption lines`);
                 return ccResult.lines;
               }
@@ -1652,20 +1662,94 @@ export class VybecordBackend extends EventEmitter {
     this.lyricsEngine.setLyricsFlagged();
 
     // Restart lyrics engine with no lyrics (preserves the status message)
-    const rpcConfig = this.getRpcConfig();
+    const rpcConfig = this.rpcConfigForTrack(t);
     this.lyricsEngine.startTrack([], t, rpcConfig);
     this.lastLyricsState = null;
     this.emit('lyricsUpdate', { current: '', next: '', prev: '' });
 
     log.info(`Flagged lyrics for "${t.track_name}" — ${t.artist_name}`);
+
+    // Look again straight away. The providers now skip what was just rejected,
+    // so what comes back is the next best rather than the same match discarded
+    // a second time -- which is what used to leave the song with nothing for
+    // the rest of its length.
+    void this.findReplacementLyrics(t);
     return true;
   }
 
-  /** Live-adjust lyrics offset without engine restart. Persists to config. */
-  setLyricsOffset(ms: number): void {
-    const clamped = Math.max(-2000, Math.min(2000, ms));
-    this.config.set('lyrics_offset_ms', clamped);
+  /**
+   * Fetch whatever the providers offer once a match has been rejected.
+   *
+   * Deliberately not awaited by the caller: flagging should feel instant, and
+   * the empty state is published before this starts. What this adds is the
+   * replacement arriving a few hundred milliseconds later, in place of a song
+   * that stayed silent until it was played again.
+   *
+   * Everything is re-checked after the await. A lookup takes long enough for
+   * the song to change underneath it, and injecting the previous track's
+   * replacement into the current one is worse than injecting nothing.
+   */
+  private async findReplacementLyrics(t: TrackData): Promise<void> {
+    const key = this.buildTrackKey(t);
+    const cacheKey = this.currentCacheKey;
+    try {
+      const lines = await fetchLyrics(
+        t.track_name, t.artist_name, t.album_name, t.duration_ms, this.fetchAbort?.signal);
+
+      if (this.currentTrackKey !== key) return;   // the song moved on
+
+      if (!lines.length) {
+        log.info(`[LYRICS] Nothing else on offer for "${t.track_name}" after the flag`);
+        return;
+      }
+
+      if (cacheKey) {
+        this.lyricsCache.set(cacheKey, lines);
+        this.evictCache();
+      }
+      this.lyricsEngine.injectLyrics(lines, t);
+      this.warmTranslations(lines, this.fetchAbort?.signal);
+      log.info(`[LYRICS] Replaced the flagged match with ${lines.length} lines`);
+    } catch (e) {
+      // A failed replacement leaves the song where the flag already put it,
+      // which is the old behaviour rather than a regression.
+      log.warn(`[LYRICS] Could not find a replacement after the flag: ${e}`);
+    }
+  }
+
+  /**
+   * Adjust the lyric offset for whatever is playing, without restarting the
+   * engine.
+   *
+   * The correction is stored against the track rather than globally: the drift
+   * belongs to the recording, so a live take and a studio single want different
+   * numbers and one setting cannot hold both. What was a single global value is
+   * now the default for every track nobody has corrected -- which is nearly all
+   * of them.
+   *
+   * With nothing playing there is no track to attribute a correction to, so it
+   * moves that default instead, which is what the Settings control does.
+   */
+  setLyricsOffset(ms: number): { offsetMs: number; perTrack: boolean } {
+    // A minute either way, matching the window and the config schema. This used
+    // to clamp to two seconds while both of those allowed sixty, so a nudge past
+    // two was written to config, shown back to the user, and never reached the
+    // engine.
+    const clamped = Math.max(-60_000, Math.min(60_000, Math.round(ms)));
+    const t = this.currentTrack;
+    const perTrack = !!t?.track_name;
+    if (perTrack) setTrackOffset(t!.track_name, t!.artist_name, clamped);
+    else this.config.set('lyrics_offset_ms', clamped);
     this.lyricsEngine.updateOffset(clamped);
+    return { offsetMs: clamped, perTrack };
+  }
+
+  /** The offset in force right now: the playing track's own, or the default. */
+  effectiveLyricsOffset(): { offsetMs: number; perTrack: boolean } {
+    const t = this.currentTrack;
+    const own = t?.track_name ? getTrackOffset(t.track_name, t.artist_name) : null;
+    if (own !== null) return { offsetMs: own, perTrack: true };
+    return { offsetMs: Number(this.config.get('lyrics_offset_ms')) || 0, perTrack: false };
   }
 
   /**
@@ -2251,6 +2335,22 @@ export class VybecordBackend extends EventEmitter {
 
   // ── RPC helpers ──
 
+  /**
+   * The RPC config a particular track should run under.
+   *
+   * Identical to getRpcConfig() except for the lyric offset, which belongs to
+   * the recording rather than to the app: a live take, a remaster and a
+   * YouTube upload with a long intro do not drift by the same amount, so one
+   * global number cannot be right for two of them at once. A track that has
+   * been corrected runs under its own; everything else runs under the setting,
+   * which is what that setting now is -- the default, not the only answer.
+   */
+  private rpcConfigForTrack(track: TrackData): Record<string, unknown> {
+    const cfg = this.getRpcConfig();
+    const own = getTrackOffset(track.track_name, track.artist_name);
+    if (own !== null) cfg.lyrics_offset_ms = own;
+    return cfg;
+  }
   private getRpcConfig(): Record<string, unknown> {
     const cfg = this.config.getAll();
     return {

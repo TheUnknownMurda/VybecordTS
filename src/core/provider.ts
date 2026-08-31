@@ -13,6 +13,7 @@ import { createLogger } from './logger.js';
 import { parseLrc } from './lrc-parser.js';
 import { similarity, batchScore } from './similarity.js';
 import { hasLocalDb, searchCustomLyrics, searchDumpLyrics, customLyricsIndex, getCustomLyrics } from './local-lyrics-db.js';
+import { isLyricsFlagged } from './lyrics-blacklist.js';
 import type { LyricLine, LrcLibResult } from './types.js';
 
 const log = createLogger('Provider');
@@ -462,6 +463,18 @@ export async function fetchLyrics(
 ): Promise<LyricLine[]> {
   const [cleanName, primaryArtist] = cleanForSearch(name, artist);
   const durationSec = durationMs > 0 ? Math.round(durationMs / 1000) : undefined;
+
+  /**
+   * A match the user has already rejected for this track.
+   *
+   * Tested here, at every phase, rather than once on whatever came back. The
+   * check used to sit in the caller, so a rejected match won its race again on
+   * the next attempt and was thrown away again -- which is why flagging left
+   * the song with no lyrics at all rather than with the next best ones. Failing
+   * a candidate here lets the phase behind it answer instead.
+   */
+  const rejectedByUser = (lines: LyricLine[] | null | undefined): boolean =>
+    !!lines && lines.length > 0 && isLyricsFlagged(name, artist, lines);
   // Clean album name too (strip Deluxe Edition, Remastered, etc.)
   let albumClean = album.replace(RE_UNRELEASED, ' ').trim();
   albumClean = albumClean.replace(RE_BRACKET_TAG, '').trim();
@@ -478,7 +491,7 @@ export async function fetchLyrics(
   // the player reports it — the one lyric set that is there by choice losing to
   // one that merely happened to be in a 100 GB file.
   const imported = findCustomLyrics(name, artist);
-  if (imported) {
+  if (imported && !rejectedByUser(imported)) {
     log.info(`[LYRICS] Imported lyrics hit (${imported.length} lines)`);
     return imported;
   }
@@ -490,7 +503,7 @@ export async function fetchLyrics(
   if (hasLocalDb()) {
     for (const [attemptName, attemptArtist] of searchAttempts(name, artist)) {
       const localResult = await searchDumpLyrics(attemptName, attemptArtist, durationSec);
-      if (localResult) {
+      if (localResult && !rejectedByUser(localResult)) {
         log.info(`[LYRICS] LRCLIB dump hit (${localResult.length} lines)`);
         return localResult;
       }
@@ -514,6 +527,8 @@ export async function fetchLyrics(
     tryDirectLookup(name, cleanName, artist, primaryArtist, albumClean, durationSec, raceSignal)
       .then(lines => {
         if (!lines) throw new Error('no result');
+        // Losing the race is how a rejected match steps aside for the next.
+        if (rejectedByUser(lines)) throw new Error('rejected by the user');
         return { source: 'LRCLib-direct', lines };
       }),
   );
@@ -523,6 +538,8 @@ export async function fetchLyrics(
     searchNetease(cleanName, primaryArtist, durationSec, raceSignal)
       .then(lines => {
         if (!lines) throw new Error('no result');
+        // Losing the race is how a rejected match steps aside for the next.
+        if (rejectedByUser(lines)) throw new Error('rejected by the user');
         return { source: 'Netease', lines };
       }),
   );
@@ -532,6 +549,8 @@ export async function fetchLyrics(
     searchMusixmatch(cleanName, primaryArtist, durationSec, raceSignal)
       .then(lines => {
         if (!lines) throw new Error('no result');
+        // Losing the race is how a rejected match steps aside for the next.
+        if (rejectedByUser(lines)) throw new Error('rejected by the user');
         return { source: 'Musixmatch', lines };
       }),
   );
@@ -739,8 +758,17 @@ async function tryFuzzySearch(
     }
 
     if (s.score >= MIN_SCORE && artistSim >= MIN_ARTIST_SIM) {
+      const parsed = parseLrc(cand.syncedLyrics);
+      // A candidate the user has already rejected loses its place to the next
+      // one down the ranking rather than ending the search. Checked here rather
+      // than on whatever this returns: this phase ranks several candidates and
+      // hands back one, so filtering the answer threw away the ranking with it.
+      if (isLyricsFlagged(name, artist, parsed)) {
+        log.debug(`[LYRICS] Fuzzy skipped — already rejected: "${cand.trackName}"`);
+        continue;
+      }
       log.info(`[LYRICS] Accepted: "${cand.trackName}" (score=${s.score.toFixed(1)}, artist_sim=${artistSim.toFixed(2)})`);
-      return parseLrc(cand.syncedLyrics);
+      return parsed;
     }
   }
 
