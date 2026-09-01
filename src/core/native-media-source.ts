@@ -1008,8 +1008,29 @@ function resolvedSource(s: SessionState): string {
   return s.source;
 }
 
-function detectWebService(s: SessionState): string | null {
-  const haystack = `${s.media.title}\0${s.media.artist}\0${s.media.albumTitle}\0${s.appId}`.toLowerCase();
+/** Exported for harness/test-web-detect.ts — the provenance rule is worth pinning. */
+export function detectWebService(s: SessionState): string | null {
+  /*
+   * Only the fields that say where the playback came from.
+   *
+   * The title and the artist say what is playing, which is a different
+   * question — and answering the first with the second is how a YouTube video
+   * called "XQC Twitch Vod (5/12/2021)" came to be announced as Twitch, under
+   * Twitch's Discord application and its icon, while the tab sat on
+   * youtube.com/watch.
+   *
+   * The misreading also silenced its own correction. backend's defer-to-the-
+   * extension test fires only for a source that is YouTube-like or an unnamed
+   * browser, so a tab misnamed as Twitch stopped deferring to the YouTube
+   * userscript that had the tab's real URL and was reporting the same playback.
+   * One wrong guess about provenance turned into a presence nothing could fix.
+   *
+   * A page's own name reaches us in the album slot or the app id; a video's
+   * title is content and names whatever it is about. When neither provenance
+   * field says anything the answer is an unnamed browser tab — which is the
+   * honest one, and the one the extension exists to improve on.
+   */
+  const haystack = `${s.media.albumTitle}\0${s.appId}`.toLowerCase();
   if (haystack.includes('soundcloud')) return 'soundcloud';
   if (haystack.includes('bandcamp')) return 'bandcamp';
   if (haystack.includes('deezer')) return 'deezer';
