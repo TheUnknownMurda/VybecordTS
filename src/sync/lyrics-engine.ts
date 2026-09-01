@@ -49,6 +49,23 @@ const RECALIB_COOLDOWN_MS = 120_000;  // Max 1 recalibration per 2 minutes (SMTC
 const SEEK_DRIFT_MS = 4_000;
 const MIN_UPDATE_INTERVAL_MS = 800;  // Discord rate-limit protection (~6 updates/5s)
 const CC_UPDATE_INTERVAL_MS = 250;   // Fast updates for YouTube CC (lines change every 200-500ms)
+/**
+ * Closest two presence pushes may be.
+ *
+ * Ordinary songs place their lines two to five seconds apart, so this floor
+ * never touches them: every line lands on its own beat. It exists for the
+ * passages that do run faster — a dense verse, an ad-lib run — where a card
+ * that changed three times a second would be unreadable, and where Discord's
+ * own client coalesces the outgoing presence anyway. Those collapse to the
+ * newest line rather than being dropped, because emitUpdate schedules a
+ * trailing push for whatever is current when the floor lifts.
+ *
+ * The IPC layer keeps its own 200ms floor underneath this one, for the bursts
+ * that arrive from somewhere other than a line change.
+ */
+const RPC_MIN_PUSH_MS = 1_500;
+/** Captions change every few hundred ms; a slower floor would swallow whole phrases. */
+const CC_RPC_MIN_PUSH_MS = 700;
 const RPC_HEARTBEAT_MS = 5_000;       // Force RPC push every 5s even if text unchanged (keeps Discord UI fresh)
 const EMA_ALPHA = 0.3;            // Exponential moving average weight for latency
 const LYRIC_GAP_MS = 25_000;      // Switch to no-lyrics RPC display during gaps longer than this
@@ -121,6 +138,7 @@ export class LyricsEngine {
   // High-resolution timing
   private trackStartHr = 0;      // performance.now() at track start
   private initialProgressMs = 0; // progress_ms at track start
+  private trackStartUnix = 0;    // unix second the track began — Discord's progress bar reads this
 
   // Track metadata (for building RPC payloads)
   private trackData: TrackData | null = null;
@@ -143,8 +161,10 @@ export class LyricsEngine {
   private lastLargeImage = '';
   private lastLargeText = '';
   private lastRpcIdx = -1;
+  private lastRpcStartTs = 0;
   private lastRpcPushTime = 0; // Monotonic timestamp of last RPC push (for heartbeat)
-  private lineChangeCount = 0; // Count line changes for Discord refresh every 2 lines
+  private rpcFlushTimer: ReturnType<typeof setTimeout> | null = null; // trailing push — see emitUpdate
+  private forceRpc = false;    // next emit publishes whatever the floor says — see forceRpcPush
 
   // Per-track cached constants (avoid re-computing on every lyric line change)
   private cachedSpotifySearch = '';
@@ -258,7 +278,7 @@ export class LyricsEngine {
       this.statusMessageTimer = null;
     }
 
-    this.lastUpdateTime = 0; // bypass rate limiter
+    this.forceRpcPush(); // bypass rate limiter and push floor
     this.emitUpdate();
 
     // Set expiry timer
@@ -280,6 +300,7 @@ export class LyricsEngine {
       clearTimeout(this.statusMessageTimer);
       this.statusMessageTimer = null;
     }
+    this.forceRpcPush();
     this.emitUpdate();
   }
 
@@ -320,8 +341,7 @@ export class LyricsEngine {
     this.detectAutoOffset();
     this.trackData = trackData;
     this.rpcConfig = rpcConfig;
-    this.initialProgressMs = trackData.progress_ms;
-    this.trackStartHr = performance.now();
+    this.anchorClock(trackData.progress_ms);
     this.lastCurrentText = '';
     this.lastUpdateTime = 0;
     this.lastEmittedIdx = -1;
@@ -334,7 +354,6 @@ export class LyricsEngine {
     this.nextFireTimeMs = -1;
     this.inLyricGap = false;
     this.romanizeCache.clear();
-    this.lineChangeCount = 0;
 
     // Pick random icon for this track (if random mode is on)
     if ((rpcConfig.random_icon_mode as boolean) === true) {
@@ -406,9 +425,8 @@ export class LyricsEngine {
     this.lastRpcDetails = '';
     this.lastRpcState = '';
     this.lastRpcIdx = -1;
-    this.lastUpdateTime = 0;
     this.lastEmittedIdx = -1;
-    this.lineChangeCount = 0;
+    this.forceRpcPush();
 
     log.info(`[INJECT] ${lyrics.length} lyrics injected at idx=${this.currentIdx}`);
     this.emitUpdate();
@@ -431,7 +449,7 @@ export class LyricsEngine {
     this.rebuildNoLyricsCache();
     // Reset RPC dedup + rate limiter so the enriched art pushes immediately
     this.lastLargeImage = '';
-    this.lastUpdateTime = 0;
+    this.forceRpcPush();
     this.emitUpdate();
   }
 
@@ -452,7 +470,7 @@ export class LyricsEngine {
     this.lastRpcDetails = '';
     this.lastRpcState = '';
     this.lastRpcIdx = -1;
-    this.lastUpdateTime = 0;
+    this.forceRpcPush();
 
     this.emitUpdate();
 
@@ -508,7 +526,7 @@ export class LyricsEngine {
     if (artChanged) {
       this.rebuildTrackCache();   // rebuild cached image BEFORE emitting
       this.lastLargeImage = '';   // reset dedup so the new art actually pushes
-      this.lastUpdateTime = 0;
+      this.forceRpcPush();
       this.emitUpdate();
     }
 
@@ -516,7 +534,7 @@ export class LyricsEngine {
     if (modeChanged) {
       this.rebuildNoLyricsCache();
       this.lastRpcDetails = '';   // reset dedup so new suffix pushes
-      this.lastUpdateTime = 0;
+      this.forceRpcPush();
       this.emitUpdate();
     }
 
@@ -539,8 +557,7 @@ export class LyricsEngine {
     if (isRepeatJump) {
       log.info(`[REPEAT] Progress jumped ${currentElapsed.toFixed(0)}ms → ${progressMs}ms — track looped, force recalibrating`);
       this.lastRecalibTime = now;
-      this.initialProgressMs = progressMs;
-      this.trackStartHr = performance.now();
+      this.anchorClock(progressMs);
       this.inLyricGap = false;
       this.clearGapTimer();
       this.romanizeCache.clear();
@@ -560,8 +577,7 @@ export class LyricsEngine {
     // The free-running timer inevitably drifts vs. the real player position.
     // Only log when drift is significant to avoid spam.
     if (this.isPushSource && drift > threshold) {
-      this.initialProgressMs = progressMs;
-      this.trackStartHr = performance.now();
+      this.anchorClock(progressMs);
       if (drift > threshold * 4) {
         log.info(`[DRIFT] ${drift.toFixed(0)}ms (engine=${currentElapsed.toFixed(0)} vs player=${progressMs}) — push recalib`);
       }
@@ -570,10 +586,9 @@ export class LyricsEngine {
       const baseMs = this.isCC ? 50 : BASE_OFFSET_MS;
       const offset = baseMs + this.measuredLatencyMs;
       const newIdx = findLyricIndex(this.lyrics, progressMs + offset);
-      if (newIdx !== this.currentIdx) {
-        this.currentIdx = newIdx;
-        this.emitUpdate();
-      }
+      if (newIdx !== this.currentIdx) this.currentIdx = newIdx;
+      this.forceRpcPush();
+      this.emitUpdate();
       this.cancelTimer();
       this.scheduleNext();
       return;
@@ -598,17 +613,15 @@ export class LyricsEngine {
       const direction = currentElapsed > progressMs ? 'AHEAD' : 'BEHIND';
       log.info(`[DRIFT] ${drift.toFixed(0)}ms ${direction} (engine=${currentElapsed.toFixed(0)} vs player=${progressMs}) after ${Number.isFinite(sinceLast) ? (sinceLast / 1000).toFixed(1) + "s" : "first sync"} — recalibrating`);
       this.lastRecalibTime = now;
-      this.initialProgressMs = progressMs;
-      this.trackStartHr = performance.now();
+      this.anchorClock(progressMs);
 
       // Reschedule from new position
       const baseMs = this.isCC ? 50 : BASE_OFFSET_MS;
       const offset = baseMs + this.measuredLatencyMs;
       const newIdx = findLyricIndex(this.lyrics, progressMs + offset);
-      if (newIdx !== this.currentIdx) {
-        this.currentIdx = newIdx;
-        this.emitUpdate();
-      }
+      if (newIdx !== this.currentIdx) this.currentIdx = newIdx;
+      this.forceRpcPush();
+      this.emitUpdate();
       this.cancelTimer();
       this.scheduleNext();
     }
@@ -625,6 +638,8 @@ export class LyricsEngine {
     this.inLyricGap = false;
     this.cancelTimer();
     this.clearHeartbeat();
+    this.clearRpcFlush();
+    this.forceRpc = false;
     this.lyrics = [];
     this.currentIdx = -1;
     this.lastEmittedIdx = -1;
@@ -650,6 +665,20 @@ export class LyricsEngine {
   }
 
   // ── Core scheduling ──
+
+  /**
+   * Re-anchor the playback clock to a position the player just reported.
+   *
+   * The three fields move together or not at all: the monotonic pair that
+   * getElapsedMs() reads, and the wall-clock second Discord draws its progress
+   * bar from. Setting one without the others is how the bar came to disagree
+   * with the lyrics running above it.
+   */
+  private anchorClock(progressMs: number): void {
+    this.initialProgressMs = progressMs;
+    this.trackStartHr = performance.now();
+    this.trackStartUnix = Math.round((Date.now() - progressMs) / 1000);
+  }
 
   /** Get current playback position using high-res timer. */
   private getElapsedMs(): number {
@@ -762,7 +791,24 @@ export class LyricsEngine {
       if (!this.running) return;
       this.inLyricGap = false;
       this.clearGapTimer();
-      this.currentIdx = nextIdx;
+      /*
+       * Show the line the clock says, not the one that was booked.
+       *
+       * setTimeout only promises not to fire early. A busy event loop — lyrics
+       * resolving for the next track, a cover being decoded, the Japanese
+       * tokenizer waking up — can hold this well past its slot, and advancing
+       * by exactly one line then leaves the display a line behind with no way
+       * back: the following line is scheduled from the one just shown, so the
+       * lag rides along to the end of the song. Reading the index off the clock
+       * absorbs a late fire in a single step. Dense captions, whose lines are a
+       * few hundred milliseconds apart, are where it shows first.
+       *
+       * Never backwards: this ran because nextIdx came due, and a timer that
+       * fires a hair early must still advance rather than re-show the line
+       * already on screen.
+       */
+      const due = this.getElapsedMs() + dynamicOffset;
+      this.currentIdx = Math.max(nextIdx, findLyricIndex(this.lyrics, due));
       this.emitUpdate();
       this.scheduleNext();
     }, Math.max(0, delay));
@@ -952,6 +998,9 @@ export class LyricsEngine {
       return;
     }
 
+    const forced = this.forceRpc;
+    this.forceRpc = false;
+
     this.lastEmittedIdx = this.currentIdx;
     this.lastCurrentText = current;
     this.lastUpdateTime = now;
@@ -962,27 +1011,48 @@ export class LyricsEngine {
       log.lyrics(current);
     }
 
-    // Discord RPC: only update every 2 lines, but always show first line
-    if (idxChanged) {
-      this.lineChangeCount++;
-    }
-    const isFirstLine = this.lineChangeCount === 1;
-    const shouldUpdateRpc = idxChanged && (isFirstLine || this.lineChangeCount % 2 === 0);
-
     // Heartbeat only applies when NOT showing lyrics (keeps Discord UI fresh during gaps/no-lyrics)
-    const isShowingLyrics = current && current !== '♪♪' && !this.inLyricGap;
+    const isShowingLyrics = !!current && current !== '♪♪' && !this.inLyricGap;
     const shouldHeartbeat = heartbeatDue && !isShowingLyrics;
 
-    // CRITICAL ORDER: RPC first (latency-sensitive), then SSE (latency-tolerant).
-    // Build and emit full RPC activity before onLyricChange triggers EventEmitter + SSE.
-    if (shouldUpdateRpc || shouldHeartbeat) {
-      const activity = this.buildActivity(current, next);
-      if (activity) {
-        this.callbacks.onRpcUpdate(activity);
+    /*
+     * Every line reaches Discord, held back by a clock rather than by a count.
+     *
+     * This used to push on every second line change — `lineChangeCount % 2` —
+     * which meant the other half of the song never appeared in `details` at
+     * all. Those lines showed once, as the "→ next" preview, and were gone by
+     * the time the following push came; the card spent half its life a line
+     * behind the song, several seconds of it on anything slow. The app's own
+     * dashboard was right the whole time, which is why the two disagreed.
+     *
+     * The floor takes its place: a line change publishes when it happens, and
+     * only a passage arriving faster than RPC_MIN_PUSH_MS is coalesced — to the
+     * newest line, never by parity. Ordinary songs, whose lines are seconds
+     * apart, are never coalesced at all.
+     *
+     * A change that does lose that race is not dropped: it schedules the
+     * trailing flush, which publishes whatever is current once the floor lifts.
+     * Dropping it is what left the presence sitting on a line the song had
+     * already left.
+     */
+    if (idxChanged || shouldHeartbeat || forced) {
+      const floorMs = forced ? 0 : this.isCC ? CC_RPC_MIN_PUSH_MS : RPC_MIN_PUSH_MS;
+      const sinceRpc = now - this.lastRpcPushTime;
+      if (sinceRpc >= floorMs) {
+        this.clearRpcFlush();
+        // CRITICAL ORDER: RPC first (latency-sensitive), then SSE (latency-tolerant).
+        // Build and emit full RPC activity before onLyricChange triggers EventEmitter + SSE.
+        const activity = this.buildActivity(current, next);
+        if (activity) {
+          this.callbacks.onRpcUpdate(activity);
+        }
+      } else if (!this.rpcFlushTimer) {
+        this.rpcFlushTimer = setTimeout(() => this.flushRpc(), floorMs - sinceRpc);
       }
     }
 
-    // SSE broadcast + dashboard update (always update, regardless of line parity)
+    // SSE broadcast + dashboard update (every line, never floored — the dashboard
+    // renders locally and has no reason to wait on Discord's push budget)
     // Dashboard gets lyrics WITHOUT music notes (clean display)
     const latencyMs = this.callbacks.onLyricChange(current, next, prev);
     if (latencyMs > 0 && latencyMs < 500) {
@@ -1135,21 +1205,29 @@ export class LyricsEngine {
     const source = d.media_source || '';
     const activityType = (source === 'twitch' || source === 'kick') ? 2 : this.cfgActivityType;
 
-    // Timestamps (elapsed timer on Discord) — clamp to duration to avoid overflowing the bar
-    const nowUnix = Math.floor(Date.now() / 1000);
-    const rawElapsed = this.getElapsedMs();
-    const elapsedSec = Math.floor((d.duration_ms > 0 ? Math.min(rawElapsed, d.duration_ms) : rawElapsed) / 1000);
-    
-    // For live streams, use stream start time to show total stream duration instead of resetting to 0
-    let startTs: number;
-    if (d.is_live && d.stream_start_time_ms) {
-      startTs = Math.floor(d.stream_start_time_ms / 1000);
-      log.debug(`[LYRICS] Live stream: using start time ${startTs} (from ${d.stream_start_time_ms})`);
-    } else {
-      startTs = nowUnix - elapsedSec;
-      log.debug(`[LYRICS] Non-live or no start time: using elapsed ${elapsedSec}s`);
-    }
-    
+    /*
+     * When the track started, as one number that does not move.
+     *
+     * Discord draws the elapsed counter and the progress bar from this, so it
+     * has to read the same on every push or the bar advances on its own. It was
+     * recomputed per push as floor(now) - floor(elapsed): two floors taken of
+     * two clocks that advance together, and their difference flips between k
+     * and k+1 once a second. The answer therefore alternated between two
+     * values, and the bar jumped a second back and forth as pushes landed on
+     * either side of the flip — a stutter that got worse the more often the
+     * presence updated, which is the opposite of what pushing more often is for.
+     *
+     * anchorClock settles it once, from the same reading that sets the lyric
+     * clock, and it is recomputed only when that clock is re-anchored: a track
+     * starting, a seek, a loop. Between those the bar simply runs.
+     *
+     * Live streams keep their own start — a stream's bar counts from when it
+     * went live, not from when this app noticed it.
+     */
+    const startTs = d.is_live && d.stream_start_time_ms
+      ? Math.floor(d.stream_start_time_ms / 1000)
+      : this.trackStartUnix;
+
     const endTs = d.duration_ms > 0 ? startTs + Math.floor(d.duration_ms / 1000) : 0;
 
     let details: string;
@@ -1260,9 +1338,20 @@ export class LyricsEngine {
     // Heartbeat: always push after RPC_HEARTBEAT_MS to keep Discord UI fresh
     const rpcNow = performance.now();
     const heartbeatDue = rpcNow - this.lastRpcPushTime >= RPC_HEARTBEAT_MS;
+    /*
+     * startTs is part of the payload, so it belongs in the comparison.
+     *
+     * It used to be excluded because it was recomputed on every push and would
+     * have defeated the dedupe entirely. Now that it only moves when the clock
+     * is re-anchored, it moving *is* news: seek inside one long line and the
+     * text is identical, the index is identical, and the only thing that
+     * changed is where the progress bar should be. Without this the bar stayed
+     * where the listener left it until the next line came round.
+     */
     if (
       !heartbeatDue &&
       this.currentIdx === this.lastRpcIdx &&
+      startTs === this.lastRpcStartTs &&
       details === this.lastRpcDetails &&
       state === this.lastRpcState &&
       largeText === this.lastLargeText &&
@@ -1271,6 +1360,7 @@ export class LyricsEngine {
       return null;
     }
     this.lastRpcIdx = this.currentIdx;
+    this.lastRpcStartTs = startTs;
     this.lastRpcDetails = details;
     this.lastRpcState = state;
     this.lastLargeText = largeText;
@@ -1430,7 +1520,45 @@ export class LyricsEngine {
     this.lastRpcState = '';
     this.lastLargeText = '';
     this.lastRpcIdx = -1;
+    this.forceRpcPush();
+  }
+
+  /**
+   * Let the next emit publish, whatever the floor and the heartbeat rule say.
+   *
+   * The heartbeat is suppressed while lyrics are showing, on the reasoning that
+   * a lyric line is its own refresh. That leaves everything which changes the
+   * card without changing the line — album art resolving a moment after the
+   * track, shuffle being toggled, the offset slider moving, a status flash —
+   * with no way through at all on a song that has lyrics. Those updates reached
+   * the dashboard and stopped there.
+   */
+  private forceRpcPush(): void {
+    this.forceRpc = true;
     this.lastUpdateTime = 0;
+  }
+
+  /**
+   * Publish whatever is current, now that the push floor has lifted.
+   *
+   * Scheduled by emitUpdate when a line change arrived too soon after the last
+   * push. It reads the display fresh rather than replaying what was held back:
+   * by the time this runs the song may have moved on again, and the line worth
+   * showing is the one playing now, not the one that lost the race.
+   */
+  private flushRpc(): void {
+    this.rpcFlushTimer = null;
+    if (!this.running || !this.callbacks || !this.trackData) return;
+    const [current, next] = this.displayPair();
+    const activity = this.buildActivity(current, next);
+    if (activity) this.callbacks.onRpcUpdate(activity);
+  }
+
+  private clearRpcFlush(): void {
+    if (this.rpcFlushTimer) {
+      clearTimeout(this.rpcFlushTimer);
+      this.rpcFlushTimer = null;
+    }
   }
 
   private clearHeartbeat(): void {

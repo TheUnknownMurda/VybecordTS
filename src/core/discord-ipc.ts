@@ -88,6 +88,9 @@ export class DiscordIPC {
   // Rate limiting: prevent rapid successive SET_ACTIVITY calls (Discord rate limit ~5 calls/5s)
   private lastSetActivityTime = 0;
   private readonly SET_ACTIVITY_COOLDOWN_MS = 200; // Max 5 calls per second
+  // Newest payload held back by that cooldown, and the timer that will send it.
+  private pendingActivity: DiscordActivity | null = null;
+  private pendingTimer: ReturnType<typeof setTimeout> | null = null;
   // Activity types Discord's IPC actually accepts for third-party Rich
   // Presence — Streaming(1) and Custom(4) are hard-rejected (error code 4000).
   private static readonly VALID_ACTIVITY_TYPES = new Set([0, 2, 3, 5]);
@@ -421,12 +424,42 @@ export class DiscordIPC {
   setActivity(activity: DiscordActivity): void {
     if (!this.connected) return;
 
-    // Rate limiting: skip if too soon since last call
+    /*
+     * Coalesce, never drop.
+     *
+     * This used to `return` inside the cooldown, which threw the payload away.
+     * The lyric line it carried was simply gone: nothing re-sent it, and the
+     * caller had no way to find out — lyrics-engine had already recorded the
+     * push as done — so the presence sat on a line the song had left until some
+     * later change happened to move the text again. On a slow song that is
+     * several seconds of showing the wrong words.
+     *
+     * Bursts inside 200ms are routine rather than exceptional: a track change
+     * fires album art, play mode and the first lyric in the same tick, and a
+     * drift correction fires another on top. Holding the newest payload and
+     * sending it when the window opens costs one timer and loses nothing that
+     * matters — only the intermediate states go, which is what a coalescing
+     * throttle is for.
+     */
     const now = performance.now();
-    if (now - this.lastSetActivityTime < this.SET_ACTIVITY_COOLDOWN_MS) {
+    const sinceLast = now - this.lastSetActivityTime;
+    if (sinceLast < this.SET_ACTIVITY_COOLDOWN_MS) {
+      this.pendingActivity = activity;
+      if (!this.pendingTimer) {
+        this.pendingTimer = setTimeout(() => {
+          this.pendingTimer = null;
+          const queued = this.pendingActivity;
+          this.pendingActivity = null;
+          if (queued) this.setActivity(queued);
+        }, this.SET_ACTIVITY_COOLDOWN_MS - sinceLast);
+      }
       return;
     }
     this.lastSetActivityTime = now;
+    // A caller got through by hand, so anything queued behind it is stale. The
+    // timer is left to fire on an empty queue rather than cancelled — it has no
+    // work left to do, and clearing it here would race with its own callback.
+    this.pendingActivity = null;
 
     // Build the RPC activity object (Discord IPC SET_ACTIVITY format)
     const rpcActivity: Record<string, unknown> = {};
@@ -543,6 +576,11 @@ export class DiscordIPC {
   }
 
   private closeSocket(): void {
+    if (this.pendingTimer) {
+      clearTimeout(this.pendingTimer);
+      this.pendingTimer = null;
+    }
+    this.pendingActivity = null;
     if (this.socket) {
       const sock = this.socket;
       this.socket = null;
