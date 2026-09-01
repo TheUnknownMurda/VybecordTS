@@ -520,6 +520,30 @@ export class VybecordBackend extends EventEmitter {
     return pinned.startsWith('browser_') && BROWSER_PUSH_SOURCES.has(mediaSource);
   }
 
+  /**
+   * Whether a pin names this source — somebody asking for this player by hand.
+   *
+   * Distinct from mayOwnPresence, which answers "may this go on air" and is
+   * true for everything while nothing is pinned. This one is true only when a
+   * pin exists and points here, which is what makes it a reason to override a
+   * setting rather than merely permission to proceed.
+   *
+   * A pin outranks the detection switches. Picking a player off the Players
+   * page is the most explicit statement of intent the app has, and it used to
+   * lose in silence to a toggle set weeks earlier and long forgotten: the
+   * switch was read first, so pinning a player whose platform was off announced
+   * nothing, gave no reason, and looked like pinning was broken. Nothing else
+   * moves — the pin still cannot conjure a player that is not running, and an
+   * unpinned platform that is switched off stays off.
+   */
+  private isPinnedSource(mediaSource: string): boolean {
+    if (!this.media?.getPreferredSource()) return false;
+    const pinned = this.media.pinnedSourceName();
+    if (pinned === null) return false;
+    if (pinned === mediaSource) return true;
+    return pinned.startsWith('browser_') && BROWSER_PUSH_SOURCES.has(mediaSource);
+  }
+
   // ── Browser-extension push handlers ──────────────────────────────────────
 
   /**
@@ -544,8 +568,11 @@ export class VybecordBackend extends EventEmitter {
     const data = spec.source.update(raw);
     if (spec.debug) log.debug(`[${spec.label}] ${spec.debug(data)}`);
 
-    if (this.config.get(spec.configKey) === false) return;
-    if (!this.mayOwnPresence(spec.presenceSource(data))) return;
+    // The pin is read first: it outranks the detection switch. See
+    // isPinnedSource for why an explicit choice should not lose to a stale one.
+    const pushSrc = spec.presenceSource(data);
+    if (!this.isPinnedSource(pushSrc) && this.config.get(spec.configKey) === false) return;
+    if (!this.mayOwnPresence(pushSrc)) return;
 
     if (!spec.playing(data)) {
       /*
@@ -965,13 +992,14 @@ export class VybecordBackend extends EventEmitter {
 
     this.idleSince = 0; // Reset grace period when track is detected
 
-    // Per-platform detection gate
+    // Per-platform detection gate — waived for the player the user pinned.
     const src = track.media_source || '';
-    if (!this.config.get('detect_all_media') && !MUSIC_APPS.has(src)) {
+    const pinnedHere = this.isPinnedSource(src);
+    if (!pinnedHere && !this.config.get('detect_all_media') && !MUSIC_APPS.has(src)) {
       return;
     }
     const pKey = platformConfigKey(src);
-    if (pKey && this.config.get(pKey) === false) {
+    if (!pinnedHere && pKey && this.config.get(pKey) === false) {
       // Platform explicitly disabled — if it was the active track, stop it
       if (this.currentTrack && this.currentTrack.media_source === src) {
         this.onTrackStopped();
