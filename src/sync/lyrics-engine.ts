@@ -52,20 +52,19 @@ const CC_UPDATE_INTERVAL_MS = 250;   // Fast updates for YouTube CC (lines chang
 /**
  * Closest two presence pushes may be.
  *
- * Ordinary songs place their lines two to five seconds apart, so this floor
- * never touches them: every line lands on its own beat. It exists for the
- * passages that do run faster — a dense verse, an ad-lib run — where a card
- * that changed three times a second would be unreadable, and where Discord's
- * own client coalesces the outgoing presence anyway. Those collapse to the
- * newest line rather than being dropped, because emitUpdate schedules a
- * trailing push for whatever is current when the floor lifts.
+ * Mostly moot now that the card advances a pair at a time: the pair cadence is
+ * half the line rate, which for any real song is already slower than this. It
+ * stays as a burst guard — a seek, an album cover resolving and a pair change
+ * can still land together — with the IPC layer's own 200ms floor underneath.
  *
- * The IPC layer keeps its own 200ms floor underneath this one, for the bursts
- * that arrive from somewhere other than a line change.
+ * Both values sit below the pair cadence of the content they apply to, so the
+ * floor never throttles the pairs themselves. Throttling those would make the
+ * window fall behind the song, which is the one thing the pair rule cannot
+ * absorb.
  */
-const RPC_MIN_PUSH_MS = 1_500;
-/** Captions change every few hundred ms; a slower floor would swallow whole phrases. */
-const CC_RPC_MIN_PUSH_MS = 700;
+const RPC_MIN_PUSH_MS = 1_000;
+/** Captions run several lines a second; their pairs need the room. */
+const CC_RPC_MIN_PUSH_MS = 400;
 /**
  * How far the contiguous window may fall behind the music before it gives up
  * and jumps.
@@ -1023,8 +1022,18 @@ export class LyricsEngine {
   private pickDisplayIdx(): number {
     const clock = this.currentIdx;
     if (clock < 0 || !this.lyrics.length) return clock;
-    const contiguous = this.lastCoveredIdx + 1;
-    if (clock <= contiguous) return clock;
+    /*
+     * The pair on the card still covers where the song is: show it again.
+     *
+     * A republish that is not a pair change — an album cover arriving late, a
+     * heartbeat, a shuffle toggle — must not re-anchor the pairs to wherever
+     * the clock happens to be standing. Doing so would restart the pairing
+     * mid-stride and put a line that was just the "next" one back as the
+     * current one, which is the shuffle the pair rule exists to avoid.
+     */
+    if (clock <= this.lastCoveredIdx && this.shownIdx >= 0) return this.shownIdx;
+    const contiguous = Math.max(this.lastCoveredIdx + 1, 0);
+    if (clock <= contiguous) return contiguous;
     const lagMs = this.lyrics[clock].time - this.lyrics[contiguous].time;
     return lagMs > MAX_COVERAGE_LAG_MS ? clock : contiguous;
   }
@@ -1054,7 +1063,9 @@ export class LyricsEngine {
     const showedLyric = this.cfgShowLyrics && idx >= 0 && !this.inLyricGap
       && !!current && current !== '♪♪';
     this.lastCoveredIdx = showedLyric ? Math.min(idx + 1, this.lyrics.length - 1) : -1;
-    return showedLyric && idx < this.currentIdx;
+    // Behind means the song has left the pair just published, not merely that
+    // it has left its first line — the second line is on the card too.
+    return showedLyric && this.currentIdx > this.lastCoveredIdx;
   }
 
   /**
@@ -1114,26 +1125,28 @@ export class LyricsEngine {
     const shouldHeartbeat = heartbeatDue && !isShowingLyrics;
 
     /*
-     * Every line reaches Discord, held back by a clock rather than by a count.
+     * The card turns a page at a time, not a line at a time.
      *
-     * This used to push on every second line change — `lineChangeCount % 2` —
-     * which meant the other half of the song never appeared in `details` at
-     * all. Those lines showed once, as the "→ next" preview, and were gone by
-     * the time the following push came; the card spent half its life a line
-     * behind the song, several seconds of it on anything slow. The app's own
-     * dashboard was right the whole time, which is why the two disagreed.
+     * `details` carries a line and `state` carries the one after it, so every
+     * push already puts two lines in front of the reader. Publishing on each
+     * line change therefore sends each line twice — once as the next line,
+     * again as the current one — and doubles how often the card redraws to say
+     * something the reader could already see. Advancing a pair at a time is the
+     * deliberate trade: the presence redraws half as often, and in exchange
+     * `details` names the line the song is on only every other line.
      *
-     * The floor takes its place: a line change publishes when it happens, and
-     * only a passage arriving faster than RPC_MIN_PUSH_MS is coalesced — to the
-     * newest line, never by parity. Ordinary songs, whose lines are seconds
-     * apart, are never coalesced at all.
+     * So the trigger is the pair, not the line: publish once the song has moved
+     * past what the last push covered, and let the intervening line change go
+     * by in silence. Lines 1-2, then 3-4, then 5-6.
      *
-     * A change that does lose that race is not dropped: it schedules the
-     * trailing flush, which publishes whatever is current once the floor lifts.
-     * Dropping it is what left the presence sitting on a line the song had
-     * already left.
+     * Nothing is skipped and nothing is dropped. pickDisplayIdx starts the new
+     * pair where the last one ended rather than at the clock, and a push held
+     * back by the floor schedules the trailing flush instead of being discarded
+     * — which is what used to leave the presence sitting on a line the song had
+     * long left.
      */
-    if (idxChanged || shouldHeartbeat || forced) {
+    const pairDue = this.currentIdx > this.lastCoveredIdx;
+    if (pairDue || shouldHeartbeat || forced) {
       const floorMs = forced ? 0 : this.isCC ? CC_RPC_MIN_PUSH_MS : RPC_MIN_PUSH_MS;
       const sinceRpc = now - this.lastRpcPushTime;
       if (sinceRpc >= floorMs) {
