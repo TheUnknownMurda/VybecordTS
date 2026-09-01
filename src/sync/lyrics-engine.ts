@@ -66,6 +66,18 @@ const CC_UPDATE_INTERVAL_MS = 250;   // Fast updates for YouTube CC (lines chang
 const RPC_MIN_PUSH_MS = 1_500;
 /** Captions change every few hundred ms; a slower floor would swallow whole phrases. */
 const CC_RPC_MIN_PUSH_MS = 700;
+/**
+ * How far the contiguous window may fall behind the music before it gives up
+ * and jumps.
+ *
+ * The window advances at most two lines per push so that nothing is skipped
+ * (see pickDisplayIdx). On content dense enough that two lines per push is
+ * slower than the song itself, holding the invariant would mean drifting
+ * further behind with every push until the card was reading words from a
+ * different verse. Past this much lag, showing the right line matters more
+ * than showing every line.
+ */
+const MAX_COVERAGE_LAG_MS = 2_500;
 const RPC_HEARTBEAT_MS = 5_000;       // Force RPC push every 5s even if text unchanged (keeps Discord UI fresh)
 const EMA_ALPHA = 0.3;            // Exponential moving average weight for latency
 const LYRIC_GAP_MS = 25_000;      // Switch to no-lyrics RPC display during gaps longer than this
@@ -162,6 +174,10 @@ export class LyricsEngine {
   private lastLargeText = '';
   private lastRpcIdx = -1;
   private lastRpcStartTs = 0;
+  /** The line the card is currently showing in `details`. */
+  private shownIdx = -1;
+  /** Highest line index that has appeared on the card in either field. */
+  private lastCoveredIdx = -1;
   private lastRpcPushTime = 0; // Monotonic timestamp of last RPC push (for heartbeat)
   private rpcFlushTimer: ReturnType<typeof setTimeout> | null = null; // trailing push — see emitUpdate
   private forceRpc = false;    // next emit publishes whatever the floor says — see forceRpcPush
@@ -370,6 +386,7 @@ export class LyricsEngine {
     const baseMs = this.isCC ? 50 : BASE_OFFSET_MS;
     const offset = baseMs + this.measuredLatencyMs + this.getTotalOffsetMs();
     this.currentIdx = findLyricIndex(lyrics, trackData.progress_ms + offset);
+    this.resetCoverage();
 
     // Don't force display of first line if before its timestamp
     // Let it display naturally when its time comes to avoid showing it too early
@@ -417,6 +434,7 @@ export class LyricsEngine {
     const baseMs = this.isCC ? 50 : BASE_OFFSET_MS;
     const offset = baseMs + this.measuredLatencyMs + this.getTotalOffsetMs();
     this.currentIdx = findLyricIndex(lyrics, this.getElapsedMs() + offset);
+    this.resetCoverage();
 
     // Don't force display of first line if before its timestamp
     // Let it display naturally when its time comes
@@ -465,6 +483,7 @@ export class LyricsEngine {
     const baseMs = this.isCC ? 50 : BASE_OFFSET_MS;
     const offset = baseMs + this.measuredLatencyMs + offsetMs + this.autoOffsetMs;
     this.currentIdx = findLyricIndex(this.lyrics, this.getElapsedMs() + offset);
+    this.resetCoverage();
 
     // Reset dedup so the new position pushes immediately
     this.lastRpcDetails = '';
@@ -566,6 +585,7 @@ export class LyricsEngine {
       const baseMs = this.isCC ? 50 : BASE_OFFSET_MS;
       const offset = baseMs + this.measuredLatencyMs + this.getTotalOffsetMs();
       this.currentIdx = findLyricIndex(this.lyrics, progressMs + offset);
+      this.resetCoverage();
       this.resetDedup();
       this.emitUpdate();
       this.cancelTimer();
@@ -587,6 +607,7 @@ export class LyricsEngine {
       const offset = baseMs + this.measuredLatencyMs;
       const newIdx = findLyricIndex(this.lyrics, progressMs + offset);
       if (newIdx !== this.currentIdx) this.currentIdx = newIdx;
+      this.resetCoverage();
       this.forceRpcPush();
       this.emitUpdate();
       this.cancelTimer();
@@ -620,6 +641,7 @@ export class LyricsEngine {
       const offset = baseMs + this.measuredLatencyMs;
       const newIdx = findLyricIndex(this.lyrics, progressMs + offset);
       if (newIdx !== this.currentIdx) this.currentIdx = newIdx;
+      this.resetCoverage();
       this.forceRpcPush();
       this.emitUpdate();
       this.cancelTimer();
@@ -953,23 +975,99 @@ export class LyricsEngine {
    */
   pushRpcNow(): boolean {
     if (!this.running || !this.trackData || !this.callbacks) return false;
-    const [current, next] = this.displayPair();
+    // Republish what the card is showing, which after a coalesced passage is
+    // not always the line the clock is on.
+    const idx = this.shownIdx >= 0 ? this.shownIdx : this.currentIdx;
+    const [current, next] = this.displayPair(idx);
     this.lastRpcPushTime = 0;  // past buildActivity's dedupe
-    const activity = this.buildActivity(current, next);
+    const activity = this.buildActivity(current, next, idx);
     if (!activity) return false;
     this.callbacks.onRpcUpdate(activity);
     return true;
   }
 
   /** The current and next lines as the presence should show them. */
-  private displayPair(): [current: string, next: string] {
+  private displayPair(idx: number = this.currentIdx): [current: string, next: string] {
     if (!this.lyrics.length) return ['♪♪', ''];
-    if (this.currentIdx < 0) return ['♪♪', this.getDisplayText(0)];
-    const nextIdx = this.currentIdx + 1;
+    if (idx < 0) return ['♪♪', this.getDisplayText(0)];
+    const nextIdx = idx + 1;
     return [
-      this.getDisplayText(this.currentIdx),
+      this.getDisplayText(idx),
       nextIdx < this.lyrics.length ? this.getDisplayText(nextIdx) : '',
     ];
+  }
+
+  /**
+   * Which line to put in `details`, given where the song actually is.
+   *
+   * The card is a two-line window, not one line: `state` carries "→ next". So a
+   * push showing line N puts both N and N+1 in front of the reader, and a
+   * following push at N+2 has skipped nothing between them. That is what the
+   * old every-second-line rule was buying, and replacing it with "always show
+   * the line the clock says" gave it away: once the floor coalesced, the lines
+   * jumped over were gone from the card entirely, in neither field, rather than
+   * merely arriving a moment late. Measured on 300ms captions, five lines in
+   * twenty-four were never shown at all.
+   *
+   * So the window advances contiguously — never further than one line past what
+   * has already been covered. When the song is slow enough that this is no
+   * constraint, which is nearly always, the answer is the clock's own line and
+   * the sync is exact. When it is not, the window falls back to two lines at a
+   * time: the old behaviour, arrived at from the invariant rather than from
+   * counting, and only where the pace actually calls for it.
+   *
+   * The exception is lag. Holding the invariant through a passage the window
+   * cannot keep up with would eventually have the card reading from a different
+   * part of the song, which is wrong in a way that missing an ad-lib is not.
+   */
+  private pickDisplayIdx(): number {
+    const clock = this.currentIdx;
+    if (clock < 0 || !this.lyrics.length) return clock;
+    const contiguous = this.lastCoveredIdx + 1;
+    if (clock <= contiguous) return clock;
+    const lagMs = this.lyrics[clock].time - this.lyrics[contiguous].time;
+    return lagMs > MAX_COVERAGE_LAG_MS ? clock : contiguous;
+  }
+
+  /**
+   * Publish one line, and remember how much of the song the card now covers.
+   *
+   * Returns whether the display is still behind the music, which is the
+   * caller's cue to come back for the rest rather than wait for the next line
+   * change to carry it.
+   */
+  private pushLine(): boolean {
+    const idx = this.pickDisplayIdx();
+    const [current, next] = this.displayPair(idx);
+    const activity = this.buildActivity(current, next, idx);
+    if (activity) this.callbacks!.onRpcUpdate(activity);
+    this.shownIdx = idx;
+    /*
+     * Only a push that actually printed a lyric may claim to have covered one.
+     *
+     * buildActivity falls back to title-and-artist whenever there is no line to
+     * show — before the first one starts, through an instrumental gap, with
+     * lyrics switched off — and counting those as coverage skipped a real line
+     * later. The opening push of a track is exactly that case: it lands with
+     * the index still at -1, and claiming line 0 meant line 0 was never shown.
+     */
+    const showedLyric = this.cfgShowLyrics && idx >= 0 && !this.inLyricGap
+      && !!current && current !== '♪♪';
+    this.lastCoveredIdx = showedLyric ? Math.min(idx + 1, this.lyrics.length - 1) : -1;
+    return showedLyric && idx < this.currentIdx;
+  }
+
+  /**
+   * Forget what the card covered, because the playhead moved.
+   *
+   * Coverage is a claim about the lines just behind the current one, and a seek
+   * or a new track makes it meaningless — the next push should show where the
+   * song is now, not resume filling a window from somewhere the listener left.
+   */
+  private resetCoverage(): void {
+    this.shownIdx = -1;
+    // Never below -1: pickDisplayIdx indexes the line just past this one.
+    this.lastCoveredIdx = Math.max(this.currentIdx - 1, -1);
   }
 
   /** Emit the current lyric state to callbacks. */
@@ -1042,9 +1140,11 @@ export class LyricsEngine {
         this.clearRpcFlush();
         // CRITICAL ORDER: RPC first (latency-sensitive), then SSE (latency-tolerant).
         // Build and emit full RPC activity before onLyricChange triggers EventEmitter + SSE.
-        const activity = this.buildActivity(current, next);
-        if (activity) {
-          this.callbacks.onRpcUpdate(activity);
+        // A push that could not carry the window all the way up to the clock
+        // books the next one itself, instead of waiting on the next line change
+        // to carry the rest.
+        if (this.pushLine()) {
+          this.rpcFlushTimer = setTimeout(() => this.flushRpc(), floorMs);
         }
       } else if (!this.rpcFlushTimer) {
         this.rpcFlushTimer = setTimeout(() => this.flushRpc(), floorMs - sinceRpc);
@@ -1198,7 +1298,7 @@ export class LyricsEngine {
 
   // ── RPC payload building ──
 
-  private buildActivity(currentText: string, nextText: string): DiscordActivity | null {
+  private buildActivity(currentText: string, nextText: string, idx: number = this.currentIdx): DiscordActivity | null {
     const d = this.trackData!;
     const hasLyrics = this.cfgShowLyrics && this.lyrics.length > 0;
     // Force Twitch and Kick to always use Listening (type 2)
@@ -1286,7 +1386,7 @@ export class LyricsEngine {
         }
         if (nxt && nxt !== '♪♪') {
           // Add multiplier after music note on next line only
-          const nextIdx = this.currentIdx + 1;
+          const nextIdx = idx + 1;
           const nextMultiplier = this.groupMultiplier[nextIdx] || 0;
           nxt = nxt + ' ♪' + (nextMultiplier > 0 ? ` (x${nextMultiplier})` : '');
         }
@@ -1350,7 +1450,7 @@ export class LyricsEngine {
      */
     if (
       !heartbeatDue &&
-      this.currentIdx === this.lastRpcIdx &&
+      idx === this.lastRpcIdx &&
       startTs === this.lastRpcStartTs &&
       details === this.lastRpcDetails &&
       state === this.lastRpcState &&
@@ -1359,7 +1459,7 @@ export class LyricsEngine {
     ) {
       return null;
     }
-    this.lastRpcIdx = this.currentIdx;
+    this.lastRpcIdx = idx;
     this.lastRpcStartTs = startTs;
     this.lastRpcDetails = details;
     this.lastRpcState = state;
@@ -1493,13 +1593,16 @@ export class LyricsEngine {
     if (!this.running || !this.callbacks || !this.trackData) return;
     if (performance.now() - this.lastRpcPushTime < TRANSLATION_REPUSH_MIN_MS) return;
 
-    const [current, next] = this.displayPair();
+    // The line on the card, not the line the clock is on: a translation is
+    // only worth a second push for words somebody is currently looking at.
+    const idx = this.shownIdx >= 0 ? this.shownIdx : this.currentIdx;
+    const [current, next] = this.displayPair(idx);
     if (current.trim() !== trimmed) return;
 
     this.lastRpcDetails = '';
     this.lastRpcState = '';
     this.lastRpcIdx = -1;
-    const activity = this.buildActivity(current, next);
+    const activity = this.buildActivity(current, next, idx);
     if (activity) this.callbacks.onRpcUpdate(activity);
   }
 
@@ -1549,9 +1652,10 @@ export class LyricsEngine {
   private flushRpc(): void {
     this.rpcFlushTimer = null;
     if (!this.running || !this.callbacks || !this.trackData) return;
-    const [current, next] = this.displayPair();
-    const activity = this.buildActivity(current, next);
-    if (activity) this.callbacks.onRpcUpdate(activity);
+    if (this.pushLine()) {
+      const floorMs = this.isCC ? CC_RPC_MIN_PUSH_MS : RPC_MIN_PUSH_MS;
+      this.rpcFlushTimer = setTimeout(() => this.flushRpc(), floorMs);
+    }
   }
 
   private clearRpcFlush(): void {
