@@ -83,6 +83,8 @@ export class DiscordIPC {
   private nonceCounter = 0;
   // Cached setActivity state: skip full rebuild + JSON.stringify when activity unchanged
   private lastActivityJson = '';
+  /** Last large_image written to the log — see the [ASSET] line in setActivity. */
+  private lastLoggedLargeImage = '';
   private lastActivityArgs = '';
   private readonly pid = process.pid;
   // Rate limiting: prevent rapid successive SET_ACTIVITY calls (Discord rate limit ~5 calls/5s)
@@ -497,6 +499,19 @@ export class DiscordIPC {
       const assets: Record<string, string> = {};
       // Always set large_image (use default if not provided to avoid app logo)
       assets.large_image = a.large_image || 'https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/zkR9FspOnC79sb6532RdH.gif';
+      /*
+       * Say which cover went out, once per change.
+       *
+       * "The cover is missing on Discord" is otherwise unanswerable from the
+       * log: the presence line records the words on the card and nothing about
+       * the image, so there is no way to tell a cover that never resolved from
+       * one Discord was handed and would not fetch. Those have different causes
+       * and only one of them is ours.
+       */
+      if (assets.large_image !== this.lastLoggedLargeImage) {
+        this.lastLoggedLargeImage = assets.large_image;
+        log.info(`[ASSET] Large image: ${assets.large_image}`);
+      }
       if (a.large_text) assets.large_text = sanitize(a.large_text);
       if (a.small_image) assets.small_image = a.small_image;
       if (a.small_text) assets.small_text = sanitize(a.small_text);

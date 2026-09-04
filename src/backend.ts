@@ -1279,9 +1279,27 @@ export class VybecordBackend extends EventEmitter {
     // Phase 1: INSTANT — show track info with no lyrics (< 1ms)
     this.lyricsEngine.startTrack([], trackData, rpcConfig);
 
-    // Start local thumb upload immediately (Apple Music etc.) — async, non-blocking
-    if (trackData.album_art_url === '/api/thumbnail') {
-      this.resolveDiscordArt(trackData, signal);
+    /*
+     * Resolve a cover whenever what we hold is not something Discord can fetch.
+     *
+     * That is the local SMTC thumbnail, and it is also nothing at all. A source
+     * reporting no artwork — an empty field, or a spotify: URI local extraction
+     * could not open — used to skip this branch outright and go straight to the
+     * "no album cover" placeholder, even though the catalogue lookup behind it
+     * answers for everything ever released and costs one small request.
+     *
+     * The upload fallback stays reserved for the thumbnail case. It publishes
+     * whatever is on disk at THUMB_PATH, and a track that reported no artwork
+     * of its own has no claim on that file — the last player to write it does.
+     *
+     * A live stream is excluded outright. There is no album behind a stream
+     * title to look up, and the catalogue would be free to answer anyway — the
+     * artist check only rejects a wrong *artist*, so a channel name that
+     * happens to read like a band would come back with that band's record.
+     */
+    const declaredArt = trackData.album_art_url || '';
+    if (!trackData.is_live && !/^https?:\/\//.test(declaredArt)) {
+      this.resolveDiscordArt(trackData, signal, declaredArt === '/api/thumbnail');
     }
 
     // Phase 2: ASYNC — fetch lyrics in background
@@ -2465,8 +2483,12 @@ export class VybecordBackend extends EventEmitter {
    * Anything still unresolved gets the default placeholder, which at least
    * renders. None of this affects the window, which reads the artwork straight
    * from the player and is therefore always right.
+   *
+   * @param allowUpload whether step 2 is on the table. Off for a track that
+   *   reported no artwork at all: the file step 2 publishes belongs to whoever
+   *   last wrote it, which for such a track is some other player.
    */
-  private resolveDiscordArt(trackData: TrackData, signal?: AbortSignal): void {
+  private resolveDiscordArt(trackData: TrackData, signal?: AbortSignal, allowUpload = true): void {
     const trackKey = this.currentTrackKey;
     // Claimed before the await, so a poll landing mid-resolve does not start a
     // second one for the same bytes.
@@ -2474,7 +2496,7 @@ export class VybecordBackend extends EventEmitter {
 
     void (async () => {
       const catalogue = await lookupCoverArt(trackKey, trackData.artist_name, trackData.track_name, signal);
-      const url = catalogue ?? await uploadCoverArt(signal);
+      const url = catalogue ?? (allowUpload ? await uploadCoverArt(signal) : null);
       if (!url) {
         log.debug(`[RPC] No cover for "${trackData.artist_name} - ${trackData.track_name}"`);
         return;
