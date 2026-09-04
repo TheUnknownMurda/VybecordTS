@@ -978,7 +978,28 @@ export class LyricsEngine {
     // not always the line the clock is on.
     const idx = this.shownIdx >= 0 ? this.shownIdx : this.currentIdx;
     const [current, next] = this.displayPair(idx);
-    this.lastRpcPushTime = 0;  // past buildActivity's dedupe
+    /*
+     * Clear what buildActivity compares against, rather than backdating its
+     * heartbeat clock.
+     *
+     * Setting lastRpcPushTime = 0 was meant to read as "long ago", and for most
+     * of a run it does. It does not for the first five seconds of one: that
+     * clock is performance.now(), whose origin is process start, so 0 is only
+     * ever RPC_HEARTBEAT_MS in the past once the process has been alive that
+     * long. Before then the heartbeat is not due, nothing else has changed —
+     * same line, same text, same cover — and the republish deduped itself away.
+     *
+     * Which is exactly the window this is called in. The first App ID switch of
+     * a session lands about a second and a half after the first track is
+     * announced, and the backend reads a false return here as "there is nothing
+     * playing" and clears the presence. The card went blank on the fresh socket
+     * and stayed blank until the next lyric line happened to come round.
+     */
+    this.lastRpcDetails = '';
+    this.lastRpcState = '';
+    this.lastLargeText = '';
+    this.lastLargeImage = '';
+    this.lastRpcIdx = -1;
     const activity = this.buildActivity(current, next, idx);
     if (!activity) return false;
     this.callbacks.onRpcUpdate(activity);
