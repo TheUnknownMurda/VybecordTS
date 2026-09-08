@@ -2407,6 +2407,7 @@ export class VybecordBackend extends EventEmitter {
       rpc_activity_type: cfg.rpc_activity_type,
       rpc_status_display: cfg.rpc_status_display,
       rpc_status_template: cfg.rpc_status_template,
+      rpc_show_playlist: cfg.rpc_show_playlist,
       dance_mode: cfg.dance_mode,
       radiate_mode: cfg.radiate_mode,
       purple_rad_mode: cfg.purple_rad_mode,

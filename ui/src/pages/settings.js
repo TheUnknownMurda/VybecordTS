@@ -131,6 +131,8 @@ function presenceTab(body) {
           ? selectRow('Away after', 'Inactivity before the status is hidden. Discord itself goes idle after 10 minutes.',
               cfg('away_after_minutes', 10), AWAY_DELAYS, (v) => put('away_after_minutes', Number(v)))
           : null,
+        toggleRow('Show playlist', 'Name the playlist, radio or Liked Songs the track is playing from — on the second line, in the cover tooltip and in the status line. Off, that line shows the artist instead. Stream follower counts are not affected.',
+          cfg('rpc_show_playlist', true) !== false, (v) => put('rpc_show_playlist', v)),
         selectRow('Activity type', 'The verb Discord shows before the activity.',
           cfg('rpc_activity_type', 2), ACTIVITY_TYPES, (v) => put('rpc_activity_type', Number(v))),
         selectRow('Status line', 'What the one-line status in the member list shows.',

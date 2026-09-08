@@ -261,6 +261,7 @@ export class LyricsEngine {
   private cfgActivityType = 2;
   private cfgStatusDisplay = 'app';
   private cachedStatusName = '';
+  private cfgShowPlaylist = true;
   private cfgHideSmallIcon = false;
   private cfgIconMode: 'default' | 'dance' | 'radiate' | 'purple_rad' | 'rouge' | 'lrc_off' | 'bleeding' | 'blue_rad' | 'random' = 'default';
   private cfgRpcTranslate = false;
@@ -1231,13 +1232,14 @@ export class LyricsEngine {
     this.cfgTranslateLang = (this.rpcConfig.translate_target_lang as string) || 'en';
     this.cfgActivityType = (this.rpcConfig.rpc_activity_type as number) ?? 2;
     this.cfgStatusDisplay = (this.rpcConfig.rpc_status_display as string) || 'app';
+    this.cfgShowPlaylist = (this.rpcConfig.rpc_show_playlist as boolean) !== false;
     // Resolved once per track — the status line only depends on metadata, never on
     // the current lyric, so it never needs rebuilding between lines.
     const statusTpl = this.cfgStatusDisplay === 'custom'
       ? (this.rpcConfig.rpc_status_template as string) || ''
       : STATUS_TEMPLATES[this.cfgStatusDisplay] || '';
     this.cachedStatusName = statusTpl
-      ? truncate(renderStatusTemplate(statusTpl, statusVars(d)), 128)
+      ? truncate(renderStatusTemplate(statusTpl, statusVars(d, this.cfgShowPlaylist)), 128)
       : '';
     this.cfgHideSmallIcon = (this.rpcConfig.hide_small_icon as boolean) === true;
     // Custom icon modes are Spotify-specific — force 'default' (platform icon) for other sources
@@ -1279,7 +1281,7 @@ export class LyricsEngine {
     if (!d) return;
     this.cachedDisplayArtist = deduplicateArtist(d.track_name, d.artist_name);
     this.cachedHasAlbum = !!(d.album_name && d.album_name.trim());
-    this.cachedContextName = getContextDisplayName(d);
+    this.cachedContextName = getContextDisplayName(d, this.cfgShowPlaylist);
     // Mark context as redundant if empty OR if it matches album name exactly
     const ctxMatchesAlbum = !!(this.cachedContextName && d.album_name && this.cachedContextName.toLowerCase() === d.album_name.toLowerCase());
     this.cachedIsRedundantCtx = !this.cachedContextName || ctxMatchesAlbum;
@@ -1295,7 +1297,7 @@ export class LyricsEngine {
     this.cachedPlayModeSuffix =
       d.is_shuffle ? ' | 🔀' :
       d.repeat_mode === 'track' ? ' | 🔂' : '';
-    this.cachedInfoText = buildInfoText(d, '', '');
+    this.cachedInfoText = buildInfoText(d, '', '', this.cfgShowPlaylist);
     // Insert play mode suffix after context/album in infoText (visible in large_text when lyrics are showing)
     if (this.cachedPlayModeSuffix) {
       this.cachedInfoText = truncate(this.cachedInfoText + this.cachedPlayModeSuffix, 128);
@@ -1786,8 +1788,20 @@ function isRedundantContext(d: TrackData): boolean {
     || ctx === d.track_name.toLowerCase();
 }
 
-/** Get display name for context, with fallback for Liked Songs (collection) and Local Files. */
-function getContextDisplayName(d: TrackData): string {
+/**
+ * Get display name for context, with fallback for Liked Songs (collection) and Local Files.
+ *
+ * `show` is the rpc_show_playlist setting, and this is the one place it is
+ * applied: every field that names the context — the state line, the cover's
+ * tooltip, the status line — asks here first, so returning nothing removes the
+ * playlist from all of them at once and lets each field's existing "no context"
+ * branch (artist instead of playlist, and its link with it) do the rest.
+ *
+ * Live sources are exempt. Kick and Twitch put the channel's follower count in
+ * this field, which is not a playlist and not what the setting is about.
+ */
+function getContextDisplayName(d: TrackData, show: boolean): string {
+  if (!show && d.context_type !== 'live') return '';
   const ctx = d.context_name?.trim();
   if (ctx) return ctx;
   // Fallback: Local files (no Spotify ID) or Local Files playlist
@@ -1829,12 +1843,12 @@ const RE_STATUS_TOKEN = /\{(\w+)\}/g;
 const RE_LEADING_SEP = /^[\s\-–—|·•,:/]+/;
 
 /** Placeholder values for the status line. Lyrics are deliberately not exposed here. */
-function statusVars(d: TrackData): Record<string, string> {
+function statusVars(d: TrackData, showPlaylist: boolean): Record<string, string> {
   return {
     title:    d.track_name || '',
     artist:   deduplicateArtist(d.track_name, d.artist_name) || '',
     album:    d.album_name || '',
-    playlist: getContextDisplayName(d),
+    playlist: getContextDisplayName(d, showPlaylist),
     platform: PLATFORM_ICONS[d.media_source || '']?.[1] || '',
   };
 }
@@ -1870,7 +1884,7 @@ function renderStatusTemplate(tpl: string, vars: Record<string, string>): string
 }
 
 /** Build large_text from metadata parts, excluding values already visible in other fields. */
-function buildInfoText(d: TrackData, currentText: string, nextText: string): string {
+function buildInfoText(d: TrackData, currentText: string, nextText: string, showPlaylist: boolean): string {
   // Concatenate shown texts once for fast substring check (avoids per-field .some().includes())
   const vis = currentText + '\0' + nextText;
   const displayArtist = deduplicateArtist(d.track_name, d.artist_name);
@@ -1878,7 +1892,7 @@ function buildInfoText(d: TrackData, currentText: string, nextText: string): str
   if (d.track_name && !vis.includes(d.track_name))   parts.push(`♫${d.track_name}`);
   if (displayArtist && !vis.includes(displayArtist)) parts.push(`🎤${displayArtist}`);
   if (d.album_name && !vis.includes(d.album_name))   parts.push(`💽${d.album_name}`);
-  const ctxName = getContextDisplayName(d);
+  const ctxName = getContextDisplayName(d, showPlaylist);
   // Skip context if it matches album name exactly (avoid redundancy)
   const ctxMatchesAlbum = ctxName && d.album_name && ctxName.toLowerCase() === d.album_name.toLowerCase();
   if (ctxName && !ctxMatchesAlbum && !isRedundantContext(d) && !vis.includes(ctxName)) parts.push(`🎼${ctxName}`);

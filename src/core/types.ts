@@ -139,6 +139,17 @@ export interface VybecordConfig {
   rpc_status_display: string;
   /** Free-form status-line template used when rpc_status_display is 'custom'. */
   rpc_status_template: string;
+  /**
+   * Show the playback context — the playlist, the Liked Songs collection, the
+   * artist radio — anywhere on the presence.
+   *
+   * On by default, which is how the presence has always behaved. Off drops it
+   * from the state field, from the cover's tooltip and from the status line,
+   * and the state field falls back to the artist (link included). A stream's
+   * context is its follower count rather than a playlist, so live sources
+   * ignore this.
+   */
+  rpc_show_playlist: boolean;
   /** Dance mode: animated small icon for Spotify */
   dance_mode: boolean;
   /** Radiate mode: custom animated GIF as small icon (all platforms) */

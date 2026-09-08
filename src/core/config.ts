@@ -29,6 +29,9 @@ const DEFAULTS: VybecordConfig = {
   rpc_activity_type: 2, // LISTENING
   rpc_status_display: 'app', // status line keeps showing the app name by default
   rpc_status_template: '{title} - {artist}',
+  // The playlist has always been on the presence; the switch is for people who
+  // would rather not say which one they are in.
+  rpc_show_playlist: true,
   dance_mode: false,
   radiate_mode: false,
   purple_rad_mode: false,
@@ -137,6 +140,7 @@ export const CONFIG_SCHEMA: Record<string, FieldSpec> = {
   rpc_activity_type: { type: 'number', min: 0, max: 5 },
   rpc_status_display: { type: 'string', values: STATUS_DISPLAY_CHOICES },
   rpc_status_template: { type: 'string', maxLength: 128 },
+  rpc_show_playlist: { type: 'boolean' },
   dance_mode: { type: 'boolean' },
   radiate_mode: { type: 'boolean' },
   purple_rad_mode: { type: 'boolean' },
