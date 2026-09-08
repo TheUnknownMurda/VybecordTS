@@ -80,6 +80,18 @@ const VIDEO_SOURCES = ['browser_', 'youtube'];
 const ARTIST_SPLIT_RE = /[,]/;  // Precompiled — used in recordPlay + artist key extraction
 
 /**
+ * How far a newcomer's position may sit from the engine's clock and still be
+ * the same playback. See isHandoff().
+ *
+ * Wide, because the whole point is that the two sides were not reading the
+ * player at the same instant, and the one taking over may have been quiet for
+ * a minute before it did. Still nowhere near what tells a handoff apart from
+ * the case it must not swallow — the same song started again from the top,
+ * which is a fresh play tens of seconds away from wherever the last one was.
+ */
+const HANDOFF_DRIFT_MS = 10_000;
+
+/**
  * The second presence button, which is not the user's to change.
  *
  * It is the one that points at whatever is playing, and its wording has to
@@ -602,6 +614,13 @@ export class VybecordBackend extends EventEmitter {
       return;
     }
 
+    // The song already playing, back from the source that knows it best — the
+    // extension answering again after being counted out. See isHandoff().
+    if (this.isHandoff(track)) {
+      this.adoptHandoff(track, trackKey, spec.web, spec.label);
+      return;
+    }
+
     this.currentTrackKey = trackKey;
     this.currentTrack = track;
     this.cachedIsWebSource = spec.web;
@@ -662,6 +681,96 @@ export class VybecordBackend extends EventEmitter {
         this.emit('statsUpdate', this.getSessionStats());
       }
     }
+  }
+
+  /**
+   * The song already on air, arriving from the other transport.
+   *
+   * The two sides trade the presence mid-song, and neither trade is a change of
+   * song. The Spicetify extension lives inside Spotify's own renderer, so
+   * Chromium throttles its timer the moment that window is minimised: a push
+   * written to arrive every two seconds goes quiet for ten or sixty, the source
+   * is judged stale, and the OS media session picks up the same playback. It
+   * hands straight back as soon as one push lands.
+   *
+   * Nothing about the song changed across that — but the key did, because the
+   * OS calls the track `desktop:<title>:<artist>` and Spotify calls it by its
+   * id, so each leg read as a brand new track. The engine restarted from zero
+   * lyrics, the providers and the cover catalogue were asked all over again for
+   * a song already resolved, and until they answered the presence sat on the
+   * "no cover" placeholder with the playlist and the featured artists gone.
+   * Twice per glitch, once in each direction. That is what a listener saw as
+   * the artwork, the lyrics and the track details dropping out mid-song.
+   *
+   * So identity here is the song, not the source that named it: same title,
+   * same lead artist, and a position continuing the one the engine is already
+   * keeping.
+   *
+   * The transports must actually differ, which `_from_push` states exactly —
+   * every extension sets it and the OS session never does. Without that test
+   * this would also catch two consecutive tracks off the same source, and a
+   * pair of titles one of which contains the other ("Intro" into "Intro
+   * (Reprise)") would inherit the wrong song's lyrics.
+   *
+   * Live sources are left out. A stream has no length and no position to
+   * compare, and its title is a channel banner that changes under it.
+   */
+  private isHandoff(track: TrackData): boolean {
+    const cur = this.currentTrack;
+    if (!cur || !this.lyricsEngine.isRunning()) return false;
+    if (track.is_live || cur.is_live) return false;
+    if (!!track._from_push === !!cur._from_push) return false;
+    if (!titlesAgree(track.track_name, cur.track_name)) return false;
+    const lead = (a: string) => a.split(ARTIST_SPLIT_RE)[0].trim();
+    if (!titlesAgree(lead(track.artist_name), lead(cur.artist_name))) return false;
+    return Math.abs(track.progress_ms - this.lyricsEngine.getElapsed()) <= HANDOFF_DRIFT_MS;
+  }
+
+  /**
+   * Take the song over from whichever source was reporting it.
+   *
+   * The arriving reading supplies the clock, and supplies the metadata only
+   * when it is the better-informed of the two. An extension reads the player's
+   * own model — every artist, the playlist being played from, the links, the
+   * cover off the service's CDN — so when it is the one arriving its account
+   * replaces what the OS session could offer. When it is the one leaving, the
+   * OS session's thinner account is not allowed to overwrite what the extension
+   * already told us, and the song keeps its credits and its playlist for the
+   * rest of the play.
+   *
+   * No recordPlay and no onNewTrack: this play is already in the history and
+   * already resolved. Not asking again is the point of the whole branch.
+   */
+  private adoptHandoff(track: TrackData, trackKey: string, web: boolean, label: string): void {
+    const cur = this.currentTrack!;
+    const rich = track._from_push ? track : cur;
+    const merged: TrackData = {
+      ...rich,
+      progress_ms: track.progress_ms,
+      duration_ms: track.duration_ms || rich.duration_ms,
+      is_playing: true,
+      _received_at: track._received_at,
+      _from_push: track._from_push,
+    };
+
+    // A cover Discord can already fetch outlives a reading that arrived without
+    // one: the local thumbnail placeholder is not an upgrade on a resolved URL.
+    if (!/^https?:\/\//.test(merged.album_art_url)) {
+      const resolved = [cur.album_art_url, track.album_art_url].find(u => /^https?:\/\//.test(u || ''));
+      if (resolved) merged.album_art_url = resolved;
+    }
+
+    log.info(`[HANDOFF] ${merged.track_name} — ${merged.artist_name}: ${label} took over mid-song`
+      + ` (${Math.round(merged.progress_ms / 1000)}s in) — keeping the lyrics and cover already resolved`);
+
+    this.currentTrackKey = trackKey;
+    this.currentTrack = merged;
+    this.cachedIsWebSource = web;
+    // Metadata first, so the engine is told which clock it is now reading
+    // before it is handed a position from it.
+    this.lyricsEngine.updateTrackData(merged);
+    this.lyricsEngine.syncProgress(merged.progress_ms);
+    this.emit('trackUpdate', merged);
   }
 
   handleSpicetifyPush(raw: unknown): void {
@@ -1112,9 +1221,18 @@ export class VybecordBackend extends EventEmitter {
       return;
     }
 
+    const web = WEB_SOURCES.some(s => src.startsWith(s));
+
+    // The song already playing, now reported by the OS session because its
+    // extension went quiet. Not a new track. See isHandoff().
+    if (this.isHandoff(track)) {
+      this.adoptHandoff(track, trackKey, web, src || 'the media session');
+      return;
+    }
+
     this.currentTrackKey = trackKey;
     this.currentTrack = track;
-    this.cachedIsWebSource = WEB_SOURCES.some(s => (track.media_source || '').startsWith(s));
+    this.cachedIsWebSource = web;
     log.info(`[NEW TRACK] ${track.track_name} — ${track.artist_name} (${track.media_source})`);
     this.recordPlay(track);
     this.emit('trackUpdate', track);

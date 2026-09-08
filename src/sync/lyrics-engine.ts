@@ -462,6 +462,18 @@ export class LyricsEngine {
   updateTrackData(trackData: TrackData): void {
     if (!this.running) return;
     this.trackData = trackData;
+    /*
+     * Which clock the positions are now coming from.
+     *
+     * Set at startTrack for the ordinary case, and it used to stay there for
+     * the life of the track — right until a source handed the song over
+     * mid-play (see isHandoff in backend.ts). Then the engine went on trusting
+     * an OS session's coarse readings the way it trusts a push source's exact
+     * ones, or holding a push source's exact ones behind the cooldown meant for
+     * coarse ones. Everything else that calls this passes a track derived from
+     * the one already playing, so for those the value is simply unchanged.
+     */
+    this.isPushSource = !!trackData._from_push;
     // Refresh cached values (album art, URLs, display text may have changed)
     this.rebuildTrackCache();
     this.rebuildNoLyricsCache();
