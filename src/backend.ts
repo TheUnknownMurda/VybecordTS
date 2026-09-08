@@ -881,6 +881,25 @@ export class VybecordBackend extends EventEmitter {
     return latest && latest.track_id === trackId ? latest.track_name : '';
   }
 
+  /**
+   * Spotify's own lyrics for this track, if the extension has pushed them.
+   *
+   * The store is keyed by Spotify track id, and most of the time the track is
+   * too. The second lookup is for when it is not: the presence sits on the OS
+   * media session, which names the track `desktop:<title>:<artist>` and knows
+   * no id at all — the state a handoff leaves behind for the rest of a song
+   * (see isHandoff). The extension is the one side holding both, so its current
+   * track is what reconciles them, exactly as the hot-inject path does.
+   */
+  private pushedSpotifyLyrics(t: TrackData): LyricLine[] | null {
+    const direct = this.spotifyLyricsStore.get(t.track_id);
+    if (direct?.length) return direct;
+    if (!t.track_id.startsWith('desktop:')) return null;
+    const latest = this.spicetify.latest;
+    if (!latest || !titlesAgree(latest.track_name, t.track_name)) return null;
+    return this.spotifyLyricsStore.get(latest.track_id) || null;
+  }
+
   handleSpotifyLyrics(raw: unknown): void {
     /*
      * Coerced the same way the six track sources are, and for the same reason:
@@ -1428,14 +1447,6 @@ export class VybecordBackend extends EventEmitter {
     const originalAlbumArtUrl = trackData.album_art_url;
 
     /*
-     * Lyrics the Spicetify extension pushed for this track.
-     *
-     * It fetches on songchange, so they routinely land before the track is set
-     * up here — the hot-inject path in handleSpotifyLyrics only covers the
-     * opposite order. Folding them into the cache now is what makes an early
-     * push count instead of being stored and forgotten.
-     */
-    /*
      * Lyrics the user imported for this track, ahead of everything else.
      *
      * They used to be reachable only through fetchLyrics, which the two paths
@@ -1450,13 +1461,33 @@ export class VybecordBackend extends EventEmitter {
       log.info(`[LYRICS] Using ${imported.length} imported lines for this track`);
     }
 
-    const pushed = this.spotifyLyricsStore.get(trackData.track_id);
-    if (pushed?.length && !this.lyricsCache.get(cacheKey)?.length) {
+    /*
+     * Spotify's own lyrics outrank every provider — the version the player
+     * itself sings along to, timed against the recording actually streamed.
+     *
+     * The extension fetches them on songchange, so they routinely land before
+     * the track is set up here; the hot-inject path in handleSpotifyLyrics only
+     * covers the opposite order. Folding an early push into the cache is what
+     * makes it count instead of being stored and forgotten.
+     *
+     * The test used to be "nothing cached yet", which handed the track to
+     * whichever provider had answered on an *earlier* play: the cache survives
+     * the song, so once LRCLib had filled it the official lines could never get
+     * in again, however many times the extension pushed them.
+     *
+     * An import still wins. It is the one thing a listener sets deliberately,
+     * and it is usually set precisely because the official version is the one
+     * that reads wrong.
+     */
+    const pushed = this.pushedSpotifyLyrics(trackData);
+    if (pushed?.length && !imported) {
       this.lyricsCache.set(cacheKey, pushed);
       log.info(`[SPOTIFY-LYRICS] Using ${pushed.length} lines pushed for this track`);
     }
 
     let lyrics: LyricLine[];
+    /** Whether what we end up with is Spotify's push rather than a provider's answer. */
+    let official = false;
     const cached = this.lyricsCache.get(cacheKey);
     if (cached && cached.length > 0) {
       lyrics = cached;
@@ -1592,14 +1623,41 @@ export class VybecordBackend extends EventEmitter {
 
       lyrics = await lyricsPromise;
 
+      /*
+       * Spotify answered while the providers were being asked.
+       *
+       * The extension fetches the official lyrics on songchange and pushes them
+       * a few hundred milliseconds later, which lands squarely inside this
+       * await — and handleSpotifyLyrics hot-injects them the moment they do.
+       * Then this line returned, and everything below went on to cache and
+       * inject the provider's answer straight over them. Measured on a real
+       * log: 220 of 288 pushed sets were overwritten that way, most within a
+       * second of arriving. Whenever the two disagreed the listener saw the
+       * lyrics change under them and keep the wrong version.
+       *
+       * The cache is what says it happened, and unambiguously: reaching this
+       * branch at all means the cache held nothing for this track, so anything
+       * in it now was put there while the fetch was in flight, and the push
+       * handler is what puts it there.
+       */
+      const arrived = this.lyricsCache.get(cacheKey);
+      // Flagged is the one thing that outranks them: somebody looked at these
+      // very lines and said they were the wrong ones.
+      if (arrived?.length && !isLyricsFlagged(trackData.track_name, trackData.artist_name, arrived)) {
+        official = true;
+        log.info(`[SPOTIFY-LYRICS] ${arrived.length} official lines arrived mid-fetch`
+          + ` — keeping them over the provider's ${lyrics.length}`);
+        lyrics = arrived;
+      }
+
       // Check blacklist: discard if this exact match was flagged as wrong
-      if (lyrics.length > 0 && isLyricsFlagged(trackData.track_name, trackData.artist_name, lyrics)) {
+      if (!official && lyrics.length > 0 && isLyricsFlagged(trackData.track_name, trackData.artist_name, lyrics)) {
         log.info(`[LYRICS] Discarded flagged match for "${trackData.track_name}"`);
         lyrics = [];
       }
 
       // Cache lyrics (only if found, to allow retry on empty results)
-      if (lyrics.length > 0) {
+      if (!official && lyrics.length > 0) {
         this.lyricsCache.set(cacheKey, lyrics);
         this.evictCache();
       }
@@ -1633,9 +1691,14 @@ export class VybecordBackend extends EventEmitter {
 
     // Phase 3: Inject lyrics into the running engine (no restart = no gap)
     if (lyrics.length > 0) {
+      // Still handed to the engine when they are Spotify's, because the object
+      // carries the cover this function has just restored — but they are the
+      // same lines it already holds, so they need no second warm-up.
       this.lyricsEngine.injectLyrics(lyrics, trackData);
-      log.info(`[LYRICS] Injected ${lyrics.length} lines into running engine`);
-      this.warmTranslations(lyrics, signal);
+      if (!official) {
+        log.info(`[LYRICS] Injected ${lyrics.length} lines into running engine`);
+        this.warmTranslations(lyrics, signal);
+      }
     } else {
       // No lyrics found
       const isYt = trackData.media_source === 'youtube' || trackData.media_source === 'youtube_music'
