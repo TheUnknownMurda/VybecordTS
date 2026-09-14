@@ -198,19 +198,24 @@
             info.followers = followerEl.textContent.trim();
         }
 
-        // Try to get category/game - try multiple selectors
+        // Try to get category/game - the specific selectors first, and only
+        // in the main column: a generic class match ran over the whole page
+        // and could land on a sidebar card instead of the stream (see the
+        // same block in twitch.js for what that looked like).
         let category = '';
         const categorySelectors = [
-            '[class*="category"]',
-            '[class*="game"]',
-            '.stream-tag',
             'a[href*="/category/"]',
-            '.game-name',
             '[data-testid*="category"]',
             '[data-testid*="game"]',
+            '.game-name',
+            '.stream-tag',
+            '[class*="category"]',
+            '[class*="game"]',
         ];
+        const channelScope = document.querySelector('main') || document;
         for (const selector of categorySelectors) {
-            const el = document.querySelector(selector);
+            const el = [...channelScope.querySelectorAll(selector)]
+                .find(e => !e.closest('nav, aside, [class*="sidebar"], [class*="side-nav"]'));
             if (el && el.textContent.trim()) {
                 const text = el.textContent.trim();
                 // Filter out cookie/consent banner text

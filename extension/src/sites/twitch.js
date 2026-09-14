@@ -186,23 +186,39 @@
             info.followers = followerEl.textContent.trim();
         }
 
-        // Try to get category/game - try multiple selectors
+        /*
+         * The category, from the channel's own info block and nowhere else.
+         *
+         * The generic class selectors used to come first and run over the whole
+         * document, which on a signed-in page found the followed-channels
+         * sidebar before the stream: the presence then read "xQcOfflineUse the
+         * Right Arrow Key to show more information." — a sidebar card's name,
+         * status and screen-reader hint run together — under every stream. So
+         * the link Twitch itself marks as the game comes first, the search is
+         * confined to the main column, and anything inside a nav is skipped.
+         */
         let category = '';
         const categorySelectors = [
+            '[data-a-target="stream-game-link"]',
+            'a[href*="/directory/category/"]',
+            'a[href*="/directory/game/"]',
+            '[data-a-target="game-title"]',
+            '.game-name',
+            '.stream-tag',
             '[class*="category"]',
             '[class*="game"]',
-            '.stream-tag',
-            'a[href*="/directory/game/"]',
-            '.game-name',
-            '[data-a-target="stream-game-link"]',
-            '[data-a-target="game-title"]',
         ];
+        const channelScope = document.querySelector('main') || document;
         for (const selector of categorySelectors) {
-            const el = document.querySelector(selector);
-            if (el && el.textContent.trim()) {
-                category = el.textContent.trim();
+            for (const el of channelScope.querySelectorAll(selector)) {
+                if (el.closest('nav, [class*="side-nav"], [data-a-target*="side-nav"]')) continue;
+                const text = el.textContent.trim();
+                // A category is one short line; boilerplate from an assistive hint is neither.
+                if (!text || text.length > 64 || text.includes('\n') || /arrow key/i.test(text)) continue;
+                category = text;
                 break;
             }
+            if (category) break;
         }
         info.category = category;
 
