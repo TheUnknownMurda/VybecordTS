@@ -24,6 +24,11 @@ const DEFAULTS: VybecordConfig = {
   /** Listen for pushes from the browser extension (opens 127.0.0.1:8888). */
   extension_enabled: true,
   discord_app_id: '',
+  // One presence unless asked for two: the second card needs a second
+  // application ID per player, and most people have never wanted it.
+  dual_presence: false,
+  show_lyrics_2: true,
+  discord_app_id_2: '',
   rpc_button1_label: '',
   rpc_button1_url: '',
   rpc_activity_type: 2, // LISTENING
@@ -132,6 +137,9 @@ export const CONFIG_SCHEMA: Record<string, FieldSpec> = {
   filter_spotify_ads: { type: 'boolean' },
   extension_enabled: { type: 'boolean' },
   discord_app_id: { type: 'string', maxLength: 32 },
+  dual_presence: { type: 'boolean' },
+  show_lyrics_2: { type: 'boolean' },
+  discord_app_id_2: { type: 'string', maxLength: 32 },
   // Labels are truncated to 32 chars when the activity is built; the generous
   // limit here only guards against absurd payloads (emojis cost 2 UTF-16 units).
   rpc_button1_label: { type: 'string', maxLength: 128 },

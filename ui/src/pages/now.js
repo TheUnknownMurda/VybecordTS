@@ -1,7 +1,7 @@
 /** Now playing — cover, metadata, progress and the live lyric line. */
 
 import { el, $, fmtTime, setArt, platformInfo, toast, modal, BLANK_ART } from '../util.js';
-import { state, subscribe } from '../state.js';
+import { state, subscribe, setFocus } from '../state.js';
 import { goto } from '../router.js';
 
 const api = window.vybecord;
@@ -12,6 +12,10 @@ export function render(root) {
       el('h1', { text: 'Now playing' }),
       el('div', { class: 'sub', id: 'npSource', text: 'Waiting for a player…' }),
     ]),
+
+    // Both presence cards at a glance, shown only while two are on air. The
+    // big card and the lyrics below follow whichever one is picked here.
+    el('div', { class: 'presences', id: 'npPresences', hidden: true }),
 
     el('div', { class: 'card' }, [
       el('div', { class: 'np' }, [
@@ -93,6 +97,7 @@ export function render(root) {
   );
 
   // Initial paint from whatever state we already hold.
+  paintPresences();
   paintTrack(state.track);
   paintProgress(state.progress);
   paintLyrics(state.lyrics);
@@ -128,7 +133,13 @@ export function render(root) {
     // itself rather than sit there reading "Nothing playing".
     // Being away hides the presence without the song changing at all, so the
     // chip that says so cannot wait for the next trackUpdate to appear.
-    subscribe('status', () => (state.track ? paintBadges(state.track) : paintTrack(null))),
+    subscribe('status', () => { paintPresences(); (state.track ? paintBadges(state.track) : paintTrack(null)); }),
+    // The second card comes and goes with what is playing; the strip and the
+    // pinned-player hint both read it.
+    subscribe('slots', paintPresences),
+    subscribe('preferredPlayers', () => { paintPresences(); if (!state.track) paintTrack(null); }),
+    // A different presence picked: everything below the strip is its now.
+    subscribe('focus', () => { paintPresences(); paintTrack(state.track); void refreshOffset(); }),
   ];
 
   const ticker = setInterval(() => {
@@ -147,14 +158,67 @@ export function render(root) {
   };
 }
 
+/** Whether two presence cards are in play. */
+const dual = () => state.status?.dualPresence === true;
+
+/** "Presence 2 · " while two cards are shown, nothing otherwise. */
+function focusPrefix() {
+  return dual() ? `Presence ${state.focus + 1} · ` : '';
+}
+
 /** What the source line says while nothing is playing. */
 function waitingText() {
-  const pinnedId = state.preferredPlayer;
-  if (!pinnedId) return 'Waiting for a player…';
+  const pinnedId = (state.preferredPlayers || [])[state.focus] ?? (state.focus === 0 ? state.preferredPlayer : null);
+  if (!pinnedId) return `${focusPrefix()}Waiting for a player…`;
   const pinned = (state.players || []).find((p) => p.appId === pinnedId);
-  return pinned
+  return focusPrefix() + (pinned
     ? `Pinned to ${platformInfo(pinned.source)[0]} — waiting for it to play`
-    : 'Pinned to a player that is not running';
+    : 'Pinned to a player that is not running');
+}
+
+/**
+ * The strip of presence tiles — one per card on the profile.
+ *
+ * Kept off the page entirely with one presence: the tile would only repeat
+ * the card under it. With two, each tile names what its card shows and the
+ * picked one is the card and the lyrics below.
+ */
+function paintPresences() {
+  const strip = $('#npPresences');
+  if (!strip) return;
+  if (!dual()) {
+    strip.hidden = true;
+    strip.replaceChildren();
+    return;
+  }
+  strip.hidden = false;
+  strip.replaceChildren(...state.slots.slice(0, 2).map((slot, i) => {
+    const t = slot.track;
+    const [label, glyph] = t ? platformInfo(t.media_source) : ['', ''];
+    const pinnedId = (state.preferredPlayers || [])[i];
+    const pinned = pinnedId ? (state.players || []).find((p) => p.appId === pinnedId) : null;
+    const idle = pinned
+      ? `Pinned to ${platformInfo(pinned.source)[0]} — waiting`
+      : pinnedId ? 'Pinned to a player that is not running' : 'Nothing playing';
+    const tile = el('button', {
+      class: `presence-tile${i === state.focus ? ' focused' : ''}${t ? '' : ' idle'}`,
+      title: t ? `Show presence ${i + 1}` : `Presence ${i + 1} — ${idle}`,
+      onclick: () => setFocus(i),
+    }, [
+      el('img', { class: 'presence-art', alt: '', src: BLANK_ART }),
+      el('div', { class: 'item-body' }, [
+        el('div', { class: 'presence-pos', text: `Presence ${i + 1}${t ? ` · ${glyph} ${label}` : ''}` }),
+        el('div', { class: 'item-title', text: t ? (t.track_name || 'Unknown track') : idle }),
+        el('div', { class: 'item-sub', text: t ? (t.artist_name || '') : '' }),
+      ]),
+      t?.is_playing ? el('span', { class: 'pulse', title: 'Playing' }) : null,
+    ]);
+    if (t) {
+      const img = tile.querySelector('.presence-art');
+      setArt(img, t.album_art_url, t.track_id).catch(() => {});
+    }
+    return tile;
+  }));
 }
 
 /*
@@ -228,14 +292,14 @@ function paintTrack(track) {
     // A pin is exclusive, so nothing playing may simply mean the pinned player
     // is paused or closed. Saying which one avoids the app looking broken when
     // it is doing exactly what it was told.
-    source.textContent = ad ? '🟢 Spotify' : waitingText();
+    source.textContent = ad ? `${focusPrefix()}🟢 Spotify` : waitingText();
     paintProgress({ progress_ms: 0, duration_ms: 0 });
     setAmbient(null);
     return;
   }
 
   const [label, glyph] = platformInfo(track.media_source);
-  source.textContent = `${glyph} ${label}`;
+  source.textContent = `${focusPrefix()}${glyph} ${label}`;
   $('#npTitle').textContent = track.track_name || 'Unknown track';
   $('#npArtist').textContent = track.artist_name || '';
   $('#npAlbum').textContent = track.album_name || '';
@@ -317,7 +381,7 @@ function paintOffset() {
 /** Ask what is in force. Called on load and whenever the track changes. */
 async function refreshOffset() {
   try {
-    const got = await api.lyricsOffsetCurrent();
+    const got = await api.lyricsOffsetCurrent(state.focus);
     if (got && typeof got.offsetMs === 'number') offsetState = got;
   } catch {
     /* the backend will answer on the next track; the last value stands */
@@ -327,7 +391,7 @@ async function refreshOffset() {
 
 async function setOffset(ms) {
   const clamped = Math.max(-60000, Math.min(60000, ms));
-  const applied = await api.setLyricsOffset(clamped);
+  const applied = await api.setLyricsOffset(clamped, state.focus);
   // Trust what came back rather than what was asked for: the backend clamps,
   // and it is the side that knows whether this landed on a track or on the
   // default.
@@ -342,7 +406,7 @@ function nudgeOffset(delta) {
 }
 
 async function copyLrc() {
-  const lrc = await api.getLrc();
+  const lrc = await api.getLrc(state.focus);
   if (!lrc) return toast('No synced lyrics loaded for this track', 'err');
   await navigator.clipboard.writeText(lrc);
   toast('Copied to clipboard', 'ok');
@@ -423,7 +487,7 @@ async function showFullLyrics() {
    */
   let data = readLines();
   if (!data) {
-    const lrc = await api.getLrc().catch(() => null);
+    const lrc = await api.getLrc(state.focus).catch(() => null);
     const lines = lrc ? parseLrc(lrc) : [];
     if (lines.length) data = { lines, synced: true };
   }
@@ -513,7 +577,7 @@ async function showFullLyrics() {
        * change, so a long instrumental intro outlasts this wait with the whole
        * song already loaded — and saying "no lyrics" there is simply wrong.
        */
-      const lrc = await api.getLrc().catch(() => null);
+      const lrc = await api.getLrc(state.focus).catch(() => null);
       const lines = lrc ? parseLrc(lrc) : [];
       // A tick may have landed, or the panel closed, while that was in flight.
       if (rows.length || !list.isConnected) return;
@@ -665,9 +729,9 @@ async function reportLyrics() {
 
   // Read the lines out first: flagging drops them from the cache, so asking
   // afterwards would hand the import form an empty box.
-  const lrc = choice === 'timing' ? await api.getLrc().catch(() => null) : null;
+  const lrc = choice === 'timing' ? await api.getLrc(state.focus).catch(() => null) : null;
 
-  const flagged = (await api.flagLyrics())?.ok === true;
+  const flagged = (await api.flagLyrics(state.focus))?.ok === true;
 
   if (choice === 'wrong') {
     toast(flagged

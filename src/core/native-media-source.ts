@@ -181,8 +181,12 @@ export class NativeMediaSource {
   private restartTimer: ReturnType<typeof setTimeout> | null = null;
   private workerPath: string;
 
-  /** User-pinned player from the window's picker; null = automatic priority. */
-  private preferredAppId: string | null = null;
+  /**
+   * User-pinned players from the window's picker, one per presence; null =
+   * automatic priority for that presence. Index 0 is the only one consulted
+   * while a single presence is shown.
+   */
+  private preferredAppIds: (string | null)[] = [null, null];
 
   /** Mirrors the filter_spotify_ads setting; the backend pushes it in. */
   private adFilter = true;
@@ -198,10 +202,10 @@ export class NativeMediaSource {
   /** appId+title+artist of the artwork currently at THUMB_PATH; '' when absent. */
   private thumbOnDisk = '';
 
-  // Parsed track for the current key, reused so the title regexes don't re-run
-  // on every poll. Never handed out directly — see snapshot().
-  private cachedTemplate: TrackData | null = null;
-  private cachedTrackKey = '';
+  // Parsed track per session, reused so the title regexes don't re-run on every
+  // poll. Keyed by session so two presences reading two sessions do not evict
+  // each other's parse on every tick. Never handed out directly — see snapshot().
+  private templates = new Map<string, { key: string; template: TrackData }>();
 
   /** @param workerPath absolute path to the built media-worker.cjs */
   constructor(workerPath: string) {
@@ -312,7 +316,7 @@ export class NativeMediaSource {
 
       case 'removed':
         this.sessions.delete(msg.id);
-        if (this.cachedTrackKey.startsWith(`${msg.id}:`)) this.invalidateTemplate();
+        this.templates.delete(msg.id);
         log.debug(`Session removed: ${msg.id}`);
         break;
 
@@ -508,8 +512,9 @@ export class NativeMediaSource {
      * nothing rather than letting another through. The window says so, and
      * Auto is one click away.
      */
-    if (this.preferredAppId) {
-      const pinned = this.sessions.get(this.preferredAppId);
+    const preferred = this.preferredAppIds[0];
+    if (preferred) {
+      const pinned = this.sessions.get(preferred);
       if (!pinned || !pinned.playing || !pinned.media.title || this.isAd(pinned)) return null;
       return pinned;
     }
@@ -556,15 +561,38 @@ export class NativeMediaSource {
     return false;
   }
 
-  /** Pin the presence to one player, or pass null to go back to automatic. */
-  setPreferredSource(appId: string | null): void {
-    this.preferredAppId = appId;
+  /**
+   * Pin one presence to one player, or pass null to put it back on automatic.
+   *
+   * A player pinned to one presence is taken off the other: two cards showing
+   * the same session would be the one thing pinning cannot mean.
+   */
+  setPreferredSource(appId: string | null, slot = 0): void {
+    if (slot < 0 || slot >= this.preferredAppIds.length) return;
+    if (appId) {
+      for (let i = 0; i < this.preferredAppIds.length; i++) {
+        if (i !== slot && this.preferredAppIds[i] === appId) this.preferredAppIds[i] = null;
+      }
+    }
+    this.preferredAppIds[slot] = appId;
     this.invalidateTemplate();
-    log.info(appId ? `Pinned to player: ${appId}` : 'Player selection back to automatic');
+    log.info(appId
+      ? `Presence ${slot + 1} pinned to player: ${appId}`
+      : `Presence ${slot + 1} player selection back to automatic`);
   }
 
-  getPreferredSource(): string | null {
-    return this.preferredAppId;
+  getPreferredSource(slot = 0): string | null {
+    return this.preferredAppIds[slot] ?? null;
+  }
+
+  /** Every presence's pin, automatic ones as null. */
+  getPreferredSources(): (string | null)[] {
+    return [...this.preferredAppIds];
+  }
+
+  /** Whether any presence is pinned to a player. */
+  get anyPinned(): boolean {
+    return this.preferredAppIds.some(Boolean);
   }
 
   /**
@@ -580,10 +608,49 @@ export class NativeMediaSource {
    * service, not for an app id, and a pin has to mean the same thing whichever
    * of the two is reporting.
    */
-  pinnedSourceName(): string | null {
-    if (!this.preferredAppId) return null;
-    const s = this.sessions.get(this.preferredAppId);
+  pinnedSourceName(slot = 0): string | null {
+    const preferred = this.preferredAppIds[slot];
+    if (!preferred) return null;
+    const s = this.sessions.get(preferred);
     return s ? resolvedSource(s) : null;
+  }
+
+  /**
+   * Every session that is playing something announceable, as the track each
+   * would be announced as — ranked by nobody. The backend ranks, because it
+   * also holds the extension's sources and a pin may name any of them.
+   *
+   * Advertisements and the ignore list are left out here for the same reason
+   * pickSession leaves them out: a suppressed session must not take a
+   * presence and then show nothing on it.
+   */
+  listPlayingTracks(): TrackData[] {
+    const out: TrackData[] = [];
+    for (const s of this.sessions.values()) {
+      if (IGNORED_SOURCES.has(s.source)) continue;
+      if (!s.playing || !s.media.title || this.isAd(s)) continue;
+      out.push(this.buildTrack(s));
+    }
+    return out;
+  }
+
+  /** Whether the artwork at THUMB_PATH was written from this session. */
+  thumbOwnedBy(sessionId: string): boolean {
+    return !!sessionId && this.thumbOnDisk.startsWith(`${sessionId}:`);
+  }
+
+  /**
+   * Record that the artwork now at THUMB_PATH belongs to this session's track.
+   *
+   * For local-art.ts, which writes the file itself when the OS handed over
+   * none: without a claim the file reads as nobody's, every art-less session
+   * reports it as its own cover, and the next art-less event from this very
+   * session cannot tell it is stale.
+   */
+  claimThumb(sessionId: string): void {
+    const s = this.sessions.get(sessionId);
+    if (!s) return;
+    this.thumbOnDisk = `${s.appId}:${s.media.title}:${s.media.artist}`;
   }
 
   /** Every detected session, playing or not — feeds the window's player picker. */
@@ -639,9 +706,12 @@ export class NativeMediaSource {
 
     if (!buf?.length) {
       // No artwork in this event. Only clear the file if it belongs to another
-      // track — an update for the *current* track that happens to omit the
-      // artwork must not wipe a cover we already hold.
-      if (this.thumbOnDisk && this.thumbOnDisk !== key) {
+      // track of *this* session — an update for the current track that happens
+      // to omit the artwork must not wipe a cover we already hold, and an
+      // art-less session must not wipe the cover another session is showing:
+      // with two presences on air the two play side by side, and every event
+      // from the one without artwork used to blank the other's cover.
+      if (this.thumbOnDisk && this.thumbOnDisk !== key && this.thumbOnDisk.startsWith(`${s.appId}:`)) {
         try {
           fs.rmSync(THUMB_PATH, { force: true });
         } catch (e) {
@@ -672,14 +742,22 @@ export class NativeMediaSource {
     // cannot be one because listPlayers never offers it.
     if (IGNORED_SOURCES.has(s.source)) return null;
 
+    return this.buildTrack(s);
+  }
+
+  /** The track a session would be announced as, parsed once per title. */
+  private buildTrack(s: SessionState): TrackData {
     const trackKey = `${s.appId}:${s.media.title}:${s.media.artist}`;
-    if (trackKey === this.cachedTrackKey && this.cachedTemplate) {
-      return this.snapshot(this.cachedTemplate, s);
+    const cached = this.templates.get(s.appId);
+    if (cached && cached.key === trackKey) {
+      return this.snapshot(cached.template, s);
     }
 
     // This session passed the ad check, so its album is the context a following
-    // short track is judged against.
-    this.lastAlbum = s.media.albumTitle || '';
+    // short track is judged against. Spotify's only: the heuristic applies to
+    // nothing else, and with two players on air another's album would just
+    // keep overwriting the one that matters.
+    if (s.source === 'spotify') this.lastAlbum = s.media.albumTitle || '';
 
     let trackName = s.media.title;
     let artistName = s.media.artist || 'Unknown';
@@ -764,9 +842,9 @@ export class NativeMediaSource {
       // Apple Music plays local files too; those have no music.apple identity.
       is_local: source === 'apple_music' && !s.appId.includes('music.apple'),
       _received_at: 0,      // per snapshot
+      _session_id: s.appId,
     };
-    this.cachedTrackKey = trackKey;
-    this.cachedTemplate = template;
+    this.templates.set(s.appId, { key: trackKey, template });
     return this.snapshot(template, s);
   }
 
@@ -781,8 +859,13 @@ export class NativeMediaSource {
    * object with itself.
    */
   private snapshot(template: TrackData, s: SessionState): TrackData {
-    // local-art.ts may have written the file after SMTC reported no cover.
-    const hasThumb = s.hasThumb || fs.existsSync(THUMB_PATH);
+    // local-art.ts may have written the file after SMTC reported no cover. A
+    // file another session wrote is not this track's cover, though — it is the
+    // other presence's, whatever this session published — so a claimed file
+    // only counts for the session that claimed it.
+    const hasThumb = this.thumbOnDisk
+      ? this.thumbOnDisk.startsWith(`${s.appId}:`)
+      : (s.hasThumb || fs.existsSync(THUMB_PATH));
     const pos = template.is_live ? 0 : this.positionOf(s);
     return {
       ...template,
@@ -795,8 +878,7 @@ export class NativeMediaSource {
   }
 
   private invalidateTemplate(): void {
-    this.cachedTrackKey = '';
-    this.cachedTemplate = null;
+    this.templates.clear();
   }
 
   get isReady(): boolean {
@@ -966,7 +1048,7 @@ export function sourceFromAppId(appId: string): string {
  * Video and stream platforms sit one rung under the music services. A Twitch
  * tab left running is more often background than the thing worth announcing.
  */
-function sourcePriority(src: string): number {
+export function sourcePriority(src: string): number {
   switch (src) {
     case 'spotify': return 10;
     case 'apple_music':

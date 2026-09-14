@@ -29,13 +29,14 @@ const api = {
   setConfig: (updates: Record<string, unknown>) => invoke<Record<string, unknown>>('config:set', updates),
 
   // ── Now playing ──
-  getTrack: () => invoke('track:current'),
-  getLyrics: () => invoke('lyrics:current'),
-  getLrc: () => invoke<string | null>('lyrics:lrc'),
+  // `slot` is the presence (0 or 1) the call is about; omitted means the first.
+  getTrack: (slot = 0) => invoke('track:current', slot),
+  getLyrics: (slot = 0) => invoke('lyrics:current', slot),
+  getLrc: (slot = 0) => invoke<string | null>('lyrics:lrc', slot),
   getThumbnail: () => invoke<{ mime: string; bytes: Uint8Array } | null>('thumbnail:get'),
-  setLyricsOffset: (ms: number) => invoke('lyrics:offset', ms),
-  lyricsOffsetCurrent: () => invoke('lyrics:offsetCurrent'),
-  flagLyrics: () => invoke('lyrics:flag'),
+  setLyricsOffset: (ms: number, slot = 0) => invoke('lyrics:offset', ms, slot),
+  lyricsOffsetCurrent: (slot = 0) => invoke('lyrics:offsetCurrent', slot),
+  flagLyrics: (slot = 0) => invoke('lyrics:flag', slot),
   listFlagged: () => invoke('lyrics:flagged'),
   unflag: (key: string) => invoke('lyrics:unflag', key),
 
@@ -77,7 +78,8 @@ const api = {
 
   // ── Players ──
   listPlayers: () => invoke('players:list'),
-  preferPlayer: (appId: string | null) => invoke('players:prefer', appId),
+  /** Pin a player to a presence (0 or 1); null puts that presence back on automatic. */
+  preferPlayer: (appId: string | null, slot = 0) => invoke('players:prefer', appId, slot),
 
   // ── Stats & history ──
   getStats: () => invoke('stats:session'),
@@ -141,9 +143,11 @@ const api = {
    * re-register listeners as the user navigates, and without a way to detach
    * they would stack up one dead listener per visit.
    */
-  on: (event: BackendEvent, cb: (payload: unknown) => void): (() => void) => {
+  on: (event: BackendEvent, cb: (payload: unknown, slot: number) => void): (() => void) => {
     if (!EVENTS.includes(event)) throw new Error(`Unknown event: ${event}`);
-    const listener = (_e: IpcRendererEvent, payload: unknown) => cb(payload);
+    // The second argument names the presence a track, progress or lyric
+    // event belongs to; the other events send 0 and nothing reads it.
+    const listener = (_e: IpcRendererEvent, payload: unknown, slot: number) => cb(payload, slot ?? 0);
     ipcRenderer.on(`backend:${event}`, listener);
     return () => ipcRenderer.off(`backend:${event}`, listener);
   },

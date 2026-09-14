@@ -9,17 +9,28 @@
 
 const api = window.vybecord;
 
+const emptySlot = () => ({ track: null, lyrics: null, progress: { progress_ms: 0, duration_ms: 0 } });
+
 export const state = {
   config: {},
+  /*
+   * `track`, `lyrics` and `progress` are the presence the window is looking
+   * at — the focused one — so every page that shows one track keeps working
+   * unchanged with two on air. `slots` holds both by position; `focus` says
+   * which of them the three mirrors follow.
+   */
   track: null,
   lyrics: null,
   progress: { progress_ms: 0, duration_ms: 0 },
+  slots: [emptySlot(), emptySlot()],
+  focus: 0,
   stats: { topTracks: [], topArtists: [] },
   players: [],
   preferredPlayer: null,
+  preferredPlayers: [null, null],
   status: {
     discordConnected: false, mediaSourceReady: false, adPlaying: false, showLyrics: true,
-    userAway: false, hideWhenAway: true,
+    showLyrics2: true, dualPresence: false, userAway: false, hideWhenAway: true,
   },
   version: '',
 };
@@ -65,20 +76,64 @@ export function set(patch) {
   for (const key of Object.keys(patch)) emit(key, state[key]);
 }
 
+/** Point the three single-track mirrors at the focused presence. */
+function mirrorFocus() {
+  const s = state.slots[state.focus] || emptySlot();
+  set({ track: s.track, lyrics: s.lyrics, progress: s.progress });
+}
+
+/**
+ * Look at one presence. The Now page calls this when a card is clicked; the
+ * state calls it itself when the one being looked at goes quiet while the
+ * other plays on, so the page never sits on "Nothing playing" beside a track.
+ */
+export function setFocus(index) {
+  const i = index === 1 ? 1 : 0;
+  if (i === state.focus) return;
+  set({ focus: i });
+  mirrorFocus();
+}
+
+function autoFocus() {
+  const cur = state.slots[state.focus];
+  if (cur?.track) return;
+  const other = state.focus === 0 ? 1 : 0;
+  if (state.slots[other]?.track) setFocus(other);
+}
+
+/** Apply a backend event to one presence's slice, and to the mirrors if it is the focused one. */
+function updateSlot(index, patch) {
+  const i = index === 1 ? 1 : 0;
+  const slots = [...state.slots];
+  slots[i] = { ...slots[i], ...patch };
+  set({ slots });
+  if (i === state.focus) set(patch);
+  autoFocus();
+}
+
 /** Load the full snapshot and wire the backend event stream. */
 export async function init() {
   const snap = await api.snapshot();
+  const slots = Array.isArray(snap.slots) && snap.slots.length
+    ? snap.slots.map((s) => ({
+        track: s?.track ?? null,
+        lyrics: s?.lyrics ?? null,
+        progress: s?.track ? (s.progress || trackProgress(s.track)) : trackProgress(null),
+      }))
+    : [{ track: snap.track, lyrics: snap.lyrics, progress: trackProgress(snap.track) }, emptySlot()];
+  while (slots.length < 2) slots.push(emptySlot());
   set({
     config: snap.config || {},
-    track: snap.track,
-    lyrics: snap.lyrics,
+    slots,
     stats: snap.stats || { topTracks: [], topArtists: [] },
     players: snap.players || [],
     preferredPlayer: snap.preferredPlayer,
-    status: snap.status || state.status,
+    preferredPlayers: snap.preferredPlayers || [snap.preferredPlayer ?? null, null],
+    status: { ...state.status, ...(snap.status || {}) },
     version: snap.version || '',
-    progress: trackProgress(snap.track),
   });
+  mirrorFocus();
+  autoFocus();
 
   /*
    * A new track invalidates the lines the old one left behind.
@@ -89,22 +144,26 @@ export async function init() {
    * track is re-sent whenever its metadata is enriched, and that must not wipe
    * the lyrics it already has.
    */
-  api.on('trackUpdate', (track) => {
-    const same = (track?.track_id || '') === (state.track?.track_id || '');
+  api.on('trackUpdate', (track, slot) => {
+    const prev = state.slots[slot === 1 ? 1 : 0]?.track;
+    const same = (track?.track_id || '') === (prev?.track_id || '');
     // A different track means the bar belongs to the new one -- at its own
     // position, or empty when playback simply stopped. Same reasoning as the
     // lyrics beside it: what the previous track left behind is not an
     // approximation of the new state, it is the wrong state.
-    set(same ? { track } : { track, lyrics: null, progress: trackProgress(track) });
+    updateSlot(slot, same ? { track } : { track, lyrics: null, progress: trackProgress(track) });
   });
-  api.on('progressUpdate', (progress) => set({ progress }));
-  api.on('lyricsUpdate', (lyrics) => set({ lyrics }));
-  api.on('plainLyricsUpdate', (lyrics) => set({ lyrics }));
+  api.on('progressUpdate', (progress, slot) => updateSlot(slot, { progress }));
+  api.on('lyricsUpdate', (lyrics, slot) => updateSlot(slot, { lyrics }));
+  api.on('plainLyricsUpdate', (lyrics, slot) => updateSlot(slot, { lyrics }));
   api.on('statsUpdate', (stats) => set({ stats }));
   api.on('configUpdate', (config) => set({ config }));
   api.on('statusUpdate', (status) => {
     set({ status: { ...state.status, ...status } });
     if (status && 'preferredPlayer' in status) set({ preferredPlayer: status.preferredPlayer });
+    if (status && Array.isArray(status.preferredPlayers)) set({ preferredPlayers: status.preferredPlayers });
+    // With the second card switched off, whatever it showed is gone too.
+    if (status && status.dualPresence === false && state.focus === 1) setFocus(0);
   });
 
   /*

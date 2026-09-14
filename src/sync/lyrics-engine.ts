@@ -409,6 +409,23 @@ export class LyricsEngine {
   }
 
   /**
+   * Apply a different RPC config to the track already running, in place.
+   *
+   * For the moment a presence changes position on the profile: the two cards
+   * may run under different lyric settings, and the one that just moved has
+   * to take up the setting of the position it landed on. Restarting the track
+   * would re-anchor the clock on a reading up to a poll old and blank the
+   * card for a beat; rebuilding the caches and republishing does neither.
+   */
+  updateConfig(rpcConfig: Record<string, unknown>): void {
+    this.rpcConfig = rpcConfig;
+    if (!this.running || !this.trackData) return;
+    this.rebuildTrackCache();
+    this.rebuildNoLyricsCache();
+    this.pushRpcNow();
+  }
+
+  /**
    * Hot-inject lyrics into the running engine without restarting timing.
    * Called when lyrics arrive asynchronously after startTrack([], ...).
    * Avoids the stop/start gap that causes a visible Discord freeze.
@@ -667,7 +684,21 @@ export class LyricsEngine {
   stop(preserveStatus = false): void {
     this.running = false;
     if (!preserveStatus) {
-      this.clearStatusMessage(); // Clear unified status message
+      /*
+       * Dropped silently, not through clearStatusMessage(): that one
+       * republishes, and at this point the engine still holds the track that
+       * is ending. Every stop — a pause, the start of the next song — used to
+       * put one more card of the old track on the socket, forced past the
+       * rate limiter, after the backend had already taken it down. With one
+       * presence that was a flicker; with two it put a paused video back on
+       * its card for the second and a half before the next switch.
+       */
+      this.statusMessage = null;
+      this.statusMessageExpiry = 0;
+      if (this.statusMessageTimer) {
+        clearTimeout(this.statusMessageTimer);
+        this.statusMessageTimer = null;
+      }
     }
     this.inLyricGap = false;
     this.cancelTimer();

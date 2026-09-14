@@ -830,6 +830,63 @@ label.field > span {
   flex-shrink: 0;
 }
 
+/* Now playing: the two presence tiles, shown only while two cards are on air */
+.presences {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.presence-tile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-s);
+  border-radius: var(--r-md);
+  background: var(--bg-elevated);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+  transition: border-color 0.15s, background 0.15s;
+}
+.presence-tile:hover {
+  background: var(--bg-hover);
+}
+.presence-tile.focused {
+  border-color: var(--border-a);
+  background: rgba(var(--accent), 0.07);
+}
+.presence-tile.idle .item-title {
+  color: var(--text-faint);
+  font-weight: 400;
+}
+.presence-art {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: var(--r-sm);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-s);
+  object-fit: cover;
+}
+.presence-pos {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.presence-tile.focused .presence-pos {
+  color: var(--accent-hex);
+}
+
 /* Players page */
 .player-card {
   display: flex;
@@ -848,6 +905,18 @@ label.field > span {
 .player-card.pinned {
   border-color: var(--border-a);
   background: rgba(var(--accent), 0.07);
+}
+/* With two presences the card is not itself a button — the pin buttons are. */
+.player-card.has-pins {
+  cursor: default;
+}
+.player-card.has-pins:hover {
+  background: var(--bg-elevated);
+}
+.pin-btns {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
 }
 .player-icon {
   width: 40px;

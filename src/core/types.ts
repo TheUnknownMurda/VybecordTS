@@ -48,6 +48,14 @@ export interface TrackData {
   _from_push?: boolean;
   /** Direct URL to the video (YouTube, etc.) */
   video_url?: string;
+  /**
+   * The OS media session this reading came from, when it came from one.
+   *
+   * Lets the backend ask whose artwork is on disk before publishing it: the
+   * thumbnail file is shared by every session, and with two presences on air
+   * the cover it holds is not necessarily this track's.
+   */
+  _session_id?: string;
 }
 
 // ── Parsed lyric line ──
@@ -126,6 +134,26 @@ export interface VybecordConfig {
    *  opened at all. */
   extension_enabled: boolean;
   discord_app_id: string;
+  /**
+   * Announce two things at once — the song in Spotify and the video in the
+   * browser, say — as two separate presence cards on the profile.
+   *
+   * Off, the app behaves as it always has: one presence, following whichever
+   * source wins the priority contest. On, that source is presence 1 and the
+   * next-best thing playing is presence 2, each under its own Discord
+   * application and with its own lyrics engine. See the reconcile() notes in
+   * backend.ts for how the two are assigned.
+   */
+  dual_presence: boolean;
+  /** Lyrics on the second presence card; `show_lyrics` governs the first. */
+  show_lyrics_2: boolean;
+  /**
+   * Discord application ID for the second presence when it would otherwise
+   * share the first's. Two cards need two applications; the platform ones
+   * (Spotify, YouTube, …) already differ, so this is only consulted for a
+   * player the app has no dedicated application for.
+   */
+  discord_app_id_2: string;
   // RPC customization
   /** Which URL each clickable RPC field links to: 'track' | 'artist' | 'album' | 'context' | 'auto' */
   rpc_button1_label: string;

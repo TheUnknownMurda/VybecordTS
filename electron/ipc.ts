@@ -127,13 +127,15 @@ export function registerIpc(
 
   // ── Backend → renderer ──
   for (const event of FORWARDED_EVENTS) {
-    backend.on(event, (payload: unknown) => {
+    backend.on(event, (payload: unknown, slot?: number) => {
       const win = getWindow();
       if (!win || win.isDestroyed()) return;
       // configUpdate carries the whole config, secrets included — the backend's
       // own listeners need those, the window does not.
       const out = event === 'configUpdate' ? redactConfig(payload as VybecordConfig) : payload;
-      win.webContents.send(`backend:${event}`, out);
+      // Track, progress and lyric events say which presence they belong to;
+      // the rest carry no slot and the renderer ignores the second argument.
+      win.webContents.send(`backend:${event}`, out, typeof slot === 'number' ? slot : 0);
     });
   }
 
@@ -158,19 +160,16 @@ export function registerIpc(
   // an empty shell waiting for the first event to arrive.
   handle('app:snapshot', () => ({
     config: safeConfig(),
+    // Presence 1, for the pages that only ever look at one; every presence
+    // by position in `slots` for the ones that show both.
     track: backend.getCurrentTrack(),
     lyrics: backend.getCurrentLyricsState(),
+    slots: backend.getSlotStates(),
     stats: backend.getSessionStats(),
     players: backend.listPlayers(),
     preferredPlayer: backend.getPreferredPlayer(),
-    status: {
-      discordConnected: backend.isDiscordConnected(),
-      mediaSourceReady: backend.isMediaSourceReady(),
-      adPlaying: backend.isAdPlaying(),
-      showLyrics: backend.getConfig().show_lyrics !== false,
-      userAway: backend.isUserAway(),
-      hideWhenAway: backend.getConfig().rpc_hide_when_away !== false,
-    },
+    preferredPlayers: backend.getPreferredPlayers(),
+    status: backend.getStatus(),
     version: app.getVersion(),
   }));
 
@@ -182,14 +181,17 @@ export function registerIpc(
   });
 
   // ── Now playing ──
-  handle('track:current', () => backend.getCurrentTrack());
-  handle('lyrics:current', () => backend.getCurrentLyricsState());
-  handle('lyrics:lrc', () => backend.getCurrentLyricsLrc());
+  // Every lyric handler takes the presence it is about; the window passes
+  // the one whose lyrics it is showing, and nothing means presence 1.
+  const slotArg = (slot: unknown) => (typeof slot === 'number' && slot >= 0 ? Math.floor(slot) : 0);
+  handle('track:current', (slot?: number) => backend.getCurrentTrack(slotArg(slot)));
+  handle('lyrics:current', (slot?: number) => backend.getCurrentLyricsState(slotArg(slot)));
+  handle('lyrics:lrc', (slot?: number) => backend.getCurrentLyricsLrc(slotArg(slot)));
   // Returns what was actually applied, and whether it belongs to the playing
   // track or to the default -- the window shows the difference.
-  handle('lyrics:offset', (ms: number) => ({ ok: true, ...backend.setLyricsOffset(ms) }));
-  handle('lyrics:offsetCurrent', () => backend.effectiveLyricsOffset());
-  handle('lyrics:flag', () => ({ ok: backend.flagCurrentLyrics() }));
+  handle('lyrics:offset', (ms: number, slot?: number) => ({ ok: true, ...backend.setLyricsOffset(ms, slotArg(slot)) }));
+  handle('lyrics:offsetCurrent', (slot?: number) => backend.effectiveLyricsOffset(slotArg(slot)));
+  handle('lyrics:flag', (slot?: number) => ({ ok: backend.flagCurrentLyrics(slotArg(slot)) }));
   handle('lyrics:flagged', () => backend.listFlaggedTracks());
   handle('lyrics:unflag', (key: string) => ({ ok: backend.clearFlaggedTrack(key) }));
 
@@ -278,9 +280,9 @@ export function registerIpc(
 
   // ── Players ──
   handle('players:list', () => backend.listPlayers());
-  handle('players:prefer', (appId: string | null) => {
-    backend.setPreferredPlayer(appId || null);
-    return { ok: true, preferred: backend.getPreferredPlayer() };
+  handle('players:prefer', (appId: string | null, slot?: number) => {
+    backend.setPreferredPlayer(appId || null, slotArg(slot));
+    return { ok: true, preferred: backend.getPreferredPlayer(), preferredPlayers: backend.getPreferredPlayers() };
   });
 
   // ── Stats & history ──

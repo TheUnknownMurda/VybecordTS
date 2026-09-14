@@ -133,6 +133,15 @@ Ce qui ne fonctionne pas : l'interrupteur par site dans Settings → Detection. 
 
 Va dans **Players** et clique sur le lecteur que tu veux afficher. Il reste épinglé jusqu'à ce que tu cliques sur **Automatic**.
 
+Ou affiche les deux. **Settings → Presence → Two presences** met deux cartes sur ton profil : la chanson Spotify en présence 1 et la vidéo du navigateur en présence 2, par exemple. Ce qui joue avec le rang le plus élevé devient la présence 1 (une appli de musique passe avant une vidéo, une vidéo avant un onglet anonyme), et ce qui suit devient la présence 2. Tant que c'est activé :
+
+- **Lyrics on** choisit quelle carte affiche les paroles — les deux, seulement la première, seulement la deuxième, ou aucune.
+- **Players** permet d'épingler un lecteur à la présence 1 ou 2, pour que les deux ne s'échangent jamais.
+- **Now playing** montre les deux ; clique sur une carte pour voir ses paroles et ses réglages.
+- Les stats, l'historique et Last.fm ne suivent que la présence 1.
+
+Chaque carte est une application Discord à part, et Spotify, YouTube, SoundCloud, Apple Music, Kick et Twitch ont chacun la leur. Un lecteur qui n'en a pas — VLC, foobar2000, un onglet anonyme — utilise celle par défaut, et deux cartes ne peuvent pas partager une application : pour un tel lecteur, la présence 2 reste absente de Discord tant que tu n'as pas collé un **Second application ID** (à créer sur discord.com/developers).
+
 ---
 
 ## Questions fréquentes

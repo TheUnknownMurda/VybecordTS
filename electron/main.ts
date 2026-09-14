@@ -167,9 +167,10 @@ async function start(): Promise<void> {
     win?.webContents.send('backend:fatal', String(e));
   }
 
-  // Keep the tray tooltip in step with what is playing.
-  backend.on('trackUpdate', (track: TrackData | null) => {
-    tray?.setToolTip(trayTooltip(track));
+  // Keep the tray tooltip in step with what is playing — presence 1, which
+  // with two cards is the one that ranks higher.
+  backend.on('trackUpdate', () => {
+    tray?.setToolTip(trayTooltip(backend?.getCurrentTrack() ?? null));
   });
 }
 

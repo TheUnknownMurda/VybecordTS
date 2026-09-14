@@ -133,6 +133,15 @@ What does not: the per-site toggle under Settings → Detection. Browser playbac
 
 Go to **Players** and click the one you want announced. It stays pinned until you click **Automatic**.
 
+Or show both. **Settings → Presence → Two presences** puts two cards on your profile: the song in Spotify on presence 1 and the video in the browser on presence 2, say. The highest-ranked thing playing is presence 1 (a music app beats a video, a video beats an unnamed tab) and the next is presence 2. While it is on:
+
+- **Lyrics on** picks which card sings along — both, only the first, only the second, or neither.
+- **Players** lets you pin a player to presence 1 or presence 2, so the two never swap.
+- **Now playing** shows both; click a card to see its lyrics and controls.
+- Stats, history and Last.fm follow presence 1 only.
+
+Each card is a Discord application of its own, and Spotify, YouTube, SoundCloud, Apple Music, Kick and Twitch each have one. A player without one — VLC, foobar2000, an unnamed tab — shares the default, and two cards cannot share an application: presence 2 stays off Discord for such a player until you paste a **Second application ID** (create one at discord.com/developers).
+
 ---
 
 ## FAQ
