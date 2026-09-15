@@ -418,6 +418,10 @@ export class LyricsEngine {
    * card for a beat; rebuilding the caches and republishing does neither.
    */
   updateConfig(rpcConfig: Record<string, unknown>): void {
+    // Most swaps change nothing for the card — the two positions run under
+    // the same settings — and a republish for nothing is one more payload
+    // for the rate limiter to hold back.
+    if (JSON.stringify(rpcConfig) === JSON.stringify(this.rpcConfig)) return;
     this.rpcConfig = rpcConfig;
     if (!this.running || !this.trackData) return;
     this.rebuildTrackCache();

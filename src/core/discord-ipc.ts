@@ -56,6 +56,15 @@ function sanitize(s: string): string {
 /** Discord requires details/state to be at least 2 characters — pad with a trailing space if needed. */
 function padMin2(s: string): string { return s.length < 2 ? s + ' ' : s; }
 
+/**
+ * Discord's ceiling on a link field. A URL past it fails the *whole* payload
+ * with error 4000, so the card never updates — seen with a stream title long
+ * enough that the search URL built from it ran to 300 characters. Better to
+ * publish the card without that one link than not at all.
+ */
+const MAX_URL_LEN = 256;
+const urlOk = (u: string | undefined): u is string => !!u && u.length <= MAX_URL_LEN;
+
 export class DiscordIPC {
   private socket: net.Socket | null = null;
   private clientId: string;
@@ -221,7 +230,10 @@ export class DiscordIPC {
     this.socket.on('close', () => {
       this.connected = false;
       this.rejectPending('IPC disconnected');
-      log.warn('Discord IPC disconnected');
+      // A close we asked for — an idle socket the pool let go — is not a
+      // warning; only Discord dropping us is.
+      if (this.shouldReconnect) log.warn('Discord IPC disconnected');
+      else log.debug('Discord IPC closed');
       this._onDisconnect?.();
       if (this.shouldReconnect) {
         this.scheduleReconnect();
@@ -518,21 +530,23 @@ export class DiscordIPC {
       rpcActivity.assets = assets;
     }
 
-    if (activity.buttons?.length) {
-      rpcActivity.buttons = activity.buttons.map(b => ({
+    // Button URLs have a wider ceiling (512) but the same failure mode.
+    const buttons = (activity.buttons ?? []).filter(b => !!b.url && b.url.length <= 512);
+    if (buttons.length) {
+      rpcActivity.buttons = buttons.map(b => ({
         label: sanitize(b.label), url: b.url,
       }));
       const meta: Record<string, unknown> = {
-        button_urls: activity.buttons.map(b => b.url),
+        button_urls: buttons.map(b => b.url),
       };
-      if (activity.large_url) meta.large_image_url = activity.large_url;
+      if (urlOk(activity.large_url)) meta.large_image_url = activity.large_url;
       rpcActivity.metadata = meta;
-    } else if (activity.large_url) {
+    } else if (urlOk(activity.large_url)) {
       rpcActivity.metadata = { large_image_url: activity.large_url };
     }
 
-    if (activity.details_url) rpcActivity.details_url = activity.details_url;
-    if (activity.state_url) rpcActivity.state_url = activity.state_url;
+    if (urlOk(activity.details_url)) rpcActivity.details_url = activity.details_url;
+    if (urlOk(activity.state_url)) rpcActivity.state_url = activity.state_url;
 
     // Serialize the activity body; skip full re-stringify if unchanged (heartbeats)
     const activityJson = JSON.stringify(rpcActivity);
@@ -559,6 +573,28 @@ export class DiscordIPC {
   private _lastWriteLatencyMs = 0;
 
   async clearActivity(): Promise<void> {
+    /*
+     * Nothing queued may outlive the clear.
+     *
+     * setActivity() holds a payload back for up to 200ms when one has just
+     * gone out, and two go out back to back whenever a card changes position
+     * — so the clear that follows a pause landed *between* a push and its
+     * held-back twin, and the twin then put the paused song straight back on
+     * the profile, timer running, for as long as it stayed paused. The card
+     * looked like it had never noticed the pause.
+     */
+    if (this.pendingTimer) {
+      clearTimeout(this.pendingTimer);
+      this.pendingTimer = null;
+    }
+    if (this.pendingActivity) {
+      log.debug('[PRESENCE] Dropped a queued update — the card is being cleared');
+      this.pendingActivity = null;
+    }
+    // The next payload is a fresh card, not a repeat of the one just cleared:
+    // let it be logged as such rather than deduplicated into silence.
+    this.lastActivityJson = '';
+    this.lastActivityArgs = '';
     if (!this.connected) return;
     // Use request() to wait for Discord's ACK (not just the write callback).
     // Short timeout — if Discord doesn't respond, we still proceed with shutdown.
