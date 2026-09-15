@@ -134,8 +134,8 @@ export function render(root) {
     // Being away hides the presence without the song changing at all, so the
     // chip that says so cannot wait for the next trackUpdate to appear.
     subscribe('status', () => { paintPresences(); (state.track ? paintBadges(state.track) : paintTrack(null)); }),
-    // The second card comes and goes with what is playing; the strip and the
-    // pinned-player hint both read it.
+    // The other cards come and go with what is playing; the strip and the
+    // pinned-player hint both read them.
     subscribe('slots', paintPresences),
     subscribe('preferredPlayers', () => { paintPresences(); if (!state.track) paintTrack(null); }),
     // A different presence picked: everything below the strip is its now.
@@ -158,12 +158,13 @@ export function render(root) {
   };
 }
 
-/** Whether two presence cards are in play. */
-const dual = () => state.status?.dualPresence === true;
+/** How many presence cards are in play. */
+const presenceCount = () => Math.max(1, Number(state.status?.presenceCount) || 1);
+const multi = () => presenceCount() > 1;
 
-/** "Presence 2 · " while two cards are shown, nothing otherwise. */
+/** "Presence 2 · " while several cards are shown, nothing otherwise. */
 function focusPrefix() {
-  return dual() ? `Presence ${state.focus + 1} · ` : '';
+  return multi() ? `Presence ${state.focus + 1} · ` : '';
 }
 
 /** What the source line says while nothing is playing. */
@@ -186,13 +187,13 @@ function waitingText() {
 function paintPresences() {
   const strip = $('#npPresences');
   if (!strip) return;
-  if (!dual()) {
+  if (!multi()) {
     strip.hidden = true;
     strip.replaceChildren();
     return;
   }
   strip.hidden = false;
-  strip.replaceChildren(...state.slots.slice(0, 2).map((slot, i) => {
+  strip.replaceChildren(...state.slots.slice(0, presenceCount()).map((slot, i) => {
     const t = slot.track;
     const [label, glyph] = t ? platformInfo(t.media_source) : ['', ''];
     const pinnedId = (state.preferredPlayers || [])[i];

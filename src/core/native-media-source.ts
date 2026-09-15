@@ -186,7 +186,7 @@ export class NativeMediaSource {
    * automatic priority for that presence. Index 0 is the only one consulted
    * while a single presence is shown.
    */
-  private preferredAppIds: (string | null)[] = [null, null];
+  private preferredAppIds: (string | null)[] = [null, null, null];
 
   /** Mirrors the filter_spotify_ads setting; the backend pushes it in. */
   private adFilter = true;

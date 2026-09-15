@@ -133,14 +133,14 @@ Ce qui ne fonctionne pas : l'interrupteur par site dans Settings → Detection. 
 
 Va dans **Players** et clique sur le lecteur que tu veux afficher. Il reste épinglé jusqu'à ce que tu cliques sur **Automatic**.
 
-Ou affiche les deux. **Settings → Presence → Two presences** met deux cartes sur ton profil : la chanson Spotify en présence 1 et la vidéo du navigateur en présence 2, par exemple. Ce qui joue avec le rang le plus élevé devient la présence 1 (une appli de musique passe avant une vidéo, une vidéo avant un onglet anonyme), et ce qui suit devient la présence 2. Tant que c'est activé :
+Ou affiche-les toutes. **Settings → Presence → Several presences** met jusqu'à trois cartes sur ton profil : la chanson Spotify en présence 1, la vidéo du navigateur en présence 2, un stream dans un autre onglet en présence 3, par exemple. Ce qui joue avec le rang le plus élevé devient la présence 1 (une appli de musique passe avant une vidéo, une vidéo avant un onglet anonyme), ce qui suit la présence 2, et ainsi de suite. Avec plus d'une carte :
 
-- **Lyrics on** choisit quelle carte affiche les paroles — les deux, seulement la première, seulement la deuxième, ou aucune.
-- **Players** permet d'épingler un lecteur à la présence 1 ou 2, pour que les deux ne s'échangent jamais.
-- **Now playing** montre les deux ; clique sur une carte pour voir ses paroles et ses réglages.
+- **Lyrics on presence N** choisit quelles cartes affichent les paroles — n'importe quelle combinaison.
+- **Players** permet d'épingler un lecteur à une présence donnée, pour qu'elle ne s'échange jamais avec une autre.
+- **Now playing** montre toutes les cartes ; clique sur l'une pour voir ses paroles et ses réglages.
 - Les stats, l'historique et Last.fm ne suivent que la présence 1.
 
-Chaque carte est une application Discord à part, et Spotify, YouTube, SoundCloud, Apple Music, Kick et Twitch ont chacun la leur. Un lecteur qui n'en a pas — VLC, foobar2000, un onglet anonyme — utilise celle par défaut, et deux cartes ne peuvent pas partager une application : pour un tel lecteur, la présence 2 reste absente de Discord tant que tu n'as pas collé un **Second application ID** (à créer sur discord.com/developers).
+Chaque carte est une application Discord à part, et Spotify, YouTube, SoundCloud, Apple Music, Kick et Twitch ont chacun la leur. Un lecteur qui n'en a pas — VLC, foobar2000, un onglet anonyme — utilise celle par défaut, et deux cartes ne peuvent pas partager une application : pour un tel lecteur, la carte du dessous reste absente de Discord tant que tu n'as pas collé un **Spare application ID** (à créer sur discord.com/developers ; deux de réserve couvrent deux lecteurs de ce genre en même temps).
 
 ---
 

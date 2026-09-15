@@ -10,6 +10,8 @@
 const api = window.vybecord;
 
 const emptySlot = () => ({ track: null, lyrics: null, progress: { progress_ms: 0, duration_ms: 0 } });
+/** How many presence cards the app can hold — matches MAX_SLOTS in the backend. */
+export const MAX_SLOTS = 3;
 
 export const state = {
   config: {},
@@ -22,15 +24,15 @@ export const state = {
   track: null,
   lyrics: null,
   progress: { progress_ms: 0, duration_ms: 0 },
-  slots: [emptySlot(), emptySlot()],
+  slots: Array.from({ length: MAX_SLOTS }, emptySlot),
   focus: 0,
   stats: { topTracks: [], topArtists: [] },
   players: [],
   preferredPlayer: null,
-  preferredPlayers: [null, null],
+  preferredPlayers: new Array(MAX_SLOTS).fill(null),
   status: {
     discordConnected: false, mediaSourceReady: false, adPlaying: false, showLyrics: true,
-    showLyrics2: true, dualPresence: false, userAway: false, hideWhenAway: true,
+    presenceCount: 1, userAway: false, hideWhenAway: true,
   },
   version: '',
 };
@@ -87,8 +89,10 @@ function mirrorFocus() {
  * state calls it itself when the one being looked at goes quiet while the
  * other plays on, so the page never sits on "Nothing playing" beside a track.
  */
+const slotIndex = (index) => Math.max(0, Math.min(MAX_SLOTS - 1, Number.isInteger(index) ? index : 0));
+
 export function setFocus(index) {
-  const i = index === 1 ? 1 : 0;
+  const i = slotIndex(index);
   if (i === state.focus) return;
   set({ focus: i });
   mirrorFocus();
@@ -97,13 +101,13 @@ export function setFocus(index) {
 function autoFocus() {
   const cur = state.slots[state.focus];
   if (cur?.track) return;
-  const other = state.focus === 0 ? 1 : 0;
-  if (state.slots[other]?.track) setFocus(other);
+  const other = state.slots.findIndex((s) => s?.track);
+  if (other >= 0) setFocus(other);
 }
 
 /** Apply a backend event to one presence's slice, and to the mirrors if it is the focused one. */
 function updateSlot(index, patch) {
-  const i = index === 1 ? 1 : 0;
+  const i = slotIndex(index);
   const slots = [...state.slots];
   slots[i] = { ...slots[i], ...patch };
   set({ slots });
@@ -120,15 +124,15 @@ export async function init() {
         lyrics: s?.lyrics ?? null,
         progress: s?.track ? (s.progress || trackProgress(s.track)) : trackProgress(null),
       }))
-    : [{ track: snap.track, lyrics: snap.lyrics, progress: trackProgress(snap.track) }, emptySlot()];
-  while (slots.length < 2) slots.push(emptySlot());
+    : [{ track: snap.track, lyrics: snap.lyrics, progress: trackProgress(snap.track) }];
+  while (slots.length < MAX_SLOTS) slots.push(emptySlot());
   set({
     config: snap.config || {},
     slots,
     stats: snap.stats || { topTracks: [], topArtists: [] },
     players: snap.players || [],
     preferredPlayer: snap.preferredPlayer,
-    preferredPlayers: snap.preferredPlayers || [snap.preferredPlayer ?? null, null],
+    preferredPlayers: snap.preferredPlayers || [snap.preferredPlayer ?? null],
     status: { ...state.status, ...(snap.status || {}) },
     version: snap.version || '',
   });
@@ -162,8 +166,8 @@ export async function init() {
     set({ status: { ...state.status, ...status } });
     if (status && 'preferredPlayer' in status) set({ preferredPlayer: status.preferredPlayer });
     if (status && Array.isArray(status.preferredPlayers)) set({ preferredPlayers: status.preferredPlayers });
-    // With the second card switched off, whatever it showed is gone too.
-    if (status && status.dualPresence === false && state.focus === 1) setFocus(0);
+    // A card beyond the new count is gone, whatever it showed.
+    if (status && typeof status.presenceCount === 'number' && state.focus >= status.presenceCount) setFocus(0);
   });
 
   /*

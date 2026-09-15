@@ -2,15 +2,15 @@
  * One presence card and everything that belongs to it alone.
  *
  * The backend used to hold exactly one of each of these as fields of its own,
- * which is the same as saying it could announce one thing. Announcing two means
- * two of everything that follows a track — the engine keeping its lyrics in
- * time, the fetch that may still be in flight for it, the lyric line the window
- * was last told — and none of what does not: the lyrics cache, the config, the
- * stats and the sources are shared, and stay on the backend.
+ * which is the same as saying it could announce one thing. Announcing several
+ * means several of everything that follows a track — the engine keeping its
+ * lyrics in time, the fetch that may still be in flight for it, the lyric line
+ * the window was last told — and none of what does not: the lyrics cache, the
+ * config, the stats and the sources are shared, and stay on the backend.
  *
  * A slot is a place, not a source. Presence 1 is whatever ranks highest right
- * now and presence 2 the next thing playing; the backend moves the *objects*
- * between the two positions when the ranking changes, so the engine and the
+ * now, presence 2 the next thing playing, and so on; the backend moves the
+ * *objects* between positions when the ranking changes, so the engine and the
  * socket follow the track rather than being torn down and rebuilt. `index` is
  * therefore the one field that changes hands — see swapSlots() in backend.ts.
  */

@@ -20,16 +20,16 @@
  *   4. On new track → fetch lyrics (local DB → LRCLib/Netease/Musixmatch race)
  *   5. Feed lyrics to LyricsEngine → precise setTimeout scheduling → RPC updates
  *
- * Two presences
- * -------------
+ * Several presences
+ * -----------------
  * Everything that follows one track lives in a PresenceSlot, and the backend
- * holds two of them. With `dual_presence` off only the first is ever filled and
- * the app behaves as it always has. With it on, every poll and every push runs
- * reconcile(): gather everything playing, rank it, give the top of the ranking
- * to presence 1 and the next to presence 2, and tell each slot what it now
- * holds. The slot objects move between the two positions rather than being
- * restarted, so a video demoted to card 2 by a song starting keeps its lyrics
- * engine, its socket and its place in the song.
+ * holds three of them. With `presence_count` at 1 only the first is ever
+ * filled and the app behaves as it always has. Above that, every poll and
+ * every push runs reconcile(): gather everything playing, rank it, give the
+ * top of the ranking to presence 1, the next to presence 2 and so on, and tell
+ * each slot what it now holds. The slot objects move between positions rather
+ * than being restarted, so a video demoted to card 2 by a song starting keeps
+ * its lyrics engine, its socket and its place in the song.
  */
 
 import fs from 'node:fs';
@@ -91,7 +91,7 @@ const VIDEO_SOURCES = ['browser_', 'youtube'];
 const ARTIST_SPLIT_RE = /[,]/;  // Precompiled — used in recordPlay + artist key extraction
 
 /** How many presence cards the app can put on the profile. */
-const MAX_SLOTS = 2;
+const MAX_SLOTS = 3;
 
 /**
  * Where a push source ranks against everything else.
@@ -294,9 +294,10 @@ export class VybecordBackend extends EventEmitter {
   /** Discord sockets, one per application, shared by the slots. */
   private pool: DiscordPool;
   /**
-   * The presence cards, by position. `slots[0]` is presence 1 — the card
-   * that counts for stats — and the objects change position on swap, so
-   * never keep a reference across a reconcile by index alone.
+   * The presence cards, by position, MAX_SLOTS of them whatever the count in
+   * play. `slots[0]` is presence 1 — the card that counts for stats — and the
+   * objects change position on swap, so never keep a reference across a
+   * reconcile by index alone.
    */
   private slots: PresenceSlot[];
 
@@ -386,7 +387,7 @@ export class VybecordBackend extends EventEmitter {
         this.setIdlePresence();
       }
 
-      // A detection switch or the second card itself may have just changed
+      // A detection switch or the card count itself may have just changed
       // the answer to "what goes on the profile" — decide now rather than at
       // the next tick, so the card appears or goes as the switch is flipped.
       // Before the restarts below, so a card that just went is not restarted
@@ -463,8 +464,11 @@ export class VybecordBackend extends EventEmitter {
     // 2. Discord RPC connect (with retry, in the background — never blocks
     //    startup). Presence 1 opens under the default application so the idle
     //    card can show before anything plays; the platform switch comes with
-    //    the first track.
-    this.applyDiscordAppId(this.slots[0], this.defaultAppId(), 'startup');
+    //    the first track. Unless a push landed while the media monitor was
+    //    starting and presence 1 is already on its platform — sending it back
+    //    to the default here only to switch again a second later is two
+    //    reconnects for nothing.
+    if (!this.slots[0].appId) this.applyDiscordAppId(this.slots[0], this.defaultAppId(), 'startup');
 
     // 3. Start polling
     // The `||` is for a config that predates the key, not a second default —
@@ -518,7 +522,8 @@ export class VybecordBackend extends EventEmitter {
 
   /** How many presence cards are in play right now. */
   private get activeSlotCount(): number {
-    return this.config.get('dual_presence') === true ? MAX_SLOTS : 1;
+    const n = Math.round(Number(this.config.get('presence_count')) || 1);
+    return Math.max(1, Math.min(MAX_SLOTS, n));
   }
 
   /**
@@ -862,7 +867,10 @@ export class VybecordBackend extends EventEmitter {
         if (!pinnedHere && !this.config.get('detect_all_media') && !MUSIC_APPS.has(src)) continue;
         const pKey = platformConfigKey(src);
         if (!pinnedHere && pKey && this.config.get(pKey) === false) continue;
-        if (this.coveredByPush(src)) continue;
+        // A pin outranks the stand-aside too: somebody pinned this very
+        // session, and a candidate a pin accepts is that pin's alone (see
+        // assignCandidates), so it cannot double up with the push elsewhere.
+        if (!pinnedHere && this.coveredByPush(src)) continue;
         out.push({
           track,
           service: src,
@@ -1007,8 +1015,8 @@ export class VybecordBackend extends EventEmitter {
     const assigned = this.assignCandidates(this.gatherCandidates(), n);
     this.alignSlots(assigned);
     for (let i = 0; i < n; i++) this.applyCandidate(this.slots[i], assigned[i], fromPoll);
-    // Positions no longer shown — the second card once dual presence is
-    // switched off — come down at once, and give their socket back.
+    // Positions no longer shown — the cards beyond the count once it is
+    // lowered — come down at once, and give their socket back.
     for (let i = n; i < this.slots.length; i++) {
       const slot = this.slots[i];
       if (slot.track) {
@@ -2431,10 +2439,9 @@ export class VybecordBackend extends EventEmitter {
       mediaSourceReady: this.media?.isReady ?? false,
       preferredPlayer: this.media?.getPreferredSource(0) ?? null,
       preferredPlayers: this.getPreferredPlayers(),
-      dualPresence: this.config.get('dual_presence') === true,
+      presenceCount: this.activeSlotCount,
       adPlaying: this.media?.isAdPlaying() ?? false,
       showLyrics: this.config.get('show_lyrics') !== false,
-      showLyrics2: this.config.get('show_lyrics_2') !== false,
       userAway: this.userAway,
       hideWhenAway: this.config.get('rpc_hide_when_away') !== false,
     };
@@ -2503,32 +2510,34 @@ export class VybecordBackend extends EventEmitter {
   /**
    * Which application a presence should publish this source under.
    *
-   * The platform's own when there is one, else the default — and for the
-   * second card, never the same as the first: Discord keys a card by
-   * application, so two cards under one application are one card showing
-   * two things in turn. That case falls back to `discord_app_id_2`, and
-   * with none set the second card stays off the profile for that source
-   * (the engine still runs, so the window shows it).
+   * The platform's own when there is one, else the default — and never the
+   * same as a higher card's: Discord keys a card by application, so two cards
+   * under one application are one card showing two things in turn. That case
+   * falls back to the spare application IDs from Settings, whichever is free,
+   * and with none free the card stays off the profile for that source (the
+   * engine still runs, so the window shows it).
    */
   private targetAppIdFor(slot: PresenceSlot, source: string): string {
     let target = PLATFORM_DISCORD_APP_IDS[source] || this.defaultAppId();
     if (slot.index === 0) return target;
-    // Both the application presence 1 is on and the one it is moving to are
-    // its: joining the one it is leaving would put both cards on one socket
-    // for the length of the debounce, each overwriting the other.
-    const first = this.slots[0];
-    const taken = (id: string) => !!id && (id === first.appId || id === first.pendingAppId);
+    // Both the application a higher card is on and the one it is moving to
+    // are its: joining the one it is leaving would put both cards on one
+    // socket for the length of the debounce, each overwriting the other.
+    const higher = this.slots.slice(0, slot.index);
+    const taken = (id: string) => !!id && higher.some(s => id === s.appId || id === s.pendingAppId);
     if (!taken(target)) return target;
-    const alt = String(this.config.get('discord_app_id_2') || '').trim();
-    if (alt && !taken(alt)) return alt;
-    // Presence 1 is on its way off this application: the re-pick its switch
-    // triggers lands the second card here a moment later. Nothing to warn
+    const spares = [this.config.get('discord_app_id_2'), this.config.get('discord_app_id_3')]
+      .map(v => String(v || '').trim())
+      .filter(Boolean);
+    for (const alt of spares) if (!taken(alt)) return alt;
+    // A higher card is on its way off this application: the re-pick its
+    // switch triggers lands this card here a moment later. Nothing to warn
     // about.
-    if (first.pendingAppId && target === first.appId && target !== first.pendingAppId) return '';
+    if (higher.some(s => s.pendingAppId && target === s.appId && target !== s.pendingAppId)) return '';
     if (!slot.noAppIdLogged.has(source)) {
       slot.noAppIdLogged.add(source);
-      log.warn(`[DISCORD] Presence 2 has no application of its own for ${source || 'this player'}`
-        + ' — it shares presence 1\'s, so it stays off Discord. Set a second application ID in Settings to show it.');
+      log.warn(`[DISCORD] Presence ${slot.index + 1} has no application of its own for ${source || 'this player'}`
+        + ' — it shares a higher card\'s, so it stays off Discord. Set a spare application ID in Settings to show it.');
     }
     return '';
   }
@@ -2610,14 +2619,15 @@ export class VybecordBackend extends EventEmitter {
     }
     if (previous) this.pool.release(previous, slot.id);
 
-    // Presence 1 taking the application presence 2 was on evicts it: the
-    // second card re-picks, which lands it on its alternative or off Discord.
-    // Presence 1 leaving one is re-picked too — the second card may have been
-    // waiting for exactly that application to come free.
-    if (slot.index === 0) {
-      const second = this.slots[1];
-      if (second.track && (second.appId === targetAppId || second.pendingAppId === targetAppId || !second.appId)) {
-        this.reconnectDiscordForSource(second, second.appIdSource || second.track.media_source || '');
+    // A card taking the application a lower card was on evicts it: the lower
+    // card re-picks, which lands it on a spare or off Discord. A card leaving
+    // one is re-picked for too — a lower card may have been waiting for
+    // exactly that application to come free.
+    for (let i = slot.index + 1; i < this.slots.length; i++) {
+      const lower = this.slots[i];
+      if (!lower.track) continue;
+      if (lower.appId === targetAppId || lower.pendingAppId === targetAppId || !lower.appId) {
+        this.reconnectDiscordForSource(lower, lower.appIdSource || lower.track.media_source || '');
       }
     }
   }
@@ -2632,8 +2642,13 @@ export class VybecordBackend extends EventEmitter {
   private recordPlay(t: TrackData, countPlay = true): void {
     // An advertisement is not a play. The presence filter is a user preference,
     // so it cannot be relied on here: with it off, every ad break used to land
-    // in the history as a track by a brand. The heuristic is the same one.
-    if (looksLikeSpotifyAd(
+    // in the history as a track by a brand. The heuristic is the same one —
+    // but only a guess, and it guesses wrong on a fifty-second album intro.
+    // A push carrying a real Spotify track id is not guessing: an ad has no
+    // such id (Spicetify sees `spotify:ad:` and reports none), so that one is
+    // trusted outright.
+    const trustedTrack = !!t._from_push && t.media_source === 'spotify' && /^[0-9A-Za-z]{22}$/.test(t.track_id);
+    if (!trustedTrack && looksLikeSpotifyAd(
       t.media_source,
       { title: t.track_name, artist: t.artist_name, albumTitle: t.album_name },
       t.duration_ms,
@@ -2804,8 +2819,8 @@ export class VybecordBackend extends EventEmitter {
     return {
       // Each card has its own lyrics switch — the one setting that is per
       // position rather than per app, because "lyrics on the song, not on the
-      // video" is the whole point of having two.
-      show_lyrics: slot.index === 0 ? cfg.show_lyrics : cfg.show_lyrics_2,
+      // video" is the whole point of having more than one.
+      show_lyrics: [cfg.show_lyrics, cfg.show_lyrics_2, cfg.show_lyrics_3][slot.index] ?? cfg.show_lyrics,
       rpc_button1_label: cfg.rpc_button1_label,
       rpc_button1_url: cfg.rpc_button1_url,
       rpc_button2_label: PLATFORM_BUTTON_LABEL,

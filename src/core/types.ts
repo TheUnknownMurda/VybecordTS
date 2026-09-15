@@ -135,25 +135,30 @@ export interface VybecordConfig {
   extension_enabled: boolean;
   discord_app_id: string;
   /**
-   * Announce two things at once — the song in Spotify and the video in the
-   * browser, say — as two separate presence cards on the profile.
+   * How many things to announce at once — the song in Spotify, the video in
+   * the browser and the stream in another tab, say — as separate presence
+   * cards on the profile. 1 to 3.
    *
-   * Off, the app behaves as it always has: one presence, following whichever
-   * source wins the priority contest. On, that source is presence 1 and the
-   * next-best thing playing is presence 2, each under its own Discord
-   * application and with its own lyrics engine. See the reconcile() notes in
-   * backend.ts for how the two are assigned.
+   * At 1 the app behaves as it always has: one presence, following whichever
+   * source wins the priority contest. Above that, that source is presence 1,
+   * the next-best thing playing is presence 2, and so on, each under its own
+   * Discord application and with its own lyrics engine. See the reconcile()
+   * notes in backend.ts for how they are assigned. Replaces the 2.1.0
+   * `dual_presence` switch, which is read as 2 once.
    */
-  dual_presence: boolean;
-  /** Lyrics on the second presence card; `show_lyrics` governs the first. */
+  presence_count: number;
+  /** Lyrics on the second and third presence cards; `show_lyrics` governs the first. */
   show_lyrics_2: boolean;
+  show_lyrics_3: boolean;
   /**
-   * Discord application ID for the second presence when it would otherwise
-   * share the first's. Two cards need two applications; the platform ones
-   * (Spotify, YouTube, …) already differ, so this is only consulted for a
-   * player the app has no dedicated application for.
+   * Discord application IDs for a presence that would otherwise share a
+   * higher card's. Every card needs its own application; the platform ones
+   * (Spotify, YouTube, …) already differ, so these are only consulted for a
+   * player the app has no dedicated application for. Either may serve any
+   * card that needs one.
    */
   discord_app_id_2: string;
+  discord_app_id_3: string;
   // RPC customization
   /** Which URL each clickable RPC field links to: 'track' | 'artist' | 'album' | 'context' | 'auto' */
   rpc_button1_label: string;

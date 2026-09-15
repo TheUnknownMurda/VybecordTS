@@ -24,11 +24,13 @@ const DEFAULTS: VybecordConfig = {
   /** Listen for pushes from the browser extension (opens 127.0.0.1:8888). */
   extension_enabled: true,
   discord_app_id: '',
-  // One presence unless asked for two: the second card needs a second
-  // application ID per player, and most people have never wanted it.
-  dual_presence: false,
+  // One presence unless asked for more: every further card needs an
+  // application ID of its own per player, and most people have never wanted it.
+  presence_count: 1,
   show_lyrics_2: true,
+  show_lyrics_3: true,
   discord_app_id_2: '',
+  discord_app_id_3: '',
   rpc_button1_label: '',
   rpc_button1_url: '',
   rpc_activity_type: 2, // LISTENING
@@ -137,9 +139,11 @@ export const CONFIG_SCHEMA: Record<string, FieldSpec> = {
   filter_spotify_ads: { type: 'boolean' },
   extension_enabled: { type: 'boolean' },
   discord_app_id: { type: 'string', maxLength: 32 },
-  dual_presence: { type: 'boolean' },
+  presence_count: { type: 'number', min: 1, max: 3 },
   show_lyrics_2: { type: 'boolean' },
+  show_lyrics_3: { type: 'boolean' },
   discord_app_id_2: { type: 'string', maxLength: 32 },
+  discord_app_id_3: { type: 'string', maxLength: 32 },
   // Labels are truncated to 32 chars when the activity is built; the generous
   // limit here only guards against absurd payloads (emojis cost 2 UTF-16 units).
   rpc_button1_label: { type: 'string', maxLength: 128 },
@@ -311,6 +315,13 @@ export class ConfigManager {
        * schema describes every key DEFAULTS has, so both doors now agree. What
        * it turns down keeps its default instead of the file winning.
        */
+      // 2.1.0 shipped the second card as a switch; it is a count now. Read
+      // the switch as two once, then let it be dropped with the other keys
+      // the app no longer has.
+      if ((parsed as Record<string, unknown>).dual_presence === true && !('presence_count' in parsed)) {
+        (parsed as Record<string, unknown>).presence_count = 2;
+        log.info('Config: dual_presence → presence_count = 2');
+      }
       const { accepted, rejected } = sanitizeConfigUpdate(parsed as Record<string, unknown>);
       for (const key of rejected) {
         dirty = true;

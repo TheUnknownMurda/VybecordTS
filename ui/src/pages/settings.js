@@ -17,19 +17,14 @@ const AWAY_DELAYS = [
   [5, 'After 5 minutes'], [10, 'After 10 minutes (Discord)'], [15, 'After 15 minutes'],
   [30, 'After 30 minutes'], [60, 'After 1 hour'],
 ];
+const PRESENCE_COUNTS = [[1, 'One'], [2, 'Two'], [3, 'Three']];
 /**
- * Which of the two cards carries lyrics. Stored as two booleans — presence 1
- * keeps the `show_lyrics` switch it always had, presence 2 has its own — and
- * offered as one choice, since that is the question being asked.
+ * Which cards carry lyrics. One switch per card — presence 1 keeps the
+ * `show_lyrics` switch it always had, the others have their own.
  */
-const LYRICS_ON = [
-  ['both', 'Both presences'], ['first', 'Presence 1 only'], ['second', 'Presence 2 only'], ['none', 'Neither'],
-];
-const lyricsOnValue = () => {
-  const a = cfg('show_lyrics', true) !== false;
-  const b = cfg('show_lyrics_2', true) !== false;
-  return a && b ? 'both' : a ? 'first' : b ? 'second' : 'none';
-};
+const LYRICS_KEYS = ['show_lyrics', 'show_lyrics_2', 'show_lyrics_3'];
+const APP_ID_KEYS = ['discord_app_id_2', 'discord_app_id_3'];
+const presenceCount = () => Math.max(1, Math.min(3, Number(cfg('presence_count', 1)) || 1));
 
 /**
  * Small-icon styles. They are stored as separate booleans rather than one enum,
@@ -158,28 +153,31 @@ function presenceTab(body) {
     ]),
 
     el('div', { class: 'card' }, [
-      el('h2', { text: 'Two presences' }),
+      el('h2', { text: 'Several presences' }),
       el('div', { class: 'row-desc', style: 'margin-top:6px;max-width:none' },
-        'Announce two things at once — the song in Spotify and the video in the browser, say — as two cards '
-        + 'on your profile. The highest-ranked thing playing goes on presence 1, the next on presence 2, and each '
-        + 'can be pinned to a player on the Players page. Stats, history and Last.fm follow presence 1.'),
+        'Announce up to three things at once — the song in Spotify, the video in the browser and a stream in '
+        + 'another tab, say — as separate cards on your profile. The highest-ranked thing playing goes on presence 1, '
+        + 'the next on presence 2, and so on; each can be pinned to a player on the Players page. '
+        + 'Stats, history and Last.fm follow presence 1.'),
       el('div', { style: 'margin-top:8px' }, [
-        toggleRow('Show two presences', 'Off, the app announces one thing at a time, as it always has.',
-          cfg('dual_presence') === true, (v) => put('dual_presence', v)),
-        cfg('dual_presence') === true
-          ? selectRow('Lyrics on', 'Which card sings along. The other shows the track without lyrics.',
-              lyricsOnValue(), LYRICS_ON, (v) => saveConfig({
-                show_lyrics: v === 'both' || v === 'first',
-                show_lyrics_2: v === 'both' || v === 'second',
-              }))
-          : null,
-        cfg('dual_presence') === true
-          ? inputRow('Second application ID',
-              'Only for players without a Discord app of their own (VLC, foobar2000, an unnamed tab…): the two cards '
-              + 'cannot share one application, so presence 2 uses this one. Create an application at '
-              + 'discord.com/developers and paste its Application ID.',
-              cfg('discord_app_id_2', ''), (v) => put('discord_app_id_2', v.trim()), { placeholder: 'Optional' })
-          : null,
+        selectRow('Presences', 'One is how the app always behaved: a single card, following whatever ranks highest.',
+          presenceCount(), PRESENCE_COUNTS, (v) => put('presence_count', Number(v))),
+        ...(presenceCount() > 1
+          ? LYRICS_KEYS.slice(0, presenceCount()).map((key, i) => toggleRow(
+              `Lyrics on presence ${i + 1}`,
+              i === 0 ? 'The same switch as Lyrics → Show lyrics.' : 'Off shows the track without lyrics on that card.',
+              cfg(key, true) !== false, (v) => put(key, v)))
+          : []),
+        ...(presenceCount() > 1
+          ? APP_ID_KEYS.slice(0, presenceCount() - 1).map((key, i) => inputRow(
+              `Spare application ID ${i + 1}`,
+              i === 0
+                ? 'Only for players without a Discord app of their own (VLC, foobar2000, an unnamed tab…): two cards '
+                  + 'cannot share one application, so a lower card uses a spare instead. Create an application at '
+                  + 'discord.com/developers and paste its Application ID.'
+                : 'A second spare, for when two such players are on at once.',
+              cfg(key, ''), (v) => put(key, v.trim()), { placeholder: 'Optional' }))
+          : []),
       ]),
     ]),
 
@@ -375,8 +373,8 @@ async function lyricsTab(body) {
     el('div', { class: 'card' }, [
       el('h2', { text: 'Lyrics' }),
       el('div', { style: 'margin-top:8px' }, [
-        toggleRow('Show lyrics', cfg('dual_presence') === true
-          ? 'Lyrics on presence 1. Presence 2 has its own switch under Presence → Two presences.'
+        toggleRow('Show lyrics', presenceCount() > 1
+          ? 'Lyrics on presence 1. The other cards have their own switches under Presence → Several presences.'
           : 'Off keeps the presence but stops fetching and displaying lyrics.',
           cfg('show_lyrics', true) !== false, (v) => put('show_lyrics', v)),
         toggleRow('Romanise Japanese / Korean', 'Converts kana and hangul to Latin script.',
