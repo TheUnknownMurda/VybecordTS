@@ -6,10 +6,6 @@ envs/
 
 # ── User config / data ──
 config.json
-local-lyrics.db
-local-lyrics.db-journal
-local-lyrics.db-shm
-local-lyrics.db-wal
 flagged-lyrics.json
 translate-cache.json
 stats-history.json
@@ -53,10 +49,6 @@ LRCLIB DUMP/
 *.sqlite3-shm
 *.sqlite3-wal
 
-# ── Test scripts / backups ──
-test-wizard.ps1
-config.json.*-backup
-
 # ── Atomic-write temp files ──
 *.tmp
 
@@ -65,9 +57,6 @@ config.json.*-backup
 
 # ── Cloudflare Worker build cache ──
 .wrangler/
-
-# ── Scratch: a partial unpacked build kept while chasing a packaging problem ──
-release-fix/
 
 # ── Windows shortcuts that wander into the working tree ──
 *.lnk
