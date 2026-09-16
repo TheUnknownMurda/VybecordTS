@@ -10,6 +10,7 @@ flagged-lyrics.json
 translate-cache.json
 stats-history.json
 listening-history.json
+window-state.json
 
 # ── Logs ──
 logs/

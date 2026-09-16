@@ -378,8 +378,16 @@ h2 {
   margin-bottom: 14px;
 }
 
+/*
+ * One column that never grows past its container. A grid track sized `auto`
+ * widens to its content's minimum, and a player card's minimum is its whole
+ * title on one line plus a row of pin buttons — so a Twitch title with a
+ * crown per word ran the card out past the edge of the page. Bounded, the
+ * card shrinks and the title takes the ellipsis it was always meant to.
+ */
 .grid {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
 }
 .grid-2 {
@@ -830,10 +838,17 @@ label.field > span {
   flex-shrink: 0;
 }
 
-/* Now playing: the two presence tiles, shown only while two cards are on air */
+/*
+ * Now playing: the presence tiles, shown only while several cards are on air.
+ *
+ * One row, one column per card in play — five tiles at the default width are
+ * narrow but whole, and a title that does not fit is cut with an ellipsis. It
+ * used to wrap once the tiles ran out of room, and a second row is what pushed
+ * the lyrics off the bottom of the window.
+ */
 .presences {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(var(--presences, 2), minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 16px;
 }
@@ -892,6 +907,7 @@ label.field > span {
   display: flex;
   align-items: center;
   gap: 14px;
+  min-width: 0;
   padding: 14px;
   border: 1px solid var(--border-s);
   border-radius: var(--r-md);
@@ -915,8 +931,18 @@ label.field > span {
 }
 .pin-btns {
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 6px;
   flex-shrink: 0;
+  /* Five buttons still leave the title some room on a narrow window. */
+  max-width: 55%;
+}
+.pin-btns .pin-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-right: 2px;
 }
 .player-icon {
   width: 40px;

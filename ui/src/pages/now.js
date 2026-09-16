@@ -193,6 +193,7 @@ function paintPresences() {
     return;
   }
   strip.hidden = false;
+  strip.style.setProperty('--presences', String(presenceCount()));
   strip.replaceChildren(...state.slots.slice(0, presenceCount()).map((slot, i) => {
     const t = slot.track;
     const [label, glyph] = t ? platformInfo(t.media_source) : ['', ''];

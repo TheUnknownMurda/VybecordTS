@@ -19,6 +19,7 @@ import { setKuromojiDicPath } from '../src/core/romanize.js';
 import { VybecordBackend } from '../src/backend.js';
 import { registerIpc } from './ipc.js';
 import { startAwayWatch } from './away-watch.js';
+import { WindowState } from './window-state.js';
 import { PushServer } from '../src/web/push-server.js';
 import type { TrackData } from '../src/core/types.js';
 
@@ -176,12 +177,21 @@ async function start(): Promise<void> {
 
 // ── Window ──
 
+/**
+ * Default size, for a first launch. Tall enough for the Now playing page with
+ * the presence tiles above the cover — a row the page did not have when the
+ * old 760 was picked, and which pushed the lyrics past the bottom edge until
+ * the window was dragged taller. Later launches open where the user left it.
+ */
+const DEFAULT_WINDOW = { width: 1180, height: 860 };
+const MIN_WINDOW = { width: 880, height: 620 };
+
 function createWindow(): void {
+  const state = new WindowState(baseDir);
   win = new BrowserWindow({
-    width: 1120,
-    height: 760,
-    minWidth: 880,
-    minHeight: 580,
+    ...state.initialBounds(DEFAULT_WINDOW, MIN_WINDOW),
+    minWidth: MIN_WINDOW.width,
+    minHeight: MIN_WINDOW.height,
     show: false,
     frame: false,
     backgroundColor: '#0d0f14',
@@ -198,6 +208,8 @@ function createWindow(): void {
   });
 
   win.removeMenu();
+  state.apply(win, DEFAULT_WINDOW, MIN_WINDOW);
+  state.track(win);
   void win.loadFile(path.join(__dirname, 'ui', 'index.html'));
 
   win.once('ready-to-show', () => {
