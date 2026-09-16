@@ -1,6 +1,6 @@
 {
   "name": "vybecord-desktop",
-  "version": "2.5.0",
+  "version": "2.5.1",
   "description": "Discord Rich Presence with real-time synced lyrics — desktop app",
   "type": "module",
   "repository": {
