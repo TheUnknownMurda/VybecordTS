@@ -135,6 +135,7 @@ Go to **Players** and click the one you want announced. It stays pinned until yo
 
 Or show them all. **Settings → Presence → Several presences** puts up to five cards on your profile: the song in Spotify on presence 1, the video in the browser on presence 2, a stream in another tab on presence 3, say. The highest-ranked thing playing is presence 1 (a music app beats a video, a video beats an unnamed tab), the next is presence 2, and so on. With more than one:
 
+- Two tabs of the same site are two things: two Twitch streams open side by side take two cards (the second one publishes under the default Vybecord application, since a Discord application can carry one card; the header still names the stream).
 - **Lyrics on presence N** picks which cards sing along — any combination.
 - **Players** lets you pin a player to a given presence, so it never swaps with another.
 - **Now playing** shows every card; click one to see its lyrics and controls.

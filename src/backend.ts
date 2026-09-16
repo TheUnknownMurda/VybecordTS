@@ -260,6 +260,8 @@ interface PushSpec {
   source: {
     readonly isActive: boolean;
     getCurrentTrack(): TrackData | null;
+    /** Every track the source reports at once — one per tab, for a site that can have several. */
+    getCurrentTracks?(): TrackData[];
   };
   /** The per-platform detection setting. Only an explicit `false` disables. */
   configKey: keyof VybecordConfig;
@@ -623,13 +625,17 @@ export class VybecordBackend extends EventEmitter {
   isBandcampSourceActive(): boolean { return this.bandcampSource.isActive; }
 
   handleKickPush(raw: unknown): void {
-    this.ingestPush(raw, this.kickSource, 'kick-userscript');
+    // Which tab said what: the one question a "two streams, one card" report
+    // needs answered, and nothing else in the log says it.
+    this.ingestPush(raw, this.kickSource, 'kick-userscript',
+      d => `tab=${d.tab_id || '(none)'} user=${d.username} live=${d.is_live}`);
   }
 
   isKickSourceActive(): boolean { return this.kickSource.isActive; }
 
   handleTwitchPush(raw: unknown): void {
-    this.ingestPush(raw, this.twitchSource, 'twitch-userscript');
+    this.ingestPush(raw, this.twitchSource, 'twitch-userscript',
+      d => `tab=${d.tab_id || '(none)'} user=${d.username} live=${d.is_live}`);
   }
 
   isTwitchSourceActive(): boolean { return this.twitchSource.isActive; }
@@ -844,24 +850,29 @@ export class VybecordBackend extends EventEmitter {
 
     for (const spec of this.pushSpecs) {
       if (!spec.source.isActive) continue;
-      // Null when paused, stale or empty — the source's own word on it.
-      const track = spec.source.getCurrentTrack();
-      if (!track) continue;
-      const service = track.media_source;
-      if (!this.isPinnedSource(service) && this.config.get(spec.configKey) === false) continue;
-      out.push({
-        track,
-        service,
-        priority: PUSH_PRIORITY[service] ?? 100,
-        push: true,
-        // Per track, not per source: Kick and Twitch are always a broadcast,
-        // but YouTube is one only when the video is, and a premiere sitting in
-        // the same tab as ordinary videos has to be read from the track itself.
-        live: !!spec.live || track.is_live === true,
-        label: spec.label,
-        web: spec.web,
-        detail: spec.detail?.(track) ?? '',
-      });
+      // Empty when paused, stale or blank — the source's own word on it. A
+      // site with several tabs open reports several tracks, each a candidate
+      // in its own right.
+      const tracks = spec.source.getCurrentTracks
+        ? spec.source.getCurrentTracks()
+        : [spec.source.getCurrentTrack()].filter((t): t is TrackData => !!t);
+      for (const track of tracks) {
+        const service = track.media_source;
+        if (!this.isPinnedSource(service) && this.config.get(spec.configKey) === false) continue;
+        out.push({
+          track,
+          service,
+          priority: PUSH_PRIORITY[service] ?? 100,
+          push: true,
+          // Per track, not per source: Kick and Twitch are always a broadcast,
+          // but YouTube is one only when the video is, and a premiere sitting in
+          // the same tab as ordinary videos has to be read from the track itself.
+          live: !!spec.live || track.is_live === true,
+          label: spec.label,
+          web: spec.web,
+          detail: spec.detail?.(track) ?? '',
+        });
+      }
     }
 
     if (this.media) {
@@ -932,37 +943,40 @@ export class VybecordBackend extends EventEmitter {
   }
 
   /**
-   * Whether the slot already holds what this candidate reports — the same
-   * track, the same song from the other transport, or at least the same
-   * service, which is what a track change within a player looks like.
-   */
-  private slotMatches(slot: PresenceSlot, c: Candidate): boolean {
-    if (!slot.track) return false;
-    if (slot.trackKey === this.buildTrackKey(c.track)) return true;
-    if (serviceFamily(slot.track.media_source) === serviceFamily(c.service)) return true;
-    return this.isHandoff(slot, c.track);
-  }
-
-  /**
    * Put each source on the position it is assigned to without restarting it.
    *
    * A song starting under a video sends the video from card 1 to card 2. The
    * slot objects are swapped rather than the video announced afresh on the
    * second card: its engine keeps its place in the lyrics, its socket keeps
    * the card, and the profile shows the same video a position lower.
+   *
+   * Each candidate first claims the slot already holding its exact track,
+   * then — for what is left — the slot holding the same song from the other
+   * transport, then any slot holding the same service, which is what a track
+   * change within one player looks like. Exact track first is what lets two
+   * tabs of one site keep two slots: matched by service alone, the second
+   * stream would claim the first stream's slot and both would restart.
    */
   private alignSlots(assigned: (Candidate | null)[]): void {
-    for (let i = 0; i < assigned.length; i++) {
+    const n = assigned.length;
+    const claimed = new Set<PresenceSlot>();
+    const home: (PresenceSlot | null)[] = new Array(n).fill(null);
+    const claim = (i: number, fits: (s: PresenceSlot, c: Candidate) => boolean) => {
       const c = assigned[i];
-      if (!c || this.slotMatches(this.slots[i], c)) continue;
-      for (let j = 0; j < this.slots.length; j++) {
-        if (j === i || !this.slotMatches(this.slots[j], c)) continue;
-        // Leave a slot that is already home to what it is assigned.
-        const theirs = assigned[j];
-        if (theirs && this.slotMatches(this.slots[j], theirs)) continue;
-        this.swapSlots(i, j);
-        break;
-      }
+      if (!c || home[i]) return;
+      const s = this.slots.find(s => !claimed.has(s) && !!s.track && fits(s, c));
+      if (s) { home[i] = s; claimed.add(s); }
+    };
+    for (let i = 0; i < n; i++) claim(i, (s, c) => s.trackKey === this.buildTrackKey(c.track));
+    for (let i = 0; i < n; i++) claim(i, (s, c) => this.isHandoff(s, c.track));
+    for (let i = 0; i < n; i++) claim(i, (s, c) => serviceFamily(s.track!.media_source) === serviceFamily(c.service));
+
+    // Bring each claimed slot to its position; whatever nobody claimed fills
+    // the rest, and is replaced or stopped when its position is applied.
+    for (let i = 0; i < n; i++) {
+      const s = home[i];
+      if (!s || this.slots[i] === s) continue;
+      this.swapSlots(i, this.slots.indexOf(s));
     }
   }
 
@@ -2523,22 +2537,26 @@ export class VybecordBackend extends EventEmitter {
    * engine still runs, so the window shows it).
    */
   private targetAppIdFor(slot: PresenceSlot, source: string): string {
-    let target = PLATFORM_DISCORD_APP_IDS[source] || this.defaultAppId();
-    if (slot.index === 0) return target;
+    const def = this.defaultAppId();
+    // In order of preference: the platform's own application, then the
+    // default one — which is what makes a second stream of the same site
+    // work with nothing configured, the card's header naming the stream
+    // either way — then the spares from Settings.
+    const options = [...new Set([
+      PLATFORM_DISCORD_APP_IDS[source] || def,
+      def,
+      ...SPARE_APP_ID_KEYS.map(k => String(this.config.get(k) || '').trim()).filter(Boolean),
+    ])];
+    if (slot.index === 0) return options[0];
     // Both the application a higher card is on and the one it is moving to
     // are its: joining the one it is leaving would put both cards on one
     // socket for the length of the debounce, each overwriting the other.
     const higher = this.slots.slice(0, slot.index);
     const taken = (id: string) => !!id && higher.some(s => id === s.appId || id === s.pendingAppId);
-    if (!taken(target)) return target;
-    const spares = SPARE_APP_ID_KEYS
-      .map(k => String(this.config.get(k) || '').trim())
-      .filter(Boolean);
-    for (const alt of spares) if (!taken(alt)) return alt;
-    // A higher card is on its way off this application: the re-pick its
-    // switch triggers lands this card here a moment later. Nothing to warn
-    // about.
-    if (higher.some(s => s.pendingAppId && target === s.appId && target !== s.pendingAppId)) return '';
+    for (const id of options) if (!taken(id)) return id;
+    // A higher card is on its way off one of these: the re-pick its switch
+    // triggers lands this card there a moment later. Nothing to warn about.
+    if (options.some(id => higher.some(s => s.pendingAppId && id === s.appId && id !== s.pendingAppId))) return '';
     if (!slot.noAppIdLogged.has(source)) {
       slot.noAppIdLogged.add(source);
       log.warn(`[DISCORD] Presence ${slot.index + 1} has no application of its own for ${source || 'this player'}`

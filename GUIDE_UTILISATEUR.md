@@ -135,6 +135,7 @@ Va dans **Players** et clique sur le lecteur que tu veux afficher. Il reste épi
 
 Ou affiche-les toutes. **Settings → Presence → Several presences** met jusqu'à cinq cartes sur ton profil : la chanson Spotify en présence 1, la vidéo du navigateur en présence 2, un stream dans un autre onglet en présence 3, par exemple. Ce qui joue avec le rang le plus élevé devient la présence 1 (une appli de musique passe avant une vidéo, une vidéo avant un onglet anonyme), ce qui suit la présence 2, et ainsi de suite. Avec plus d'une carte :
 
+- Deux onglets du même site comptent pour deux : deux streams Twitch ouverts côte à côte prennent deux cartes (la seconde est publiée sous l'application Vybecord par défaut, une application Discord ne portant qu'une carte ; l'en‑tête nomme quand même le stream).
 - **Lyrics on presence N** choisit quelles cartes affichent les paroles — n'importe quelle combinaison.
 - **Players** permet d'épingler un lecteur à une présence donnée, pour qu'elle ne s'échange jamais avec une autre.
 - **Now playing** montre toutes les cartes ; clique sur l'une pour voir ses paroles et ses réglages.

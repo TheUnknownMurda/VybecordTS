@@ -10,13 +10,17 @@
  *   - Live status
  *
  * Falls back to SMTC automatically if the userscript stops pushing, judged against the cadence it had been keeping -- see push-freshness.ts.
+ *
+ * Several tabs at once are several streams at once — one entry per tab, one
+ * track per live tab. See push-instances.ts and the same note in
+ * twitch-source.ts.
  */
 
 import { performance } from 'node:perf_hooks';
 import { createLogger } from './logger.js';
 import { asBool, asNonNegativeInt, asRecord, asText, asUrl } from './utils.js';
 import type { TrackData } from './types.js';
-import { PushFreshness } from './push-freshness.js';
+import { PushInstances, type PushInstance } from './push-instances.js';
 
 const log = createLogger('KickSource');
 
@@ -32,12 +36,15 @@ export interface KickPayload {
   thumbnail_url: string;
   profile_picture_url: string;
   stream_start_time_ms?: number;
+  /** Which tab pushed this — see the same field in twitch-source.ts. */
+  tab_id?: string;
 }
 
 /** Coerce a push into the shape above, whatever actually arrived. */
 export function normalizeKickPayload(raw: unknown): KickPayload {
   const d = asRecord(raw);
   return {
+    tab_id: asText(d.tab_id, 32),
     username: asText(d.username, 64),
     display_name: asText(d.display_name, 64),
     followers: asText(d.followers, 32),
@@ -51,12 +58,15 @@ export function normalizeKickPayload(raw: unknown): KickPayload {
   };
 }
 
+/** One tab's latest push, plus the start estimate it has settled on. */
+interface KickTab extends KickPayload {
+  startEstimateMs: number;
+}
+
 export class KickSource {
-  private latestData: KickPayload | null = null;
-  private receivedAt = 0;
-  private readonly freshness = new PushFreshness();
+  /** One entry per tab — or per channel, for a script that names no tab. */
+  private readonly tabs = new PushInstances<KickTab>();
   private _wasActive = false;
-  private streamStartTime = 0; // Store stream start time once
 
   /**
    * Ingest a push from the Kick userscript.
@@ -64,43 +74,38 @@ export class KickSource {
    */
   update(raw: unknown): KickPayload {
     const data = normalizeKickPayload(raw);
-    this.latestData = data;
-    this.receivedAt = performance.now();
-    this.freshness.seen(this.receivedAt);
+    const now = performance.now();
+    const key = data.tab_id || data.username.toLowerCase() || 'tab';
+    const prev = this.tabs.get(key);
 
     if (!this._wasActive) {
       this._wasActive = true;
       log.info('Kick userscript connected ✓ — using as primary Kick source');
     }
-    
-    // Use stream start time from Tampermonkey script
-    if (data.stream_start_time_ms) {
-      this.streamStartTime = data.stream_start_time_ms;
-      log.debug(`[KICK] Stream start time from script: ${this.streamStartTime}`);
-    } else if (data.is_live && this.streamStartTime === 0) {
-      // Fallback: set locally if not provided by script
-      this.streamStartTime = Date.now();
-      log.debug(`[KICK] Stream start time set locally: ${this.streamStartTime}`);
-    }
-    // Reset when stream goes offline
-    if (!data.is_live) {
-      this.streamStartTime = 0;
-    }
+
+    // Use stream start time from Tampermonkey script, else what this tab
+    // settled on earlier, else now. Reset when the stream goes offline.
+    const startEstimateMs = !data.is_live ? 0
+      : data.stream_start_time_ms || prev?.data.startEstimateMs || Date.now();
+    this.tabs.seen(key, { ...data, startEstimateMs }, now);
     return data;
   }
 
   /**
-   * Convert the latest push into a TrackData.
-   * Returns null if not live, no data, or data is stale.
+   * One track per live stream some fresh tab is on. Two tabs on the same
+   * channel are one stream: the one pushed most recently speaks for it.
    */
-  getCurrentTrack(): TrackData | null {
-    if (!this.latestData || !this.isActive) return null;
-    if (!this.latestData.is_live) return null;
-
-    const d = this.latestData;
-    if (!d.username) return null;
-
-    return {
+  getCurrentTracks(): TrackData[] {
+    const now = performance.now();
+    const byLogin = new Map<string, PushInstance<KickTab>>();
+    for (const t of this.tabs.fresh(now)) {
+      const d = t.data;
+      if (!d.is_live || !d.username) continue;
+      const login = d.username.toLowerCase();
+      const held = byLogin.get(login);
+      if (!held || t.receivedAt >= held.receivedAt) byLogin.set(login, t);
+    }
+    return [...byLogin.values()].map(({ data: d }) => ({
       track_id: `kick:${d.username}`,
       track_name: `📺 ${d.display_name || d.username}`,
       artist_name: d.stream_title || d.category || 'Just Chatting',
@@ -109,7 +114,7 @@ export class KickSource {
       progress_ms: 0,
       is_playing: true,
       is_live: true,
-      stream_start_time_ms: this.streamStartTime, // Use stored start time
+      stream_start_time_ms: d.startEstimateMs,
       album_art_url: d.profile_picture_url || d.thumbnail_url || '',
       spotify_url: d.profile_url || '',
       artist_url: '',
@@ -117,31 +122,35 @@ export class KickSource {
       context_url: d.profile_url || '',
       context_type: 'live',
       media_source: 'kick',
-      _received_at: performance.now(),
+      _received_at: now,
       _from_push: true,
       video_url: d.profile_url || '',
-    };
+    }));
   }
 
-  /** True while pushes are still arriving at the cadence this source has been keeping. */
+  /** The first live stream, for callers that want one — see getCurrentTracks(). */
+  getCurrentTrack(): TrackData | null {
+    return this.getCurrentTracks()[0] ?? null;
+  }
+
+  /** True while some tab is still pushing at the cadence it has been keeping. */
   get isActive(): boolean {
-    if (!this.latestData) return false;
-    const stale = this.freshness.isStale(performance.now());
-    if (stale && this._wasActive) {
+    const fresh = this.tabs.fresh(performance.now()).length > 0;
+    if (!fresh && this._wasActive) {
       this._wasActive = false;
-      log.warn(`Kick userscript stale (>${this.freshness.windowSeconds}s) — falling back to SMTC`);
+      log.warn(`Kick userscript stale (>${this.tabs.windowSeconds}s) — falling back to SMTC`);
     }
-    return !stale;
+    return fresh;
   }
 
-  /** Whether the userscript reports playback is paused. */
+  /** Whether the userscript reports nothing playing: no fresh tab on a live stream. */
   get isPaused(): boolean {
-    if (!this.latestData || !this.isActive) return true;
-    return !this.latestData.is_live;
+    if (!this.isActive) return true;
+    return this.getCurrentTracks().length === 0;
   }
 
-  /** The raw latest payload. */
+  /** The most recent payload from any fresh tab. */
   get latest(): KickPayload | null {
-    return this.isActive ? this.latestData : null;
+    return this.tabs.latest(performance.now())?.data ?? null;
   }
 }

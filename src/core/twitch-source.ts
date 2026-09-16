@@ -25,13 +25,18 @@
  * and note that failing to reach Twitch is not evidence of anything.
  *
  * Falls back to SMTC automatically if the userscript stops pushing, judged against the cadence it had been keeping -- see push-freshness.ts.
+ *
+ * Several tabs at once are several streams at once: each push is filed under
+ * the tab it came from (see push-instances.ts), and getCurrentTracks() hands
+ * back one track per live tab, so two streams watched side by side can take two
+ * presence cards rather than fighting over one.
  */
 
 import { performance } from 'node:perf_hooks';
 import { createLogger } from './logger.js';
 import { asBool, asNonNegativeInt, asRecord, asText, asUrl, evictOldest } from './utils.js';
 import type { TrackData } from './types.js';
-import { PushFreshness } from './push-freshness.js';
+import { PushInstances, type PushInstance } from './push-instances.js';
 
 const log = createLogger('TwitchSource');
 
@@ -48,12 +53,19 @@ export interface TwitchPayload {
   profile_picture_url: string;
   /** Estimated — superseded by the GraphQL lookup below once it resolves. */
   stream_start_time_ms?: number;
+  /**
+   * Which tab pushed this, so a tab moving from one channel to the next
+   * replaces its own entry rather than leaving the old channel on a card
+   * until it ages out. Older scripts send none; the channel stands in.
+   */
+  tab_id?: string;
 }
 
 /** Coerce a push into the shape above, whatever actually arrived. */
 export function normalizeTwitchPayload(raw: unknown): TwitchPayload {
   const d = asRecord(raw);
   return {
+    tab_id: asText(d.tab_id, 32),
     username: asText(d.username, 64),
     display_name: asText(d.display_name, 64),
     followers: asText(d.followers, 32),
@@ -187,18 +199,20 @@ async function fetchStreamStart(username: string): Promise<StreamLookup> {
   }
 }
 
+/** One tab's latest push, plus the start estimate it has settled on. */
+interface TwitchTab extends TwitchPayload {
+  /** The userscript's estimate, kept across pushes that omit it. */
+  startEstimateMs: number;
+}
+
 export class TwitchSource {
-  private latestData: TwitchPayload | null = null;
-  private receivedAt = 0;
-  private readonly freshness = new PushFreshness();
+  /** One entry per tab — or per channel, for a script that names no tab. */
+  private readonly tabs = new PushInstances<TwitchTab>();
   private _wasActive = false;
-  private streamStartTime = 0; // The userscript's estimate
 
   /** Real `createdAt` per streamer, so poll() reuses it instead of re-querying. */
   private readonly resolvedStarts = new Map<string, ResolvedStart>();
   private readonly lookupsInFlight = new Set<string>();
-  /** Guards a slow response from overwriting a newer session. */
-  private activeStreamer = '';
 
   /**
    * Ingest a push from the Twitch userscript.
@@ -206,9 +220,10 @@ export class TwitchSource {
    */
   update(raw: unknown): TwitchPayload {
     const data = normalizeTwitchPayload(raw);
-    this.latestData = data;
-    this.receivedAt = performance.now();
-    this.freshness.seen(this.receivedAt);
+    const now = performance.now();
+    const login = normaliseLogin(data.username);
+    const key = data.tab_id || login || 'tab';
+    const prev = this.tabs.get(key);
 
     if (!this._wasActive) {
       this._wasActive = true;
@@ -216,26 +231,34 @@ export class TwitchSource {
     }
 
     if (!data.is_live) {
-      // Reset when stream goes offline. The resolved start goes with it: if
-      // the channel comes back it is a new stream with a new createdAt.
-      this.streamStartTime = 0;
-      if (this.activeStreamer) this.resolvedStarts.delete(this.activeStreamer);
-      this.activeStreamer = '';
+      // Kept, not dropped: the script is still talking, which is what
+      // isActive answers, and it now says this tab shows no stream. The
+      // resolved start goes if no other tab has the channel live — if it
+      // comes back it is a new stream with a new createdAt.
+      this.tabs.seen(key, { ...data, startEstimateMs: 0 }, now);
+      if (login && !this.liveLogins(now).has(login)) this.resolvedStarts.delete(login);
       return data;
     }
 
     // Use stream start time from Tampermonkey script — an estimate, and only
     // what the timer falls back to until the GraphQL lookup lands.
-    if (data.stream_start_time_ms) {
-      this.streamStartTime = data.stream_start_time_ms;
-    } else if (this.streamStartTime === 0) {
-      // Fallback: set locally if not provided by script
-      this.streamStartTime = Date.now();
-    }
+    const startEstimateMs = data.stream_start_time_ms || prev?.data.startEstimateMs || Date.now();
+    this.tabs.seen(key, { ...data, startEstimateMs }, now);
 
-    this.activeStreamer = normaliseLogin(data.username);
-    void this.resolveStreamStart(this.activeStreamer);
+    if (login) void this.resolveStreamStart(login);
     return data;
+  }
+
+  /** Every channel some fresh tab reports live, lowercased. */
+  private liveLogins(now = performance.now()): Set<string> {
+    const out = new Set<string>();
+    for (const t of this.tabs.fresh(now)) {
+      if (t.data.is_live) {
+        const login = normaliseLogin(t.data.username);
+        if (login) out.add(login);
+      }
+    }
+    return out;
   }
 
   /**
@@ -263,7 +286,7 @@ export class TwitchSource {
     this.lookupsInFlight.add(username);
     try {
       const result = await fetchStreamStart(username);
-      if (username !== this.activeStreamer) return; // session moved on, discard
+      if (!this.liveLogins().has(username)) return; // every tab moved on, discard
 
       const prev = this.resolvedStarts.get(username);
       const entry: ResolvedStart = result === null
@@ -327,18 +350,24 @@ export class TwitchSource {
   }
 
   /**
-   * Convert the latest push into a TrackData.
-   * Returns null if not live, no data, or data is stale.
+   * One track per live stream some fresh tab is on.
+   *
+   * Two tabs on the same channel are one stream: the one pushed most recently
+   * speaks for it. A channel Twitch itself has called offline is left out —
+   * see isKnownOffline().
    */
-  getCurrentTrack(): TrackData | null {
-    if (!this.latestData || !this.isActive) return null;
-    if (!this.latestData.is_live) return null;
-
-    const d = this.latestData;
-    if (!d.username) return null;
-    if (this.isKnownOffline(d.username)) return null;
-
-    return {
+  getCurrentTracks(): TrackData[] {
+    const now = performance.now();
+    const byLogin = new Map<string, PushInstance<TwitchTab>>();
+    for (const t of this.tabs.fresh(now)) {
+      const d = t.data;
+      if (!d.is_live || !d.username) continue;
+      if (this.isKnownOffline(d.username)) continue;
+      const login = normaliseLogin(d.username) || d.username.toLowerCase();
+      const held = byLogin.get(login);
+      if (!held || t.receivedAt >= held.receivedAt) byLogin.set(login, t);
+    }
+    return [...byLogin.values()].map(({ data: d }) => ({
       track_id: `twitch:${d.username}`,
       track_name: `📺 ${d.display_name || d.username}`,
       artist_name: d.stream_title || d.category || 'Just Chatting',
@@ -348,7 +377,7 @@ export class TwitchSource {
       is_playing: true,
       is_live: true,
       // Twitch's own createdAt once it has resolved, else the script's estimate
-      stream_start_time_ms: this.resolvedStartFor(d.username) || this.streamStartTime,
+      stream_start_time_ms: this.resolvedStartFor(d.username) || d.startEstimateMs,
       album_art_url: d.profile_picture_url || d.thumbnail_url || '',
       spotify_url: d.profile_url || '',
       artist_url: '',
@@ -356,38 +385,42 @@ export class TwitchSource {
       context_url: d.profile_url || '',
       context_type: 'live',
       media_source: 'twitch',
-      _received_at: performance.now(),
+      _received_at: now,
       _from_push: true,
       video_url: d.profile_url || '',
-    };
+    }));
   }
 
-  /** True while pushes are still arriving at the cadence this source has been keeping. */
+  /** The first live stream, for callers that want one — see getCurrentTracks(). */
+  getCurrentTrack(): TrackData | null {
+    return this.getCurrentTracks()[0] ?? null;
+  }
+
+  /** True while some tab is still pushing at the cadence it has been keeping. */
   get isActive(): boolean {
-    if (!this.latestData) return false;
-    const stale = this.freshness.isStale(performance.now());
-    if (stale && this._wasActive) {
+    const fresh = this.tabs.fresh(performance.now()).length > 0;
+    if (!fresh && this._wasActive) {
       this._wasActive = false;
-      log.warn(`Twitch userscript stale (>${this.freshness.windowSeconds}s) — falling back to SMTC`);
+      log.warn(`Twitch userscript stale (>${this.tabs.windowSeconds}s) — falling back to SMTC`);
     }
-    return !stale;
+    return fresh;
   }
 
   /**
-   * Whether the userscript reports playback is paused.
+   * Whether the userscript reports nothing playing: no fresh tab on a live
+   * stream.
    *
-   * Also true once Twitch has contradicted the page, which is what clears a
-   * presence the page is still claiming: poll() stops the current track when
-   * an active source reports paused.
+   * Also true once Twitch has contradicted every page, which is what clears a
+   * presence a page is still claiming: the backend stops a track whose source
+   * reports paused.
    */
   get isPaused(): boolean {
-    if (!this.latestData || !this.isActive) return true;
-    if (!this.latestData.is_live) return true;
-    return this.isKnownOffline(this.latestData.username);
+    if (!this.isActive) return true;
+    return this.getCurrentTracks().length === 0;
   }
 
-  /** The raw latest payload. */
+  /** The most recent payload from any fresh tab. */
   get latest(): TwitchPayload | null {
-    return this.isActive ? this.latestData : null;
+    return this.tabs.latest(performance.now())?.data ?? null;
   }
 }
