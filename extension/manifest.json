@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Vybecord",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Sends what you are playing on Spotify, YouTube, SoundCloud, Bandcamp, Twitch and Kick to the Vybecord desktop app.",
   "icons": {
     "16": "icons/icon16.png",

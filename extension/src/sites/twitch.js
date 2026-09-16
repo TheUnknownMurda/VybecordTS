@@ -27,6 +27,27 @@
 
     // ── Config ──
     const VYBECORD_URL = 'http://127.0.0.1:8888/api/twitch';
+
+    /*
+     * Which tab this is, so the desktop app can keep one entry per tab.
+     *
+     * Two tabs on two channels are two streams, and the app shows both; but
+     * a tab that moves from one channel to the next must replace its own
+     * entry rather than leave the old channel on a card until it ages out.
+     * sessionStorage is per tab and survives the SPA's own navigation and a
+     * reload, which is exactly the lifetime wanted.
+     */
+    const TAB_ID_KEY = 'vybecord_tab_id';
+    let TAB_ID = '';
+    try {
+        TAB_ID = sessionStorage.getItem(TAB_ID_KEY) || '';
+        if (!TAB_ID) {
+            TAB_ID = Math.random().toString(36).slice(2, 10);
+            sessionStorage.setItem(TAB_ID_KEY, TAB_ID);
+        }
+    } catch (e) {
+        TAB_ID = Math.random().toString(36).slice(2, 10);
+    }
     const BASE_INTERVAL_MS = 2500;
     const MAX_INTERVAL_MS = 15000;
 
@@ -162,7 +183,8 @@
             is_live: false,
             thumbnail_url: '',
             profile_picture_url: '',
-            stream_start_time_ms: 0
+            stream_start_time_ms: 0,
+            tab_id: TAB_ID
         };
 
         // Try to get username from URL, unless the page is one of Twitch's own
