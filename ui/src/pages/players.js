@@ -128,14 +128,21 @@ function paintList(list) {
       p_.isAd ? el('span', { class: 'badge', title: 'Detected as an advertisement and not announced', text: 'Ad' }) : null,
       p_.playing ? el('span', { class: 'pulse', title: 'Playing' }) : null,
       twoWay
-        ? el('div', { class: 'pin-btns' }, p.map((_, i) => el('button', {
-            class: `btn btn-sm ${pinnedTo === i ? 'btn-primary' : ''}`.trim(),
-            text: pinnedTo === i ? `Pinned · ${i + 1}` : `Pin to ${i + 1}`,
-            title: pinnedTo === i
-              ? `Pinned to presence ${i + 1} — click to unpin`
-              : `Pin presence ${i + 1} to ${label}`,
-            onclick: (e) => { e.stopPropagation(); pin(pinnedTo === i ? null : p_.appId, i); },
-          })))
+        // Past three presences the buttons carry the number alone, under
+        // one "Pin to" label — five "Pin to N" in a row crowded the title.
+        ? el('div', { class: 'pin-btns' }, [
+            p.length > 3 ? el('span', { class: 'pin-label', text: pinned ? 'Pinned to' : 'Pin to' }) : null,
+            ...p.map((_, i) => el('button', {
+              class: `btn btn-sm ${pinnedTo === i ? 'btn-primary' : ''}`.trim(),
+              text: p.length > 3
+                ? String(i + 1)
+                : pinnedTo === i ? `Pinned · ${i + 1}` : `Pin to ${i + 1}`,
+              title: pinnedTo === i
+                ? `Pinned to presence ${i + 1} — click to unpin`
+                : `Pin presence ${i + 1} to ${label}`,
+              onclick: (e) => { e.stopPropagation(); pin(pinnedTo === i ? null : p_.appId, i); },
+            })),
+          ])
         : pinned ? el('span', { class: 'badge accent', text: 'Pinned' }) : null,
     ]);
   }));
