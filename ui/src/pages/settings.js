@@ -172,10 +172,11 @@ function presenceTab(body) {
           ? APP_ID_KEYS.slice(0, presenceCount() - 1).map((key, i) => inputRow(
               `Spare application ID ${i + 1}`,
               i === 0
-                ? 'Only for players without a Discord app of their own (VLC, foobar2000, an unnamed tab…): two cards '
-                  + 'cannot share one application, so a lower card uses a spare instead. Create an application at '
+                ? 'Optional. A Discord application carries one card, so a card whose own application is taken '
+                  + 'borrows one: the default, then these spares, then a platform application nothing is on. '
+                  + 'Set one to be borrowed ahead of the platform ones — create an application at '
                   + 'discord.com/developers and paste its Application ID.'
-                : `Another spare, for when ${i + 1} such players are on at once.`,
+                : 'Another spare, borrowed after the one above.',
               cfg(key, ''), (v) => put(key, v.trim()), { placeholder: 'Optional' }))
           : []),
       ]),

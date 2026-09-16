@@ -135,13 +135,13 @@ Go to **Players** and click the one you want announced. It stays pinned until yo
 
 Or show them all. **Settings → Presence → Several presences** puts up to five cards on your profile: the song in Spotify on presence 1, the video in the browser on presence 2, a stream in another tab on presence 3, say. The highest-ranked thing playing is presence 1 (a music app beats a video, a video beats an unnamed tab), the next is presence 2, and so on. With more than one:
 
-- Two tabs of the same site are two things: two Twitch streams open side by side take two cards (the second one publishes under the default Vybecord application, since a Discord application can carry one card; the header still names the stream).
+- Tabs of the same site are separate things: four Twitch streams open side by side take four cards. A Discord application carries one card, so the others borrow one — the default Vybecord application, then any spare you set, then a platform application nothing is on — and the card names its platform in the header either way.
 - **Lyrics on presence N** picks which cards sing along — any combination.
 - **Players** lets you pin a player to a given presence, so it never swaps with another.
 - **Now playing** shows every card; click one to see its lyrics and controls.
 - Stats, history and Last.fm follow presence 1 only.
 
-Each card is a Discord application of its own, and Spotify, YouTube, SoundCloud, Apple Music, Kick and Twitch each have one. A player without one — VLC, foobar2000, an unnamed tab — shares the default, and two cards cannot share an application: a lower card stays off Discord for such a player until you paste a **Spare application ID** (create one at discord.com/developers; up to four spares, one per such player on at once).
+Each card is a Discord application of its own, and Spotify, YouTube, SoundCloud, Apple Music, Kick and Twitch each have one; with the default that is seven, and a card whose own application is taken borrows a free one. Only past seven cards' worth — or if you would rather not borrow — do the **Spare application IDs** matter (create one at discord.com/developers; up to four).
 
 ---
 

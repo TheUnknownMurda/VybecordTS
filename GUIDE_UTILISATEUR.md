@@ -135,13 +135,13 @@ Va dans **Players** et clique sur le lecteur que tu veux afficher. Il reste épi
 
 Ou affiche-les toutes. **Settings → Presence → Several presences** met jusqu'à cinq cartes sur ton profil : la chanson Spotify en présence 1, la vidéo du navigateur en présence 2, un stream dans un autre onglet en présence 3, par exemple. Ce qui joue avec le rang le plus élevé devient la présence 1 (une appli de musique passe avant une vidéo, une vidéo avant un onglet anonyme), ce qui suit la présence 2, et ainsi de suite. Avec plus d'une carte :
 
-- Deux onglets du même site comptent pour deux : deux streams Twitch ouverts côte à côte prennent deux cartes (la seconde est publiée sous l'application Vybecord par défaut, une application Discord ne portant qu'une carte ; l'en‑tête nomme quand même le stream).
+- Les onglets d'un même site sont des choses distinctes : quatre streams Twitch ouverts côte à côte prennent quatre cartes. Une application Discord ne porte qu'une carte, donc les autres en empruntent une — l'application Vybecord par défaut, puis un ID de réserve si tu en as mis, puis l'application d'une plateforme que rien n'occupe — et la carte nomme sa plateforme dans l'en‑tête de toute façon.
 - **Lyrics on presence N** choisit quelles cartes affichent les paroles — n'importe quelle combinaison.
 - **Players** permet d'épingler un lecteur à une présence donnée, pour qu'elle ne s'échange jamais avec une autre.
 - **Now playing** montre toutes les cartes ; clique sur l'une pour voir ses paroles et ses réglages.
 - Les stats, l'historique et Last.fm ne suivent que la présence 1.
 
-Chaque carte est une application Discord à part, et Spotify, YouTube, SoundCloud, Apple Music, Kick et Twitch ont chacun la leur. Un lecteur qui n'en a pas — VLC, foobar2000, un onglet anonyme — utilise celle par défaut, et deux cartes ne peuvent pas partager une application : pour un tel lecteur, la carte du dessous reste absente de Discord tant que tu n'as pas collé un **Spare application ID** (à créer sur discord.com/developers ; jusqu'à quatre de réserve, un par lecteur de ce genre en même temps).
+Chaque carte est une application Discord à part, et Spotify, YouTube, SoundCloud, Apple Music, Kick et Twitch ont chacun la leur ; avec celle par défaut, ça fait sept, et une carte dont l'application est déjà prise en emprunte une libre. Les **Spare application ID** ne servent qu'au‑delà de sept cartes — ou si tu préfères ne pas emprunter (à créer sur discord.com/developers ; jusqu'à quatre).
 
 ---
 

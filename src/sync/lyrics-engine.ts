@@ -266,6 +266,12 @@ export class LyricsEngine {
   private cfgIconMode: 'default' | 'dance' | 'radiate' | 'purple_rad' | 'rouge' | 'lrc_off' | 'bleeding' | 'blue_rad' | 'random' = 'default';
   private cfgRpcTranslate = false;
   private cfgTranslateLang = '';
+  /**
+   * The platform's name, for the header, when the card is published under
+   * some other application — see borrowed_app in backend.ts. Empty otherwise,
+   * and the application's own name shows as it always has.
+   */
+  private cfgBorrowedName = '';
 
   setCallbacks(cbs: LyricsEngineCallbacks): void {
     this.callbacks = cbs;
@@ -1277,6 +1283,9 @@ export class LyricsEngine {
     this.cfgRomanize = (this.rpcConfig.romanize_lyrics as boolean) === true;
     this.cfgRpcTranslate = (this.rpcConfig.rpc_translate_lyrics as boolean) === true;
     this.cfgTranslateLang = (this.rpcConfig.translate_target_lang as string) || 'en';
+    this.cfgBorrowedName = (this.rpcConfig.borrowed_app as boolean) === true
+      ? (PLATFORM_NAMES[source] ?? '')
+      : '';
     this.cfgActivityType = (this.rpcConfig.rpc_activity_type as number) ?? 2;
     this.cfgStatusDisplay = (this.rpcConfig.rpc_status_display as string) || 'app';
     this.cfgShowPlaylist = (this.rpcConfig.rpc_show_playlist as boolean) !== false;
@@ -1555,12 +1564,17 @@ export class LyricsEngine {
     // one slot the lyrics don't already occupy, leaving details/state intact.
     // An empty render (e.g. {playlist} on a track with no context) omits `name`
     // entirely, which falls back to the application name.
+    // A card on a borrowed application still names its own platform in the
+    // header; the status line keeps reading from whichever field the setting
+    // says.
+    const borrowed = this.cfgBorrowedName ? { name: this.cfgBorrowedName } : {};
     const activity: DiscordActivity = {
       type: activityType,
       ...(this.cachedStatusName
         ? { name: this.cachedStatusName, status_display_type: 0 }
-        : this.cfgStatusDisplay === 'details' ? { status_display_type: 2 }
-        : this.cfgStatusDisplay === 'state' ? { status_display_type: 1 }
+        : this.cfgStatusDisplay === 'details' ? { ...borrowed, status_display_type: 2 }
+        : this.cfgStatusDisplay === 'state' ? { ...borrowed, status_display_type: 1 }
+        : this.cfgBorrowedName ? { ...borrowed, status_display_type: 0 }
         : {}),
       details,
       state,

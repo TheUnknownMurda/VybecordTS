@@ -964,10 +964,19 @@ export class VybecordBackend extends EventEmitter {
     const claim = (i: number, fits: (s: PresenceSlot, c: Candidate) => boolean) => {
       const c = assigned[i];
       if (!c || home[i]) return;
-      const s = this.slots.find(s => !claimed.has(s) && !!s.track && fits(s, c));
+      // The slot already at this position first: a track change within one
+      // player then stays where it is rather than trading places with another
+      // slot of the same service and dragging a third along.
+      const here = this.slots[i];
+      const s = (!claimed.has(here) && !!here.track && fits(here, c))
+        ? here
+        : this.slots.find(s => !claimed.has(s) && !!s.track && fits(s, c));
       if (s) { home[i] = s; claimed.add(s); }
     };
     for (let i = 0; i < n; i++) claim(i, (s, c) => s.trackKey === this.buildTrackKey(c.track));
+    // The same stream or video under a new title — a Twitch channel whose
+    // title the script read late is still that channel's card.
+    for (let i = 0; i < n; i++) claim(i, (s, c) => s.track!.track_id === c.track.track_id);
     for (let i = 0; i < n; i++) claim(i, (s, c) => this.isHandoff(s, c.track));
     for (let i = 0; i < n; i++) claim(i, (s, c) => serviceFamily(s.track!.media_source) === serviceFamily(c.service));
 
@@ -2538,14 +2547,17 @@ export class VybecordBackend extends EventEmitter {
    */
   private targetAppIdFor(slot: PresenceSlot, source: string): string {
     const def = this.defaultAppId();
-    // In order of preference: the platform's own application, then the
-    // default one — which is what makes a second stream of the same site
-    // work with nothing configured, the card's header naming the stream
-    // either way — then the spares from Settings.
+    // In order of preference: the platform's own application; the default
+    // one — which is what makes a second stream of the same site work with
+    // nothing configured; the spares from Settings; and last, any other
+    // platform's application that nothing is on. The card names its own
+    // platform whichever it lands on (see borrowed_app in getRpcConfig), so
+    // four streams of one site fit out of the box.
     const options = [...new Set([
       PLATFORM_DISCORD_APP_IDS[source] || def,
       def,
       ...SPARE_APP_ID_KEYS.map(k => String(this.config.get(k) || '').trim()).filter(Boolean),
+      ...Object.values(PLATFORM_DISCORD_APP_IDS),
     ])];
     if (slot.index === 0) return options[0];
     // Both the application a higher card is on and the one it is moving to
@@ -2553,6 +2565,10 @@ export class VybecordBackend extends EventEmitter {
     // socket for the length of the debounce, each overwriting the other.
     const higher = this.slots.slice(0, slot.index);
     const taken = (id: string) => !!id && higher.some(s => id === s.appId || id === s.pendingAppId);
+    // Settled once, not chased: a card already on an application it may use
+    // stays there when a better-ranked one frees up. Every move is a second
+    // and a half off the profile, and the header names the platform anyway.
+    if (slot.appId && options.includes(slot.appId) && !taken(slot.appId)) return slot.appId;
     for (const id of options) if (!taken(id)) return id;
     // A higher card is on its way off one of these: the re-pick its switch
     // triggers lands this card there a moment later. Nothing to warn about.
@@ -2638,7 +2654,12 @@ export class VybecordBackend extends EventEmitter {
     // only comes down once the new one can go up.
     if (targetAppId && !this.shuttingDown) {
       this.pool.acquire(targetAppId, slot.id);
-      if (this.pool.isConnected(targetAppId)) this.refreshPresence(slot);
+      // Whether the card is on its own platform's application just changed
+      // with it, and that decides the header — see borrowed_app. The engine
+      // republishes as part of taking the new config, on the new socket if
+      // it is up; the ready callback covers it otherwise.
+      if (slot.track) slot.engine.updateConfig(this.rpcConfigForTrack(slot, slot.track));
+      else if (this.pool.isConnected(targetAppId)) this.refreshPresence(slot);
     }
     if (previous) this.pool.release(previous, slot.id);
 
@@ -2839,11 +2860,18 @@ export class VybecordBackend extends EventEmitter {
   }
   private getRpcConfig(slot: PresenceSlot): Record<string, unknown> {
     const cfg = this.config.getAll();
+    const source = slot.track?.media_source || '';
+    const ownApp = PLATFORM_DISCORD_APP_IDS[source] || this.defaultAppId();
     return {
       // Each card has its own lyrics switch — the one setting that is per
       // position rather than per app, because "lyrics on the song, not on the
       // video" is the whole point of having more than one.
       show_lyrics: cfg[LYRICS_SWITCH_KEYS[slot.index] ?? 'show_lyrics'],
+      // On another application than its platform's — the default one, a
+      // spare, or a free platform's — the card would be headed by that
+      // application's name. Told so, the engine puts the platform's name in
+      // the header itself.
+      borrowed_app: !!slot.appId && slot.appId !== ownApp,
       rpc_button1_label: cfg.rpc_button1_label,
       rpc_button1_url: cfg.rpc_button1_url,
       rpc_button2_label: PLATFORM_BUTTON_LABEL,
