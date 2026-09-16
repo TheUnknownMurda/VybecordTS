@@ -23,7 +23,7 @@
  * Several presences
  * -----------------
  * Everything that follows one track lives in a PresenceSlot, and the backend
- * holds three of them. With `presence_count` at 1 only the first is ever
+ * holds five of them. With `presence_count` at 1 only the first is ever
  * filled and the app behaves as it always has. Above that, every poll and
  * every push runs reconcile(): gather everything playing, rank it, give the
  * top of the ranking to presence 1, the next to presence 2 and so on, and tell
@@ -90,8 +90,13 @@ const WEB_SOURCES = ['browser_', 'soundcloud', 'bandcamp', 'youtube'];
 const VIDEO_SOURCES = ['browser_', 'youtube'];
 const ARTIST_SPLIT_RE = /[,]/;  // Precompiled — used in recordPlay + artist key extraction
 
+/** The per-card lyrics switch, by position; `show_lyrics` is presence 1's. */
+const LYRICS_SWITCH_KEYS = ['show_lyrics', 'show_lyrics_2', 'show_lyrics_3', 'show_lyrics_4', 'show_lyrics_5'] as const;
+/** Application IDs a card may fall back on when a higher card holds its own. */
+const SPARE_APP_ID_KEYS = ['discord_app_id_2', 'discord_app_id_3', 'discord_app_id_4', 'discord_app_id_5'] as const;
+
 /** How many presence cards the app can put on the profile. */
-const MAX_SLOTS = 3;
+const MAX_SLOTS = 5;
 
 /**
  * Where a push source ranks against everything else.
@@ -2526,8 +2531,8 @@ export class VybecordBackend extends EventEmitter {
     const higher = this.slots.slice(0, slot.index);
     const taken = (id: string) => !!id && higher.some(s => id === s.appId || id === s.pendingAppId);
     if (!taken(target)) return target;
-    const spares = [this.config.get('discord_app_id_2'), this.config.get('discord_app_id_3')]
-      .map(v => String(v || '').trim())
+    const spares = SPARE_APP_ID_KEYS
+      .map(k => String(this.config.get(k) || '').trim())
       .filter(Boolean);
     for (const alt of spares) if (!taken(alt)) return alt;
     // A higher card is on its way off this application: the re-pick its
@@ -2820,7 +2825,7 @@ export class VybecordBackend extends EventEmitter {
       // Each card has its own lyrics switch — the one setting that is per
       // position rather than per app, because "lyrics on the song, not on the
       // video" is the whole point of having more than one.
-      show_lyrics: [cfg.show_lyrics, cfg.show_lyrics_2, cfg.show_lyrics_3][slot.index] ?? cfg.show_lyrics,
+      show_lyrics: cfg[LYRICS_SWITCH_KEYS[slot.index] ?? 'show_lyrics'],
       rpc_button1_label: cfg.rpc_button1_label,
       rpc_button1_url: cfg.rpc_button1_url,
       rpc_button2_label: PLATFORM_BUTTON_LABEL,

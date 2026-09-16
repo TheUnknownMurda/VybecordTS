@@ -11,7 +11,7 @@ const api = window.vybecord;
 
 const emptySlot = () => ({ track: null, lyrics: null, progress: { progress_ms: 0, duration_ms: 0 } });
 /** How many presence cards the app can hold — matches MAX_SLOTS in the backend. */
-export const MAX_SLOTS = 3;
+export const MAX_SLOTS = 5;
 
 export const state = {
   config: {},

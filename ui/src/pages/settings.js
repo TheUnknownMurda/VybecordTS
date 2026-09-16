@@ -17,14 +17,14 @@ const AWAY_DELAYS = [
   [5, 'After 5 minutes'], [10, 'After 10 minutes (Discord)'], [15, 'After 15 minutes'],
   [30, 'After 30 minutes'], [60, 'After 1 hour'],
 ];
-const PRESENCE_COUNTS = [[1, 'One'], [2, 'Two'], [3, 'Three']];
+const PRESENCE_COUNTS = [[1, 'One'], [2, 'Two'], [3, 'Three'], [4, 'Four'], [5, 'Five']];
 /**
  * Which cards carry lyrics. One switch per card — presence 1 keeps the
  * `show_lyrics` switch it always had, the others have their own.
  */
-const LYRICS_KEYS = ['show_lyrics', 'show_lyrics_2', 'show_lyrics_3'];
-const APP_ID_KEYS = ['discord_app_id_2', 'discord_app_id_3'];
-const presenceCount = () => Math.max(1, Math.min(3, Number(cfg('presence_count', 1)) || 1));
+const LYRICS_KEYS = ['show_lyrics', 'show_lyrics_2', 'show_lyrics_3', 'show_lyrics_4', 'show_lyrics_5'];
+const APP_ID_KEYS = ['discord_app_id_2', 'discord_app_id_3', 'discord_app_id_4', 'discord_app_id_5'];
+const presenceCount = () => Math.max(1, Math.min(5, Number(cfg('presence_count', 1)) || 1));
 
 /**
  * Small-icon styles. They are stored as separate booleans rather than one enum,
@@ -155,7 +155,7 @@ function presenceTab(body) {
     el('div', { class: 'card' }, [
       el('h2', { text: 'Several presences' }),
       el('div', { class: 'row-desc', style: 'margin-top:6px;max-width:none' },
-        'Announce up to three things at once — the song in Spotify, the video in the browser and a stream in '
+        'Announce up to five things at once — the song in Spotify, the video in the browser, a stream in '
         + 'another tab, say — as separate cards on your profile. The highest-ranked thing playing goes on presence 1, '
         + 'the next on presence 2, and so on; each can be pinned to a player on the Players page. '
         + 'Stats, history and Last.fm follow presence 1.'),
@@ -175,7 +175,7 @@ function presenceTab(body) {
                 ? 'Only for players without a Discord app of their own (VLC, foobar2000, an unnamed tab…): two cards '
                   + 'cannot share one application, so a lower card uses a spare instead. Create an application at '
                   + 'discord.com/developers and paste its Application ID.'
-                : 'A second spare, for when two such players are on at once.',
+                : `Another spare, for when ${i + 1} such players are on at once.`,
               cfg(key, ''), (v) => put(key, v.trim()), { placeholder: 'Optional' }))
           : []),
       ]),

@@ -137,7 +137,7 @@ export interface VybecordConfig {
   /**
    * How many things to announce at once — the song in Spotify, the video in
    * the browser and the stream in another tab, say — as separate presence
-   * cards on the profile. 1 to 3.
+   * cards on the profile. 1 to 5.
    *
    * At 1 the app behaves as it always has: one presence, following whichever
    * source wins the priority contest. Above that, that source is presence 1,
@@ -147,18 +147,22 @@ export interface VybecordConfig {
    * `dual_presence` switch, which is read as 2 once.
    */
   presence_count: number;
-  /** Lyrics on the second and third presence cards; `show_lyrics` governs the first. */
+  /** Lyrics on the second to fifth presence cards; `show_lyrics` governs the first. */
   show_lyrics_2: boolean;
   show_lyrics_3: boolean;
+  show_lyrics_4: boolean;
+  show_lyrics_5: boolean;
   /**
    * Discord application IDs for a presence that would otherwise share a
    * higher card's. Every card needs its own application; the platform ones
    * (Spotify, YouTube, …) already differ, so these are only consulted for a
-   * player the app has no dedicated application for. Either may serve any
-   * card that needs one.
+   * player the app has no dedicated application for. Any of them may serve
+   * any card that needs one.
    */
   discord_app_id_2: string;
   discord_app_id_3: string;
+  discord_app_id_4: string;
+  discord_app_id_5: string;
   // RPC customization
   /** Which URL each clickable RPC field links to: 'track' | 'artist' | 'album' | 'context' | 'auto' */
   rpc_button1_label: string;

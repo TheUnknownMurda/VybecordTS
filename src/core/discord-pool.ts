@@ -28,7 +28,7 @@ const log = createLogger('DiscordPool');
 /** How long an unused connection is kept before it is closed. */
 const IDLE_CLOSE_MS = 60_000;
 /** Ceiling on open sockets; the least recently released idle one goes first. */
-const MAX_CONNECTIONS = 6;
+const MAX_CONNECTIONS = 8;
 
 interface Entry {
   ipc: DiscordIPC;

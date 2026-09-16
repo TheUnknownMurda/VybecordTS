@@ -133,14 +133,14 @@ What does not: the per-site toggle under Settings → Detection. Browser playbac
 
 Go to **Players** and click the one you want announced. It stays pinned until you click **Automatic**.
 
-Or show them all. **Settings → Presence → Several presences** puts up to three cards on your profile: the song in Spotify on presence 1, the video in the browser on presence 2, a stream in another tab on presence 3, say. The highest-ranked thing playing is presence 1 (a music app beats a video, a video beats an unnamed tab), the next is presence 2, and so on. With more than one:
+Or show them all. **Settings → Presence → Several presences** puts up to five cards on your profile: the song in Spotify on presence 1, the video in the browser on presence 2, a stream in another tab on presence 3, say. The highest-ranked thing playing is presence 1 (a music app beats a video, a video beats an unnamed tab), the next is presence 2, and so on. With more than one:
 
 - **Lyrics on presence N** picks which cards sing along — any combination.
 - **Players** lets you pin a player to a given presence, so it never swaps with another.
 - **Now playing** shows every card; click one to see its lyrics and controls.
 - Stats, history and Last.fm follow presence 1 only.
 
-Each card is a Discord application of its own, and Spotify, YouTube, SoundCloud, Apple Music, Kick and Twitch each have one. A player without one — VLC, foobar2000, an unnamed tab — shares the default, and two cards cannot share an application: a lower card stays off Discord for such a player until you paste a **Spare application ID** (create one at discord.com/developers; two spares cover two such players at once).
+Each card is a Discord application of its own, and Spotify, YouTube, SoundCloud, Apple Music, Kick and Twitch each have one. A player without one — VLC, foobar2000, an unnamed tab — shares the default, and two cards cannot share an application: a lower card stays off Discord for such a player until you paste a **Spare application ID** (create one at discord.com/developers; up to four spares, one per such player on at once).
 
 ---
 
