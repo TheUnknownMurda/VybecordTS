@@ -18,6 +18,140 @@
   }
   window.__vybecordLoaded = true;
 
+  // ── The card in Marketplace → Installed ──────────────────────────────────
+  //
+  // The Marketplace lists only what it installed itself, from its own store,
+  // so an extension enabled with `spicetify config extensions` never shows up
+  // there: adblock had a card and Vybecord did not. This writes the record the
+  // Marketplace's own Install button writes, and the card appears like any
+  // other. (The Marketplace then also injects the copy from GitHub on each
+  // start — that is what the double-load guard above is for.)
+  //
+  // Where the record lives depends on the Marketplace version. Up to 1.0.8 it
+  // was localStorage; since 1.0.9 (July 2026) it is an IndexedDB database, and
+  // marketplace:* keys left in localStorage are migrated once, then deleted
+  // unread. So: the database when it exists, localStorage otherwise — a
+  // Marketplace that upgrades later migrates the entry with everything else.
+  //
+  // Keyed on the index, not on the card record: the Marketplace rewrites the
+  // index from a snapshot it took at startup whenever something else is
+  // installed, and a card added after that snapshot drops out of the list
+  // while its record survives. Checking the index heals that next start. It
+  // also means removing the card from the Marketplace brings it back next
+  // start — which is right, the extension is still installed. Remove it from
+  // Spicetify to be rid of the card.
+
+  const MP_USER = 'TheUnknownMurda';
+  const MP_REPO = 'VybecordTS';
+  const MP_BRANCH = 'main';
+  /** Keep this in sync with manifest.json at the repo root. */
+  const MP_MANIFEST = {
+    name: 'Vybecord',
+    description:
+      'Sends the track you are playing to VybecordTS for real-time Discord Rich Presence: '
+      + 'instant track changes, accurate progress, album art and full Spotify metadata.',
+    preview: 'assets/spicetify-preview.png',
+    main: 'spicetify-extension/vybecord.js',
+    readme: 'README.md',
+    authors: [{ name: MP_USER, url: `https://github.com/${MP_USER}` }],
+    tags: ['discord', 'rich presence', 'integration', 'now playing'],
+  };
+  const MP_INDEX_KEY = 'marketplace:installed-extensions';
+  const MP_CARD_KEY = `marketplace:installed:${MP_USER}/${MP_REPO}/${MP_MANIFEST.main}`;
+  const MP_DB = 'spicetify-marketplace';
+  const MP_STORE = 'settings';
+
+  /** The record the Marketplace stores per installed extension. */
+  function marketplaceRecord() {
+    const raw = p => `https://raw.githubusercontent.com/${MP_USER}/${MP_REPO}/${MP_BRANCH}/${p}`;
+    const now = new Date().toISOString();
+    return JSON.stringify({
+      manifest: MP_MANIFEST,
+      type: 'extension',
+      title: MP_MANIFEST.name,
+      subtitle: MP_MANIFEST.description,
+      authors: MP_MANIFEST.authors,
+      user: MP_USER,
+      repo: MP_REPO,
+      branch: MP_BRANCH,
+      imageURL: raw(MP_MANIFEST.preview),
+      extensionURL: raw(MP_MANIFEST.main),
+      readmeURL: raw(MP_MANIFEST.readme),
+      stars: 0,
+      lastUpdated: now,
+      created: now,
+    });
+  }
+
+  /** The index with this card appended, or null when it is already listed. */
+  function indexWithCard(json) {
+    let list;
+    try { list = JSON.parse(json || '[]'); } catch { list = []; }
+    if (!Array.isArray(list)) list = [];
+    return list.includes(MP_CARD_KEY) ? null : JSON.stringify([...list, MP_CARD_KEY]);
+  }
+
+  /**
+   * The Marketplace database, or null when there is none.
+   *
+   * Opening without a version creates the database if it is missing, which
+   * would then look to the Marketplace like a store it had already migrated
+   * to — aborting the upgrade leaves nothing behind.
+   */
+  function openMarketplaceDb() {
+    return new Promise((resolve) => {
+      let req;
+      try { req = indexedDB.open(MP_DB); } catch { resolve(null); return; }
+      req.onupgradeneeded = () => { req.transaction.abort(); };
+      req.onerror = (e) => { e.preventDefault(); resolve(null); };
+      req.onsuccess = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(MP_STORE)) { db.close(); resolve(null); return; }
+        resolve(db);
+      };
+    });
+  }
+
+  function registerInDb(db) {
+    return new Promise((resolve, reject) => {
+      db.onversionchange = () => db.close();
+      const tx = db.transaction(MP_STORE, 'readwrite');
+      const store = tx.objectStore(MP_STORE);
+      let added = false;
+      const get = store.get(MP_INDEX_KEY);
+      get.onsuccess = () => {
+        const index = indexWithCard(get.result?.value);
+        if (!index) return;
+        store.put({ key: MP_CARD_KEY, value: marketplaceRecord() });
+        store.put({ key: MP_INDEX_KEY, value: index });
+        added = true;
+      };
+      tx.oncomplete = () => { db.close(); resolve(added); };
+      tx.onerror = () => { db.close(); reject(tx.error); };
+      tx.onabort = () => { db.close(); reject(tx.error); };
+    });
+  }
+
+  function registerInLocalStorage() {
+    const index = indexWithCard(localStorage.getItem(MP_INDEX_KEY));
+    if (!index) return false;
+    localStorage.setItem(MP_CARD_KEY, marketplaceRecord());
+    localStorage.setItem(MP_INDEX_KEY, index);
+    return true;
+  }
+
+  /** Never awaited by the rest: the card is a courtesy, the presence is not. */
+  async function registerInMarketplace() {
+    try {
+      const db = await openMarketplaceDb();
+      const added = db ? await registerInDb(db) : registerInLocalStorage();
+      if (added) console.log('[VybecordTS] Added the card to Marketplace → Installed.');
+    } catch (e) {
+      console.log('[VybecordTS] Could not add the Marketplace card:', e?.message || e);
+    }
+  }
+  void registerInMarketplace();
+
   // Wait for Spicetify API to be available
   while (!(Spicetify?.Player?.addEventListener && Spicetify?.Player?.data)) {
     await new Promise(r => setTimeout(r, 200));
