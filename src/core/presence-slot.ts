@@ -16,7 +16,7 @@
  */
 
 import { LyricsEngine } from '../sync/lyrics-engine.js';
-import type { TrackData, LyricLine } from './types.js';
+import type { TrackData, LyricLine, DiscordActivity } from './types.js';
 
 /** What the window is told on each lyric tick. */
 export interface LyricsState {
@@ -44,6 +44,12 @@ export class PresenceSlot {
   /** Thumbnail the last art resolution acted on — see resolveDiscordArt(). */
   artThumbSig = '';
   lastLyricsState: LyricsState | null = null;
+  /**
+   * The card the engine last built for this presence — what the window's
+   * preview shows. Kept even while publishing is switched off or the user is
+   * away, so the preview is right the moment the card goes back up.
+   */
+  lastActivity: DiscordActivity | null = null;
   /** Cached per track: avoids WEB_SOURCES.some() on every poll. */
   isWebSource = false;
   /** Grace-period timestamp for an OS session that stopped reporting. */

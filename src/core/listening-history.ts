@@ -93,6 +93,8 @@ export interface WrappedStats {
   topArtists: { name: string; totalMs: number; plays: number }[];
   activeDays: number;
   avgDailyMs: number;
+  /** Time listened per local day (YYYY-MM-DD), oldest first; days with nothing are absent. */
+  byDay: { day: string; ms: number }[];
 }
 
 let historyPath = '';
@@ -353,13 +355,14 @@ export function getWrappedStats(days?: number): WrappedStats {
 
   const trackMap = new Map<string, { name: string; artist: string; art: string; totalMs: number; plays: number }>();
   const artistMap = new Map<string, { name: string; totalMs: number; plays: number }>();
-  const daySet = new Set<string>();
+  const dayMap = new Map<string, number>();
 
   let totalMs = 0;
 
   for (const e of source) {
     totalMs += e.listenedMs;
-    daySet.add(localDayKey(e.startedAt));
+    const day = localDayKey(e.startedAt);
+    dayMap.set(day, (dayMap.get(day) ?? 0) + e.listenedMs);
 
     // Track aggregation
     const tKey = `${e.track.toLowerCase()}|${e.artist.toLowerCase().split(/[,]/)[0].trim()}`;
@@ -393,7 +396,7 @@ export function getWrappedStats(days?: number): WrappedStats {
     .sort((a, b) => b.totalMs - a.totalMs)
     .slice(0, 10);
 
-  const activeDays = daySet.size;
+  const activeDays = dayMap.size;
 
   return {
     totalListenedMs: totalMs,
@@ -404,5 +407,7 @@ export function getWrappedStats(days?: number): WrappedStats {
     topArtists,
     activeDays,
     avgDailyMs: activeDays > 0 ? Math.round(totalMs / activeDays) : 0,
+    // The keys are zero-padded, so a string sort is a date sort.
+    byDay: [...dayMap.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([day, ms]) => ({ day, ms })),
   };
 }

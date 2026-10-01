@@ -59,7 +59,7 @@ import { releaseJapaneseTokenizer } from './core/romanize.js';
 import { initLyricsOffsets, getTrackOffset, setTrackOffset } from './core/lyrics-offsets.js';
 import { translateBatch, translateText, getCachedTranslation, isTranslationWorthFetching } from './core/translate.js';
 import { asNonNegativeInt, asRecord, asText, evictLeast, evictOldest, evictUntil } from './core/utils.js';
-import type { TrackData, LyricLine, VybecordConfig } from './core/types.js';
+import type { TrackData, LyricLine, VybecordConfig, DiscordActivity } from './core/types.js';
 
 const log = createLogger('Backend');
 
@@ -2272,10 +2272,11 @@ export class VybecordBackend extends EventEmitter {
   getCurrentLyricsState(slotIndex = 0) { return this.slotAt(slotIndex).lastLyricsState; }
 
   /** What every presence holds, by position — the window's snapshot. */
-  getSlotStates(): { track: TrackData | null; lyrics: LyricsState | null; progress: { progress_ms: number; duration_ms: number } }[] {
+  getSlotStates(): { track: TrackData | null; lyrics: LyricsState | null; activity: DiscordActivity | null; progress: { progress_ms: number; duration_ms: number } }[] {
     return this.slots.map(s => ({
       track: s.track,
       lyrics: s.lastLyricsState,
+      activity: s.track ? s.lastActivity : null,
       progress: {
         progress_ms: s.track ? Math.round(s.engine.getElapsed()) : 0,
         duration_ms: s.track?.duration_ms ?? 0,
@@ -2523,6 +2524,11 @@ export class VybecordBackend extends EventEmitter {
         return slot.appId ? (this.pool.get(slot.appId)?.lastWriteLatencyMs ?? 0) : 0;
       },
       onRpcUpdate: (activity) => {
+        // The window previews the card itself, so it is told before anything
+        // decides whether Discord is. Whether the card is actually up is the
+        // window's to read off the status and the config.
+        slot.lastActivity = activity;
+        this.emit('activityUpdate', activity, slot.index);
         // The engine keeps running while the user is away — it owns the lyric
         // clock, and stopping it would mean re-seeking on every return. Only
         // the publish is dropped.

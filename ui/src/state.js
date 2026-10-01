@@ -9,7 +9,7 @@
 
 const api = window.vybecord;
 
-const emptySlot = () => ({ track: null, lyrics: null, progress: { progress_ms: 0, duration_ms: 0 } });
+const emptySlot = () => ({ track: null, lyrics: null, activity: null, progress: { progress_ms: 0, duration_ms: 0 } });
 /** How many presence cards the app can hold — matches MAX_SLOTS in the backend. */
 export const MAX_SLOTS = 5;
 
@@ -23,6 +23,8 @@ export const state = {
    */
   track: null,
   lyrics: null,
+  /** The card the engine last built for the focused presence — the Discord preview. */
+  activity: null,
   progress: { progress_ms: 0, duration_ms: 0 },
   slots: Array.from({ length: MAX_SLOTS }, emptySlot),
   focus: 0,
@@ -78,10 +80,10 @@ export function set(patch) {
   for (const key of Object.keys(patch)) emit(key, state[key]);
 }
 
-/** Point the three single-track mirrors at the focused presence. */
+/** Point the single-track mirrors at the focused presence. */
 function mirrorFocus() {
   const s = state.slots[state.focus] || emptySlot();
-  set({ track: s.track, lyrics: s.lyrics, progress: s.progress });
+  set({ track: s.track, lyrics: s.lyrics, activity: s.activity ?? null, progress: s.progress });
 }
 
 /**
@@ -122,6 +124,7 @@ export async function init() {
     ? snap.slots.map((s) => ({
         track: s?.track ?? null,
         lyrics: s?.lyrics ?? null,
+        activity: s?.activity ?? null,
         progress: s?.track ? (s.progress || trackProgress(s.track)) : trackProgress(null),
       }))
     : [{ track: snap.track, lyrics: snap.lyrics, progress: trackProgress(snap.track) }];
@@ -149,17 +152,22 @@ export async function init() {
    * the lyrics it already has.
    */
   api.on('trackUpdate', (track, slot) => {
-    const prev = state.slots[slot === 1 ? 1 : 0]?.track;
+    // Compared against its own presence. This read `slot === 1 ? 1 : 0` from
+    // when there were two, so presences 3 to 5 measured every track against
+    // presence 1's and kept or dropped their lyrics on the strength of it.
+    const prev = state.slots[slotIndex(slot)]?.track;
     const same = (track?.track_id || '') === (prev?.track_id || '');
     // A different track means the bar belongs to the new one -- at its own
     // position, or empty when playback simply stopped. Same reasoning as the
     // lyrics beside it: what the previous track left behind is not an
-    // approximation of the new state, it is the wrong state.
-    updateSlot(slot, same ? { track } : { track, lyrics: null, progress: trackProgress(track) });
+    // approximation of the new state, it is the wrong state. The card built
+    // for the previous track goes with them.
+    updateSlot(slot, same ? { track } : { track, lyrics: null, activity: null, progress: trackProgress(track) });
   });
   api.on('progressUpdate', (progress, slot) => updateSlot(slot, { progress }));
   api.on('lyricsUpdate', (lyrics, slot) => updateSlot(slot, { lyrics }));
   api.on('plainLyricsUpdate', (lyrics, slot) => updateSlot(slot, { lyrics }));
+  api.on('activityUpdate', (activity, slot) => updateSlot(slot, { activity }));
   api.on('statsUpdate', (stats) => set({ stats }));
   api.on('configUpdate', (config) => set({ config }));
   api.on('statusUpdate', (status) => {
