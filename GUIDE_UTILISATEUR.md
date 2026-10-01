@@ -2,7 +2,7 @@
 
 Vybecord affiche sur ton profil Discord la musique que tu écoutes, avec les paroles qui défilent en temps réel.
 
-**Rien à installer dans Spotify, rien à installer dans ton navigateur.** L'appli lit directement le lecteur média de Windows.
+**Rien à installer dans Spotify, rien à installer dans ton navigateur.** L'appli lit directement le lecteur média de Windows. Deux extensions optionnelles — une pour Spotify, une pour ton navigateur — ajoutent des détails, mais tout fonctionne sans elles.
 
 ---
 
@@ -43,9 +43,10 @@ Tu peux changer ça dans **Settings → App → Close to tray**.
 | **Players** | Tous les lecteurs détectés — utile si plusieurs choses jouent en même temps |
 | **Stats** | Tes titres et artistes les plus écoutés de la session |
 | **History** | Tout ton historique, plus un résumé façon « Wrapped » |
-| **Lyrics** | Ta bibliothèque de paroles perso, l'import, et les titres signalés |
+| **Lyrics** | Ta bibliothèque de paroles perso, l'import, le dump LRCLIB hors ligne, et les titres signalés |
 | **Settings** | Tous les réglages |
 | **Last.fm** | Le scrobbling, si tu veux |
+| **Report** | Signaler un problème au développeur |
 
 Astuce : les touches **1 à 8** changent de page.
 
@@ -81,11 +82,14 @@ Toutes les vidéos n'ont pas de sous-titres, et la vidéo doit être retrouvable
 
 ### Les paroles sont décalées
 
-Sur **Now playing**, utilise les boutons **−250 / +250** sous les paroles. Le décalage est mémorisé et s'applique aux morceaux suivants.
+Sur **Now playing**, utilise les boutons **−250 / +250** sous les paroles. Le décalage est enregistré pour ce morceau uniquement : il sera juste la prochaine fois que la chanson repassera, sans décaler toutes les autres. Les morceaux que tu n'as jamais corrigés utilisent la valeur par défaut de **Settings → Lyrics → Timing offset**.
 
 ### Les paroles sont fausses
 
-Clique sur **Wrong lyrics**. Ce résultat ne sera plus jamais réutilisé pour ce morceau. Tu peux ensuite importer les bonnes paroles dans **Lyrics → Import**, ou annuler le signalement dans **Lyrics → Flagged**.
+Sur **Now playing**, clique sur **These lyrics aren't matching?** et indique le problème :
+
+- **The words are wrong** — ce résultat ne sera plus jamais réutilisé pour ce morceau, et la source suivante prend le relais. Tu peux annuler le signalement dans **Lyrics → Flagged**.
+- **The timing is off** — les lignes sont reprises dans **Lyrics → Import**, où **Sync while playing** te permet de les recaler sur la chanson et d'enregistrer ta propre version. Ta version passe avant tout ce qui vient d'Internet.
 
 ### Mon statut disparaît pendant les pubs Spotify
 
@@ -107,27 +111,30 @@ Le délai se change dans **Settings → Presence → Away after**, et l'option s
 
 ### La pochette s'affiche dans la fenêtre mais pas sur Discord
 
-La fenêtre lit l'image directement sur ton disque. Discord ne peut pas : il lui faut une URL. Vybecord cherche donc l'album sur un CDN musical public et transmet cette URL à Discord.
+La fenêtre lit l'image directement sur ton disque. Discord ne peut pas : il lui faut une URL. Vybecord cherche donc l'album dans un catalogue musical public (Deezer, puis iTunes d'Apple) et transmet cette URL à Discord.
 
-Si un morceau affiche l'image par défaut, c'est qu'il n'est simplement pas au catalogue — en général un titre non distribué ou un fichier local. **Settings → Presence → Cover images → Test with the current track** te dit dans quel cas tu es.
+La musique absente de tout catalogue — tes rips, démos, DJ sets — n'a de pochette que dans ton fichier. Pour celle-là, Vybecord publie cette seule image sur son propre stockage de pochettes pour que Discord puisse la charger : jamais l'audio, et les infos d'appareil photo et de localisation sont retirées avant. C'est **Settings → Presence → Cover images → Publish artwork that exists only on this PC**, activé par défaut.
 
-Envoyer ton propre fichier ne sert à rien : Discord accepte la présence puis refuse de charger l'image, d'où le « ? ». Testé avec un hébergeur public et avec le CDN de Discord lui-même.
+Une image par défaut sur Discord veut donc dire l'une de deux choses : le morceau n'est dans aucun catalogue et cette option est coupée, ou c'est un live, qui n'est jamais recherché.
 
 ### Obtenir plus de détails sur la lecture navigateur
 
 Windows dit à Vybecord ce qui joue, pas sur quel site : un onglet SoundCloud et un onglet YouTube sont identiques.
 
-L'extension optionnelle, dans le dossier `extension/`, corrige ça. Charge-la via `chrome://extensions` → Mode développeur → **Charger l'extension non empaquetée**, et choisis ce dossier. Son icône ouvre une page de réglages avec un interrupteur par site — Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick — tous actifs par défaut.
+L'extension navigateur optionnelle corrige ça. **Settings → Detection → Browser extension** te guide :
+
+- **Chrome, Edge, Brave, Opera, Vivaldi** — clique sur **Open the extension folder**, ouvre la page des extensions de ton navigateur (le panneau copie son adresse pour toi), active le **Mode développeur**, clique sur **Charger l'extension non empaquetée** et choisis ce dossier.
+- **Firefox 121 ou plus récent** — télécharge `vybecord-extension-<version>-firefox.zip` depuis la [page des releases](https://github.com/TheUnknownMurda/VybecordTS/releases/latest), ouvre `about:debugging#/runtime/this-firefox`, clique sur **Charger un module complémentaire temporaire** et choisis le zip. Firefox retire les modules temporaires à sa fermeture.
+
+Son icône ouvre une page de réglages avec un interrupteur par site — Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick — tous actifs par défaut.
 
 Avec elle, chaque site est correctement identifié, la présence pointe directement vers le morceau, et la barre de progression lit l'élément audio de la page au lieu de la position système, plus grossière. Sans elle, tout ce qui suit reste valable.
 
 ### SoundCloud apparaît comme un navigateur, pas comme SoundCloud
 
-Windows indique à Vybecord ce qui joue, pas sur quel site : un onglet SoundCloud et un onglet YouTube sont identiques. Seuls les scripts Tampermonkey savaient les distinguer, et ils ont disparu.
+Sans l'extension navigateur, Windows indique à Vybecord ce qui joue, mais pas sur quel site : un onglet SoundCloud et un onglet YouTube sont identiques. Installe l'extension (voir plus haut) et SoundCloud est annoncé comme SoundCloud, avec un lien vers le morceau.
 
-Ce qui fonctionne quand même : le titre et l'artiste sont analysés avec les conventions de SoundCloud, donc un upload intitulé « Artiste - Titre (prod. Machin) » donne le bon artiste plutôt que le compte qui a mis en ligne. Les paroles, la pochette et la présence elle-même ne sont pas affectées — elles se basent sur le morceau et l'artiste, pas sur le site.
-
-Ce qui ne fonctionne pas : l'interrupteur par site dans Settings → Detection. La lecture navigateur est régie par **Browser tabs** à la place.
+Même sans elle, le titre et l'artiste sont analysés avec les conventions de SoundCloud, donc un upload intitulé « Artiste - Titre (prod. Machin) » donne le bon artiste plutôt que le compte qui a mis en ligne. Les paroles, la pochette et la présence elle-même ne sont pas affectées — elles se basent sur le morceau et l'artiste, pas sur le site. Tant que le site n'est pas identifié, cet onglet dépend de l'interrupteur **Browser tabs** dans Settings → Detection, et non de **SoundCloud**.
 
 ### Deux choses jouent en même temps
 
@@ -151,19 +158,19 @@ Chaque carte est une application Discord à part, et Spotify, YouTube, SoundClou
 Oui. Vybecord ne parle jamais à l'API de Spotify — il lit ce que Windows sait déjà.
 
 **Faut-il installer Spicetify ou une extension de navigateur ?**
-Non. Les anciennes versions le demandaient, plus celle-ci.
+Non. Les anciennes versions le demandaient, plus celle-ci. Ce sont deux bonus optionnels : Spicetify apporte les changements de morceau instantanés et les paroles officielles de Spotify (à configurer dans **Settings → Detection → Spotify via Spicetify**), et l'extension navigateur indique à Vybecord sur quel site joue un onglet.
 
 **Ça marche avec quoi ?**
 Tout ce qui apparaît dans l'encart média de Windows : Spotify, les onglets de navigateur (YouTube, SoundCloud, Deezer…), VLC, foobar2000, MusicBee, AIMP, Apple Music, Tidal, Amazon Music.
 
 **Est-ce que mes données sortent de mon PC ?**
-Les titres et artistes sont envoyés aux services de paroles (LRCLib, Netease, Musixmatch) pour chercher les paroles, et à Discord pour le statut. Si tu actives Last.fm, ils vont aussi à Last.fm. L'historique et les paroles importées restent en local.
+Les titres et artistes sont envoyés aux services de paroles (LRCLib, Netease, Musixmatch, Genius) pour chercher les paroles, à Deezer et iTunes d'Apple pour trouver la pochette, et à Discord pour le statut. Une pochette qui n'existe que dans tes fichiers est publiée sur le stockage de pochettes de Vybecord, sans ses métadonnées — désactivable dans **Settings → Presence → Cover images**. Si tu actives la traduction, les lignes de paroles partent au service de traduction ; si tu actives Last.fm, tes écoutes y vont aussi. L'historique, les réglages et les paroles importées restent en local. La liste complète est dans la [politique de confidentialité](https://theunknownmurda.github.io/VybecordTS/privacy/).
 
 **Où sont mes fichiers ?**
 Dans `%APPDATA%\Vybecord` — colle ce chemin dans l'explorateur.
 
 **Je viens de VybecordTS 1.x, je perds quelque chose ?**
-Ta configuration, ta base de paroles et ton historique sont conservés. En revanche, la playlist en cours, le mode aléatoire/répétition et les liens cliquables vers le morceau ne sont plus disponibles : Windows ne les expose pas. Tu peux désinstaller l'extension Spicetify et les scripts Tampermonkey.
+Ta configuration, ta base de paroles et ton historique sont conservés. Windows seul n'expose ni la playlist en cours, ni le mode aléatoire/répétition, ni les liens cliquables vers le morceau ; les extensions optionnelles Spicetify et navigateur les rétablissent. Désinstalle l'ancienne extension Spicetify 1.x et les scripts Tampermonkey — la nouvelle extension Spicetify s'installe depuis les Settings.
 
 ---
 

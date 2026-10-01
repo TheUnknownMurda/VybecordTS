@@ -51,28 +51,37 @@ npx wrangler r2 bucket create vybecord-art
 npx wrangler deploy
 ```
 
-### Attach a domain
+### Where it is served from
 
-Do not serve from `*.workers.dev`. Shared Cloudflare subdomains are heavily used
-for phishing and appear on DNS filter lists, which puts the app straight back
-into the problem this replaced. Add the zone to the same Cloudflare account,
-uncomment the `[[routes]]` block in `wrangler.toml`, and redeploy.
+The store Vybecord ships with is deployed at
+`https://vybecord-art.vybecord.workers.dev`, and that is the default
+`art_upload_url` in `src/core/config.ts`.
+
+`*.workers.dev` was a deliberate choice, not a placeholder. What got the old
+file host blocked was being listed as a malware distributor; this endpoint can
+store nothing but JPEG and PNG, and is not rate limited for reads the way
+`r2.dev` is. Shared Cloudflare subdomains do carry some phishing reputation, so
+a custom domain remains an option: add the zone to the same Cloudflare account,
+uncomment the `[[routes]]` block in `wrangler.toml`, redeploy, and change the
+default in `config.ts`. Nothing migrates — a cover's address is its hash, so
+clients simply re-publish on their next miss.
 
 ### Point the app at it
 
-In `src/core/config.ts`, set `art_upload_url` to the deployed origin (no
-trailing slash — one is tolerated but not needed):
+A fork deploying its own store sets `art_upload_url` to the deployed origin (no
+trailing slash — one is tolerated but not needed), either as the default in
+`src/core/config.ts` or per install in `config.json`:
 
 ```
-art_upload_url: 'https://art.vybecord.app',
+art_upload_url: 'https://art.example.com',
 ```
 
-`art_upload_enabled` stays `false`. The feature is offered in Settings → Cover
-images rather than assumed: the store is shared and public, and what gets
-published is artwork off the user's own disk.
-
-If you flip that default to `true`, update `website/privacy/` first — at that
-point the app publishes user files by default and the policy has to say so.
+`art_upload_enabled` defaults to `true`: released music never reaches the store
+(it is resolved from a catalogue), so only artwork that exists nowhere else is
+published, after its metadata is stripped. Users turn it off in Settings →
+Presence → Cover images. Because the app publishes user files by default, the
+policy at `website/privacy/` describes the store in full — keep the two in step
+when either changes.
 
 ## Costs
 

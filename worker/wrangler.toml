@@ -24,10 +24,11 @@ namespace_id = "1001"
   limit = 60
   period = 60
 
-# Serve from a domain we own rather than *.workers.dev: shared Cloudflare
-# subdomains are heavily used for phishing and appear on DNS filter lists, which
-# would put us straight back into the problem this replaced. Uncomment once the
-# zone is in this Cloudflare account.
+# Optional custom domain. The store is served from vybecord-art.vybecord.workers.dev
+# today (the default art_upload_url in src/core/config.ts); a domain of our own
+# would shed the phishing reputation shared Cloudflare subdomains carry. Uncomment
+# once the zone is in this Cloudflare account, then change that default — covers
+# are addressed by hash, so nothing needs migrating.
 # [[routes]]
 # pattern = "art.vybecord.app/*"
 # custom_domain = true

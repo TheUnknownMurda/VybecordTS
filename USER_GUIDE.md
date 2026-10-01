@@ -2,7 +2,7 @@
 
 Vybecord shows what you are listening to on your Discord profile, with the lyrics scrolling in real time.
 
-**Nothing to install into Spotify, nothing to install into your browser.** The app reads Windows' own media player information.
+**Nothing to install into Spotify, nothing to install into your browser.** The app reads Windows' own media player information. Two optional extensions — one for Spotify, one for your browser — add detail, but everything works without them.
 
 ---
 
@@ -43,9 +43,10 @@ You can change this under **Settings → App → Close to tray**.
 | **Players** | Every detected player — useful when more than one thing is playing |
 | **Stats** | Your top tracks and artists this session |
 | **History** | Your full listening log, plus a "wrapped" summary |
-| **Lyrics** | Your own lyrics library, importing, and flagged tracks |
+| **Lyrics** | Your own lyrics library, importing, the offline LRCLIB dump, and flagged tracks |
 | **Settings** | Everything else |
 | **Last.fm** | Scrobbling, if you want it |
+| **Report** | Tell the developer something is broken |
 
 Tip: keys **1–8** jump between pages.
 
@@ -81,11 +82,14 @@ Not every video has captions, and the video has to be findable by its title and 
 
 ### Lyrics are out of sync
 
-On **Now playing**, use the **−250 / +250** buttons under the lyrics. The offset is remembered and applies to later tracks too.
+On **Now playing**, use the **−250 / +250** buttons under the lyrics. The offset is saved for that track only, so it is right again the next time the song comes round without pulling every other song off. Tracks you have never corrected use the default under **Settings → Lyrics → Timing offset**.
 
 ### Wrong lyrics
 
-Click **Wrong lyrics**. That result will never be reused for this track. You can then import the correct file under **Lyrics → Import**, or undo the flag under **Lyrics → Flagged**.
+On **Now playing**, click **These lyrics aren't matching?** and say what is wrong:
+
+- **The words are wrong** — that result will never be reused for this track, and the next source gets its turn. You can undo the flag under **Lyrics → Flagged**.
+- **The timing is off** — the lines are carried over to **Lyrics → Import**, where **Sync while playing** lets you re-time them against the song and save your own copy. Your copy wins over anything fetched online.
 
 ### My status disappears during Spotify ads
 
@@ -107,27 +111,30 @@ The delay lives in **Settings → Presence → Away after**, and the switch just
 
 ### The cover does not show on Discord (but shows in the window)
 
-The window reads the artwork straight off your disk. Discord cannot — it needs a URL, so Vybecord looks the album up on a public music CDN and hands Discord that.
+The window reads the artwork straight off your disk. Discord cannot — it needs a URL, so Vybecord looks the album up on a public music catalogue (Deezer, then Apple's iTunes) and hands Discord that.
 
-If a track shows the default placeholder instead, it is simply not in the catalogue — usually an unreleased track or a local file. **Settings → Presence → Cover images → Test with the current track** tells you which case you are in.
+Music that is in no catalogue — your own rips, demos, DJ sets — has artwork nowhere but in your file. For those, Vybecord publishes that one image to its own cover store so Discord can load it: never the audio, and with camera and location tags stripped first. That is **Settings → Presence → Cover images → Publish artwork that exists only on this PC**, on by default.
 
-Uploading your own file does not help: Discord accepts the presence and then refuses to load the image, showing a "?". That was tried both with a public file host and with Discord's own CDN.
+So a placeholder on Discord means one of two things: the track is in no catalogue and that switch is off, or it is a live stream, which is never looked up.
 
 ### Getting more detail from browser playback
 
 Windows tells Vybecord what is playing, not which website it is on: a SoundCloud tab and a YouTube tab look identical.
 
-The optional extension in the `extension/` folder fixes that. Load it via `chrome://extensions` → Developer mode → **Load unpacked**, and pick that folder. Its icon opens a settings page with a switch per site — Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick — all on by default.
+The optional browser extension fixes that. **Settings → Detection → Browser extension** walks you through it:
+
+- **Chrome, Edge, Brave, Opera, Vivaldi** — click **Open the extension folder**, open your browser's extensions page (the card copies its address for you), turn on **Developer mode**, click **Load unpacked** and pick that folder.
+- **Firefox 121 or newer** — download `vybecord-extension-<version>-firefox.zip` from the [releases page](https://github.com/TheUnknownMurda/VybecordTS/releases/latest), open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on** and pick the zip. Firefox removes temporary add-ons when it closes.
+
+Its icon opens a settings page with a switch per site — Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick — all on by default.
 
 With it, each site is identified properly, the presence links straight to the track, and the progress bar reads the page's own audio element instead of the coarser system position. Without it, everything below still applies.
 
 ### SoundCloud shows as a browser, not as SoundCloud
 
-Windows tells Vybecord what is playing, not which website it is on: a SoundCloud tab and a YouTube tab look identical. Only the userscripts could tell them apart, and they are gone.
+Without the browser extension, Windows tells Vybecord what is playing but not which website it is on: a SoundCloud tab and a YouTube tab look identical. Install the extension (above) and SoundCloud is announced as SoundCloud, with a link to the track.
 
-What still works: the track and artist are parsed with SoundCloud's conventions in mind, so an upload titled "Artist - Track (prod. Someone)" resolves to the right artist rather than the uploading account. Lyrics, cover art and the presence itself are unaffected — they key on the track and artist, not the site.
-
-What does not: the per-site toggle under Settings → Detection. Browser playback is governed by the **Browser tabs** switch instead.
+Even without it, the track and artist are parsed with SoundCloud's conventions in mind, so an upload titled "Artist - Track (prod. Someone)" resolves to the right artist rather than the uploading account. Lyrics, cover art and the presence itself are unaffected — they key on the track and artist, not the site. Until the site is identified, that tab is governed by the **Browser tabs** switch under Settings → Detection rather than the **SoundCloud** one.
 
 ### Two things playing at once
 
@@ -151,19 +158,19 @@ Each card is a Discord application of its own, and Spotify, YouTube, SoundCloud,
 No. Vybecord never talks to Spotify's API — it reads what Windows already knows.
 
 **Do I need Spicetify or a browser extension?**
-No. Older versions did; this one does not.
+No. Older versions did; this one does not. Both are optional extras: Spicetify adds instant track changes and Spotify's own lyrics (set it up under **Settings → Detection → Spotify via Spicetify**), and the browser extension tells Vybecord which site a tab is on.
 
 **What does it work with?**
 Anything that appears in the Windows media overlay: Spotify, browser tabs (YouTube, SoundCloud, Deezer…), VLC, foobar2000, MusicBee, AIMP, Apple Music, Tidal, Amazon Music.
 
 **Does my data leave my PC?**
-Track and artist names go to the lyrics services (LRCLib, Netease, Musixmatch) to look lyrics up, and to Discord for the status. If you enable Last.fm, they go there too. Your history and imported lyrics stay local.
+Track and artist names go to the lyrics services (LRCLib, Netease, Musixmatch, Genius) to look lyrics up, to Deezer and Apple's iTunes to find the album cover, and to Discord for the status. Artwork that exists only in your own files is published to Vybecord's cover store, stripped of its metadata — switch that off under **Settings → Presence → Cover images**. If you turn on translation, the lyric lines go to the translation service; if you enable Last.fm, your plays go there. Your history, settings and imported lyrics stay local. The full list is in the [privacy policy](https://theunknownmurda.github.io/VybecordTS/privacy/).
 
 **Where are my files?**
 In `%APPDATA%\Vybecord` — paste that into Explorer.
 
 **I'm coming from VybecordTS 1.x — do I lose anything?**
-Your config, lyrics database and history all carry over. You do lose playlist context, shuffle/repeat state and clickable track links: Windows does not expose them. You can uninstall the Spicetify extension and the Tampermonkey scripts.
+Your config, lyrics database and history all carry over. Windows alone does not expose playlist context, shuffle/repeat state or clickable track links; the optional Spicetify and browser extensions bring them back. Uninstall the old 1.x Spicetify extension and the Tampermonkey scripts — the new Spicetify extension is set up from Settings instead.
 
 ---
 
