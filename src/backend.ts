@@ -309,6 +309,8 @@ export class VybecordBackend extends EventEmitter {
   private slots: PresenceSlot[];
 
   private pollTimer: ReturnType<typeof setInterval> | null = null;
+  /** The period pollTimer runs at, so a config change can tell whether it moved. */
+  private pollIntervalMs = 0;
   private polling = false;  // re-entrance guard for poll()
   private lyricsCache = new Map<string, LyricLine[]>();
   private shuttingDown = false;
@@ -383,6 +385,8 @@ export class VybecordBackend extends EventEmitter {
       this.media?.setAdFilter(cfg.filter_spotify_ads !== false);
       // Emit status update for dashboard (showLyrics badge, etc.)
       this.emitStatus();
+      // Only once start() has the poll running; before that it sets it up.
+      if (this.pollTimer) this.applyPollInterval();
 
       // Answered first, and without looking at what is playing: turning "hide
       // when away" on while already idle has to take the presence down, and
@@ -478,14 +482,30 @@ export class VybecordBackend extends EventEmitter {
     if (!this.slots[0].appId) this.applyDiscordAppId(this.slots[0], this.defaultAppId(), 'startup');
 
     // 3. Start polling
-    // The `||` is for a config that predates the key, not a second default —
-    // DEFAULTS in config.ts is the one that decides, and the two have to agree.
-    const interval = this.config.get('poll_interval_ms') || 1000;
-    log.info(`Starting polling (every ${interval}ms)`);
-    this.pollTimer = setInterval(() => this.poll(), interval);
+    this.applyPollInterval();
 
     // Immediate first poll
     this.poll();
+  }
+
+  /**
+   * Run the poll at the configured period, restarting the timer if it changed.
+   *
+   * The period used to be read once, in start(), so the Settings control wrote
+   * config.json and changed nothing until the next launch — while every other
+   * control on that page applies as it is moved. Called from start() and from
+   * every config change; a change that leaves the period alone costs nothing.
+   */
+  private applyPollInterval(): void {
+    if (this.shuttingDown) return;
+    // The `||` is for a config that predates the key, not a second default —
+    // DEFAULTS in config.ts is the one that decides, and the two have to agree.
+    const interval = Number(this.config.get('poll_interval_ms')) || 1000;
+    if (this.pollTimer && interval === this.pollIntervalMs) return;
+    if (this.pollTimer) clearInterval(this.pollTimer);
+    this.pollIntervalMs = interval;
+    this.pollTimer = setInterval(() => this.poll(), interval);
+    log.info(`Polling every ${interval}ms`);
   }
 
   // ── Track source ──

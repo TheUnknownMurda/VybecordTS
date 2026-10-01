@@ -51,6 +51,15 @@ let stopAwayWatch: (() => void) | null = null;
 /** Set once the user really means to exit, so 'close' stops hiding to tray. */
 let quitting = false;
 
+/**
+ * Started by the login item rather than by someone.
+ *
+ * applyLaunchOnStartup registers the app with this flag precisely so that
+ * signing in does not throw a window in the user's face — but nothing read it,
+ * so the window opened at every sign-in unless "Start hidden" was also on.
+ */
+const launchedHidden = process.argv.includes('--hidden');
+
 // ── Single instance ──
 // A second launch should raise the existing window, not start a rival backend
 // that would fight the first one over the Discord IPC pipe.
@@ -154,7 +163,7 @@ async function start(): Promise<void> {
     }
   });
 
-  createWindow();
+  createWindow(true);
   syncTray(lastTrayEnabled);
   applyLaunchOnStartup(lastLaunchOnStartup);
 
@@ -186,7 +195,13 @@ async function start(): Promise<void> {
 const DEFAULT_WINDOW = { width: 1180, height: 860 };
 const MIN_WINDOW = { width: 880, height: 620 };
 
-function createWindow(): void {
+/**
+ * @param atLaunch  true for the window made at startup, the only one that may
+ *   stay hidden. A window recreated later — after it was really closed — is
+ *   always made because someone asked for it (the tray, a second launch), and
+ *   keeping that one hidden would leave the click doing nothing.
+ */
+function createWindow(atLaunch = false): void {
   const state = new WindowState(baseDir);
   win = new BrowserWindow({
     ...state.initialBounds(DEFAULT_WINDOW, MIN_WINDOW),
@@ -213,7 +228,7 @@ function createWindow(): void {
   void win.loadFile(path.join(__dirname, 'ui', 'index.html'));
 
   win.once('ready-to-show', () => {
-    if (backend?.getConfig().start_minimized === true) return;
+    if (atLaunch && (launchedHidden || backend?.getConfig().start_minimized === true)) return;
     win?.show();
   });
 
