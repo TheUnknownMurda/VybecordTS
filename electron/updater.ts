@@ -39,6 +39,16 @@ const FIRST_CHECK_DELAY_MS = 5_000;
 /** And again on a long cycle, for the tray copy that runs for days. */
 const RECHECK_INTERVAL_MS = 6 * 60 * 60_000;
 
+/**
+ * The one electron-updater warning worth dropping on the floor.
+ *
+ * It fires on every download that is not a web installer, advising that
+ * disableWebInstaller be set to true — which is precisely what we do not want
+ * (see initUpdater). Advice that does not apply, once per update, in a log read
+ * to find real problems.
+ */
+const MUTED_WARNING = /^disableWebInstaller is set to false/;
+
 export type UpdateState =
   | { status: 'idle' }
   | { status: 'checking' }
@@ -86,9 +96,27 @@ export function initUpdater(getWindow: () => BrowserWindow | null): void {
   // Swapping the app out from under a running player would be rude; the
   // installer runs on the way out instead.
   autoUpdater.autoInstallOnAppQuit = true;
+  /*
+   * Keep the web-installer path open.
+   *
+   * Nothing uses it today: the nsis target embeds the app in the setup exe, so
+   * latest.yml carries no `packages:` block and electron-updater never takes
+   * that branch. False is also its current default, so this line changes no
+   * behaviour at all — it is here because electron-updater announces the
+   * default will become true, and that flip would quietly refuse a web
+   * installer (ERR_UPDATER_WEB_INSTALLER_DISABLED) the day the build ships one.
+   * Moving to the nsis-web target should be a change to the build, not an
+   * afternoon spent working out why the updater rejects its own release.
+   *
+   * It cannot be decided per update instead: with autoDownload on,
+   * downloadUpdate() runs and reads this flag into its options before
+   * update-available is emitted, so a handler inspecting info.packages would
+   * always be too late.
+   */
+  autoUpdater.disableWebInstaller = false;
   autoUpdater.logger = {
     info: (m: unknown) => log.info(String(m)),
-    warn: (m: unknown) => log.warn(String(m)),
+    warn: (m: unknown) => { const t = String(m); if (!MUTED_WARNING.test(t)) log.warn(t); },
     error: (m: unknown) => log.error(String(m)),
     debug: (m: unknown) => log.debug(String(m)),
   };
