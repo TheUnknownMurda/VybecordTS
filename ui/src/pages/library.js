@@ -12,6 +12,13 @@ import { state, subscribe } from '../state.js';
 const api = window.vybecord;
 const PAGE_SIZE = 40;
 
+/** A presence with nothing in it — what an out-of-range slot reads as. */
+const EMPTY_SLOT = { track: null, lyrics: null, progress: { progress_ms: 0, duration_ms: 0 } };
+
+/** How many presences are on air, and one presence's slice of the state. */
+const presenceCount = () => Math.max(1, Number(state.status?.presenceCount) || 1);
+const slotOf = (i) => state.slots?.[i] || EMPTY_SLOT;
+
 /**
  * @param params optional handover from another page — `{ tab, prefill }`. Now
  *   playing uses it to drop a track's lyrics straight into the import form
@@ -162,8 +169,12 @@ async function editEntry(entry, refresh) {
   const album = el('input', { type: 'text', value: full?.album_name ?? entry.album_name ?? '' });
   const lrc = el('textarea', { rows: 14, text: full?.synced_lyrics ?? '' });
 
+  // Not dismissable: this box holds a textarea the user may have spent ten
+  // minutes in, and a click that missed it — or an Escape meant for something
+  // else — used to close it and drop every edit without asking.
   await modal((close) => el('div', {}, [
     el('h2', { text: 'Edit lyrics' }),
+    el('div', { class: 'muted', style: 'margin-top:6px', text: 'Save or Cancel to close — clicking outside leaves your edits alone.' }),
     el('div', { style: 'margin-top:16px' }, [
       field('Title', track), field('Artist', artist), field('Album', album), field('Synced lyrics (.lrc)', lrc),
     ]),
@@ -188,10 +199,26 @@ async function editEntry(entry, refresh) {
         },
       }),
     ]),
-  ]));
+  ]), { dismissable: false });
 }
 
 // ── Import ────────────────────────────────────────────────────────────────────
+
+/*
+ * The import form's draft.
+ *
+ * Switching tabs throws that tab's DOM away, and rebuilding it handed back an
+ * empty form: a song half typed in, or a hundred lines pasted and not yet
+ * saved, were gone because the user glanced at My lyrics for a second. The
+ * draft outlives the DOM instead — across tabs, and across leaving the page
+ * altogether — for as long as the window is alive. Closing to the tray only
+ * hides that window, so it survives that too; quitting does not.
+ */
+const importDraft = {
+  track: '', artist: '', album: '', duration: '', lrc: '', status: '',
+  /** null until a presence is picked; the focused one is the first answer. */
+  slot: null,
+};
 
 const LRC_PLACEHOLDER = [
   'Paste the lyrics here, or type them out — one line per line, exactly as you',
@@ -206,34 +233,148 @@ const LRC_PLACEHOLDER = [
 ].join('\n');
 
 function renderImport(body, refresh, prefill) {
-  const track = el('input', { type: 'text', placeholder: 'Song title' });
-  const artist = el('input', { type: 'text', placeholder: 'Artist' });
-  const album = el('input', { type: 'text', placeholder: 'Album (optional)' });
-  const duration = el('input', { type: 'number', placeholder: 'Duration in seconds (optional)', min: 0 });
-  const lrc = el('textarea', { rows: 14, placeholder: LRC_PLACEHOLDER });
-  const status = el('div', { class: 'muted', style: 'margin-top:8px' });
+  const track = el('input', { type: 'text', placeholder: 'Song title', value: importDraft.track });
+  const artist = el('input', { type: 'text', placeholder: 'Artist', value: importDraft.artist });
+  const album = el('input', { type: 'text', placeholder: 'Album (optional)', value: importDraft.album });
+  const duration = el('input', { type: 'number', placeholder: 'Duration in seconds (optional)', min: 0, value: importDraft.duration });
+  const lrc = el('textarea', { rows: 14, placeholder: LRC_PLACEHOLDER, text: importDraft.lrc });
+  const status = el('div', { class: 'muted', style: 'margin-top:8px', text: importDraft.status });
 
-  const fillFromTrack = () => {
-    const t = state.track;
-    if (!t) return toast('Nothing is playing', 'err');
+  const fields = [track, artist, album, duration, lrc];
+
+  /*
+   * Which presence this page works against.
+   *
+   * With one on air "the current track" means one thing and this stays hidden.
+   * With several it does not, and the window's focus is the wrong answer: it
+   * moves on its own the moment the presence it points at falls quiet, which
+   * used to drag a half-finished sync onto whatever the other player had just
+   * started. So the choice is made here, and the studio is pinned to it.
+   */
+  let slot = importDraft.slot ?? Math.min(Math.max(0, state.focus || 0), presenceCount() - 1);
+
+  /**
+   * Mirror the form into the draft.
+   *
+   * Typing is covered by the listeners below; every place that writes a value
+   * itself — the fill button, Clear, a save, timings coming back from the
+   * studio — has to say so, because setting .value fires no input event.
+   */
+  const keepDraft = () => {
+    importDraft.track = track.value;
+    importDraft.artist = artist.value;
+    importDraft.album = album.value;
+    importDraft.duration = duration.value;
+    importDraft.lrc = lrc.value;
+    importDraft.status = status.textContent;
+    importDraft.slot = slot;
+  };
+  fields.forEach((f) => f.addEventListener('input', keepDraft));
+
+  /** What a presence's option says: the position, and what is on it. */
+  const slotLabel = (i) => {
+    const t = slotOf(i).track;
+    return `Presence ${i + 1} — ${t ? (t.track_name || 'Unknown track') : 'nothing playing'}`;
+  };
+
+  const picker = el('div');
+  // Rebuilt only when the words on it change. 'slots' fires on every progress
+  // tick, and replacing the control once a second would swallow the click that
+  // happened to land on it.
+  let pickerKey = '';
+  function paintPicker() {
+    const count = presenceCount();
+    if (slot >= count) slot = 0;
+    const key = count < 2 ? '' : [slot, ...Array.from({ length: count }, (_, i) => slotLabel(i))].join('|');
+    if (key === pickerKey) return;
+    pickerKey = key;
+    if (!key) return picker.replaceChildren();
+    picker.replaceChildren(el('div', { class: 'row' }, [
+      el('div', {}, [
+        el('div', { class: 'row-label', text: 'Which presence' }),
+        el('div', { class: 'row-desc', text: 'Several players are on air. This picks the one Fill from current track '
+          + 'reads, and the one Sync while playing follows — it stays on that player for the whole pass, whatever '
+          + 'the others start or stop doing.' }),
+      ]),
+      el('div', { class: 'row-control' }, [
+        el('select', {
+          onchange: (e) => { slot = Number(e.target.value) || 0; keepDraft(); paintPicker(); },
+        }, Array.from({ length: count }, (_, i) => el('option', {
+          value: String(i), selected: i === slot, text: slotLabel(i),
+        }))),
+      ]),
+    ]));
+  }
+  paintPicker();
+
+  /**
+   * Copy the chosen presence's track into the form — the words with it.
+   *
+   * The lyrics are the whole reason to be on this page, so leaving that one box
+   * empty made the button half a feature: the app had the lines on screen and
+   * the user retyped them underneath. Timed lines come in with their stamps,
+   * which the studio can re-tap one by one; a plain fetch comes in bare, which
+   * is exactly what the studio is for.
+   */
+  async function fillFromTrack() {
+    const t = slotOf(slot).track;
+    if (!t) {
+      return toast(presenceCount() > 1 ? `Presence ${slot + 1} is not playing anything` : 'Nothing is playing', 'err');
+    }
+
+    const words = await loadedLyrics(slot);
+    const typed = lrc.value.trim();
+    if (words && typed && typed !== words.text.trim()
+      && !(await confirmBox('Replace what is in the lyrics box with the lines loaded for this track?'))) return;
+
     track.value = t.track_name || '';
     artist.value = t.artist_name || '';
     album.value = t.album_name || '';
-    if (t.duration_ms > 0) duration.value = String(Math.round(t.duration_ms / 1000));
-  };
+    duration.value = t.duration_ms > 0 ? String(Math.round(t.duration_ms / 1000)) : '';
+    if (words) lrc.value = words.text;
 
+    status.textContent = !words
+      ? 'Track filled in — no lyrics are loaded for this one, so the box is left as it was.'
+      : words.synced
+        ? 'Filled in, timings and all. Save as it is, or re-tap the lines that drift with Sync while playing.'
+        : 'Filled in. These lines carry no timings yet — start the song and hit Sync while playing.';
+    keepDraft();
+  }
+
+  /** Empty the page — and the draft behind it, which would otherwise refill it. */
+  async function clearForm() {
+    if (!fields.some((f) => f.value.trim())) return toast('Nothing to clear', '');
+    // A hundred pasted lines are one misclick away from this button, and there
+    // is no undo on the other side of it.
+    if (!(await confirmBox('Clear the title, artist, album, duration and lyrics?'))) return;
+    fields.forEach((f) => { f.value = ''; });
+    status.textContent = '';
+    keepDraft();
+    toast('Cleared', 'ok');
+  }
+
+  // A handover from Now playing is an explicit "work on this one", so it wins
+  // over whatever the draft was holding.
   if (prefill) {
     track.value = prefill.track || '';
     artist.value = prefill.artist || '';
     album.value = prefill.album || '';
     duration.value = prefill.duration || '';
     lrc.value = prefill.lrc || '';
+    keepDraft();
   }
 
   const formCard = el('div', { class: 'card' }, [
     el('div', { class: 'card-head' }, [
       el('h2', { text: 'Import lyrics' }),
-      el('button', { class: 'btn btn-sm', text: 'Fill from current track', onclick: fillFromTrack }),
+      el('div', { class: 'item-actions' }, [
+        el('button', { class: 'btn btn-sm', text: 'Fill from current track', onclick: () => { void fillFromTrack(); } }),
+        el('button', {
+          class: 'btn btn-sm btn-danger', text: 'Clear all',
+          title: 'Empty every field on this page',
+          onclick: () => { void clearForm(); },
+        }),
+      ]),
     ]),
 
     prefill ? el('div', { class: 'notice' },
@@ -243,8 +384,10 @@ function renderImport(body, refresh, prefill) {
         : `“${prefill.track}” had no synced lyrics to carry over. Paste or write them below, `
           + 'then time them with Sync while playing.') : null,
 
+    picker,
+
     el('ol', { class: 'steps' }, [
-      el('li', {}, ['Name the track. ', el('b', { text: 'Fill from current track' }), ' copies whatever is playing right now.']),
+      el('li', {}, ['Name the track. ', el('b', { text: 'Fill from current track' }), ' copies whatever is playing right now — its lyrics too, when the app has them.']),
       el('li', {}, ['Put the lyrics in the box below — paste them from anywhere, or type them yourself. One line per line.']),
       el('li', {}, [
         'If they already carry ', el('code', { text: '[mm:ss.xx]' }), ' timings, save straight away. If they do not, start the song and hit ',
@@ -274,8 +417,21 @@ function renderImport(body, refresh, prefill) {
 
   let studio = null;
 
-  function closeStudio() {
+  /**
+   * Put the studio away.
+   *
+   * `keep` writes the timings stamped so far back into the box. Cancel does not
+   * pass it — that is what Cancel means — but a tab switch is not a cancel, and
+   * dropping a pass someone was halfway through is the very loss the draft
+   * exists to prevent.
+   */
+  function closeStudio(keep = false) {
     if (!studio) return;
+    if (keep) {
+      lrc.value = studio.toLrc();
+      status.textContent = 'Sync closed — the timings stamped so far are in the box.';
+      keepDraft();
+    }
     studio.dispose();
     studio = null;
     studioHost.replaceChildren();
@@ -288,12 +444,14 @@ function renderImport(body, refresh, prefill) {
       text: lrc.value,
       title: track.value.trim(),
       artist: artist.value.trim(),
+      slot,
       onApply: (text) => {
         lrc.value = text;
         closeStudio();
         status.textContent = 'Timings applied — save to keep them.';
+        keepDraft();
       },
-      onCancel: closeStudio,
+      onCancel: () => closeStudio(),
     });
     if (!studio) return;                       // nothing to sync; the studio said so
     formCard.style.display = 'none';
@@ -320,12 +478,41 @@ function renderImport(body, refresh, prefill) {
       toast('Imported ✓', 'ok');
       lrc.value = '';
       status.textContent = '';
+      keepDraft();
     } catch (e) {
       toast(`Import failed: ${e.message}`, 'err');
     }
   }
 
-  return closeStudio;
+  const unsubs = [subscribe('slots', paintPicker), subscribe('status', paintPicker)];
+
+  return () => {
+    closeStudio(true);
+    unsubs.forEach((fn) => fn());
+  };
+}
+
+/**
+ * The lyrics the app is holding for a presence, as text for the import box.
+ *
+ * The timed copy is asked of the backend rather than read off the state: the
+ * state only holds what a lyric tick last pushed, and a track paused before its
+ * first line has lyrics loaded but has pushed nothing yet. The plain fallback
+ * has no such cache behind it, so that one does come from the state.
+ */
+async function loadedLyrics(slot) {
+  const cached = await api.getLrc(slot).catch(() => null);
+  if (cached && cached.trim()) return { text: cached.replace(/\r\n?/g, '\n').trimEnd(), synced: true };
+
+  const l = slotOf(slot).lyrics;
+  if (Array.isArray(l?.lyrics) && l.lyrics.length) {
+    return {
+      text: l.lyrics.map((x) => (Number.isFinite(x.time) ? `${lrcStamp(x.time)} ${x.text}` : x.text)).join('\n'),
+      synced: true,
+    };
+  }
+  if (Array.isArray(l?.lines) && l.lines.length) return { text: l.lines.join('\n'), synced: false };
+  return null;
 }
 
 // ── Sync studio ───────────────────────────────────────────────────────────────
@@ -385,8 +572,15 @@ function readLines(text) {
  * Returns `{ node, dispose }`, or null when there is nothing to time. The
  * disposer is not optional: this holds a document-level key handler and an
  * interval, both of which outlive the DOM it is attached to.
+ *
+ * `slot` is the presence being timed, and it does not change for the life of the
+ * panel. Everything here reads that slot rather than the window's focused
+ * mirrors, which is the point: the focus follows whatever is playing, so a
+ * second player starting — or this one going quiet for a poll — used to swap the
+ * clock under a half-finished pass and time every line after it against another
+ * song.
  */
-function createSyncStudio({ text, title, artist, onApply, onCancel }) {
+function createSyncStudio({ text, title, artist, slot = 0, onApply, onCancel }) {
   const lines = readLines(text);
   const firstStampable = lines.findIndex((l) => l.text);
   if (firstStampable < 0) {
@@ -402,14 +596,35 @@ function createSyncStudio({ text, title, artist, onApply, onCancel }) {
   const timeOf = (i) => (taps[i] != null ? Math.max(0, taps[i] + offset) : lines[i].preset);
 
   // ── live position ──
+  const trackNow = () => slotOf(slot).track;
+  const progressNow = () => slotOf(slot).progress || EMPTY_SLOT.progress;
+
   // Same trick as Now playing: the backend reports a position once per poll, so
   // read the gap off a timestamp rather than trusting the tick to be on time.
-  let base = state.progress.progress_ms || 0;
+  let posRef = progressNow();
+  let base = posRef.progress_ms || 0;
   let baseAt = performance.now();
-  const onProgress = (p) => { base = p?.progress_ms || 0; baseAt = performance.now(); };
+  /*
+   * One subscription for the lot.
+   *
+   * Every track and progress event reaches the state through the slot array, so
+   * watching it covers both — and unlike the 'track' and 'progress' keys, it is
+   * not a mirror of the focused presence. A slot's progress object is replaced
+   * wholesale on each report and left alone by every other patch, so its
+   * identity is what says a fresh position has landed.
+   */
+  const onSlots = () => {
+    const p = progressNow();
+    if (p !== posRef) {
+      posRef = p;
+      base = p.progress_ms || 0;
+      baseAt = performance.now();
+    }
+    paintTransport();
+  };
   function livePosition() {
-    if (!state.track?.is_playing) return base;
-    const total = state.progress.duration_ms;
+    if (!trackNow()?.is_playing) return base;
+    const total = progressNow().duration_ms;
     const elapsed = base + (performance.now() - baseAt);
     return total > 0 ? Math.min(elapsed, total) : elapsed;
   }
@@ -569,35 +784,52 @@ function createSyncStudio({ text, title, artist, onApply, onCancel }) {
     stampBtn.textContent = cursor >= lines.length ? 'All lines timed' : 'Stamp this line';
     skipBtn.disabled = cursor >= lines.length;
     undoBtn.disabled = prevStampable(Math.min(cursor, lines.length) - 1) < 0;
-    if (scroll && cursor < lines.length) {
-      rows[cursor].row.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    }
+    if (scroll && cursor < lines.length) centerLine(rows[cursor].row);
+  }
+
+  /**
+   * Bring a line to the middle of the list — and of nothing else.
+   *
+   * scrollIntoView scrolls every scrollable ancestor it can find, the page among
+   * them. In a window too short to hold the whole studio that meant each stamp
+   * scrolled the page as well as the list, sliding the Stamp button out from
+   * under the cursor so the next click landed on empty space.
+   */
+  function centerLine(row) {
+    const r = row.getBoundingClientRect();
+    const box = lineList.getBoundingClientRect();
+    const target = lineList.scrollTop + (r.top - box.top - lineList.clientTop)
+      - (lineList.clientHeight - r.height) / 2;
+    lineList.scrollTo({
+      top: Math.max(0, Math.min(target, lineList.scrollHeight - lineList.clientHeight)),
+      behavior: 'smooth',
+    });
   }
 
   function paintTransport() {
     const pos = livePosition();
-    const total = state.progress.duration_ms || 0;
+    const total = progressNow().duration_ms || 0;
     posEl.textContent = fmtPos(pos);
     totalEl.textContent = total > 0 ? fmtTime(total) : '--:--';
     fill.style.width = total > 0 ? `${Math.min(100, (pos / total) * 100)}%` : '0%';
 
-    const t = state.track;
+    // Named while several are on air, so it is plain which clock this is and
+    // that the panel has not wandered off to the other one.
+    const where = presenceCount() > 1 ? `presence ${slot + 1}` : 'your player';
+    const t = trackNow();
     if (!t) {
       nowPlaying.className = 'sync-playing is-warn';
-      nowPlaying.textContent = 'Nothing is playing — start the song in your player, the clock follows it.';
+      nowPlaying.textContent = `Nothing is playing on ${where} — start the song there, the clock follows it.`;
       return;
     }
     const same = !title || norm(t.track_name) === norm(title);
     nowPlaying.className = `sync-playing${same ? '' : ' is-warn'}`;
     nowPlaying.textContent = same
-      ? `Following: ${t.track_name} — ${t.artist_name}`
-      : `Careful — the player is on “${t.track_name}”, but you are timing “${title}”.`;
+      ? `Following ${where}: ${t.track_name} — ${t.artist_name}`
+      : `Careful — ${where} is on “${t.track_name}”, but you are timing “${title}”.`;
   }
 
-  const unsubs = [
-    subscribe('progress', onProgress),
-    subscribe('track', paintTransport),
-  ];
+  const unsubs = [subscribe('slots', onSlots)];
   // 80ms keeps the centiseconds readable without being a spin loop; it only
   // rewrites two text nodes and one width.
   const ticker = setInterval(paintTransport, 80);
@@ -624,6 +856,7 @@ function createSyncStudio({ text, title, artist, onApply, onCancel }) {
 
   return {
     node,
+    toLrc,
     dispose() {
       clearInterval(ticker);
       unsubs.forEach((fn) => fn());

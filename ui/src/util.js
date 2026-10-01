@@ -200,8 +200,17 @@ export function toast(message, kind = '') {
   setTimeout(() => node.remove(), kind === 'err' ? 6000 : 3200);
 }
 
-/** Show a modal; resolves when it closes. `render(close)` builds the body. */
-export function modal(render) {
+/**
+ * Show a modal; resolves when it closes. `render(close)` builds the body.
+ *
+ * `opts.dismissable` is what a click on the backdrop and the Escape key do, and
+ * it defaults to true: most dialogs here ask a question whose "never mind" costs
+ * nothing. A form holding edits the user typed is not one of those — a stray
+ * click beside the box threw the whole lot away — so those pass false and close
+ * only through their own buttons.
+ */
+export function modal(render, opts = {}) {
+  const dismissable = opts.dismissable !== false;
   return new Promise((resolve) => {
     const close = (value) => {
       backdrop.remove();
@@ -213,12 +222,12 @@ export function modal(render) {
     const box = el('div', { class: 'modal' });
     const backdrop = el('div', {
       class: 'modal-backdrop',
-      onclick: (e) => { if (e.target === backdrop) close(undefined); },
+      onclick: dismissable ? (e) => { if (e.target === backdrop) close(undefined); } : null,
     }, [box]);
 
     box.append(render(close));
     document.body.append(backdrop);
-    document.addEventListener('keydown', onKey);
+    if (dismissable) document.addEventListener('keydown', onKey);
     box.querySelector('input, textarea, button')?.focus();
   });
 }
