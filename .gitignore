@@ -5,12 +5,19 @@ envs/
 !.env.example
 
 # ── User config / data ──
+# In development the data folder is the repository root, so every file the app
+# writes there has to be listed — lastfm-session.txt holds a live session key.
 config.json
 flagged-lyrics.json
 translate-cache.json
 stats-history.json
 listening-history.json
 window-state.json
+lyrics-offsets.json
+lastfm-session.txt
+lastfm-queue.json
+# The user's own yt-dlp override (Settings → Lyrics → YouTube captions).
+/bin/
 
 # ── Logs ──
 logs/
@@ -36,7 +43,10 @@ desktop.ini
 .vs/
 
 # ── LRCLib SQLite database dumps (can be 100GB+) ──
+# The drop folder is "LRCLIB Dump"; both spellings, since git only matches
+# case-insensitively where core.ignorecase is on.
 LRCLIB DUMP/
+LRCLIB Dump/
 *.sqlite3.gz
 *.db
 
