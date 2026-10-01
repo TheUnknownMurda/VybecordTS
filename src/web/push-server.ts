@@ -7,7 +7,7 @@
  * shut. This one:
  *
  *   - binds 127.0.0.1 only, so nothing off the machine can reach it;
- *   - answers POST on six push paths and nothing else — no config, no reads,
+ *   - answers POST on seven push paths and nothing else — no config, no reads,
  *     no way to learn anything about the user;
  *   - accepts only extension origins, because an extension's origin is
  *     something the browser sets and a page cannot forge. A shared secret

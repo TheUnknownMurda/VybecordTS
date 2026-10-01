@@ -101,8 +101,10 @@ export function revealExtensionFolder(): void {
     log.warn(`Extension folder missing at ${dir}`);
     return;
   }
-  // showItemInFolder on the manifest, so the folder opens with the file that
-  // Firefox's "Load Temporary Add-on" asks for already selected.
+  // showItemInFolder on the manifest, so Explorer opens on the extension's own
+  // folder — the one "Load unpacked" wants — rather than on its parent. Not
+  // the file for Firefox: this manifest is the Chromium one, and Firefox loads
+  // the -firefox.zip from the release instead (see scripts/pack-extension.mjs).
   shell.showItemInFolder(path.join(dir, 'manifest.json'));
 }
 

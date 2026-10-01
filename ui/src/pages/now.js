@@ -84,7 +84,7 @@ export function render(root) {
       el('div', { class: 'row' }, [
         el('div', {}, [
           el('div', { class: 'row-label', text: 'Timing offset' }),
-          el('div', { class: 'row-desc', text: 'Negative shows lines earlier, positive later. Applies to the current track and every track after it.' }),
+          el('div', { class: 'row-desc', text: 'Negative shows lines earlier, positive later. Saved for this track only — the others keep the default from Settings → Lyrics.' }),
         ]),
         el('div', { class: 'row-control', style: 'display:flex;gap:6px;align-items:center' }, [
           el('button', { class: 'btn btn-sm', text: '−250', onclick: () => nudgeOffset(-250) }),

@@ -287,12 +287,15 @@ function extensionCard() {
         el('span', { class: 'row-label', text: 'Status' }), status,
       ]),
 
+      // '' rather than null: replaceChildren turns null into the text "null",
+      // which is what this card printed under its status whenever the port
+      // was fine — that is, nearly always.
       info.portBlocked
         ? el('div', { class: 'row-desc', style: 'margin-top:10px;max-width:none' },
             'Another program is holding 127.0.0.1:8888, so the extension has nowhere to send to. '
             + 'A second copy of Vybecord is the usual cause — close it, then reopen this app. '
             + 'Installing the extension again will not help.')
-        : null,
+        : '',
 
       !info.available
         ? el('div', { class: 'row-desc', style: 'margin-top:10px', text: 'The extension folder is missing from this install.' })
@@ -334,10 +337,24 @@ function extensionCard() {
               : el('div', { class: 'row-desc', style: 'margin-top:14px' },
                   'No browser detected. Open yours, go to its extensions page, and load the folder above.'),
 
+            /*
+             * Not this folder for Firefox. Its manifest is the Chromium one,
+             * whose background is a Manifest V3 service worker — which Firefox
+             * does not run, so the add-on loads and then does nothing. The
+             * Firefox package (scripts/pack-extension.mjs) declares the same
+             * code as an event page, and ships with every release.
+             */
             firefox.length
-              ? el('div', { class: 'row-desc', style: 'margin-top:12px;max-width:none' },
-                  'Firefox loads it as a temporary add-on and drops it when it closes — pick manifest.json rather '
-                  + 'than the folder there.')
+              ? el('div', { style: 'margin-top:12px' }, [
+                  el('div', { class: 'row-desc', style: 'max-width:none' },
+                    'Firefox needs its own package: download vybecord-extension-…-firefox.zip from the latest '
+                    + 'release, then pick that zip under "Load Temporary Add-on". Firefox drops temporary add-ons '
+                    + 'when it closes.'),
+                  el('button', {
+                    class: 'btn btn-sm', style: 'margin-top:8px', text: 'Get the Firefox package',
+                    onclick: () => api.openExternal('https://github.com/TheUnknownMurda/VybecordTS/releases/latest'),
+                  }),
+                ])
               : null,
           ]),
 
@@ -380,7 +397,8 @@ async function lyricsTab(body) {
           cfg('show_lyrics', true) !== false, (v) => put('show_lyrics', v)),
         toggleRow('Romanise Japanese / Korean', 'Converts kana and hangul to Latin script.',
           cfg('romanize_lyrics') === true, (v) => put('romanize_lyrics', v)),
-        inputRow('Timing offset (ms)', 'Negative shows lines earlier, positive later.',
+        inputRow('Timing offset (ms)', 'The default for every track. Negative shows lines earlier, positive later. '
+          + 'A track corrected on Now playing keeps its own offset instead.',
           cfg('lyrics_offset_ms', 0), (v) => put('lyrics_offset_ms', Math.max(-60000, Math.min(60000, v))), { type: 'number', min: -60000, max: 60000 }),
         inputRow('LRCLIB dump path',
           'Optional offline database. Leave empty to use only online providers. '
@@ -552,11 +570,12 @@ function appTab(body) {
         }),
         toggleRow('Close to tray', 'Closing the window hides it instead of quitting, so the presence keeps running.',
           cfg('minimize_to_tray', true) !== false, (v) => put('minimize_to_tray', v)),
-        toggleRow('Show tray icon', 'Takes effect on the next start.',
+        toggleRow('Show tray icon', 'The icon in the notification area. Without it, opening Vybecord again brings a hidden window back.',
           cfg('tray_enabled', true) !== false, (v) => put('tray_enabled', v)),
         toggleRow('Start hidden', 'Launch straight to the tray without showing the window.',
           cfg('start_minimized') === true, (v) => put('start_minimized', v)),
-        toggleRow('Launch at sign-in', null, cfg('launch_on_startup') === true, (v) => put('launch_on_startup', v)),
+        toggleRow('Launch at sign-in', 'Starts with Windows, without opening the window — the presence runs in the background.',
+          cfg('launch_on_startup') === true, (v) => put('launch_on_startup', v)),
       ]),
     ]),
 
