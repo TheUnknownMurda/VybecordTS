@@ -69,7 +69,7 @@ const THUMB_PATH = path.join(process.env.TEMP || os.tmpdir(), 'vybecord_thumb.jp
 
 /** Backend events forwarded verbatim to the renderer. */
 const FORWARDED_EVENTS = [
-  'trackUpdate', 'progressUpdate', 'lyricsUpdate', 'plainLyricsUpdate',
+  'trackUpdate', 'progressUpdate', 'lyricsUpdate', 'plainLyricsUpdate', 'activityUpdate',
   'statusUpdate', 'configUpdate', 'statsUpdate',
 ] as const;
 
