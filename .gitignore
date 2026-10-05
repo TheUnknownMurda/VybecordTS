@@ -32,7 +32,7 @@ vendor/
 dist/
 dist-electron/
 build/
-release/
+/release/
 
 # ── OS artifacts ──
 .DS_Store
