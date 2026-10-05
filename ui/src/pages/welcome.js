@@ -106,9 +106,15 @@ export function render(root) {
     extraStep.className = 'wel-step';
     extraStep.replaceChildren(n, body);
 
-    const done = (badge, on, text) => { badge.className = `badge${on ? ' accent' : ''}`; badge.textContent = text; };
+    // A connected add-on has nothing left to set up, so its button goes: "Connected"
+    // beside "Set up" read as a contradiction.
+    const done = (badge, on, text) => {
+      badge.className = `badge${on ? ' accent' : ''}`;
+      badge.textContent = text;
+      if (on) badge.nextElementSibling?.remove();
+    };
     api.extensionInfo().then((i) => done(ext, i?.connected, i?.connected ? 'Connected' : 'Not set up')).catch(() => done(ext, false, 'Unknown'));
-    api.spicetifyInfo().then((i) => done(spot, i?.connected, i?.connected ? 'Connected' : i?.installed && i?.extensionEnabled ? 'Set up' : 'Not set up'))
+    api.spicetifyInfo().then((i) => done(spot, i?.connected, i?.connected ? 'Connected' : i?.installed && i?.extensionEnabled ? 'Installed' : 'Not set up'))
       .catch(() => done(spot, false, 'Unknown'));
     api.lastfmStatus().then((s) => done(fm, s?.scrobbling, s?.scrobbling ? 'Connected' : 'Not connected')).catch(() => done(fm, false, 'Unknown'));
   }

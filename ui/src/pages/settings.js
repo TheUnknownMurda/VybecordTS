@@ -23,9 +23,10 @@ const STATUS_DISPLAY = [
   ['artist_title', 'Artist — Title'], ['artist', 'Artist'], ['album', 'Album'],
   ['details', 'Details field'], ['state', 'State field'], ['custom', 'Custom template'],
 ];
+/** The row is already labelled "Away after": repeating it cut the Discord hint off in a 200px select. */
 const AWAY_DELAYS = [
-  [5, 'After 5 minutes'], [10, 'After 10 minutes (Discord)'], [15, 'After 15 minutes'],
-  [30, 'After 30 minutes'], [60, 'After 1 hour'],
+  [5, '5 minutes'], [10, '10 minutes (Discord)'], [15, '15 minutes'],
+  [30, '30 minutes'], [60, '1 hour'],
 ];
 const PRESENCE_COUNTS = [[1, 'One'], [2, 'Two'], [3, 'Three'], [4, 'Four'], [5, 'Five']];
 /**

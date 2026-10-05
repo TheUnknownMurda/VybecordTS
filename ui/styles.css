@@ -1972,8 +1972,9 @@ html[data-theme='light'] .lyr-clickable:hover {
   color: var(--text-secondary);
 }
 .wel-steps {
+  /* Padding is the card's: zeroing it here (to drop the list indent) put the
+     step circles against the border. */
   list-style: none;
-  padding: 0;
   margin: 0;
 }
 .wel-step {
