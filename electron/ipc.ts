@@ -287,7 +287,6 @@ export function registerIpc(
 
   // ── Stats & history ──
   handle('stats:session', () => backend.getSessionStats());
-  handle('stats:history', () => backend.getStatsHistory());
   // `anchor` pins the listing to the log as it stood when paging began, so a
   // track finishing mid-scroll cannot repeat a row at the seam between pages.
   handle('history:list', (limit = 50, offset = 0, anchor?: number) =>

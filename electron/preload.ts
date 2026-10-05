@@ -83,7 +83,6 @@ const api = {
 
   // ── Stats & history ──
   getStats: () => invoke('stats:session'),
-  getStatsHistory: () => invoke('stats:history'),
   getHistory: (limit?: number, offset?: number, anchor?: number) => invoke('history:list', limit, offset, anchor),
   getWrapped: (days?: number) => invoke('history:wrapped', days),
 

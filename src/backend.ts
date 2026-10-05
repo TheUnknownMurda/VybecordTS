@@ -63,14 +63,6 @@ import type { TrackData, LyricLine, VybecordConfig, DiscordActivity } from './co
 
 const log = createLogger('Backend');
 
-// ── Stats history (persisted across sessions) ──
-const MAX_HISTORY_SESSIONS = 10;
-interface SessionSnapshot {
-  date: string;  // ISO date string
-  topTracks: { name: string; artist: string; art: string; plays: number }[];
-  topArtists: { name: string; art: string; artist_art: string; plays: number }[];
-}
-
 // ── Module-level constants (avoid re-creating on every 400ms poll) ──
 const MUSIC_APPS = new Set(['spotify', 'apple_music', 'deezer', 'tidal', 'amazon_music']);
 
@@ -327,12 +319,6 @@ export class VybecordBackend extends EventEmitter {
   private cachedStats: { topTracks: any[]; topArtists: any[] } | null = null;
   private statsDirty = true;
   private _lastCcLang: string | undefined;
-  private statsHistory: SessionSnapshot[] = [];
-  private statsHistoryPath: string;
-  /** When this session began — the identity of its row in the stats history. */
-  private readonly sessionStartedAt = new Date().toISOString();
-  /** Whether this session's row is already at the head of statsHistory. */
-  private sessionRowSaved = false;
   /** Album of the last play accepted as real — lets recordPlay() tell an
    *  interlude from an advertisement, the same way the media source does. */
   private lastRecordedAlbum = '';
@@ -351,8 +337,6 @@ export class VybecordBackend extends EventEmitter {
     this.configDir = configDir;
     this.mediaWorkerPath = mediaWorkerPath;
     this.lrclibWorkerPath = lrclibWorkerPath;
-    this.statsHistoryPath = path.join(configDir, 'stats-history.json');
-    this.statsHistory = this.loadStatsHistory();
     this.config = new ConfigManager(configDir, (cfg) => {
       log.info('Config changed — will apply on next poll');
       // Reached only when config.json is edited by hand: the app's own writes
@@ -2311,93 +2295,6 @@ export class VybecordBackend extends EventEmitter {
     this.statsDirty = false;
     return this.cachedStats;
   }
-  // ── Stats history (persisted across sessions) ──
-
-  private loadStatsHistory(): SessionSnapshot[] {
-    try {
-      if (fs.existsSync(this.statsHistoryPath)) {
-        const raw = fs.readFileSync(this.statsHistoryPath, 'utf-8');
-        const arr = JSON.parse(raw);
-        if (Array.isArray(arr)) {
-          log.info(`Loaded ${arr.length} previous session(s) from stats history`);
-          return arr.slice(0, MAX_HISTORY_SESSIONS);
-        }
-      }
-    } catch (e) {
-      log.warn(`Failed to load stats history: ${e}`);
-    }
-    return [];
-  }
-
-  private saveStatsHistory(): void {
-    // Written once per session (during shutdown), so a synchronous atomic write
-    // is both safe and more reliable than async I/O racing process.exit():
-    // full content lands in a temp file, then a single rename swaps it in.
-    const tmpPath = `${this.statsHistoryPath}.${process.pid}.tmp`;
-    try {
-      fs.mkdirSync(path.dirname(this.statsHistoryPath), { recursive: true });
-      fs.writeFileSync(tmpPath, JSON.stringify(this.statsHistory, null, 2), 'utf-8');
-      fs.renameSync(tmpPath, this.statsHistoryPath);
-    } catch (e) {
-      log.warn(`Failed to save stats history: ${e}`);
-      try { fs.unlinkSync(tmpPath); } catch { /* nothing to clean up */ }
-    }
-  }
-
-  /**
-   * Persist this session's top 3 into the history file.
-   *
-   * Called on every play now, not only on the way out. It used to run from
-   * shutdown() alone, so a crash, a power cut or an End Task took the whole
-   * session's listening with it — while the listening *history* next door had
-   * been saving continuously all along, which left the two views of the same
-   * afternoon disagreeing with each other.
-   *
-   * The session owns one row and rewrites it, rather than adding one per call:
-   * the file holds the last ten *sessions*, and it would otherwise hold the
-   * last ten songs of this one. `sessionStartedAt` is fixed at the first save
-   * so the row keeps saying when the session began rather than when it was last
-   * touched.
-   */
-  private saveCurrentSession(): void {
-    const stats = this.getSessionStats();
-    if (!stats.topTracks.length && !stats.topArtists.length) return;
-
-    const snapshot: SessionSnapshot = {
-      date: this.sessionStartedAt,
-      topTracks: stats.topTracks,
-      topArtists: stats.topArtists,
-    };
-
-    if (this.sessionRowSaved && this.statsHistory[0]?.date === this.sessionStartedAt) {
-      this.statsHistory[0] = snapshot;
-    } else {
-      this.statsHistory.unshift(snapshot);
-      this.sessionRowSaved = true;
-      if (this.statsHistory.length > MAX_HISTORY_SESSIONS) {
-        this.statsHistory = this.statsHistory.slice(0, MAX_HISTORY_SESSIONS);
-      }
-      log.info(`Saved current session to stats history (${this.statsHistory.length} total)`);
-    }
-    this.saveStatsHistory();
-  }
-
-  /**
-   * Previous sessions — genuinely previous ones.
-   *
-   * This used to be able to return the list as-is, because the running session
-   * was only written on the way out. It saves on every play now (so a crash
-   * cannot take the afternoon with it), which put the live session at the head
-   * of the list — and the Stats page shows "This session" above "Past
-   * sessions", so it would have appeared twice, with the same numbers.
-   *
-   * Filtered on the session's own start time rather than by dropping the first
-   * row: the row only exists once something has played, so index 0 is not
-   * reliably ours.
-   */
-  getStatsHistory(): SessionSnapshot[] {
-    return this.statsHistory.filter(s => s.date !== this.sessionStartedAt);
-  }
 
   /** Get a page of the persistent listening history (most recent first). */
   getListeningHistory(limit = 50, offset = 0, anchor?: number) { return getHistoryPage(limit, offset, anchor); }
@@ -2802,8 +2699,6 @@ export class VybecordBackend extends EventEmitter {
     evictLeast(this.sessionArtistPlays, 500, a => a.count);
 
     this.emit('statsUpdate', this.getSessionStats());
-    // Banked now rather than at shutdown alone — see saveCurrentSession().
-    this.saveCurrentSession();
   }
 
   // ── Away (Discord auto-idle parity) ──
@@ -3091,8 +2986,7 @@ export class VybecordBackend extends EventEmitter {
     // 6. Stop config watcher
     this.config.close();
 
-    // 7. Save session stats + listening history + finalize scrobble
-    this.saveCurrentSession();
+    // 7. Save listening history + finalize scrobble
     scrobbleTrackEnd();
     historyTrackEnd();
 

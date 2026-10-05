@@ -339,7 +339,6 @@ Everything has a control in **Settings** or on the **Last.fm** page, except the 
 | `custom-lyrics.sqlite3` | Your imported lyrics. Created on first run. |
 | `LRCLIB Dump\` | Drop folder for an LRCLIB dump. |
 | `listening-history.json` | Listening log, up to 10,000 entries. |
-| `stats-history.json` | Top tracks and artists of the last 10 sessions. |
 | `flagged-lyrics.json` | Lyrics you marked as wrong. |
 | `lyrics-offsets.json` | Timing offsets per track, up to 1,000 tracks. |
 | `translate-cache.json` | Translation cache, up to 5,000 lines. |

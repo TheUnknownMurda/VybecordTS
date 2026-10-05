@@ -282,8 +282,7 @@ function flushSave(): void {
  * Atomic: the whole file is rewritten on every save, so an interrupted write
  * left a truncated JSON array — which the loader cannot parse, so it starts
  * from empty and the user's entire listening history is gone. A temp file plus
- * a rename means the old file stands until a complete new one exists. This is
- * the same shape saveStatsHistory() already uses next door.
+ * a rename means the old file stands until a complete new one exists.
  *
  * Synchronous: the shutdown path is `historyTrackEnd()` → here → `app.exit(0)`
  * a moment later. An async write racing process exit is exactly the write worth
