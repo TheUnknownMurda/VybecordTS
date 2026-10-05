@@ -1,227 +1,22 @@
-/** Now playing — cover, metadata, progress and the live lyric line. */
+/**
+ * Now playing — the track, what Discord shows for it, and the live lyrics.
+ *
+ * Three blocks, top to bottom, in the order people look for them: what is
+ * playing, what their friends see, and the words. The player picker that used
+ * to be a page of its own is the Source menu in the header — pinning is a
+ * decision about the presence on screen, so it lives next to it.
+ */
 
 import { el, $, fmtTime, setArt, platformInfo, toast, modal, BLANK_ART } from '../util.js';
-import { state, subscribe, setFocus } from '../state.js';
+import { state, subscribe, setFocus, set } from '../state.js';
 import { goto } from '../router.js';
+import { discordPreview } from '../discord-card.js';
 
 const api = window.vybecord;
-
-export function render(root) {
-  root.replaceChildren(
-    el('div', { class: 'page-head' }, [
-      el('h1', { text: 'Now playing' }),
-      el('div', { class: 'sub', id: 'npSource', text: 'Waiting for a player…' }),
-    ]),
-
-    // Both presence cards at a glance, shown only while two are on air. The
-    // big card and the lyrics below follow whichever one is picked here.
-    el('div', { class: 'presences', id: 'npPresences', hidden: true }),
-
-    el('div', { class: 'card' }, [
-      el('div', { class: 'np' }, [
-        el('img', { class: 'np-art', id: 'npArt', alt: '', src: BLANK_ART }),
-        el('div', { class: 'np-meta' }, [
-          el('div', { class: 'np-title', id: 'npTitle', text: 'Nothing playing' }),
-          el('div', { class: 'np-artist', id: 'npArtist' }),
-          el('div', { class: 'np-album', id: 'npAlbum' }),
-          el('div', { class: 'np-badges', id: 'npBadges' }),
-          el('div', { class: 'np-progress' }, [
-            el('div', { class: 'np-bar' }, [el('div', { class: 'np-fill', id: 'npFill' })]),
-            el('div', { class: 'np-times' }, [
-              el('span', { id: 'npElapsed', text: '0:00' }),
-              el('span', { id: 'npTotal', text: '0:00' }),
-            ]),
-          ]),
-        ]),
-      ]),
-    ]),
-
-    // The card that takes the leftover height — see .lyr-card in the stylesheet.
-    el('div', { class: 'card lyr-card' }, [
-      el('div', { class: 'card-head' }, [
-        el('h2', { text: 'Lyrics' }),
-        el('div', { class: 'item-actions' }, [
-          el('button', {
-            class: 'btn btn-sm', text: 'Full lyrics', title: 'Show every line of this song',
-            onclick: openFullLyrics,
-          }),
-          el('button', {
-            class: 'btn btn-sm', text: 'Copy .lrc', title: 'Copy the synced lyrics to the clipboard',
-            onclick: copyLrc,
-          }),
-        ]),
-      ]),
-      // The block itself is the affordance: three lines is a keyhole view of the
-      // song, and clicking anywhere on them opens the rest of it.
-      el('div', {
-        class: 'lyr lyr-clickable',
-        role: 'button',
-        tabindex: '0',
-        title: 'Show every line of this song',
-        onclick: openFullLyrics,
-        onkeydown: (e) => {
-          // A held key repeats; only the first press means anything here.
-          if (e.repeat) return;
-          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openFullLyrics(); }
-        },
-      }, [
-        el('div', { class: 'lyr-prev', id: 'lyrPrev' }),
-        el('div', { class: 'lyr-cur', id: 'lyrCur', text: '—' }),
-        el('div', { class: 'lyr-tr', id: 'lyrTr' }),
-        el('div', { class: 'lyr-next', id: 'lyrNext' }),
-      ]),
-      el('div', { class: 'lyr-report' }, [
-        el('button', {
-          class: 'btn btn-danger btn-lg', id: 'npReport',
-          text: '⚑  These lyrics aren’t matching?',
-          onclick: reportLyrics,
-        }),
-        el('div', { class: 'lyr-report-hint' },
-          'Not matching what you hear? Say so — the app stops using them for this track, '
-          + 'and if it is only the timing that drifts you can re-time them yourself.'),
-      ]),
-
-      el('div', { class: 'row' }, [
-        el('div', {}, [
-          el('div', { class: 'row-label', text: 'Timing offset' }),
-          el('div', { class: 'row-desc', text: 'Negative shows lines earlier, positive later. Saved for this track only — the others keep the default from Settings → Lyrics.' }),
-        ]),
-        el('div', { class: 'row-control', style: 'display:flex;gap:6px;align-items:center' }, [
-          el('button', { class: 'btn btn-sm', text: '−250', onclick: () => nudgeOffset(-250) }),
-          el('span', { id: 'npOffset', style: 'min-width:70px;text-align:center;font-variant-numeric:tabular-nums', text: '0 ms' }),
-          el('button', { class: 'btn btn-sm', text: '+250', onclick: () => nudgeOffset(250) }),
-          el('button', { class: 'btn btn-sm', text: 'Reset', onclick: () => setOffset(0) }),
-        ]),
-      ]),
-    ]),
-  );
-
-  // Initial paint from whatever state we already hold.
-  paintPresences();
-  paintTrack(state.track);
-  paintProgress(state.progress);
-  paintLyrics(state.lyrics);
-  void refreshOffset();
-  paintTrSlot();
-
-  /*
-   * Local clock for the progress bar.
-   *
-   * The backend reports progress once per poll (1s); this fills the gap so the
-   * bar and the elapsed time move smoothly. It reads the elapsed time from a
-   * timestamp rather than adding a fixed step per tick — setInterval fires late
-   * under load, and a fixed step would quietly lose that time on every tick and
-   * drift away from the player over the length of a track.
-   */
-  let base = state.progress.progress_ms || 0;
-  let baseAt = performance.now();
-
-  const onProgress = (p) => {
-    base = p?.progress_ms || 0;
-    baseAt = performance.now();
-    paintProgress(p);
-  };
-
-  const unsubs = [
-    subscribe('track', paintTrack),
-    subscribe('progress', onProgress),
-    subscribe('lyrics', paintLyrics),
-    subscribe('config', () => { void refreshOffset(); paintTrSlot(); }),
-    // A new track may carry its own correction, or none.
-    subscribe('track', () => { void refreshOffset(); }),
-    // An ad produces no track, so the idle state has to be redrawn to explain
-    // itself rather than sit there reading "Nothing playing".
-    // Being away hides the presence without the song changing at all, so the
-    // chip that says so cannot wait for the next trackUpdate to appear.
-    subscribe('status', () => { paintPresences(); (state.track ? paintBadges(state.track) : paintTrack(null)); }),
-    // The other cards come and go with what is playing; the strip and the
-    // pinned-player hint both read them.
-    subscribe('slots', paintPresences),
-    subscribe('preferredPlayers', () => { paintPresences(); if (!state.track) paintTrack(null); }),
-    // A different presence picked: everything below the strip is its now.
-    subscribe('focus', () => { paintPresences(); paintTrack(state.track); void refreshOffset(); }),
-  ];
-
-  const ticker = setInterval(() => {
-    if (!state.track?.is_playing) return;
-    const duration = state.progress.duration_ms;
-    const elapsed = base + (performance.now() - baseAt);
-    paintProgress({
-      progress_ms: duration > 0 ? Math.min(elapsed, duration) : elapsed,
-      duration_ms: duration,
-    });
-  }, 250);
-
-  return () => {
-    clearInterval(ticker);
-    unsubs.forEach((fn) => fn());
-  };
-}
 
 /** How many presence cards are in play. */
 const presenceCount = () => Math.max(1, Number(state.status?.presenceCount) || 1);
 const multi = () => presenceCount() > 1;
-
-/** "Presence 2 · " while several cards are shown, nothing otherwise. */
-function focusPrefix() {
-  return multi() ? `Presence ${state.focus + 1} · ` : '';
-}
-
-/** What the source line says while nothing is playing. */
-function waitingText() {
-  const pinnedId = (state.preferredPlayers || [])[state.focus] ?? (state.focus === 0 ? state.preferredPlayer : null);
-  if (!pinnedId) return `${focusPrefix()}Waiting for a player…`;
-  const pinned = (state.players || []).find((p) => p.appId === pinnedId);
-  return focusPrefix() + (pinned
-    ? `Pinned to ${platformInfo(pinned.source)[0]} — waiting for it to play`
-    : 'Pinned to a player that is not running');
-}
-
-/**
- * The strip of presence tiles — one per card on the profile.
- *
- * Kept off the page entirely with one presence: the tile would only repeat
- * the card under it. With two, each tile names what its card shows and the
- * picked one is the card and the lyrics below.
- */
-function paintPresences() {
-  const strip = $('#npPresences');
-  if (!strip) return;
-  if (!multi()) {
-    strip.hidden = true;
-    strip.replaceChildren();
-    return;
-  }
-  strip.hidden = false;
-  strip.style.setProperty('--presences', String(presenceCount()));
-  strip.replaceChildren(...state.slots.slice(0, presenceCount()).map((slot, i) => {
-    const t = slot.track;
-    const [label, glyph] = t ? platformInfo(t.media_source) : ['', ''];
-    const pinnedId = (state.preferredPlayers || [])[i];
-    const pinned = pinnedId ? (state.players || []).find((p) => p.appId === pinnedId) : null;
-    const idle = pinned
-      ? `Pinned to ${platformInfo(pinned.source)[0]} — waiting`
-      : pinnedId ? 'Pinned to a player that is not running' : 'Nothing playing';
-    const tile = el('button', {
-      class: `presence-tile${i === state.focus ? ' focused' : ''}${t ? '' : ' idle'}`,
-      title: t ? `Show presence ${i + 1}` : `Presence ${i + 1} — ${idle}`,
-      onclick: () => setFocus(i),
-    }, [
-      el('img', { class: 'presence-art', alt: '', src: BLANK_ART }),
-      el('div', { class: 'item-body' }, [
-        el('div', { class: 'presence-pos', text: `Presence ${i + 1}${t ? ` · ${glyph} ${label}` : ''}` }),
-        el('div', { class: 'item-title', text: t ? (t.track_name || 'Unknown track') : idle }),
-        el('div', { class: 'item-sub', text: t ? (t.artist_name || '') : '' }),
-      ]),
-      t?.is_playing ? el('span', { class: 'pulse', title: 'Playing' }) : null,
-    ]);
-    if (t) {
-      const img = tile.querySelector('.presence-art');
-      setArt(img, t.album_art_url, t.track_id).catch(() => {});
-    }
-    return tile;
-  }));
-}
 
 /*
  * The glyphs behind the status chips.
@@ -250,31 +45,376 @@ const ICONS = {
   away: '<svg viewBox="0 0 24 24"><path d="M20.5 13.4A8.6 8.6 0 0110.6 3.5a8.6 8.6 0 109.9 9.9z"/></svg>',
 };
 
+/** A few literal glyphs for the buttons; same rule as ICONS. */
+const BTN = {
+  lines: '<svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>',
+  copy: '<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2h2"/></svg>',
+  minus: '<svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg>',
+  plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  flag: '<svg viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>',
+  chevron: '<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>',
+  check: '<svg class="src-check" viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg>',
+};
+
+/** A button whose face is a glyph plus words. */
+function iconBtn(cls, glyph, label, props = {}) {
+  const b = el('button', { type: 'button', class: cls, ...props });
+  b.innerHTML = glyph;
+  if (label) b.append(document.createTextNode(label));
+  return b;
+}
+
+export function render(root) {
+  const preview = discordPreview({ onCustomize: () => goto('settings', { cat: 'presence' }) });
+
+  root.replaceChildren(
+    el('div', { class: 'np-head' }, [
+      el('div', { id: 'npHeadLeft' }),
+      sourcePicker(),
+    ]),
+
+    el('div', { class: 'np-hero' }, [
+      el('section', { class: 'card np-card', 'aria-label': 'Now playing' }, [
+        el('img', { class: 'np-art', id: 'npArt', alt: '', src: BLANK_ART }),
+        el('div', { class: 'np-meta' }, [
+          el('div', { class: 'eyebrow np-source', id: 'npSource', text: 'Waiting for a player…' }),
+          el('div', { class: 'np-title', id: 'npTitle', text: 'Nothing playing' }),
+          el('div', { class: 'np-artist', id: 'npArtist' }),
+          el('div', { class: 'np-badges', id: 'npBadges' }),
+          el('div', { class: 'np-progress', id: 'npProgress' }, [
+            el('div', { class: 'np-bar' }, [el('div', { class: 'np-fill', id: 'npFill' })]),
+            el('div', { class: 'np-times' }, [
+              el('span', { id: 'npElapsed', text: '0:00' }),
+              el('span', { id: 'npTotal', text: '0:00' }),
+            ]),
+          ]),
+        ]),
+      ]),
+      preview.node,
+    ]),
+
+    // The card that takes the leftover height — see .lyr-card in the stylesheet.
+    el('section', { class: 'card lyr-card', 'aria-label': 'Lyrics' }, [
+      el('div', { class: 'lyr-bar' }, [
+        el('div', { class: 'lyr-bar-title' }, [
+          el('h2', { text: 'Lyrics' }),
+          el('span', { class: 'badge', id: 'lyrKind', hidden: true }),
+        ]),
+        el('div', { class: 'lyr-actions', id: 'lyrActions' }, [
+          iconBtn('btn btn-ghost btn-sm', BTN.lines, 'Full lyrics', { title: 'Show every line of this song', onclick: openFullLyrics }),
+          iconBtn('btn btn-ghost btn-sm', BTN.copy, 'Copy .lrc', { title: 'Copy the synced lyrics to the clipboard', onclick: copyLrc }),
+        ]),
+      ]),
+      // The block itself is the affordance: a few lines is a keyhole view of
+      // the song, and clicking anywhere on them opens the rest of it.
+      el('div', {
+        class: 'lyr lyr-clickable',
+        id: 'lyrStage',
+        role: 'button',
+        tabindex: '0',
+        title: 'Show every line of this song',
+        onclick: openFullLyrics,
+        onkeydown: (e) => {
+          // A held key repeats; only the first press means anything here.
+          if (e.repeat) return;
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openFullLyrics(); }
+        },
+      }, [
+        el('div', { class: 'lyr-far', id: 'lyrPrev2' }),
+        el('div', { class: 'lyr-near', id: 'lyrPrev' }),
+        el('div', { class: 'lyr-cur', id: 'lyrCur', text: '—' }),
+        el('div', { class: 'lyr-tr', id: 'lyrTr' }),
+        el('div', { class: 'lyr-near', id: 'lyrNext' }),
+        el('div', { class: 'lyr-far', id: 'lyrNext2' }),
+      ]),
+      el('div', { class: 'lyr-empty', id: 'lyrEmpty', hidden: true }, [
+        el('div', { class: 'lyr-empty-title', id: 'lyrEmptyTitle' }),
+        el('div', { class: 'lyr-empty-desc', id: 'lyrEmptyDesc' }),
+      ]),
+      el('div', { class: 'lyr-ask', id: 'lyrAsk', hidden: true, role: 'group', 'aria-label': 'What is wrong with these lyrics?' }, [
+        el('div', { class: 'lyr-ask-title', text: 'What’s wrong with these lyrics?' }),
+        choice_('The timing is off',
+          'The words are right, they just land early or late. They go to the lyrics editor, where you re-time the lines that drift.',
+          () => reportLyrics('timing')),
+        choice_('The words are wrong',
+          'A different song, nonsense, or this track has none. This version is dropped and never fetched for it again.',
+          () => reportLyrics('wrong')),
+        el('button', { type: 'button', class: 'btn btn-ghost', text: 'Cancel', style: 'align-self:center', onclick: () => toggleAsk(false) }),
+      ]),
+      el('div', { class: 'lyr-foot', id: 'lyrFoot' }, [
+        el('div', { class: 'lyr-offset' }, [
+          el('span', { class: 'lyr-offset-label', text: 'Timing' }),
+          iconBtn('btn btn-sm btn-icon', BTN.minus, '', { 'aria-label': 'Show lines 250 ms earlier', title: 'Earlier', onclick: () => nudgeOffset(-250) }),
+          el('output', { id: 'npOffset', text: '0 ms' }),
+          iconBtn('btn btn-sm btn-icon', BTN.plus, '', { 'aria-label': 'Show lines 250 ms later', title: 'Later', onclick: () => nudgeOffset(250) }),
+          el('button', { type: 'button', class: 'btn btn-ghost btn-sm', id: 'npOffsetReset', text: 'Reset', onclick: () => setOffset(0) }),
+          el('span', { class: 'lyr-offset-hint', id: 'npOffsetHint' }),
+        ]),
+        iconBtn('btn btn-ghost btn-sm', BTN.flag, 'Wrong lyrics?', { id: 'npReport', 'aria-expanded': 'false', onclick: () => toggleAsk() }),
+      ]),
+    ]),
+  );
+
+  // Initial paint from whatever state we already hold.
+  paintHead();
+  paintTrack(state.track);
+  paintProgress(state.progress);
+  paintLyrics(state.lyrics);
+  void refreshOffset();
+  paintTrSlot();
+
+  /*
+   * Local clock for the progress bar.
+   *
+   * The backend reports progress once per poll (1s); this fills the gap so the
+   * bar and the elapsed time move smoothly. It reads the elapsed time from a
+   * timestamp rather than adding a fixed step per tick — setInterval fires late
+   * under load, and a fixed step would quietly lose that time on every tick and
+   * drift away from the player over the length of a track.
+   */
+  let base = state.progress.progress_ms || 0;
+  let baseAt = performance.now();
+
+  const onProgress = (p) => {
+    base = p?.progress_ms || 0;
+    baseAt = performance.now();
+    paintProgress(p);
+  };
+
+  const unsubs = [
+    subscribe('track', (t) => { paintTrack(t); paintLyrics(state.lyrics); }),
+    subscribe('progress', onProgress),
+    subscribe('lyrics', paintLyrics),
+    subscribe('config', () => { void refreshOffset(); paintTrSlot(); paintLyrics(state.lyrics); }),
+    // A new track may carry its own correction, or none.
+    subscribe('track', () => { void refreshOffset(); }),
+    // An ad produces no track, so the idle state has to be redrawn to explain
+    // itself rather than sit there reading "Nothing playing". Being away hides
+    // the presence without the song changing at all, so the chip that says so
+    // cannot wait for the next trackUpdate to appear.
+    subscribe('status', () => { paintHead(); (state.track ? paintBadges(state.track) : paintTrack(null)); }),
+    // The other cards come and go with what is playing; the tabs read them.
+    subscribe('slots', paintHead),
+    subscribe('players', () => { paintHead(); if (menuOpen) paintSourceMenu(); }),
+    subscribe('preferredPlayers', () => { paintHead(); if (!state.track) paintTrack(null); }),
+    // A different presence picked: everything below the header is its now.
+    subscribe('focus', () => { toggleAsk(false); paintHead(); paintTrack(state.track); paintLyrics(state.lyrics); void refreshOffset(); }),
+  ];
+
+  const ticker = setInterval(() => {
+    if (!state.track?.is_playing) return;
+    const duration = state.progress.duration_ms;
+    const elapsed = base + (performance.now() - baseAt);
+    paintProgress({
+      progress_ms: duration > 0 ? Math.min(elapsed, duration) : elapsed,
+      duration_ms: duration,
+    });
+  }, 250);
+
+  return () => {
+    clearInterval(ticker);
+    unsubs.forEach((fn) => fn());
+    preview.dispose();
+    closeSourceMenu();
+  };
+}
+
+/** "Presence 2 · " while several cards are shown, nothing otherwise. */
+function focusPrefix() {
+  return multi() ? `Presence ${state.focus + 1} · ` : '';
+}
+
+/** The pin each presence in play holds, presence 1 falling back to the legacy field. */
+function pins() {
+  const arr = Array.isArray(state.preferredPlayers) ? state.preferredPlayers : [];
+  return Array.from({ length: presenceCount() }, (_, i) => (i === 0 ? arr[0] ?? state.preferredPlayer ?? null : arr[i] ?? null));
+}
+
+/** What the source line says while nothing is playing. */
+function waitingText() {
+  const pinnedId = pins()[state.focus] ?? null;
+  if (!pinnedId) return 'Waiting for a player…';
+  const pinned = (state.players || []).find((p) => p.appId === pinnedId);
+  return pinned
+    ? `Pinned to ${platformInfo(pinned.source)[0]} — waiting for it to play`
+    : 'Pinned to a player that is not running';
+}
+
+/* ── Header: presence tabs and the source picker ─────────────────────────── */
+
+/*
+ * Rebuilt from a key rather than on every call: 'slots' fires on each progress
+ * tick, and replacing the tabs once a second would swallow the click that
+ * happened to land on one.
+ */
+let headKey = '';
+
+function paintHead() {
+  const left = $('#npHeadLeft');
+  if (!left) return;
+  paintSourceButton();
+
+  const count = presenceCount();
+  const tabs = count > 1 ? state.slots.slice(0, count).map((s, i) => {
+    const t = s.track;
+    return { i, sub: t ? platformInfo(t.media_source)[0] : 'Idle', playing: !!t?.is_playing };
+  }) : [];
+  const key = `${state.focus}|${tabs.map((t) => `${t.sub}:${t.playing}`).join(',')}`;
+  if (key === headKey && left.childElementCount) return;
+  headKey = key;
+
+  if (!tabs.length) {
+    left.replaceChildren(el('h1', { text: 'Now playing' }));
+    return;
+  }
+  left.replaceChildren(el('div', { class: 'seg', role: 'tablist', 'aria-label': 'Presences on your profile' },
+    tabs.map((t) => el('button', {
+      type: 'button',
+      class: `seg-btn${t.i === state.focus ? ' active' : ''}`,
+      role: 'tab',
+      'aria-selected': t.i === state.focus ? 'true' : 'false',
+      title: `Show presence ${t.i + 1}`,
+      onclick: () => setFocus(t.i),
+    }, [
+      el('span', { class: `dot${t.playing ? ' on' : ''}` }),
+      `Presence ${t.i + 1}`,
+      el('span', { class: 'seg-sub', text: t.sub }),
+    ]))));
+}
+
+let menuOpen = false;
+let onDocClick = null;
+let onDocKey = null;
+
+function sourcePicker() {
+  const btn = el('button', {
+    type: 'button', class: 'btn src-btn', id: 'srcBtn', 'aria-haspopup': 'menu', 'aria-expanded': 'false',
+    onclick: (e) => { e.stopPropagation(); menuOpen ? closeSourceMenu() : openSourceMenu(); },
+  });
+  return el('div', { class: 'src-wrap' }, [btn, el('div', { class: 'src-menu', id: 'srcMenu', role: 'menu', hidden: true })]);
+}
+
+function paintSourceButton() {
+  const btn = $('#srcBtn');
+  if (!btn) return;
+  const pinnedId = pins()[state.focus] ?? null;
+  const pinned = pinnedId ? (state.players || []).find((p) => p.appId === pinnedId) : null;
+  const label = !pinnedId ? 'Automatic' : pinned ? platformInfo(pinned.source)[0] : 'Pinned player';
+  const key = `${multi() ? state.focus : '-'}|${label}`;
+  if (btn.dataset.key === key) return;
+  btn.dataset.key = key;
+  btn.replaceChildren(el('span', { class: 'src-label', text: multi() ? `Presence ${state.focus + 1} source` : 'Source' }), label);
+  btn.insertAdjacentHTML('beforeend', BTN.chevron);
+  btn.title = 'Choose which player this presence follows';
+  if (menuOpen) paintSourceMenu();
+}
+
+function openSourceMenu() {
+  const menu = $('#srcMenu');
+  if (!menu) return;
+  menuOpen = true;
+  menu.hidden = false;
+  $('#srcBtn')?.setAttribute('aria-expanded', 'true');
+  paintSourceMenu(true);
+  menu.querySelector('.src-opt')?.focus();
+  onDocClick = (e) => { if (!e.target.closest?.('.src-wrap')) closeSourceMenu(); };
+  onDocKey = (e) => { if (e.key === 'Escape') { closeSourceMenu(); $('#srcBtn')?.focus(); } };
+  document.addEventListener('click', onDocClick);
+  document.addEventListener('keydown', onDocKey);
+}
+
+function closeSourceMenu() {
+  menuOpen = false;
+  const menu = $('#srcMenu');
+  if (menu) menu.hidden = true;
+  $('#srcBtn')?.setAttribute('aria-expanded', 'false');
+  if (onDocClick) document.removeEventListener('click', onDocClick);
+  if (onDocKey) document.removeEventListener('keydown', onDocKey);
+  onDocClick = null;
+  onDocKey = null;
+}
+
+/*
+ * Rebuilt only when what it lists changes. The player list is polled every
+ * two seconds, and replacing the rows each time would take the keyboard focus
+ * off whichever one it was on.
+ */
+let menuKey = '';
+
+function paintSourceMenu(force = false) {
+  const menu = $('#srcMenu');
+  if (!menu) return;
+  const p = pins();
+  const mine = p[state.focus] ?? null;
+  // Playing first, then alphabetically — a stable order stops rows from
+  // reshuffling under the cursor on every 2s refresh.
+  const players = [...(state.players || [])].sort((a, b) => (
+    (b.playing ? 1 : 0) - (a.playing ? 1 : 0) || a.source.localeCompare(b.source)
+  ));
+  const key = [state.focus, p.join(','), ...players.map((pl) => [pl.appId, pl.playing, pl.title, pl.artist, pl.isAd].join(':'))].join('|');
+  if (!force && key === menuKey) return;
+  menuKey = key;
+
+  const opt = (active, title, sub, onclick, extra = []) => {
+    const b = el('button', { type: 'button', class: `src-opt${active ? ' active' : ''}`, role: 'menuitemradio', 'aria-checked': active ? 'true' : 'false', onclick }, [
+      el('div', { class: 'item-body' }, [
+        el('div', { class: 'item-title', text: title }),
+        sub ? el('div', { class: 'item-sub', text: sub }) : null,
+      ]),
+      ...extra,
+    ]);
+    b.insertAdjacentHTML('afterbegin', BTN.check);
+    return b;
+  };
+
+  menu.replaceChildren(
+    opt(!mine, 'Automatic', multi()
+      ? `Presence ${state.focus + 1} takes the next thing playing`
+      : 'Follows whatever ranks highest — a music app beats a browser tab', () => pin(null)),
+    ...(players.length ? players.map((pl) => {
+      const [label] = platformInfo(pl.source);
+      const elsewhere = p.indexOf(pl.appId);
+      const sub = [pl.artist, label, elsewhere >= 0 && elsewhere !== state.focus ? `on presence ${elsewhere + 1}` : '', pl.isAd ? 'ad' : '']
+        .filter(Boolean).join(' · ');
+      return opt(mine === pl.appId, pl.title || label, sub,
+        () => pin(mine === pl.appId ? null : pl.appId),
+        [pl.playing ? el('span', { class: 'pulse', title: 'Playing' }) : null]);
+    }) : [el('div', { class: 'empty', style: 'padding:16px', text: 'No media session detected. Start playing something and it appears here.' })]),
+    el('div', { class: 'src-note', text: 'A pinned presence shows that player and nothing else — not another player, and not the browser extension.' }),
+  );
+}
+
+async function pin(appId) {
+  const slot = state.focus;
+  closeSourceMenu();
+  const res = await api.preferPlayer(appId, slot);
+  set({
+    preferredPlayer: res?.preferred ?? null,
+    preferredPlayers: Array.isArray(res?.preferredPlayers) ? res.preferredPlayers : [res?.preferred ?? null],
+  });
+  const which = multi() ? ` (presence ${slot + 1})` : '';
+  toast(appId ? `Pinned to this player${which}` : `Back to automatic${which}`, 'ok');
+}
+
+/* ── Track ───────────────────────────────────────────────────────────────── */
+
 /** True while the presence is being withheld because the user is idle. */
 function hiddenForAway() {
   return state.status?.userAway === true && state.status?.hideWhenAway !== false;
 }
 
-/**
- * A status chip: the glyph on screen, the words in the tooltip.
- *
- * Four of these spelled out in words ran wider than the track title and read
- * like a sentence the page was not making. The label is still there for anyone
- * hovering, and for a screen reader.
- */
+/** A status chip: a glyph and a word. */
 function statusChip(icon, label, accent = false) {
-  return el('span', {
-    class: `badge badge-icon${accent ? ' accent' : ''}`,
-    title: label,
-    role: 'img',
-    'aria-label': label,
-    html: ICONS[icon],
-  });
+  const chip = el('span', { class: `badge${accent ? ' accent' : ''}`, title: label });
+  chip.innerHTML = ICONS[icon];
+  chip.append(document.createTextNode(label));
+  return chip;
 }
 
 function paintTrack(track) {
   const art = $('#npArt');
   const source = $('#npSource');
+  if (!art) return;
 
   if (!track) {
     const ad = state.status?.adPlaying === true;
@@ -282,29 +422,34 @@ function paintTrack(track) {
     $('#npTitle').textContent = ad ? 'Advertisement' : 'Nothing playing';
     $('#npArtist').textContent = ad
       ? 'Your Discord status is hidden until the ad is over.'
-      : away ? 'You are away — your Discord status is hidden until you come back.' : '';
-    $('#npAlbum').textContent = '';
-    // Spread a list rather than passing a conditional: replaceChildren() has no
-    // filtering of its own, so a bare null lands on screen as the text "null".
+      : away ? 'You are away — your Discord status is hidden until you come back.'
+      : 'Play something in Spotify, a browser tab or any media app.';
     $('#npBadges').replaceChildren(
       ...(ad ? [statusChip('ad', 'Spotify ad')] : []),
-      ...(away ? [statusChip('away', 'Away — Discord status hidden')] : []),
+      ...(away ? [statusChip('away', 'Away')] : []),
     );
     art.src = BLANK_ART;
     // A pin is exclusive, so nothing playing may simply mean the pinned player
     // is paused or closed. Saying which one avoids the app looking broken when
     // it is doing exactly what it was told.
-    source.textContent = ad ? `${focusPrefix()}🟢 Spotify` : waitingText();
+    source.replaceChildren(focusPrefix() + (ad ? 'Spotify' : waitingText()));
     paintProgress({ progress_ms: 0, duration_ms: 0 });
     setAmbient(null);
     return;
   }
 
-  const [label, glyph] = platformInfo(track.media_source);
-  source.textContent = `${focusPrefix()}${glyph} ${label}`;
+  const [label] = platformInfo(track.media_source);
+  const verb = track.is_live ? 'Live on' : track.is_playing ? 'Playing on' : 'Paused on';
+  source.replaceChildren(...[
+    track.is_playing ? el('span', { class: 'pulse' }) : null,
+    `${focusPrefix()}${verb} ${label}`,
+  ].filter(Boolean));
   $('#npTitle').textContent = track.track_name || 'Unknown track';
-  $('#npArtist').textContent = track.artist_name || '';
-  $('#npAlbum').textContent = track.album_name || '';
+  $('#npTitle').title = track.track_name || '';
+  const artist = $('#npArtist');
+  artist.replaceChildren(track.artist_name || '');
+  if (track.album_name) artist.append(el('span', { class: 'np-album', text: ` · ${track.album_name}` }));
+  artist.title = [track.artist_name, track.album_name].filter(Boolean).join(' · ');
 
   // Resolving local art needs a round trip, so the tint follows the image.
   setArt(art, track.album_art_url, track.track_id).then(setAmbient, () => setAmbient(null));
@@ -320,28 +465,72 @@ function paintTrack(track) {
  */
 function paintBadges(track) {
   const badges = [];
-  if (hiddenForAway()) badges.push(['away', 'Away — Discord status hidden until you come back', true]);
-  if (track.is_live) badges.push(['live', 'Live broadcast', true]);
+  if (hiddenForAway()) badges.push(['away', 'Away — status hidden', true]);
+  if (track.is_live) badges.push(['live', 'Live', true]);
   if (track.is_local) badges.push(['local', 'Local file', false]);
-  if (track.is_shuffle) badges.push(['shuffle', 'Shuffle is on', false]);
-  if (track.repeat_mode === 'track') badges.push(['repeatOne', 'Repeating this track', false]);
-  else if (track.repeat_mode && track.repeat_mode !== 'off') badges.push(['repeat', 'Repeating the queue', false]);
+  if (track.is_shuffle) badges.push(['shuffle', 'Shuffle', false]);
+  if (track.repeat_mode === 'track') badges.push(['repeatOne', 'Repeat one', false]);
+  else if (track.repeat_mode && track.repeat_mode !== 'off') badges.push(['repeat', 'Repeat', false]);
   if (!track.is_playing) badges.push(['paused', 'Paused', false]);
   $('#npBadges').replaceChildren(...badges.map((b) => statusChip(...b)));
 }
 
 function paintProgress(p) {
+  const box = $('#npProgress');
+  if (!box) return;
   const total = p?.duration_ms || 0;
+  // A stream has no length; the bar would sit empty forever.
+  box.hidden = !!state.track?.is_live || (!state.track && total <= 0);
   const elapsed = Math.min(p?.progress_ms || 0, total || Infinity);
   $('#npFill').style.width = total > 0 ? `${Math.min(100, (elapsed / total) * 100)}%` : '0%';
   $('#npElapsed').textContent = fmtTime(elapsed);
   $('#npTotal').textContent = total > 0 ? fmtTime(total) : '—';
 }
 
+/* ── Lyrics ──────────────────────────────────────────────────────────────── */
+
+/** The text of line `i` of a synced array, '' outside it. */
+const lineAt = (arr, i) => (i >= 0 && i < arr.length ? arr[i]?.text || '' : '');
+
 function paintLyrics(l) {
+  const stage = $('#lyrStage');
+  if (!stage) return;
+  const t = state.track;
+  const kind = $('#lyrKind');
+
+  const synced = Array.isArray(l?.lyrics) && l.lyrics.length > 0;
+  const plain = !synced && Array.isArray(l?.lines) && l.lines.length > 0;
+  kind.hidden = !(synced || plain);
+  kind.textContent = synced ? 'Synced' : plain ? 'Words only' : '';
+
+  // What to say instead of lines, when there are none to show.
+  let empty = null;
+  if (!t) empty = ['Nothing playing', 'Lyrics show here, in time with the song, as soon as something plays.'];
+  else if (t.is_live) empty = ['Live streams have no lyrics', 'This presence shows the stream title and how long it has been live instead.'];
+  else if (state.config[state.focus === 0 ? 'show_lyrics' : `show_lyrics_${state.focus + 1}`] === false) {
+    empty = ['Lyrics are switched off for this presence', 'Turn them back on in Settings → Discord presence.'];
+  }
+
+  stage.hidden = !!empty;
+  $('#lyrEmpty').hidden = !empty;
+  $('#lyrFoot').hidden = !!empty;
+  $('#lyrActions').hidden = !!empty;
+  if (empty) {
+    toggleAsk(false);
+    $('#lyrEmptyTitle').textContent = empty[0];
+    $('#lyrEmptyDesc').textContent = empty[1];
+    return;
+  }
+
+  // The whole song rides along with every tick, so the lines either side of
+  // the three the engine names come straight off it.
+  const idx = Number.isInteger(l?.currentIndex) ? l.currentIndex : -1;
+  const arr = synced ? l.lyrics : [];
+  $('#lyrPrev2').textContent = idx >= 0 ? lineAt(arr, idx - 2) : '';
   $('#lyrPrev').textContent = l?.prev || '';
-  $('#lyrCur').textContent = l?.current || (state.track ? '♪' : '—');
+  $('#lyrCur').textContent = l?.current || (t ? '♪' : '—');
   $('#lyrNext').textContent = l?.next || '';
+  $('#lyrNext2').textContent = idx >= 0 ? lineAt(arr, idx + 2) : '';
   $('#lyrTr').textContent = l?.translation || '';
 }
 
@@ -350,34 +539,45 @@ function paintLyrics(l) {
  *
  * With translations on it stays in the layout even while a line is untranslated,
  * so the lines do not jump every time one arrives. With them off it goes away
- * entirely — an empty slot there spaces the three lines unevenly, leaving a hole
- * under the current one.
+ * entirely — an empty slot there spaces the lines unevenly.
  */
 function paintTrSlot() {
-  $('.lyr')?.classList.toggle('with-tr', state.config.translate_lyrics === true);
+  $('#lyrStage')?.classList.toggle('with-tr', state.config.translate_lyrics === true);
 }
+
+function toggleAsk(open) {
+  const ask = $('#lyrAsk');
+  if (!ask) return;
+  const show = open ?? ask.hidden;
+  if (show && !state.track) return toast('Nothing is playing', 'err');
+  ask.hidden = !show;
+  $('#npReport')?.setAttribute('aria-expanded', show ? 'true' : 'false');
+  if (show) ask.querySelector('.choice')?.focus();
+}
+
+/* ── Timing offset ───────────────────────────────────────────────────────── */
 
 /**
  * The offset in force, and whether it belongs to this track or is the default.
  *
- * Not read from config any more: a correction made here is stored against the
- * playing track, because the drift belongs to the recording. The Settings
- * control still moves the default, which is what tracks nobody has corrected
- * run under.
+ * Not read from config: a correction made here is stored against the playing
+ * track, because the drift belongs to the recording. The Settings control still
+ * moves the default, which is what tracks nobody has corrected run under.
  */
 let offsetState = { offsetMs: 0, perTrack: false };
 
 function paintOffset() {
-  const el = $('#npOffset');
-  if (!el) return;
+  const out = $('#npOffset');
+  if (!out) return;
   const ms = offsetState.offsetMs;
-  el.textContent = `${ms > 0 ? '+' : ''}${ms} ms`;
+  out.textContent = `${ms > 0 ? '+' : ''}${ms} ms`;
   // A corrected track is worth marking: otherwise the number looks like a
   // global setting that has mysteriously changed on its own.
-  el.title = offsetState.perTrack
-    ? 'Saved for this track. Reset puts it back on the default from Settings.'
-    : 'The default from Settings. Adjusting it here saves it for this track only.';
-  el.classList.toggle('per-track', offsetState.perTrack && ms !== 0);
+  out.classList.toggle('per-track', offsetState.perTrack && ms !== 0);
+  $('#npOffsetReset').hidden = ms === 0;
+  $('#npOffsetHint').textContent = offsetState.perTrack && ms !== 0
+    ? 'Saved for this track'
+    : 'Default from Settings';
 }
 
 /** Ask what is in force. Called on load and whenever the track changes. */
@@ -416,10 +616,10 @@ async function copyLrc() {
 
 /* ── Full lyrics ───────────────────────────────────────────────────────────
  *
- * The card shows three lines because that is what fits beside a cover; the rest
- * of the song lives in a panel one click away. Nothing extra is fetched to fill
- * it: every lyric tick already carries the whole line array and the index the
- * engine is on, so the panel follows the song off the same events the card does.
+ * The card shows a few lines; the rest of the song lives in a panel one click
+ * away. Nothing extra is fetched to fill it: every lyric tick already carries
+ * the whole line array and the index the engine is on, so the panel follows
+ * the song off the same events the card does.
  */
 
 /**
@@ -542,8 +742,7 @@ async function showFullLyrics() {
   ]));
 
   // The list has no size until it is in the document, so it opens on the line
-  // the song is on only if the first centring waits for that. Anything measured
-  // before the mount is zero, and the panel would open at the top of the song.
+  // the song is on only if the first centring waits for that.
   if (rows[cur]) centre(rows[cur], 'auto');
 
   await closed;
@@ -641,8 +840,7 @@ async function showFullLyrics() {
    *
    * The scroll is aimed at the list rather than the row — scrollIntoView() moves
    * every scrollable ancestor, which would drag the modal and the page behind it
-   * around as well. The measurement goes through rects rather than offsetTop,
-   * which is relative to whichever ancestor happens to be positioned.
+   * around as well.
    */
   function centre(node, behavior) {
     const rect = node.getBoundingClientRect();
@@ -666,8 +864,7 @@ async function showFullLyrics() {
    * Fill in the translations, when the user has them switched on.
    *
    * The backend warms the whole song's translations as soon as a track loads,
-   * so this is usually a cache read that lands in one round trip. A miss just
-   * leaves the lines untranslated — there is nothing to report.
+   * so this is usually a cache read that lands in one round trip.
    */
   async function translateAll(lines) {
     if (state.config.translate_lyrics !== true) return;
@@ -691,46 +888,21 @@ async function showFullLyrics() {
   }
 }
 
-/**
- * Ask what is actually wrong, then act on the answer.
+/* ── Wrong lyrics ──────────────────────────────────────────────────────────
  *
- * The two cases want opposite things. Wrong words: drop them and never fetch
+ * The two answers want opposite things. Wrong words: drop them and never fetch
  * them again, done. Wrong timing: the words are worth keeping, so they are
- * carried into the import form where the sync studio can re-tap the lines that
+ * carried into the editor where the sync studio can re-tap the lines that
  * drift. Both flag the version currently loaded, which is what stops the app
  * from fetching it back.
  */
-async function reportLyrics() {
+async function reportLyrics(choice) {
   const track = state.track;
+  toggleAsk(false);
   if (!track) return toast('Nothing is playing', 'err');
 
-  const choice = await modal((close) => el('div', {}, [
-    el('h2', { text: 'What is wrong with these lyrics?' }),
-    el('div', { class: 'muted', style: 'margin:10px 0 18px' },
-      `${track.track_name || 'Unknown track'} — ${track.artist_name || ''}`),
-
-    choice_(
-      'The timing is off',
-      'The words are right, they just land early or late. They are carried over to the import '
-      + 'page, where you can re-time them line by line against the song and save your own copy.',
-      () => close('timing'),
-    ),
-    choice_(
-      'The words are wrong',
-      'A different song, nonsense — or this track has no lyrics at all. '
-      + 'This version is dropped and never fetched for this track again.',
-      () => close('wrong'),
-    ),
-
-    el('div', { style: 'display:flex;justify-content:flex-end;margin-top:16px' }, [
-      el('button', { class: 'btn', text: 'Cancel', onclick: () => close() }),
-    ]),
-  ]));
-
-  if (!choice) return;
-
   // Read the lines out first: flagging drops them from the cache, so asking
-  // afterwards would hand the import form an empty box.
+  // afterwards would hand the editor an empty box.
   const lrc = choice === 'timing' ? await api.getLrc(state.focus).catch(() => null) : null;
 
   const flagged = (await api.flagLyrics(state.focus))?.ok === true;
@@ -757,9 +929,9 @@ async function reportLyrics() {
     : 'No synced lyrics to carry over — the track details are filled in', lrc ? 'ok' : 'err');
 }
 
-/** A big clickable answer in the report dialog. */
+/** A big clickable answer. */
 function choice_(title, desc, onclick) {
-  return el('button', { class: 'choice', onclick }, [
+  return el('button', { type: 'button', class: 'choice', onclick }, [
     el('div', { class: 'choice-title', text: title }),
     el('div', { class: 'choice-desc', text: desc }),
   ]);
