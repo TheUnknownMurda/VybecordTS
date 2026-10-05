@@ -28,7 +28,6 @@ export const state = {
   progress: { progress_ms: 0, duration_ms: 0 },
   slots: Array.from({ length: MAX_SLOTS }, emptySlot),
   focus: 0,
-  stats: { topTracks: [], topArtists: [] },
   players: [],
   preferredPlayer: null,
   preferredPlayers: new Array(MAX_SLOTS).fill(null),
@@ -132,7 +131,6 @@ export async function init() {
   set({
     config: snap.config || {},
     slots,
-    stats: snap.stats || { topTracks: [], topArtists: [] },
     players: snap.players || [],
     preferredPlayer: snap.preferredPlayer,
     preferredPlayers: snap.preferredPlayers || [snap.preferredPlayer ?? null],
@@ -168,7 +166,6 @@ export async function init() {
   api.on('lyricsUpdate', (lyrics, slot) => updateSlot(slot, { lyrics }));
   api.on('plainLyricsUpdate', (lyrics, slot) => updateSlot(slot, { lyrics }));
   api.on('activityUpdate', (activity, slot) => updateSlot(slot, { activity }));
-  api.on('statsUpdate', (stats) => set({ stats }));
   api.on('configUpdate', (config) => set({ config }));
   api.on('statusUpdate', (status) => {
     set({ status: { ...state.status, ...status } });

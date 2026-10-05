@@ -70,7 +70,7 @@ const THUMB_PATH = path.join(process.env.TEMP || os.tmpdir(), 'vybecord_thumb.jp
 /** Backend events forwarded verbatim to the renderer. */
 const FORWARDED_EVENTS = [
   'trackUpdate', 'progressUpdate', 'lyricsUpdate', 'plainLyricsUpdate', 'activityUpdate',
-  'statusUpdate', 'configUpdate', 'statsUpdate',
+  'statusUpdate', 'configUpdate',
 ] as const;
 
 // `updateStatus` is pushed by the updater itself rather than the backend, so it
@@ -165,7 +165,6 @@ export function registerIpc(
     track: backend.getCurrentTrack(),
     lyrics: backend.getCurrentLyricsState(),
     slots: backend.getSlotStates(),
-    stats: backend.getSessionStats(),
     players: backend.listPlayers(),
     preferredPlayer: backend.getPreferredPlayer(),
     preferredPlayers: backend.getPreferredPlayers(),
@@ -285,8 +284,7 @@ export function registerIpc(
     return { ok: true, preferred: backend.getPreferredPlayer(), preferredPlayers: backend.getPreferredPlayers() };
   });
 
-  // ── Stats & history ──
-  handle('stats:session', () => backend.getSessionStats());
+  // ── Listening history ──
   // `anchor` pins the listing to the log as it stood when paging began, so a
   // track finishing mid-scroll cannot repeat a row at the seam between pages.
   handle('history:list', (limit = 50, offset = 0, anchor?: number) =>

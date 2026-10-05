@@ -11,7 +11,7 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 /** Backend events the renderer may subscribe to. */
 const EVENTS = [
   'trackUpdate', 'progressUpdate', 'lyricsUpdate', 'plainLyricsUpdate', 'activityUpdate',
-  'statusUpdate', 'configUpdate', 'statsUpdate', 'fatal', 'updateStatus',
+  'statusUpdate', 'configUpdate', 'fatal', 'updateStatus',
 ] as const;
 type BackendEvent = typeof EVENTS[number];
 
@@ -81,8 +81,7 @@ const api = {
   /** Pin a player to a presence (0 or 1); null puts that presence back on automatic. */
   preferPlayer: (appId: string | null, slot = 0) => invoke('players:prefer', appId, slot),
 
-  // ── Stats & history ──
-  getStats: () => invoke('stats:session'),
+  // ── Listening history ──
   getHistory: (limit?: number, offset?: number, anchor?: number) => invoke('history:list', limit, offset, anchor),
   getWrapped: (days?: number) => invoke('history:wrapped', days),
 

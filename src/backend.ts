@@ -58,7 +58,7 @@ import { initHistory, historyTrackStart, historyTrackPause, historyTrackResume, 
 import { releaseJapaneseTokenizer } from './core/romanize.js';
 import { initLyricsOffsets, getTrackOffset, setTrackOffset } from './core/lyrics-offsets.js';
 import { translateBatch, translateText, getCachedTranslation, isTranslationWorthFetching } from './core/translate.js';
-import { asNonNegativeInt, asRecord, asText, evictLeast, evictOldest, evictUntil } from './core/utils.js';
+import { asNonNegativeInt, asRecord, asText, evictOldest, evictUntil } from './core/utils.js';
 import type { TrackData, LyricLine, VybecordConfig, DiscordActivity } from './core/types.js';
 
 const log = createLogger('Backend');
@@ -313,11 +313,6 @@ export class VybecordBackend extends EventEmitter {
   private lastAdState = false;  // so the ad status is pushed on change, not every poll
   private configDir: string;
 
-  // Session stats (reset on app restart)
-  private sessionTrackPlays = new Map<string, { name: string; artist: string; art: string; count: number }>();
-  private sessionArtistPlays = new Map<string, { name: string; art: string; artist_art: string; count: number }>();
-  private cachedStats: { topTracks: any[]; topArtists: any[] } | null = null;
-  private statsDirty = true;
   private _lastCcLang: string | undefined;
   /** Album of the last play accepted as real — lets recordPlay() tell an
    *  interlude from an advertisement, the same way the media source does. */
@@ -1003,15 +998,15 @@ export class VybecordBackend extends EventEmitter {
     b.index = i;
     log.info(`[SLOTS] ${a.track ? `"${a.track.track_name}"` : '(empty)'} → P${j + 1}, ${b.track ? `"${b.track.track_name}"` : '(empty)'} → P${i + 1}`);
 
-    // Stats follow presence 1. The card leaving it stops counting; the one
-    // arriving is a listen continued rather than a new play.
+    // The history and Last.fm follow presence 1. The card leaving it stops
+    // counting; the one arriving is a listen continued rather than a new play.
     const nowPrimary = this.slots[0];
     if (wasPrimary !== nowPrimary) {
       if (wasPrimary.track) {
         scrobblePause();
         historyTrackPause();
       }
-      if (nowPrimary.track) this.recordPlay(nowPrimary.track, false);
+      if (nowPrimary.track) this.recordPlay(nowPrimary.track);
     }
 
     for (const s of [a, b]) {
@@ -1163,23 +1158,6 @@ export class VybecordBackend extends EventEmitter {
     }
 
     this.syncTrackProgress(slot, track);
-
-    /*
-     * The artist image arrives late when it arrives at all — the extension
-     * fetches it after its first push — so the stats row created at track start
-     * has none. Backfill it rather than leaving that artist blank for the rest
-     * of the session. Only Spicetify supplies one today; the test costs nothing
-     * for the sources that never will.
-     */
-    if (track.artist_art_url) {
-      const primaryArtist = track.artist_name.split(ARTIST_SPLIT_RE)[0].trim().toLowerCase();
-      const entry = this.sessionArtistPlays.get(primaryArtist);
-      if (entry && !entry.artist_art) {
-        entry.artist_art = track.artist_art_url;
-        this.statsDirty = true;
-        this.emit('statsUpdate', this.getSessionStats());
-      }
-    }
   }
 
   /**
@@ -2280,22 +2258,6 @@ export class VybecordBackend extends EventEmitter {
     }).join('\n');
   }
 
-  /** Get top 3 tracks and top 3 artists for the current session. Cached until next play. */
-  getSessionStats() {
-    if (!this.statsDirty && this.cachedStats) return this.cachedStats;
-    const topTracks = [...this.sessionTrackPlays.values()]
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 3)
-      .map(t => ({ name: t.name, artist: t.artist, art: t.art, plays: t.count }));
-    const topArtists = [...this.sessionArtistPlays.values()]
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 3)
-      .map(a => ({ name: a.name, art: a.art, artist_art: a.artist_art, plays: a.count }));
-    this.cachedStats = { topTracks, topArtists };
-    this.statsDirty = false;
-    return this.cachedStats;
-  }
-
   /** Get a page of the persistent listening history (most recent first). */
   getListeningHistory(limit = 50, offset = 0, anchor?: number) { return getHistoryPage(limit, offset, anchor); }
   getListeningWrapped(days?: number) { return getWrappedStats(days); }
@@ -2600,13 +2562,12 @@ export class VybecordBackend extends EventEmitter {
   }
 
   /**
-   * Record a track play for session stats + scrobbling.
+   * Record a track play in the listening history and on Last.fm.
    *
-   * @param countPlay  false when the track is not starting but returning to
-   *   presence 1 after being demoted — the listen continues in the history
-   *   and on Last.fm, but the session's play count already has it.
+   * Also called for a track returning to presence 1 after being demoted: the
+   * history module sees the open entry and continues that listen.
    */
-  private recordPlay(t: TrackData, countPlay = true): void {
+  private recordPlay(t: TrackData): void {
     // An advertisement is not a play. The presence filter is a user preference,
     // so it cannot be relied on here: with it off, every ad break used to land
     // in the history as a track by a brand. The heuristic is the same one —
@@ -2656,49 +2617,6 @@ export class VybecordBackend extends EventEmitter {
     if (!isStream) {
       scrobbleTrackStart(t.track_name, t.artist_name, t.album_name, t.duration_ms);
     }
-
-    // The session counters already have this play.
-    if (resumed || !countPlay) return;
-
-    if (isStream) return;
-
-    this.statsDirty = true;
-    // Extract primary artist once (used for both track and artist stats)
-    const artistDisplay = t.artist_name.split(ARTIST_SPLIT_RE)[0].trim();
-    const artistKey = artistDisplay.toLowerCase();
-
-    // Track plays — keyed by normalized name+primary artist (stable before enrichment)
-    const trackKey = `${t.track_name.toLowerCase()}|${artistKey}`;
-    const existing = this.sessionTrackPlays.get(trackKey);
-    if (existing) {
-      existing.count++;
-      if (t.album_art_url) existing.art = t.album_art_url;
-    } else {
-      this.sessionTrackPlays.set(trackKey, {
-        name: t.track_name,
-        artist: t.artist_name,
-        art: t.album_art_url || '',
-        count: 1,
-      });
-    }
-    const existingArtist = this.sessionArtistPlays.get(artistKey);
-    if (existingArtist) {
-      existingArtist.count++;
-      // Prefer the longer/richer name variant
-      if (artistDisplay.length > existingArtist.name.length) existingArtist.name = artistDisplay;
-      if (t.album_art_url) existingArtist.art = t.album_art_url;
-      if (t.artist_art_url) existingArtist.artist_art = t.artist_art_url;
-    } else {
-      this.sessionArtistPlays.set(artistKey, { name: artistDisplay, art: t.album_art_url || '', artist_art: t.artist_art_url || '', count: 1 });
-    }
-
-    // Bounded by plays, not by arrival. These two feed the "top 3" lists, and
-    // evicting by insertion order dropped the session's first track — which is
-    // disproportionately the one on repeat.
-    evictLeast(this.sessionTrackPlays, 500, t => t.count);
-    evictLeast(this.sessionArtistPlays, 500, a => a.count);
-
-    this.emit('statsUpdate', this.getSessionStats());
   }
 
   // ── Away (Discord auto-idle parity) ──
@@ -2924,22 +2842,11 @@ export class VybecordBackend extends EventEmitter {
   }
 
   /**
-   * Point the track's stats and history rows at a real cover URL, and tell
-   * the window so it repaints without waiting for the next track.
+   * Point the track's history row at a real cover URL, and tell the window so
+   * it repaints without waiting for the next track.
    */
   private backfillArt(slot: PresenceSlot, t: TrackData, url: string): void {
     if (slot.primary) historyUpdateArt(url);
-
-    // Same keys recordPlay() derives, so the rows it created are the rows updated.
-    const artistDisplay = t.artist_name.split(ARTIST_SPLIT_RE)[0].trim();
-    const artistKey = artistDisplay.toLowerCase();
-    const trackEntry = this.sessionTrackPlays.get(`${t.track_name.toLowerCase()}|${artistKey}`);
-    if (trackEntry) trackEntry.art = url;
-    const artistEntry = this.sessionArtistPlays.get(artistKey);
-    if (artistEntry) artistEntry.art = url;
-
-    this.statsDirty = true;
-    this.emit('statsUpdate', this.getSessionStats());
     if (slot.track) this.emit('trackUpdate', slot.track, slot.index);
   }
 

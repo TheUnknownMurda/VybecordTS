@@ -480,7 +480,7 @@ curl.exe -i -X POST http://127.0.0.1:8888/api/youtube -H "Content-Type: applicat
 
 ### Renderer bridge
 
-The window has no Node access and no network access (its CSP sets `connect-src 'none'`). Its whole API is the `window.vybecord` object exposed by [`electron/preload.ts`](electron/preload.ts). Every method maps to one `ipcMain.handle` channel in [`electron/ipc.ts`](electron/ipc.ts). Backend events (`trackUpdate`, `progressUpdate`, `lyricsUpdate`, `plainLyricsUpdate`, `statusUpdate`, `configUpdate`, `statsUpdate`, `updateStatus`, `fatal`) arrive through `vybecord.on(event, cb)`, which returns an unsubscribe function. Track, progress and lyrics events include the index of the presence they belong to.
+The window has no Node access and no network access (its CSP sets `connect-src 'none'`). Its whole API is the `window.vybecord` object exposed by [`electron/preload.ts`](electron/preload.ts). Every method maps to one `ipcMain.handle` channel in [`electron/ipc.ts`](electron/ipc.ts). Backend events (`trackUpdate`, `progressUpdate`, `lyricsUpdate`, `plainLyricsUpdate`, `activityUpdate`, `statusUpdate`, `configUpdate`, `updateStatus`, `fatal`) arrive through `vybecord.on(event, cb)`, which returns an unsubscribe function. Track, progress, lyrics and activity events include the index of the presence they belong to.
 
 ### Cover store
 
