@@ -152,7 +152,10 @@ export async function init() {
    * the lyrics it already has.
    */
   api.on('trackUpdate', (track, slot) => {
-    const prev = state.slots[slot === 1 ? 1 : 0]?.track;
+    // Compared against its own presence. This read `slot === 1 ? 1 : 0` from
+    // when there were two, so presences 3 to 5 measured every track against
+    // presence 1's and kept or dropped their lyrics on the strength of it.
+    const prev = state.slots[slotIndex(slot)]?.track;
     const same = (track?.track_id || '') === (prev?.track_id || '');
     // A different track means the bar belongs to the new one -- at its own
     // position, or empty when playback simply stopped. Same reasoning as the
