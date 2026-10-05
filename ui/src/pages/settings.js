@@ -330,7 +330,7 @@ function presenceCat(body, { search }) {
             cfg(key, ''), (v) => put(key, v.trim()), { placeholder: 'Optional' }))
         : []),
     ], multi
-      ? 'The highest-ranked thing playing goes on presence 1, the next on presence 2, and so on. Pin one to a player with the Source menu on Now playing. Stats, history and Last.fm follow presence 1.'
+      ? 'The highest-ranked thing playing goes on presence 1, the next on presence 2, and so on. Pin one to a player with the Source menu on Now playing. The listening history and Last.fm follow presence 1.'
       : null),
   ].filter(Boolean));
 

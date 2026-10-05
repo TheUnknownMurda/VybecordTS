@@ -53,6 +53,6 @@ There is no automated test suite and no CI for the app.
 
 Navigation went from 8 pages to 5: Now, Library, Activity, Settings, Welcome.
 `players`, `account`, `history` and `stats` were folded into the others. The Discord card
-preview (`ui/src/discord-card.js`) is fed by the `activityUpdate` event. Open items:
-`stats:history` IPC has no caller left; the guides still describe Players/History pages;
-not yet tested in the running app.
+preview (`ui/src/discord-card.js`) is fed by the `activityUpdate` event. The old Stats
+backend (`stats:history`, `statsUpdate`, the session top 3) is removed; Activity reads the
+listening history only. Open items: not yet tested page by page in the running app.
