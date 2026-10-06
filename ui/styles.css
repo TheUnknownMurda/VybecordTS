@@ -829,6 +829,10 @@ label.field > span {
 .page[data-page='now'] .card {
   margin-bottom: 0;
 }
+/* The preview keeps its height; the lyrics take whatever is left. */
+.page[data-page='now'] > .dc-card {
+  flex: none;
+}
 
 .np-head {
   display: flex;
@@ -843,80 +847,34 @@ label.field > span {
   flex-direction: column;
 }
 
-.np-hero {
-  /*
-   * The track and its Discord card stacked, each the full width of the page.
-   * Side by side, the card got a third of the width: at the default window its
-   * text had about 190px, so a cover line or a stream title ran to six or
-   * seven lines and the card looked broken next to a half-empty track card.
-   */
+/* Under the heading: the player and what the track is doing, never its title. */
+.np-status {
   display: flex;
-  flex-direction: column;
-  gap: 16px;
-  flex: none;
-}
-.np-card {
-  min-width: 0;
-  display: flex;
-  gap: 22px;
+  flex-wrap: wrap;
   align-items: center;
-  padding: 18px 22px;
+  gap: 6px 8px;
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--text-muted);
 }
-.np-art {
-  width: 120px;
-  height: 120px;
-  flex-shrink: 0;
-  border-radius: 14px;
-  background: var(--bg-surface);
-  object-fit: cover;
-  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.4);
+.np-status:empty {
+  display: none;
 }
-.np-meta {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.np-source {
-  display: flex;
+.np-status-text {
+  display: inline-flex;
   align-items: center;
   gap: 8px;
 }
-.np-title {
-  font-size: 26px;
-  font-weight: 700;
-  color: var(--text-primary);
-  letter-spacing: -0.02em;
-  line-height: 1.15;
-  word-break: break-word;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+.np-status .badge {
+  min-height: 22px;
+  padding: 0 8px;
+  font-size: 11.5px;
 }
-/* Two lines at most: a stream's "artist" is its title, and streamers write
-   paragraphs there. The whole of it is in the tooltip. */
-.np-artist {
-  font-size: 15px;
-  color: var(--text-secondary);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+.np-status .badge svg {
+  width: 13px;
+  height: 13px;
 }
-.np-album {
-  color: var(--text-muted);
-}
-.np-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
-}
-.np-badges:empty {
-  display: none;
-}
+
 .badge {
   display: inline-flex;
   align-items: center;
@@ -946,9 +904,6 @@ label.field > span {
   stroke-linejoin: round;
 }
 
-.np-progress {
-  margin-top: 12px;
-}
 .np-bar {
   height: 6px;
   border-radius: 99px;
@@ -961,14 +916,6 @@ label.field > span {
   border-radius: 99px;
   background: var(--accent-hex);
   transition: width 0.25s linear;
-}
-.np-times {
-  display: flex;
-  justify-content: space-between;
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-top: 6px;
-  font-variant-numeric: tabular-nums;
 }
 .live-tag {
   padding: 3px 8px;
@@ -1457,19 +1404,8 @@ html[data-theme='light'] .lyr-clickable:hover {
   .page[data-page='now'].active {
     gap: 12px;
   }
-  .np-art {
-    width: 84px;
-    height: 84px;
-  }
-  .np-title {
-    font-size: 22px;
-  }
-  .np-card,
   .dc-card {
     padding: 14px 16px;
-  }
-  .np-progress {
-    margin-top: 6px;
   }
   .dc {
     min-height: 0;
@@ -1490,8 +1426,7 @@ html[data-theme='light'] .lyr-clickable:hover {
   }
 }
 @media (max-height: 640px) {
-  .dc-time-slot,
-  .np-badges {
+  .dc-time-slot {
     display: none;
   }
 }

@@ -39,7 +39,7 @@ Tu peux changer ça dans **Settings → App & window → Close to tray**.
 
 | Page | À quoi ça sert |
 | --- | --- |
-| **Now playing** | Le titre en cours, un aperçu de ta carte Discord telle que tes amis la voient, et les paroles qui défilent (clique dessus pour voir tout le morceau, ou sur **Big lyrics** pour les afficher en grand dans toute la fenêtre, comme Spotify ; **Échap** ferme). Le menu **Source** choisit le lecteur suivi. |
+| **Now playing** | Un aperçu de ta carte Discord telle que tes amis la voient, avec le titre en cours, et les paroles qui défilent (clique dessus pour voir tout le morceau, ou sur **Big lyrics** pour les afficher en grand dans toute la fenêtre, comme Spotify ; **Échap** ferme). Le menu **Source** choisit le lecteur suivi. |
 | **Lyrics** | Ta bibliothèque de paroles perso : **My lyrics**, **Blocked** (les paroles signalées comme fausses) et le dump **LRCLIB** hors ligne. **Add lyrics** sert à importer ou écrire de nouvelles paroles. |
 | **Activity** | Ce que tu as écouté sur 7 jours, 30 jours, 12 mois ou depuis toujours : temps d'écoute, graphique, top artistes et titres, et tes dernières écoutes (**See all** ouvre tout l'historique). |
 | **Settings** | Discord presence, Lyrics & translation, Detection, Integrations (extension navigateur, Spotify, Last.fm), App & window et About. La barre de recherche trouve n'importe quel réglage. |

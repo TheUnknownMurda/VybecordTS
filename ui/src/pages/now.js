@@ -1,8 +1,8 @@
 /**
- * Now playing — the track, what Discord shows for it, and the live lyrics.
+ * Now playing — what Discord shows for the track, and the live lyrics.
  *
- * Three blocks, top to bottom, in the order people look for them: what is
- * playing, what their friends see, and the words. The player picker that used
+ * Two blocks, top to bottom: what their friends see, which names the track,
+ * and the words. The player picker that used
  * to be a page of its own is the Source menu in the header — pinning is a
  * decision about the presence on screen, so it lives next to it.
  */
@@ -38,10 +38,6 @@ const ICONS = {
     + '<path d="M15 4l3 3-3 3"/><path d="M9 20l-3-3 3-3"/></svg>',
   repeatOne: '<svg viewBox="0 0 24 24"><path d="M7 7h10a3 3 0 013 3v1"/><path d="M17 17H7a3 3 0 01-3-3v-1"/>'
     + '<path d="M15 4l3 3-3 3"/><path d="M9 20l-3-3 3-3"/><path d="M11.3 10.6l1.4-1V15"/></svg>',
-  paused: '<svg viewBox="0 0 24 24"><rect x="7" y="5" width="3.4" height="14" rx="1.2"/>'
-    + '<rect x="13.6" y="5" width="3.4" height="14" rx="1.2"/></svg>',
-  ad: '<svg viewBox="0 0 24 24"><path d="M4 10.5v3a1 1 0 001 1h2.2l6.8 4V5.5l-6.8 4H5a1 1 0 00-1 1z"/>'
-    + '<path d="M17.5 9.2a4 4 0 010 5.6"/><path d="M20 6.6a7.6 7.6 0 010 10.8"/></svg>',
   away: '<svg viewBox="0 0 24 24"><path d="M20.5 13.4A8.6 8.6 0 0110.6 3.5a8.6 8.6 0 109.9 9.9z"/></svg>',
 };
 
@@ -71,29 +67,20 @@ export function render(root) {
 
   root.replaceChildren(
     el('div', { class: 'np-head' }, [
-      el('div', { id: 'npHeadLeft' }),
+      el('div', { class: 'np-head-title' }, [
+        el('div', { id: 'npHeadLeft' }),
+        el('div', { class: 'np-status', id: 'npStatus', 'aria-live': 'polite' }),
+      ]),
       sourcePicker(),
     ]),
 
-    el('div', { class: 'np-hero' }, [
-      el('section', { class: 'card np-card', 'aria-label': 'Now playing' }, [
-        el('img', { class: 'np-art', id: 'npArt', alt: '', src: BLANK_ART }),
-        el('div', { class: 'np-meta' }, [
-          el('div', { class: 'eyebrow np-source', id: 'npSource', text: 'Waiting for a player…' }),
-          el('div', { class: 'np-title', id: 'npTitle', text: 'Nothing playing' }),
-          el('div', { class: 'np-artist', id: 'npArtist' }),
-          el('div', { class: 'np-badges', id: 'npBadges' }),
-          el('div', { class: 'np-progress', id: 'npProgress' }, [
-            el('div', { class: 'np-bar' }, [el('div', { class: 'np-fill', id: 'npFill' })]),
-            el('div', { class: 'np-times' }, [
-              el('span', { id: 'npElapsed', text: '0:00' }),
-              el('span', { id: 'npTotal', text: '0:00' }),
-            ]),
-          ]),
-        ]),
-      ]),
-      preview.node,
-    ]),
+    /*
+     * The Discord preview is the track: it already shows the title, artist,
+     * cover and clock, so a track card above it said everything twice and
+     * pushed the lyrics down. What it cannot show — which player, paused,
+     * shuffle — is the status line under the heading.
+     */
+    preview.node,
 
     // The card that takes the leftover height — see .lyr-card in the stylesheet.
     el('section', { class: 'card lyr-card', id: 'lyrCard', 'aria-label': 'Lyrics' }, [
@@ -161,41 +148,21 @@ export function render(root) {
   // Initial paint from whatever state we already hold.
   paintHead();
   paintTrack(state.track);
-  paintProgress(state.progress);
   paintLyrics(state.lyrics);
   void refreshOffset();
   paintTrSlot();
 
-  /*
-   * Local clock for the progress bar.
-   *
-   * The backend reports progress once per poll (1s); this fills the gap so the
-   * bar and the elapsed time move smoothly. It reads the elapsed time from a
-   * timestamp rather than adding a fixed step per tick — setInterval fires late
-   * under load, and a fixed step would quietly lose that time on every tick and
-   * drift away from the player over the length of a track.
-   */
-  let base = state.progress.progress_ms || 0;
-  let baseAt = performance.now();
-
-  const onProgress = (p) => {
-    base = p?.progress_ms || 0;
-    baseAt = performance.now();
-    paintProgress(p);
-  };
-
   const unsubs = [
     subscribe('track', (t) => { paintTrack(t); paintLyrics(state.lyrics); }),
-    subscribe('progress', onProgress),
     subscribe('lyrics', paintLyrics),
     subscribe('config', () => { void refreshOffset(); paintTrSlot(); paintLyrics(state.lyrics); }),
     // A new track may carry its own correction, or none.
     subscribe('track', () => { void refreshOffset(); }),
-    // An ad produces no track, so the idle state has to be redrawn to explain
-    // itself rather than sit there reading "Nothing playing". Being away hides
+    // An ad produces no track, so the status line has to be redrawn to explain
+    // it rather than sit there reading "Waiting for a player". Being away hides
     // the presence without the song changing at all, so the chip that says so
     // cannot wait for the next trackUpdate to appear.
-    subscribe('status', () => { paintHead(); (state.track ? paintBadges(state.track) : paintTrack(null)); }),
+    subscribe('status', () => { paintHead(); paintTrack(state.track); }),
     // The other cards come and go with what is playing; the tabs read them.
     subscribe('slots', paintHead),
     subscribe('players', () => { paintHead(); if (menuOpen) paintSourceMenu(); }),
@@ -204,29 +171,13 @@ export function render(root) {
     subscribe('focus', () => { toggleAsk(false); paintHead(); paintTrack(state.track); paintLyrics(state.lyrics); void refreshOffset(); }),
   ];
 
-  const ticker = setInterval(() => {
-    if (!state.track?.is_playing) return;
-    const duration = state.progress.duration_ms;
-    const elapsed = base + (performance.now() - baseAt);
-    paintProgress({
-      progress_ms: duration > 0 ? Math.min(elapsed, duration) : elapsed,
-      duration_ms: duration,
-    });
-  }, 250);
-
   return () => {
-    clearInterval(ticker);
     unsubs.forEach((fn) => fn());
     preview.dispose();
     closeSourceMenu();
     // It hangs off <body>, so leaving the page would otherwise leave it up.
     closeBig?.();
   };
-}
-
-/** "Presence 2 · " while several cards are shown, nothing otherwise. */
-function focusPrefix() {
-  return multi() ? `Presence ${state.focus + 1} · ` : '';
 }
 
 /** The pin each presence in play holds, presence 1 falling back to the legacy field. */
@@ -416,80 +367,56 @@ function statusChip(icon, label, accent = false) {
   return chip;
 }
 
+/** Loads the cover off screen, only to tint the background from it. */
+const artProbe = new Image();
+
+/**
+ * The line under the heading: where the presence on screen is playing from,
+ * and the states the Discord card does not show — paused, shuffle, a local
+ * file. The title itself is left to the preview.
+ */
 function paintTrack(track) {
-  const art = $('#npArt');
-  const source = $('#npSource');
-  if (!art) return;
+  const line = $('#npStatus');
+  if (!line) return;
 
   if (!track) {
     const ad = state.status?.adPlaying === true;
     const away = !ad && hiddenForAway();
-    $('#npTitle').textContent = ad ? 'Advertisement' : 'Nothing playing';
-    $('#npArtist').textContent = ad
-      ? 'Your Discord status is hidden until the ad is over.'
-      : away ? 'You are away — your Discord status is hidden until you come back.'
-      : 'Play something in Spotify, a browser tab or any media app.';
-    $('#npBadges').replaceChildren(
-      ...(ad ? [statusChip('ad', 'Spotify ad')] : []),
-      ...(away ? [statusChip('away', 'Away')] : []),
-    );
-    art.src = BLANK_ART;
     // A pin is exclusive, so nothing playing may simply mean the pinned player
     // is paused or closed. Saying which one avoids the app looking broken when
     // it is doing exactly what it was told.
-    source.replaceChildren(focusPrefix() + (ad ? 'Spotify' : waitingText()));
-    paintProgress({ progress_ms: 0, duration_ms: 0 });
+    line.replaceChildren(
+      el('span', { class: 'np-status-text', text: ad ? 'A Spotify ad is playing' : waitingText() }),
+      ...(away ? [statusChip('away', 'Away')] : []),
+    );
     setAmbient(null);
     return;
   }
 
   const [label] = platformInfo(track.media_source);
   const verb = track.is_live ? 'Live on' : track.is_playing ? 'Playing on' : 'Paused on';
-  source.replaceChildren(...[
-    track.is_playing ? el('span', { class: 'pulse' }) : null,
-    `${focusPrefix()}${verb} ${label}`,
-  ].filter(Boolean));
-  $('#npTitle').textContent = track.track_name || 'Unknown track';
-  $('#npTitle').title = track.track_name || '';
-  const artist = $('#npArtist');
-  artist.replaceChildren(track.artist_name || '');
-  if (track.album_name) artist.append(el('span', { class: 'np-album', text: ` · ${track.album_name}` }));
-  artist.title = [track.artist_name, track.album_name].filter(Boolean).join(' · ');
+  line.replaceChildren(
+    el('span', { class: 'np-status-text' }, [
+      track.is_playing ? el('span', { class: 'pulse' }) : null,
+      `${verb} ${label}`,
+    ].filter(Boolean)),
+    ...badges(track).map((b) => statusChip(...b)),
+  );
 
   // Resolving local art needs a round trip, so the tint follows the image.
-  setArt(art, track.album_art_url, track.track_id).then(setAmbient, () => setAmbient(null));
-
-  paintBadges(track);
+  setArt(artProbe, track.album_art_url, track.track_id).then(setAmbient, () => setAmbient(null));
 }
 
-/**
- * The chips under the title.
- *
- * Split out of paintTrack because the first of them answers to the status
- * rather than to the track — see the 'status' subscription above.
- */
-function paintBadges(track) {
-  const badges = [];
-  if (hiddenForAway()) badges.push(['away', 'Away — status hidden', true]);
-  if (track.is_live) badges.push(['live', 'Live', true]);
-  if (track.is_local) badges.push(['local', 'Local file', false]);
-  if (track.is_shuffle) badges.push(['shuffle', 'Shuffle', false]);
-  if (track.repeat_mode === 'track') badges.push(['repeatOne', 'Repeat one', false]);
-  else if (track.repeat_mode && track.repeat_mode !== 'off') badges.push(['repeat', 'Repeat', false]);
-  if (!track.is_playing) badges.push(['paused', 'Paused', false]);
-  $('#npBadges').replaceChildren(...badges.map((b) => statusChip(...b)));
-}
-
-function paintProgress(p) {
-  const box = $('#npProgress');
-  if (!box) return;
-  const total = p?.duration_ms || 0;
-  // A stream has no length; the bar would sit empty forever.
-  box.hidden = !!state.track?.is_live || (!state.track && total <= 0);
-  const elapsed = Math.min(p?.progress_ms || 0, total || Infinity);
-  $('#npFill').style.width = total > 0 ? `${Math.min(100, (elapsed / total) * 100)}%` : '0%';
-  $('#npElapsed').textContent = fmtTime(elapsed);
-  $('#npTotal').textContent = total > 0 ? fmtTime(total) : '—';
+/** The chips after the source: what the track is doing that its title does not say. */
+function badges(track) {
+  const out = [];
+  if (hiddenForAway()) out.push(['away', 'Away — status hidden', true]);
+  if (track.is_live) out.push(['live', 'Live', true]);
+  if (track.is_local) out.push(['local', 'Local file', false]);
+  if (track.is_shuffle) out.push(['shuffle', 'Shuffle', false]);
+  if (track.repeat_mode === 'track') out.push(['repeatOne', 'Repeat one', false]);
+  else if (track.repeat_mode && track.repeat_mode !== 'off') out.push(['repeat', 'Repeat', false]);
+  return out;
 }
 
 /* ── Lyrics ──────────────────────────────────────────────────────────────── */
