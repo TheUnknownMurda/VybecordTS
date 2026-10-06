@@ -94,7 +94,7 @@ export function render(root) {
     ]),
 
     // The card that takes the leftover height — see .lyr-card in the stylesheet.
-    el('section', { class: 'card lyr-card', 'aria-label': 'Lyrics' }, [
+    el('section', { class: 'card lyr-card', id: 'lyrCard', 'aria-label': 'Lyrics' }, [
       el('div', { class: 'lyr-bar' }, [
         el('div', { class: 'lyr-bar-title' }, [
           el('h2', { text: 'Lyrics' }),
@@ -512,6 +512,7 @@ function paintLyrics(l) {
   }
 
   stage.hidden = !!empty;
+  $('#lyrCard').classList.toggle('is-empty', !!empty);
   $('#lyrEmpty').hidden = !empty;
   $('#lyrFoot').hidden = !!empty;
   $('#lyrActions').hidden = !!empty;

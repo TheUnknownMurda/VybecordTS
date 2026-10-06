@@ -812,18 +812,19 @@ label.field > span {
 /* ── Now playing ──────────────────────────────────────────────────────────── */
 
 /*
- * Now playing fits the window instead of scrolling.
+ * Now playing fits the window instead of scrolling, down to a point.
  *
- * The page holds a fixed set of cards, so it is laid out as a column the height
- * of the content area, and the lyric block takes whatever the other cards leave
- * over. The card scrolls inside itself as a last resort, so a window short
- * enough to squeeze the block past its content still never scrolls the page.
+ * The page holds a fixed set of cards, so it is laid out as a column at least
+ * the height of the content area, and the lyric block takes whatever the other
+ * cards leave over. Below a usable height the lyric block stops shrinking and
+ * the page scrolls instead: with the track and the Discord card stacked, the
+ * smallest window would otherwise have left the lyrics a sliver.
  */
 .page[data-page='now'].active {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  height: 100%;
+  min-height: 100%;
 }
 .page[data-page='now'] .card {
   margin-bottom: 0;
@@ -843,21 +844,27 @@ label.field > span {
 }
 
 .np-hero {
+  /*
+   * The track and its Discord card stacked, each the full width of the page.
+   * Side by side, the card got a third of the width: at the default window its
+   * text had about 190px, so a cover line or a stream title ran to six or
+   * seven lines and the card looked broken next to a half-empty track card.
+   */
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 16px;
   flex: none;
 }
 .np-card {
-  flex: 3 1 400px;
   min-width: 0;
   display: flex;
   gap: 22px;
   align-items: center;
+  padding: 18px 22px;
 }
 .np-art {
-  width: 148px;
-  height: 148px;
+  width: 120px;
+  height: 120px;
   flex-shrink: 0;
   border-radius: 14px;
   background: var(--bg-surface);
@@ -877,7 +884,7 @@ label.field > span {
   gap: 8px;
 }
 .np-title {
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 700;
   color: var(--text-primary);
   letter-spacing: -0.02em;
@@ -1047,11 +1054,13 @@ label.field > span {
  * card, and a light version of it would show the user something nobody sees. */
 
 .dc-card {
-  flex: 2 1 300px;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  /* The card lays itself out from its own width: wide on Now playing, narrow
+     in the Settings column. */
+  container-type: inline-size;
 }
 .dc-head {
   display: flex;
@@ -1231,17 +1240,65 @@ label.field > span {
   line-height: 1.5;
   color: var(--text-muted);
 }
+.dc-note:empty {
+  display: none;
+}
+
+/*
+ * Wide enough, the buttons move beside the lines instead of under them, the
+ * way Discord's full profile lays an activity out. That keeps the card about
+ * as tall as its cover, so the lyrics below keep their room.
+ */
+@container (min-width: 640px) {
+  .dc {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
+    grid-template-areas: 'verb verb' 'body buttons';
+    column-gap: 24px;
+    row-gap: 12px;
+    align-items: center;
+    min-height: 0;
+  }
+  .dc-verb {
+    grid-area: verb;
+  }
+  .dc-body {
+    grid-area: body;
+  }
+  .dc-buttons {
+    grid-area: buttons;
+    margin-top: 0;
+  }
+  .dc:not(:has(.dc-buttons)) .dc-body,
+  .dc-hidden {
+    grid-column: 1 / -1;
+  }
+}
 
 /* Lyrics */
 
 .lyr-card {
   display: flex;
   flex-direction: column;
-  flex: 1;
+  /* A 0px basis, not flex: 1's 0%: the page's height is only a minimum now,
+     and against that a percentage basis falls back to the content's height,
+     which grew the page past the window by a few pixels. */
+  flex: 1 1 0px;
   /* A flex item refuses to shrink past its content until it is told it may. */
   min-height: 0;
   padding: 0;
   overflow: hidden;
+}
+/* No lines to show (a live stream, lyrics off, nothing playing): one short
+   message, not half the page held open around it. */
+.lyr-card:not(.is-empty) {
+  min-height: 230px;
+}
+.lyr-card.is-empty {
+  flex: none;
+}
+.lyr-card.is-empty .lyr-empty {
+  padding: 18px 24px;
 }
 .lyr-bar {
   display: flex;
@@ -1279,6 +1336,8 @@ label.field > span {
   text-align: center;
   padding: clamp(12px, 2vh, 26px) 24px;
   overflow-y: auto;
+  /* Lines that do not fit fade into the edges instead of being cut in half. */
+  mask-image: linear-gradient(to bottom, transparent, #000 28px, #000 calc(100% - 28px), transparent);
 }
 .lyr-far {
   font-size: clamp(14px, 1.6vh, 17px);
@@ -1399,15 +1458,18 @@ html[data-theme='light'] .lyr-clickable:hover {
     gap: 12px;
   }
   .np-art {
-    width: 104px;
-    height: 104px;
+    width: 84px;
+    height: 84px;
   }
   .np-title {
-    font-size: 24px;
+    font-size: 22px;
   }
   .np-card,
   .dc-card {
-    padding: 16px;
+    padding: 14px 16px;
+  }
+  .np-progress {
+    margin-top: 6px;
   }
   .dc {
     min-height: 0;
@@ -1421,6 +1483,10 @@ html[data-theme='light'] .lyr-clickable:hover {
   .dc-note,
   .lyr-far {
     display: none;
+  }
+  /* The buttons' column goes with them. */
+  .dc-body {
+    grid-column: 1 / -1;
   }
 }
 @media (max-height: 640px) {
@@ -1786,6 +1852,10 @@ html[data-theme='light'] .lyr-clickable:hover {
 }
 .set-panel .dc {
   max-width: 420px;
+}
+/* Capped at 420px, it must not take the wide layout its column would allow. */
+.set-panel .dc-card {
+  container-type: normal;
 }
 .set-group {
   display: flex;
