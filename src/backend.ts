@@ -57,8 +57,9 @@ import { initBlacklist, flagLyrics, isLyricsFlagged, clearFlags, listFlaggedTrac
 import { initHistory, historyTrackStart, historyTrackPause, historyTrackResume, historyTrackEnd, historyUpdateArt, getHistoryPage, getWrappedStats } from './core/listening-history.js';
 import { releaseJapaneseTokenizer } from './core/romanize.js';
 import { initLyricsOffsets, getTrackOffset, setTrackOffset } from './core/lyrics-offsets.js';
+import { LyricsCache } from './core/lyrics-cache.js';
 import { translateBatch, translateText, getCachedTranslation, isTranslationWorthFetching } from './core/translate.js';
-import { asNonNegativeInt, asRecord, asText, evictLeast, evictOldest, evictUntil } from './core/utils.js';
+import { asNonNegativeInt, asRecord, asText, evictLeast, evictOldest } from './core/utils.js';
 import type { TrackData, LyricLine, VybecordConfig } from './core/types.js';
 
 const log = createLogger('Backend');
@@ -312,7 +313,7 @@ export class VybecordBackend extends EventEmitter {
   /** The period pollTimer runs at, so a config change can tell whether it moved. */
   private pollIntervalMs = 0;
   private polling = false;  // re-entrance guard for poll()
-  private lyricsCache = new Map<string, LyricLine[]>();
+  private lyricsCache = new LyricsCache();
   private shuttingDown = false;
   /** True while the OS has seen no input for longer than away_after_minutes —
    *  the same window in which Discord flips the account to Idle. Driven from
@@ -461,6 +462,7 @@ export class VybecordBackend extends EventEmitter {
 
     initHistory(this.configDir);
     initLyricsOffsets(this.configDir);
+    this.lyricsCache.init(this.configDir);
 
     // 1. Start the native media monitor. It is now the only track source, so
     //    its failure leaves nothing to detect — but it must still not abort
@@ -1665,7 +1667,14 @@ export class VybecordBackend extends EventEmitter {
     let lyrics: LyricLine[];
     /** Whether what we end up with is Spotify's push rather than a provider's answer. */
     let official = false;
-    const cached = this.lyricsCache.get(cacheKey);
+    let cached = this.lyricsCache.get(cacheKey);
+    // The cache now outlives the process, and a flag made just before a crash
+    // can beat the debounced write that drops its entry. The providers skip
+    // a flagged set on their own; a cache hit has to as well.
+    if (cached?.length && isLyricsFlagged(trackData.track_name, trackData.artist_name, cached)) {
+      this.lyricsCache.delete(cacheKey);
+      cached = undefined;
+    }
     if (cached && cached.length > 0) {
       lyrics = cached;
       log.info(`[LYRICS] Cache hit (${lyrics.length} lines)`);
@@ -1836,7 +1845,6 @@ export class VybecordBackend extends EventEmitter {
       // Cache lyrics (only if found, to allow retry on empty results)
       if (!official && lyrics.length > 0) {
         this.lyricsCache.set(cacheKey, lyrics);
-        this.evictCache();
       }
     }
 
@@ -2117,7 +2125,6 @@ export class VybecordBackend extends EventEmitter {
 
       if (cacheKey) {
         this.lyricsCache.set(cacheKey, lines);
-        this.evictCache();
       }
       slot.engine.injectLyrics(lines, t);
       this.warmTranslations(lines, slot.fetchAbort?.signal);
@@ -3042,10 +3049,6 @@ export class VybecordBackend extends EventEmitter {
     if (slot.track) this.emit('trackUpdate', slot.track, slot.index);
   }
 
-  private evictCache(): void {
-    evictUntil(this.lyricsCache, 50);
-  }
-
   // ── Shutdown ──
 
   async shutdown(): Promise<void> {
@@ -3092,6 +3095,9 @@ export class VybecordBackend extends EventEmitter {
 
     // 8. Close local lyrics database
     closeLocalDb();
+
+    // 9. Keep the lyrics found this session for the next one
+    this.lyricsCache.flush();
 
     log.info('All services stopped cleanly.');
   }
