@@ -2558,6 +2558,164 @@ html[data-theme='light'] .lyr-clickable:hover {
   margin-right: auto;
 }
 
+/* ── Big lyrics ───────────────────────────────────────────────────────────────
+ *
+ * Spotify's lyrics view: the cover's colour fills the window and the song is
+ * a column of big bold lines. What was sung stays readable, the line being
+ * sung is white, and what is coming is dimmed. The tint is the cover's average
+ * colour pulled towards black, so a white or pale cover still leaves white
+ * type readable; it is dark in the light theme too, as Spotify's is.
+ */
+
+.lyr-big {
+  --big-tint: var(--accent-hex);
+  position: fixed;
+  inset: var(--titlebar-h) 0 0 0;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  color: #fff;
+  background:
+    radial-gradient(120% 80% at 15% 0%, color-mix(in srgb, var(--big-tint) 62%, #000) 0%, transparent 70%),
+    linear-gradient(180deg, color-mix(in srgb, var(--big-tint) 46%, #0a0a0d), color-mix(in srgb, var(--big-tint) 22%, #0a0a0d));
+  transition: background 1.2s var(--ease-out);
+  animation: big-in 0.22s var(--ease-out);
+}
+@keyframes big-in {
+  from {
+    opacity: 0;
+  }
+}
+.lyr-big-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px clamp(20px, 5vw, 64px) 6px;
+}
+.lyr-big-art {
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
+  object-fit: cover;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  flex: none;
+}
+.lyr-big-id {
+  flex: 1;
+  min-width: 0;
+}
+.lyr-big-title {
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lyr-big-artist {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lyr-big .btn-ghost {
+  color: rgba(255, 255, 255, 0.85);
+}
+.lyr-big .btn-ghost:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+.lyr-big-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18vh clamp(20px, 5vw, 64px) 44vh;
+  scrollbar-width: none;
+  user-select: text;
+  /* Lines fade out at the edges instead of being cut by them. */
+  mask-image: linear-gradient(180deg, transparent 0, #000 12%, #000 82%, transparent 100%);
+}
+.lyr-big-list::-webkit-scrollbar {
+  display: none;
+}
+.lyr-big-list .lyr-full-line {
+  display: block;
+  max-width: 980px;
+  padding: 0;
+  margin: 0 0 0.55em;
+  border-radius: 0;
+  font-size: clamp(26px, 3.3vw, 46px);
+  font-weight: 800;
+  line-height: 1.22;
+  letter-spacing: -0.015em;
+  color: rgba(255, 255, 255, 0.62);
+  scroll-margin: 0;
+  transition: color 0.3s var(--ease-out), opacity 0.3s var(--ease-out);
+}
+.lyr-big-list .lyr-full-line.is-blank {
+  padding: 0;
+  color: rgba(255, 255, 255, 0.62);
+}
+/* What is still to come: everything after the current line, or all of it before the first. */
+.lyr-big-list .lyr-full-line.is-current ~ .lyr-full-line,
+.lyr-big-list:not(.has-current):not(.is-plain) .lyr-full-line {
+  color: rgba(255, 255, 255, 0.34);
+}
+.lyr-big-list .lyr-full-line.is-current {
+  background: none;
+  box-shadow: none;
+  color: #fff;
+  font-weight: 800;
+}
+.lyr-big-list.is-plain .lyr-full-line {
+  color: rgba(255, 255, 255, 0.92);
+}
+/* Nothing to follow, so no room is kept above for a current line to sit in. */
+.lyr-big-list.is-plain {
+  padding-top: 4vh;
+}
+.lyr-big-list .lyr-full-tr {
+  margin-top: 0.15em;
+  font-size: 0.5em;
+  font-style: normal;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: inherit;
+  opacity: 0.8;
+}
+.lyr-big-list .lyr-full-empty {
+  padding: 0;
+  text-align: left;
+  font-size: clamp(22px, 2.6vw, 34px);
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.75);
+}
+.lyr-big-foot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 22px;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+.lyr-big-follow {
+  pointer-events: auto;
+  border-radius: 999px;
+  padding: 9px 18px;
+  font-weight: 700;
+  color: #000;
+  background: #fff;
+  border-color: transparent;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.lyr-big-follow:hover {
+  background: #f2f2f2;
+}
+.lyr-big-follow.is-idle {
+  visibility: hidden;
+}
+
 /* ── Reduced motion ───────────────────────────────────────────────────────── */
 /*
  * "Reduce motion" is a system setting people turn on for vestibular disorders

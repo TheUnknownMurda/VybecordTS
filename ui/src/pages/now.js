@@ -54,6 +54,8 @@ const BTN = {
   flag: '<svg viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>',
   chevron: '<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>',
   check: '<svg class="src-check" viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg>',
+  expand: '<svg viewBox="0 0 24 24"><path d="M14 4h6v6M10 20H4v-6M20 4l-6.5 6.5M4 20l6.5-6.5"/></svg>',
+  close: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
 };
 
 /** A button whose face is a glyph plus words. */
@@ -101,6 +103,7 @@ export function render(root) {
           el('span', { class: 'badge', id: 'lyrKind', hidden: true }),
         ]),
         el('div', { class: 'lyr-actions', id: 'lyrActions' }, [
+          iconBtn('btn btn-ghost btn-sm', BTN.expand, 'Big lyrics', { title: 'Fill the window with the lyrics, one big line at a time', onclick: openBigLyrics }),
           iconBtn('btn btn-ghost btn-sm', BTN.lines, 'Full lyrics', { title: 'Show every line of this song', onclick: openFullLyrics }),
           iconBtn('btn btn-ghost btn-sm', BTN.copy, 'Copy .lrc', { title: 'Copy the synced lyrics to the clipboard', onclick: copyLrc }),
         ]),
@@ -216,6 +219,8 @@ export function render(root) {
     unsubs.forEach((fn) => fn());
     preview.dispose();
     closeSourceMenu();
+    // It hangs off <body>, so leaving the page would otherwise leave it up.
+    closeBig?.();
   };
 }
 
@@ -664,8 +669,10 @@ function parseLrc(lrc) {
   return out;
 }
 
-/** Set while the panel is up. */
+/** Set while the panel or the big view is up. */
 let panelOpen = false;
+/** Closes the big view; null while it is not up. */
+let closeBig = null;
 
 /**
  * Open the panel, once.
@@ -676,12 +683,30 @@ let panelOpen = false;
  * the first, subscriptions and all.
  */
 function openFullLyrics() {
-  if (panelOpen) return Promise.resolve();
-  panelOpen = true;
-  return showFullLyrics().finally(() => { panelOpen = false; });
+  return openLyrics('panel');
 }
 
-async function showFullLyrics() {
+/** The Spotify-style view: the window turns into the lyrics, a few big lines at a time. */
+function openBigLyrics() {
+  return openLyrics('big');
+}
+
+function openLyrics(mode) {
+  if (panelOpen) return Promise.resolve();
+  panelOpen = true;
+  return showFullLyrics(mode).finally(() => { panelOpen = false; });
+}
+
+/**
+ * Every line of the song, following along.
+ *
+ * Both views are this one function: the list, the highlight, following the
+ * song and the wait after a skip are the hard part, and two copies of them
+ * would drift apart. 'panel' is the dialog with timestamps; 'big' takes the
+ * whole window below the title bar, tinted from the cover.
+ */
+async function showFullLyrics(mode = 'panel') {
+  const big = mode === 'big';
   /*
    * The engine only emits on a line change, so a track paused before its first
    * line has lyrics cached but no state to read them from. Asking for the LRC
@@ -698,10 +723,16 @@ async function showFullLyrics() {
     return toast(state.track ? 'No lyrics loaded for this track' : 'Nothing is playing', 'err');
   }
 
-  const list = el('div', { class: 'lyr-full' });
+  const list = el('div', { class: big ? 'lyr-big-list' : 'lyr-full' });
   const trackLine = el('div', { class: 'lyr-full-track' });
   const meta = el('div', { class: 'lyr-full-meta' });
-  const followBtn = el('button', { class: 'btn btn-sm lyr-full-follow', onclick: () => setFollow(true) });
+  const followBtn = el('button', {
+    class: big ? 'btn lyr-big-follow' : 'btn btn-sm lyr-full-follow',
+    onclick: () => setFollow(true),
+  });
+  const bigArt = big ? el('img', { class: 'lyr-big-art', alt: '', src: BLANK_ART }) : null;
+  const bigTitle = big ? el('div', { class: 'lyr-big-title' }) : null;
+  const bigArtist = big ? el('div', { class: 'lyr-big-artist' }) : null;
 
   // One node per line, kept and mutated: the highlight moves several times a
   // minute and rebuilding the list would throw away the scroll position each time.
@@ -730,17 +761,29 @@ async function showFullLyrics() {
     list.addEventListener(ev, () => setFollow(false), { passive: true });
   }
 
-  // modal() builds and mounts synchronously, and only resolves once the panel
-  // is closed — so this is the promise to wait on, not the panel being up.
-  const closed = modal((close) => el('div', {}, [
-    el('div', { class: 'lyr-full-head' }, [el('h2', { text: 'Lyrics' }), meta]),
-    trackLine,
-    list,
-    el('div', { class: 'lyr-full-foot' }, [
-      followBtn,
-      el('button', { class: 'btn', text: 'Close', onclick: () => close() }),
-    ]),
-  ]));
+  // Both build and mount synchronously, and only resolve once closed — so this
+  // is the promise to wait on, not the view being up.
+  const closed = big
+    ? fullWindow((close) => [
+      el('div', { class: 'lyr-big-head' }, [
+        bigArt,
+        el('div', { class: 'lyr-big-id' }, [bigTitle, bigArtist]),
+        iconBtn('btn btn-ghost btn-icon lyr-big-close', BTN.close, '', {
+          'aria-label': 'Close the big lyrics', title: 'Close (Esc)', onclick: () => close(),
+        }),
+      ]),
+      list,
+      el('div', { class: 'lyr-big-foot' }, [followBtn]),
+    ])
+    : modal((close) => el('div', {}, [
+      el('div', { class: 'lyr-full-head' }, [el('h2', { text: 'Lyrics' }), meta]),
+      trackLine,
+      list,
+      el('div', { class: 'lyr-full-foot' }, [
+        followBtn,
+        el('button', { class: 'btn', text: 'Close', onclick: () => close() }),
+      ]),
+    ]));
 
   // The list has no size until it is in the document, so it opens on the line
   // the song is on only if the first centring waits for that.
@@ -756,6 +799,11 @@ async function showFullLyrics() {
     trackLine.textContent = t
       ? [t.track_name || 'Unknown track', t.artist_name].filter(Boolean).join(' — ')
       : 'Nothing playing';
+    if (!big) return;
+    bigTitle.textContent = t ? t.track_name || 'Unknown track' : 'Nothing playing';
+    bigArtist.textContent = t?.artist_name || '';
+    // Resolved art is cached by track, so this is the image Now already shows.
+    void setArt(bigArt, t?.album_art_url, t?.track_id).catch(() => { bigArt.src = BLANK_ART; });
   }
 
   /** A skip empties the panel until the new song's lines arrive. */
@@ -800,7 +848,7 @@ async function showFullLyrics() {
       signature = sig;
       cur = -1;
       rows = next.lines.map((line) => el('div', { class: `lyr-full-line${line.text ? '' : ' is-blank'}` }, [
-        next.synced ? el('span', { class: 'lyr-full-time', text: fmtTime(line.time) }) : null,
+        next.synced && !big ? el('span', { class: 'lyr-full-time', text: fmtTime(line.time) }) : null,
         el('span', { class: 'lyr-full-text', text: line.text || '♪' }),
       ]));
       list.replaceChildren(...rows);
@@ -808,6 +856,7 @@ async function showFullLyrics() {
         ? `${next.lines.length} lines · follows the song`
         : `${next.lines.length} lines · no timings, so it cannot follow along`;
       followBtn.hidden = !next.synced;
+      list.classList.toggle('is-plain', !next.synced);
       setFollow(true);
       translateAll(next.lines);
     }
@@ -823,6 +872,9 @@ async function showFullLyrics() {
     rows[cur]?.classList.remove('is-current');
     cur = idx;
     const node = rows[idx];
+    // The big view greys what is still to come with a sibling selector off the
+    // current line; before the first line there is none, and it needs telling.
+    list.classList.toggle('has-current', !!node);
     if (!node) return;
     node.classList.add('is-current');
     if (follow) centre(node, behavior);
@@ -832,12 +884,16 @@ async function showFullLyrics() {
     follow = on;
     followBtn.textContent = on ? 'Following the song' : 'Back to the current line';
     followBtn.disabled = on;
-    followBtn.classList.toggle('btn-primary', !on);
+    // A disabled "Following the song" is noise over big type; it shows only
+    // when there is somewhere to go back to.
+    if (big) followBtn.classList.toggle('is-idle', on);
+    followBtn.classList.toggle('btn-primary', !on && !big);
     if (on && rows[cur]) centre(rows[cur], 'smooth');
   }
 
   /**
-   * Put a line in the middle of the list.
+   * Put a line in the middle of the list — or, in the big view, a third of the
+   * way down, as Spotify does, so more of what is coming is on screen.
    *
    * The scroll is aimed at the list rather than the row — scrollIntoView() moves
    * every scrollable ancestor, which would drag the modal and the page behind it
@@ -846,7 +902,8 @@ async function showFullLyrics() {
   function centre(node, behavior) {
     const rect = node.getBoundingClientRect();
     const box = list.getBoundingClientRect();
-    const top = Math.max(0, list.scrollTop + (rect.top - box.top) - (list.clientHeight - rect.height) / 2);
+    const anchor = big ? 0.36 : 0.5;
+    const top = Math.max(0, list.scrollTop + (rect.top - box.top) - (list.clientHeight - rect.height) * anchor);
     const from = list.scrollTop;
     list.scrollTo({ top, behavior });
     if (behavior !== 'smooth') return;
@@ -949,6 +1006,7 @@ function setAmbient(url) {
   const orbs = document.querySelectorAll('.orb');
   if (!url) {
     orbs.forEach((o) => o.style.removeProperty('--orb'));
+    setTint(null);
     return;
   }
   const img = new Image();
@@ -961,9 +1019,57 @@ function setAmbient(url) {
       ctx.drawImage(img, 0, 0, 1, 1);
       const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
       orbs.forEach((o) => o.style.setProperty('--orb', `rgb(${r},${g},${b})`));
+      setTint(`rgb(${r},${g},${b})`);
     } catch {
       /* cross-origin cover — keep the default tint */
     }
   };
   img.src = url;
+}
+
+/** The cover's average colour, for the big lyrics' background; null for the default. */
+let tint = null;
+
+function setTint(colour) {
+  tint = colour;
+  const view = document.querySelector('.lyr-big');
+  if (!view) return;
+  if (tint) view.style.setProperty('--big-tint', tint);
+  else view.style.removeProperty('--big-tint');
+}
+
+/**
+ * Mount a view over the whole window below the title bar.
+ *
+ * Not modal(): that one is a box in the middle of a dimmed page, and the point
+ * here is the opposite — nothing else on screen. It sits on <body> because the
+ * page container animates with a transform, which would turn `position: fixed`
+ * into "fixed to the page". The title bar stays reachable so the window can
+ * still be moved, minimised and closed.
+ */
+function fullWindow(render) {
+  return new Promise((resolve) => {
+    const before = document.activeElement;
+    const view = el('div', { class: 'lyr-big', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Lyrics' });
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      close();
+    };
+    const close = () => {
+      if (!view.isConnected) return;
+      view.remove();
+      document.removeEventListener('keydown', onKey);
+      closeBig = null;
+      if (before?.isConnected) before.focus();
+      resolve(undefined);
+    };
+
+    view.append(...render(close));
+    if (tint) view.style.setProperty('--big-tint', tint);
+    document.body.append(view);
+    document.addEventListener('keydown', onKey);
+    closeBig = close;
+    view.querySelector('.lyr-big-close')?.focus();
+  });
 }
