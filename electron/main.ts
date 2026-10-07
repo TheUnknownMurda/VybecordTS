@@ -7,13 +7,13 @@
  * on the machine to reach the app's API.
  */
 
-import { app, BrowserWindow, Tray, Menu, nativeImage, shell } from 'electron';
+import { app, BrowserWindow, Tray, Menu, nativeImage, shell, type MenuItemConstructorOptions } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config as loadEnv } from 'dotenv';
 import { initLogFile, createLogger, setLogLevel, flushAndClose } from '../src/core/logger.js';
 import { initTranslateCache, flushTranslationCache } from '../src/core/translate.js';
-import { initUpdater, stopUpdater } from './updater.js';
+import { initUpdater, stopUpdater, updateState, check as checkForUpdate, installNow, type UpdateState } from './updater.js';
 import { setYtDlpSearchDir, setYtDlpBundled } from '../src/core/youtube-captions.js';
 import { setKuromojiDicPath } from '../src/core/romanize.js';
 import { VybecordBackend } from '../src/backend.js';
@@ -121,7 +121,7 @@ async function start(): Promise<void> {
 
   // Checks on a delay and again every few hours; installs on the way out, so a
   // long tray session is never interrupted mid-song.
-  initUpdater(() => win);
+  initUpdater(() => win, refreshTrayMenu);
 
   // The extension endpoint follows its setting, so an install that does not use
   // the extension never opens a port.
@@ -149,6 +149,8 @@ async function start(): Promise<void> {
   let lastLaunchOnStartup = initialConfig.launch_on_startup === true;
   backend.on('configUpdate', (cfg: Record<string, unknown>) => {
     syncPushServer(cfg.extension_enabled !== false);
+    // The quick switches there show the config, whichever side changed it.
+    refreshTrayMenu();
 
     const trayEnabled = cfg.tray_enabled !== false;
     if (trayEnabled !== lastTrayEnabled) {
@@ -181,6 +183,7 @@ async function start(): Promise<void> {
   // with two cards is the one that ranks higher.
   backend.on('trackUpdate', () => {
     tray?.setToolTip(trayTooltip(backend?.getCurrentTrack() ?? null));
+    refreshTrayMenu();
   });
 }
 
@@ -305,13 +308,132 @@ function createTray(): void {
   const icon = nativeImage.createFromPath(resourcePath('assets/icon.ico'));
   tray = new Tray(icon.isEmpty() ? nativeImage.createEmpty() : icon);
   tray.setToolTip('Vybecord');
-  tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Open Vybecord', click: () => showWindow() },
-    { type: 'separator' },
-    { label: 'Quit', click: () => void quitApp() },
-  ]));
+  trayMenuKey = '';
+  refreshTrayMenu();
   tray.on('click', () => showWindow());
   tray.on('double-click', () => showWindow());
+}
+
+/** The per-card lyrics switches, by position; `show_lyrics` is presence 1's. */
+const LYRICS_KEYS = ['show_lyrics', 'show_lyrics_2', 'show_lyrics_3', 'show_lyrics_4', 'show_lyrics_5'] as const;
+const PRESENCE_COUNTS = ['One', 'Two', 'Three', 'Four', 'Five'];
+/** The players Settings → Detection lists, in its order and with its names. */
+const DETECT_KEYS: [string, string][] = [
+  ['detect_spotify', 'Spotify'], ['detect_apple_music', 'Apple Music'], ['detect_youtube', 'YouTube and YouTube Music'],
+  ['detect_soundcloud', 'SoundCloud'], ['detect_browser', 'Other browser tabs'], ['detect_twitch', 'Twitch'],
+  ['detect_kick', 'Kick'], ['detect_other_apps', 'Other desktop apps'],
+];
+/** The sidebar's pages, in its order and with its names. */
+const TRAY_PAGES: [string, string][] = [['now', 'Now playing'], ['library', 'Lyrics'], ['activity', 'Activity'], ['settings', 'Settings']];
+
+let trayMenuKey = '';
+
+/*
+ * The switches people reach for while the window is closed, in the tray menu:
+ * the presence and what it shows, when it hides, which players it detects,
+ * how many cards there are, starting with Windows and updates. Same keys as Settings and Now playing,
+ * so each place shows what the others changed. Lyrics is one item for every
+ * presence in play, since the menu has no room to say which card is which; it
+ * reads on while any of them has lyrics, and flips them all together.
+ */
+function refreshTrayMenu(): void {
+  if (!tray || !backend) return;
+  const cfg = backend.getConfig() as unknown as Record<string, unknown>;
+  const count = Math.min(LYRICS_KEYS.length, Math.max(1, Math.round(Number(cfg.presence_count) || 1)));
+  const lyricsKeys = LYRICS_KEYS.slice(0, count);
+  const on = (k: string, dflt = true) => (dflt ? cfg[k] !== false : cfg[k] === true);
+  const flags = {
+    presence: on('rpc_enabled'),
+    lyrics: lyricsKeys.some((k) => cfg[k] !== false),
+    translate: on('rpc_translate_lyrics', false),
+    paused: on('rpc_only_when_playing', false),
+    away: on('rpc_hide_when_away'),
+    ads: on('filter_spotify_ads'),
+    startup: on('launch_on_startup', false),
+    detectAll: on('detect_all_media'),
+    detect: DETECT_KEYS.map(([k]) => on(k)),
+  };
+  const playing = trayNowPlaying(backend.getCurrentTrack());
+  const update = updateState();
+  // Rebuilt only when it would change: configUpdate fires for every setting,
+  // and trackUpdate for every play and pause.
+  const key = JSON.stringify([flags, count, playing, update.status, 'version' in update ? update.version : '']);
+  if (key === trayMenuKey) return;
+  trayMenuKey = key;
+
+  // Electron has already flipped `checked` by the time click runs.
+  const toggle = (label: string, checked: boolean, write: (v: boolean) => Record<string, unknown>): MenuItemConstructorOptions => ({
+    label, type: 'checkbox', checked, click: (item) => backend?.updateConfig(write(item.checked)),
+  });
+
+  const template: MenuItemConstructorOptions[] = [
+    ...(playing ? [{ label: playing, enabled: false }, { type: 'separator' } as const] : []),
+    { label: 'Open Vybecord', click: () => showWindow() },
+    { label: 'Go to', submenu: TRAY_PAGES.map(([page, label]) => ({ label, click: () => openPage(page) })) },
+    { type: 'separator' },
+    toggle('Show on Discord', flags.presence, (v) => ({ rpc_enabled: v })),
+    toggle('Lyrics on Discord', flags.lyrics, (v) => Object.fromEntries(lyricsKeys.map((k) => [k, v]))),
+    toggle('Translate lyrics on Discord', flags.translate, (v) => ({ rpc_translate_lyrics: v })),
+    {
+      label: 'Detection',
+      submenu: [
+        toggle('Detect everything', flags.detectAll, (v) => ({ detect_all_media: v })),
+        { type: 'separator' },
+        ...DETECT_KEYS.map(([k, label], i) => toggle(label, flags.detect[i], (v) => ({ [k]: v }))),
+      ],
+    },
+    {
+      label: 'Presences',
+      submenu: PRESENCE_COUNTS.map((label, i) => ({
+        label, type: 'radio', checked: count === i + 1,
+        click: () => backend?.updateConfig({ presence_count: i + 1 }),
+      })),
+    },
+    { type: 'separator' },
+    toggle('Hide when paused', flags.paused, (v) => ({ rpc_only_when_playing: v })),
+    toggle('Hide when I’m away', flags.away, (v) => ({ rpc_hide_when_away: v })),
+    toggle('Hide during Spotify ads', flags.ads, (v) => ({ filter_spotify_ads: v })),
+    { type: 'separator' },
+    toggle('Launch at sign-in', flags.startup, (v) => ({ launch_on_startup: v })),
+    trayUpdateItem(update),
+    { type: 'separator' },
+    { label: 'Quit', click: () => void quitApp() },
+  ];
+  tray.setContextMenu(Menu.buildFromTemplate(template));
+}
+
+/** What presence 1 is playing, as a menu heading; '' when nothing plays. */
+function trayNowPlaying(track: TrackData | null): string {
+  if (!track?.track_name) return '';
+  const full = track.artist_name ? `${track.track_name} — ${track.artist_name}` : track.track_name;
+  const cut = full.length > 60 ? `${full.slice(0, 59)}…` : full;
+  // A single & is a mnemonic marker in a Windows menu label and would vanish.
+  return `${track.is_playing ? '♪' : '⏸'} ${cut.replace(/&/g, '&&')}`;
+}
+
+/** The update item: a check, the check under way, or the restart that installs it. */
+function trayUpdateItem(u: UpdateState): MenuItemConstructorOptions {
+  switch (u.status) {
+    case 'ready': return { label: `Restart to install ${u.version}`, click: () => installNow() };
+    case 'checking': return { label: 'Checking for updates…', enabled: false };
+    case 'available':
+    case 'downloading': return { label: 'Downloading an update…', enabled: false };
+    default: return { label: 'Check for updates', click: () => void checkForUpdate() };
+  }
+}
+
+/**
+ * Open the window on one page. A window that is still loading has not wired
+ * its listener yet, so the request waits for it; the renderer holds it until
+ * it has booted, then opens there instead of its first page.
+ */
+function openPage(page: string): void {
+  showWindow();
+  const contents = win?.webContents;
+  if (!contents) return;
+  const send = () => contents.send('backend:navigate', page);
+  if (contents.isLoading()) contents.once('did-finish-load', send);
+  else send();
 }
 
 function trayTooltip(track: TrackData | null): string {

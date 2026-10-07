@@ -8,7 +8,7 @@
  */
 
 import { el, $, fmtTime, setArt, platformInfo, toast, modal, BLANK_ART } from '../util.js';
-import { state, subscribe, setFocus, set } from '../state.js';
+import { state, subscribe, setFocus, set, saveConfig } from '../state.js';
 import { goto } from '../router.js';
 import { discordPreview } from '../discord-card.js';
 
@@ -66,7 +66,10 @@ function iconBtn(cls, glyph, label, props = {}) {
 }
 
 export function render(root) {
-  const preview = discordPreview({ onCustomize: () => goto('settings', { cat: 'presence' }) });
+  const preview = discordPreview({
+    onCustomize: () => goto('settings', { cat: 'presence' }),
+    actions: el('div', { class: 'qt-row', id: 'npQuick', role: 'group', 'aria-label': 'Quick switches' }),
+  });
 
   const cover = el('div', { class: 'np-cover' });
   cover.innerHTML = ICONS.note;
@@ -173,6 +176,7 @@ export function render(root) {
   );
 
   // Initial paint from whatever state we already hold.
+  paintQuick();
   paintHead();
   paintTrack(state.track);
   paintLyrics(state.lyrics);
@@ -225,7 +229,7 @@ export function render(root) {
     subscribe('track', (t) => { paintTrack(t); onPlayState(t); paintLyrics(state.lyrics); }),
     subscribe('progress', onProgress),
     subscribe('lyrics', paintLyrics),
-    subscribe('config', () => { void refreshOffset(); paintTrSlot(); paintLyrics(state.lyrics); }),
+    subscribe('config', () => { paintQuick(); void refreshOffset(); paintTrSlot(); paintLyrics(state.lyrics); }),
     // A new track may carry its own correction, or none.
     subscribe('track', () => { void refreshOffset(); }),
     // An ad produces no track, so both cards have to be redrawn to explain it
@@ -238,7 +242,7 @@ export function render(root) {
     subscribe('players', () => { paintHead(); if (menuOpen) paintSourceMenu(); }),
     subscribe('preferredPlayers', () => { paintHead(); if (!state.track) paintTrack(null); }),
     // A different presence picked: everything below the header is its now.
-    subscribe('focus', () => { toggleAsk(false); paintHead(); paintTrack(state.track); paintLyrics(state.lyrics); void refreshOffset(); }),
+    subscribe('focus', () => { toggleAsk(false); paintQuick(); paintHead(); paintTrack(state.track); paintLyrics(state.lyrics); void refreshOffset(); }),
   ];
 
   const ticker = setInterval(() => { if (running) paintProgress(position()); }, 250);
@@ -281,6 +285,55 @@ function waitingText() {
   return pinned
     ? `Pinned to ${platformInfo(pinned.source)[0]} — waiting for it to play`
     : 'Pinned to a player that is not running';
+}
+
+/* ── Quick switches: the presence and its lyrics ─────────────────────────── */
+
+/** The lyrics switch of the presence on screen; `show_lyrics` is presence 1's. */
+const lyricsKey = () => (state.focus > 0 ? `show_lyrics_${state.focus + 1}` : 'show_lyrics');
+
+/*
+ * The two switches people reach for while something plays, one click away
+ * beside the card they change, rather than a page and a category away in
+ * Settings. They write the same keys Settings writes; nothing new is stored. Rebuilt from a key, like the tabs, so a config save that changed
+ * neither leaves the focus where it was.
+ */
+let quickKey = '';
+
+function paintQuick() {
+  const row = $('#npQuick');
+  if (!row) return;
+  const presenceOn = state.config.rpc_enabled !== false;
+  const lyricsOn = state.config[lyricsKey()] !== false;
+  const which = multi() ? ` on presence ${state.focus + 1}` : '';
+  const key = `${presenceOn}|${lyricsOn}|${which}`;
+  if (key === quickKey && row.childElementCount) return;
+  quickKey = key;
+
+  const focused = document.activeElement?.closest?.('#npQuick') ? document.activeElement.dataset.key : null;
+  row.replaceChildren(
+    quickSwitch('rpc_enabled', 'Presence', presenceOn,
+      presenceOn ? 'Your activity is on Discord. Off clears your status right away.' : 'Nothing is on your Discord profile. On puts your status back.'),
+    quickSwitch(lyricsKey(), 'Lyrics', lyricsOn,
+      lyricsOn ? `Lyrics follow the song${which}. Off keeps the title and artist.` : `No lyrics${which}. On shows the line being sung.`),
+  );
+  if (focused) row.querySelector(`[data-key="${focused.replace(/[^\w]/g, '')}"]`)?.focus();
+}
+
+/** A labelled pill switch that flips one boolean config key. */
+function quickSwitch(key, label, on, tip) {
+  return el('button', {
+    type: 'button',
+    class: `qt${on ? ' on' : ''}`,
+    role: 'switch',
+    'aria-checked': on ? 'true' : 'false',
+    dataset: { key },
+    title: tip,
+    onclick: () => { void saveConfig({ [key]: !on }); },
+  }, [
+    el('span', { class: 'qt-label', text: label }),
+    el('span', { class: 'qt-track', 'aria-hidden': 'true' }, [el('span', { class: 'qt-thumb' })]),
+  ]);
 }
 
 /* ── Header: presence tabs and the source picker ─────────────────────────── */
@@ -688,7 +741,7 @@ function paintLyrics(l) {
   else if (!t) empty = ['No lyrics yet', 'They show here, in time with the song, as soon as something plays.'];
   else if (t.is_live) empty = ['Live streams have no lyrics', 'This presence shows the stream title and how long it has been live instead.'];
   else if (state.config[state.focus === 0 ? 'show_lyrics' : `show_lyrics_${state.focus + 1}`] === false) {
-    empty = ['Lyrics are switched off for this presence', 'Turn them back on in Settings → Discord presence.'];
+    empty = ['Lyrics are switched off for this presence', 'Turn them back on with the Lyrics switch above.'];
   }
 
   stage.hidden = !!empty;
