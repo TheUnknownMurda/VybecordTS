@@ -9,7 +9,7 @@
 
 const api = window.vybecord;
 
-const emptySlot = () => ({ track: null, lyrics: null, progress: { progress_ms: 0, duration_ms: 0 } });
+const emptySlot = () => ({ track: null, lyrics: null, activity: null, progress: { progress_ms: 0, duration_ms: 0 }, lastTrack: null });
 /** How many presence cards the app can hold — matches MAX_SLOTS in the backend. */
 export const MAX_SLOTS = 5;
 
@@ -23,10 +23,20 @@ export const state = {
    */
   track: null,
   lyrics: null,
+  /** The card the engine last built for the focused presence — the Discord preview. */
+  activity: null,
   progress: { progress_ms: 0, duration_ms: 0 },
+  /*
+   * The song a presence was playing when it stopped, paused where it stopped.
+   * The backend takes the track down on a pause — Discord's card reads
+   * "Nothing playing" then — so without this a paused Spotify read as
+   * "Waiting for a player… Play something in Spotify", with Spotify open on
+   * the song. Null once anything
+   * plays again, and never a live stream: one that stops has ended.
+   */
+  lastTrack: null,
   slots: Array.from({ length: MAX_SLOTS }, emptySlot),
   focus: 0,
-  stats: { topTracks: [], topArtists: [] },
   players: [],
   preferredPlayer: null,
   preferredPlayers: new Array(MAX_SLOTS).fill(null),
@@ -78,31 +88,47 @@ export function set(patch) {
   for (const key of Object.keys(patch)) emit(key, state[key]);
 }
 
-/** Point the three single-track mirrors at the focused presence. */
+/** Point the single-track mirrors at the focused presence. */
 function mirrorFocus() {
   const s = state.slots[state.focus] || emptySlot();
-  set({ track: s.track, lyrics: s.lyrics, progress: s.progress });
+  set({ track: s.track, lyrics: s.lyrics, activity: s.activity ?? null, progress: s.progress, lastTrack: s.lastTrack ?? null });
 }
 
-/**
- * Look at one presence. The Now page calls this when a card is clicked; the
- * state calls it itself when the one being looked at goes quiet while the
- * other plays on, so the page never sits on "Nothing playing" beside a track.
- */
 const slotIndex = (index) => Math.max(0, Math.min(MAX_SLOTS - 1, Number.isInteger(index) ? index : 0));
 
-export function setFocus(index) {
-  const i = slotIndex(index);
+/**
+ * An empty presence the user picked by hand, or -1: picked on purpose, it is
+ * not taken away from them. Cleared once something plays on it, after which
+ * it is moved off like any other when it goes quiet.
+ */
+let chosen = -1;
+
+function focusOn(i) {
   if (i === state.focus) return;
   set({ focus: i });
   mirrorFocus();
 }
 
+/** Look at one presence: the Now page calls this when a card is clicked. */
+export function setFocus(index) {
+  const i = slotIndex(index);
+  chosen = i;
+  focusOn(i);
+}
+
+/*
+ * The state moves the view itself when the presence being looked at has
+ * nothing to show while another plays, so the page never sits on "Nothing
+ * playing" beside a track. A paused song is something to show: it ran on
+ * every update of any presence, and with a live stream on the other card
+ * that is every second, so clicking the paused card showed it for a moment
+ * and then jumped back to the stream. Nor does it undo a click.
+ */
 function autoFocus() {
   const cur = state.slots[state.focus];
-  if (cur?.track) return;
+  if (cur?.track || cur?.lastTrack || chosen === state.focus) return;
   const other = state.slots.findIndex((s) => s?.track);
-  if (other >= 0) setFocus(other);
+  if (other >= 0) focusOn(other);
 }
 
 /** Apply a backend event to one presence's slice, and to the mirrors if it is the focused one. */
@@ -110,6 +136,7 @@ function updateSlot(index, patch) {
   const i = slotIndex(index);
   const slots = [...state.slots];
   slots[i] = { ...slots[i], ...patch };
+  if (i === chosen && slots[i].track) chosen = -1;
   set({ slots });
   if (i === state.focus) set(patch);
   autoFocus();
@@ -122,14 +149,15 @@ export async function init() {
     ? snap.slots.map((s) => ({
         track: s?.track ?? null,
         lyrics: s?.lyrics ?? null,
+        activity: s?.activity ?? null,
         progress: s?.track ? (s.progress || trackProgress(s.track)) : trackProgress(null),
+        lastTrack: null,
       }))
     : [{ track: snap.track, lyrics: snap.lyrics, progress: trackProgress(snap.track) }];
   while (slots.length < MAX_SLOTS) slots.push(emptySlot());
   set({
     config: snap.config || {},
     slots,
-    stats: snap.stats || { topTracks: [], topArtists: [] },
     players: snap.players || [],
     preferredPlayer: snap.preferredPlayer,
     preferredPlayers: snap.preferredPlayers || [snap.preferredPlayer ?? null],
@@ -149,25 +177,51 @@ export async function init() {
    * the lyrics it already has.
    */
   api.on('trackUpdate', (track, slot) => {
-    const prev = state.slots[slot === 1 ? 1 : 0]?.track;
+    // Compared against its own presence. This read `slot === 1 ? 1 : 0` from
+    // when there were two, so presences 3 to 5 measured every track against
+    // presence 1's and kept or dropped their lyrics on the strength of it.
+    const was = state.slots[slotIndex(slot)];
+    const prev = was?.track;
     const same = (track?.track_id || '') === (prev?.track_id || '');
     // A different track means the bar belongs to the new one -- at its own
     // position, or empty when playback simply stopped. Same reasoning as the
     // lyrics beside it: what the previous track left behind is not an
-    // approximation of the new state, it is the wrong state.
-    updateSlot(slot, same ? { track } : { track, lyrics: null, progress: trackProgress(track) });
+    // approximation of the new state, it is the wrong state. The card built
+    // for the previous track goes with them.
+    const stopped = !track && prev && !prev.is_live
+      ? { ...prev, is_playing: false, progress_ms: was.progress?.progress_ms ?? prev.progress_ms }
+      : null;
+    updateSlot(slot, same ? { track } : {
+      track, lyrics: null, activity: null, progress: trackProgress(track), lastTrack: stopped,
+    });
   });
   api.on('progressUpdate', (progress, slot) => updateSlot(slot, { progress }));
-  api.on('lyricsUpdate', (lyrics, slot) => updateSlot(slot, { lyrics }));
-  api.on('plainLyricsUpdate', (lyrics, slot) => updateSlot(slot, { lyrics }));
-  api.on('statsUpdate', (stats) => set({ stats }));
+  /*
+   * The words-only fallback and the engine's state share one slice, and the
+   * engine keeps talking after the fallback lands: a song with no synced lines
+   * still gets its "♪♪" tick, and that tick replaced the 39 plain lines a
+   * moment after they arrived, so they never showed. Each event now carries
+   * over what the other one set. A new track still starts clean — trackUpdate
+   * drops the slice on a change of id — and synced lines, once there, win.
+   */
+  api.on('lyricsUpdate', (lyrics, slot) => {
+    const prev = state.slots[slotIndex(slot)]?.lyrics;
+    const synced = Array.isArray(lyrics?.lyrics) && lyrics.lyrics.length > 0;
+    const keep = !synced && Array.isArray(prev?.lines) && prev.lines.length > 0;
+    updateSlot(slot, { lyrics: keep ? { ...lyrics, lines: prev.lines } : lyrics });
+  });
+  api.on('plainLyricsUpdate', (plain, slot) => {
+    const prev = state.slots[slotIndex(slot)]?.lyrics;
+    updateSlot(slot, { lyrics: { ...prev, lines: plain?.lines ?? [] } });
+  });
+  api.on('activityUpdate', (activity, slot) => updateSlot(slot, { activity }));
   api.on('configUpdate', (config) => set({ config }));
   api.on('statusUpdate', (status) => {
     set({ status: { ...state.status, ...status } });
     if (status && 'preferredPlayer' in status) set({ preferredPlayer: status.preferredPlayer });
     if (status && Array.isArray(status.preferredPlayers)) set({ preferredPlayers: status.preferredPlayers });
     // A card beyond the new count is gone, whatever it showed.
-    if (status && typeof status.presenceCount === 'number' && state.focus >= status.presenceCount) setFocus(0);
+    if (status && typeof status.presenceCount === 'number' && state.focus >= status.presenceCount) focusOn(0);
   });
 
   /*

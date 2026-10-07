@@ -1,5 +1,7 @@
 # Release notes
 
+Notes for 2.0.4 and later (up to the current release) are on the [GitHub releases page](https://github.com/TheUnknownMurda/VybecordTS/releases), in French. This file holds 2.0.3 and earlier.
+
 ## 2.0.3 — The LRCLIB dump, and pinning that means it
 
 ### What changed

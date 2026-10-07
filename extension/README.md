@@ -55,7 +55,7 @@ The extension icon opens the settings, where each site has its own switch. All a
 
 ## How it reaches the app
 
-The desktop app listens on `127.0.0.1:8888`, and only while **Settings → Detection → Accept data from the extension** is on. That endpoint:
+The desktop app listens on `127.0.0.1:8888`, and only while **Settings → Integrations → Browser extension → Accept data from the extension** is on. That endpoint:
 
 - binds loopback only, so nothing off the machine can reach it
 - answers POST on seven push paths and nothing else — no settings, no reads, nothing that could leak anything about you

@@ -33,7 +33,7 @@ vendor/
 dist/
 dist-electron/
 build/
-release/
+/release/
 
 # ── OS artifacts ──
 .DS_Store
@@ -65,7 +65,11 @@ LRCLIB Dump/
 *.tmp
 
 # ── Agent worktrees and session state ──
-.claude/
+# .claude/settings.json, hooks/ and skills/ are the shared project setup and are
+# committed; what is personal or per-session stays out.
+.claude/settings.local.json
+.claude/worktrees/
+.claude/*.local.*
 
 # ── Cloudflare Worker build cache ──
 .wrangler/

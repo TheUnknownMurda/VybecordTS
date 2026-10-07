@@ -4,10 +4,42 @@
  * Four jobs: browse and edit what you have imported, write or paste lyrics and
  * time them against the playing track, pull a track out of a LRCLIB dump to
  * seed an entry, and clear tracks you have flagged as having the wrong lyrics.
+ *
+ * The library itself is what opens. Adding lyrics is one button away rather
+ * than the first thing on screen: most visits are to find or fix something
+ * already there, and a blank form is a strange way to greet them.
  */
 
-import { el, modal, toast, fmtTime } from '../util.js';
+import { el, modal, toast, fmtTime, plural } from '../util.js';
 import { state, subscribe } from '../state.js';
+import { goto } from '../router.js';
+
+/** Literal glyphs only — see the note on ICONS in now.js. */
+const GLYPH = {
+  plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  back: '<svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>',
+  edit: '<svg viewBox="0 0 24 24"><path d="M4 20h4L18.5 9.5a2.1 2.1 0 00-3-3L5 17v3"/></svg>',
+  time: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  trash: '<svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
+  check: '<svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg>',
+  lyric: '<svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 012-2h13v18H6a2 2 0 01-2-2z"/><path d="M9 7h7M9 11h7"/></svg>',
+  flag: '<svg viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>',
+};
+
+/** A button whose face is a glyph, plus words when there is room for them. */
+function glyphBtn(cls, glyph, label, props = {}) {
+  const b = el('button', { type: 'button', class: cls, ...props });
+  b.innerHTML = glyph;
+  if (label) b.append(document.createTextNode(label));
+  return b;
+}
+
+/** The square at the start of a row that has no cover of its own. */
+function rowGlyph(glyph) {
+  const g = el('div', { class: 'item-glyph', 'aria-hidden': 'true' });
+  g.innerHTML = glyph;
+  return g;
+}
 
 const api = window.vybecord;
 const PAGE_SIZE = 40;
@@ -25,44 +57,73 @@ const slotOf = (i) => state.slots?.[i] || EMPTY_SLOT;
  *   after the user reports the timing as off.
  */
 export function render(root, params) {
-  const TABS = { import: renderImport, browse: renderBrowse, dump: renderDump, flagged: renderFlagged };
-  const body = el('div');
-  let tab = TABS[params?.tab] ? params.tab : 'import';
-  // Consumed by the first paint of the tab it was meant for; coming back to the
-  // page later must not resurrect it.
+  const TABS = { browse: renderBrowse, flagged: renderFlagged, dump: renderDump, import: renderImport };
+  const body = el('div', { class: 'lib-main' });
+  let tab = TABS[params?.tab] ? params.tab : 'browse';
+  // Consumed by the first paint of the view it was meant for; coming back to
+  // the page later must not resurrect it.
   let prefill = params?.prefill || null;
-  // The import tab holds a key handler and a ticker while its sync studio is
-  // open, so a tab can hand back a disposer. The router calls ours on the way
-  // out; switching tabs calls it too, since the old tab's DOM is thrown away.
+  // The import view holds a key handler and a ticker while its sync studio is
+  // open, so a view can hand back a disposer. The router calls ours on the way
+  // out; switching views calls it too, since the old view's DOM is thrown away.
   let disposeTab = null;
+  /** What the tab counters say; filled in as the answers arrive. */
+  const counts = { browse: '', flagged: '' };
 
-  const tabs = el('div', { class: 'tabs' }, [
-    tabBtn('Import', 'import'),
-    tabBtn('My lyrics', 'browse'),
-    tabBtn('LRCLIB dump', 'dump'),
-    tabBtn('Flagged', 'flagged'),
-  ]);
+  const tabs = el('div', { class: 'tabs', role: 'tablist', 'aria-label': 'Lyrics views' });
+  const back = glyphBtn('btn btn-ghost btn-sm back-link', GLYPH.back, 'Back to my lyrics', { onclick: () => open('browse') });
+  const addBtn = glyphBtn('btn btn-primary', GLYPH.plus, 'Add lyrics', {
+    title: 'Paste or write lyrics, and time them against the song',
+    onclick: () => open('import'),
+  });
+
+  const ctx = {
+    open,
+    setCount(id, n) {
+      counts[id] = n > 0 ? String(n) : '';
+      paintTabs();
+    },
+  };
 
   root.replaceChildren(
     el('div', { class: 'page-head' }, [
-      el('h1', { text: 'Lyrics library' }),
-      el('div', { class: 'sub', text: 'Custom lyrics stored locally. These always win over anything fetched online.' }),
+      el('div', {}, [
+        el('h1', { text: 'Lyrics' }),
+        el('div', { class: 'sub', text: 'Lyrics you added or fixed. They always win over anything found online.' }),
+      ]),
+      el('div', { class: 'page-head-actions' }, [addBtn]),
     ]),
     tabs,
-    body,
+    back,
+    el('div', { class: 'lib-layout' }, [body, sourcesAside(ctx)]),
   );
 
-  function tabBtn(label, id) {
-    return el('button', {
-      class: `tab ${id === tab ? 'active' : ''}`.trim(),
-      text: label,
-      onclick: (e) => {
-        tab = id;
-        [...tabs.children].forEach((c) => c.classList.toggle('active', c === e.target));
-        show();
-      },
-    });
+  function paintTabs() {
+    const importing = tab === 'import';
+    tabs.hidden = importing;
+    back.hidden = !importing;
+    addBtn.hidden = importing;
+    tabs.replaceChildren(...[['browse', 'My lyrics'], ['flagged', 'Blocked'], ['dump', 'LRCLIB dump']].map(([id, label]) => el('button', {
+      type: 'button',
+      class: `tab${id === tab ? ' active' : ''}`,
+      role: 'tab',
+      'aria-selected': id === tab ? 'true' : 'false',
+      onclick: () => open(id),
+    }, [label, el('span', { class: 'tab-count', text: counts[id] || '' })])));
   }
+
+  /** Switch view, optionally handing the new one something to open with. */
+  function open(id, handover = null) {
+    tab = id;
+    prefill = handover;
+    paintTabs();
+    show();
+  }
+
+  // The counters are worth having before their tabs are visited.
+  api.listCustom(1, 0).then((r) => ctx.setCount('browse', r?.total || 0)).catch(() => {});
+  api.listFlagged().then((r) => ctx.setCount('flagged', (r || []).length)).catch(() => {});
+  paintTabs();
 
   function releaseTab() {
     if (!disposeTab) return;
@@ -77,11 +138,11 @@ export function render(root, params) {
   function show() {
     releaseTab();
     body.replaceChildren();
-    const handover = tab === params?.tab ? prefill : null;
+    const handover = prefill;
     prefill = null;
-    // The async tabs resolve to a promise rather than a disposer; only the ones
-    // that actually own something outside their own DOM return a function.
-    const result = TABS[tab](body, show, handover);
+    // The async views resolve to a promise rather than a disposer; only the
+    // ones that actually own something outside their own DOM return a function.
+    const result = TABS[tab](body, show, handover, ctx);
     disposeTab = typeof result === 'function' ? result : null;
   }
   show();
@@ -89,26 +150,92 @@ export function render(root, params) {
   return releaseTab;
 }
 
+/**
+ * Where lyrics come from, in the order they are tried, each with its state on
+ * this machine.
+ *
+ * "Why these lyrics and not those?" is the question behind most visits here,
+ * and the answer is an order nobody could guess: your own copy first, then
+ * Spotify's, then the offline dump, then the internet.
+ */
+function sourcesAside() {
+  const list = el('ol', { class: 'src-list' });
+  const items = [
+    ['My lyrics', async () => {
+      const r = await api.listCustom(1, 0);
+      return [`${plural(r?.total || 0, 'track')} — always used first`, (r?.total || 0) > 0];
+    }],
+    ['Spotify’s own lyrics', async () => {
+      const s = await api.spicetifyInfo();
+      if (s?.connected) return ['Through Spicetify · connected', true];
+      if (s?.installed && s?.extensionEnabled) return ['Through Spicetify · waiting for Spotify', false];
+      return ['Needs Spicetify — Settings → Integrations', false];
+    }],
+    ['LRCLIB dump', async () => {
+      const s = await api.lrclibStatus();
+      return s?.loaded ? ['Loaded · searched offline, instantly', true] : ['Not loaded — optional', false];
+    }],
+    ['Online providers', async () => ['LRCLIB, Netease, Musixmatch', true]],
+    ['YouTube captions', async () => {
+      const s = await api.captionsStatus();
+      return s?.available ? ['For videos with no lyrics anywhere else', true] : ['Needs yt-dlp — Settings → Lyrics & translation', false];
+    }],
+  ];
+
+  list.replaceChildren(...items.map(([title, probe], i) => {
+    const stateEl = el('div', { class: 'src-li-state', text: 'Checking…' });
+    probe().then(([text, on]) => {
+      stateEl.textContent = text;
+      stateEl.classList.toggle('on', !!on);
+    }).catch(() => { stateEl.textContent = 'Could not check'; });
+    return el('li', {}, [
+      el('span', { class: 'src-n', text: String(i + 1) }),
+      el('div', { style: 'min-width:0' }, [el('div', { class: 'src-li-title', text: title }), stateEl]),
+    ]);
+  }));
+
+  const tip = el('section', { class: 'card', style: 'display:flex;gap:12px;align-items:flex-start' }, [
+    rowGlyph(GLYPH.flag),
+    el('div', { style: 'font-size:13px;line-height:1.5;color:var(--text-secondary)' }, [
+      'Wrong lyrics while listening? Use ',
+      el('b', { text: 'Wrong lyrics?', style: 'color:var(--text-primary)' }),
+      ' on ',
+      el('a', { href: '#', text: 'Now playing', onclick: (e) => { e.preventDefault(); goto('now'); } }),
+      ' — it lands here, ready to fix.',
+    ]),
+  ]);
+
+  return el('aside', { class: 'lib-side', 'aria-label': 'Where lyrics come from' }, [
+    el('section', { class: 'card' }, [
+      el('h2', { text: 'Where lyrics come from', style: 'font-size:15px' }),
+      el('div', { class: 'muted', style: 'margin-top:4px', text: 'Tried in this order — the first match wins.' }),
+      list,
+    ]),
+    tip,
+  ]);
+}
+
 // ── Browse ────────────────────────────────────────────────────────────────────
 
-async function renderBrowse(body, refresh) {
+async function renderBrowse(body, refresh, _handover, ctx) {
   let offset = 0;
   let search = '';
   const list = el('div', { class: 'list' });
-  const counter = el('div', { class: 'muted' });
-  const more = el('button', { class: 'btn', text: 'Load more', style: 'margin-top:12px', onclick: () => load(false) });
+  const counter = el('div', { class: 'muted', style: 'padding:4px 12px 0' });
+  const more = el('button', { type: 'button', class: 'btn', text: 'Load more', style: 'margin:10px 12px 4px', onclick: () => load(false) });
 
   const searchInput = el('input', {
-    type: 'search', placeholder: 'Search title, artist or album…',
+    type: 'search', placeholder: 'Search by title, artist or album',
+    'aria-label': 'Search your lyrics',
     oninput: debounce((e) => { search = e.target.value; load(true); }, 250),
   });
+  const searchBox = el('label', { class: 'search' }, [searchInput]);
+  searchBox.insertAdjacentHTML('afterbegin', '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>');
 
-  body.replaceChildren(el('div', { class: 'card' }, [
-    el('div', { class: 'card-head' }, [el('h2', { text: 'Stored lyrics' }), counter]),
-    el('div', { style: 'margin-bottom:12px' }, [searchInput]),
-    list,
-    more,
-  ]));
+  body.replaceChildren(
+    searchBox,
+    el('div', { class: 'card', style: 'padding:8px' }, [list, more, counter]),
+  );
 
   async function load(reset) {
     if (reset) { offset = 0; list.replaceChildren(); }
@@ -118,14 +245,20 @@ async function renderBrowse(body, refresh) {
       const entries = res?.entries || [];
       const total = res?.total || 0;
       offset += entries.length;
+      if (!search) ctx?.setCount('browse', total);
 
       if (!entries.length && offset === 0) {
-        list.replaceChildren(el('div', { class: 'empty', text: search ? 'No match.' : 'Nothing imported yet.' }));
+        list.replaceChildren(search
+          ? el('div', { class: 'empty', text: 'No match.' })
+          : el('div', { class: 'empty' }, [
+              el('div', { text: 'Nothing here yet. Lyrics you add or fix are kept here, and always win.' }),
+              glyphBtn('btn btn-primary', GLYPH.plus, 'Add lyrics', { style: 'margin-top:14px', onclick: () => ctx?.open('import') }),
+            ]));
       } else {
-        list.append(...entries.map((e) => entryRow(e, refresh)));
+        list.append(...entries.map((e) => entryRow(e, refresh, ctx)));
       }
-      counter.textContent = total ? `${offset} of ${total}` : '';
-      more.style.display = offset >= total ? 'none' : '';
+      counter.textContent = total > PAGE_SIZE ? `${offset} of ${total}` : '';
+      more.hidden = offset >= total;
     } catch (e) {
       toast(`Could not load: ${e.message}`, 'err');
     } finally {
@@ -135,16 +268,21 @@ async function renderBrowse(body, refresh) {
   await load(true);
 }
 
-function entryRow(e, refresh) {
+function entryRow(e, refresh, ctx) {
   return el('div', { class: 'item' }, [
+    rowGlyph(GLYPH.lyric),
     el('div', { class: 'item-body' }, [
       el('div', { class: 'item-title', text: e.track_name }),
       el('div', { class: 'item-sub', text: `${e.artist_name}${e.album_name ? ` · ${e.album_name}` : ''}${e.duration ? ` · ${fmtTime(e.duration * 1000)}` : ''}` }),
     ]),
     el('div', { class: 'item-actions' }, [
-      el('button', { class: 'btn btn-sm', text: 'Edit', onclick: () => editEntry(e, refresh) }),
-      el('button', {
-        class: 'btn btn-sm btn-danger', text: 'Delete',
+      glyphBtn('btn btn-ghost btn-icon', GLYPH.edit, '', { title: 'Edit', 'aria-label': `Edit the lyrics for ${e.track_name}`, onclick: () => editEntry(e, refresh) }),
+      glyphBtn('btn btn-ghost btn-icon', GLYPH.time, '', {
+        title: 'Re-time against the song', 'aria-label': `Re-time the lyrics for ${e.track_name}`,
+        onclick: () => retime(e, ctx),
+      }),
+      glyphBtn('btn btn-ghost btn-icon', GLYPH.trash, '', {
+        title: 'Delete', 'aria-label': `Delete the lyrics for ${e.track_name}`,
         onclick: async () => {
           if (!(await confirmBox(`Delete the lyrics for “${e.track_name}”?`))) return;
           await api.deleteCustom(e.track_id);
@@ -154,6 +292,23 @@ function entryRow(e, refresh) {
       }),
     ]),
   ]);
+}
+
+/** Open a stored entry in the editor, words and timings, ready for the sync studio. */
+async function retime(entry, ctx) {
+  let full;
+  try {
+    full = await api.getCustom(entry.track_id);
+  } catch (e) {
+    return toast(`Could not open: ${e.message}`, 'err');
+  }
+  ctx?.open('import', {
+    track: full?.track_name ?? entry.track_name ?? '',
+    artist: full?.artist_name ?? entry.artist_name ?? '',
+    album: full?.album_name ?? entry.album_name ?? '',
+    duration: entry.duration ? String(entry.duration) : '',
+    lrc: full?.synced_lyrics ?? '',
+  });
 }
 
 async function editEntry(entry, refresh) {
@@ -942,7 +1097,7 @@ function renderDump(body) {
       el('li', {}, [
         'Point the app at it, either way round: put it in the folder below and rename it ',
         el('code', { text: 'lrclib-dump.sqlite3' }), ', or leave it wherever it is and paste its full path into ',
-        el('b', { text: 'Settings → LRCLIB dump path' }), ' (handy if it lives on another drive).',
+        el('b', { text: 'Settings → Lyrics & translation → LRCLIB dump path' }), ' (handy if it lives on another drive).',
       ]),
       el('li', {}, ['Restart Vybecord. The database is opened once at startup, so it is not picked up before that.']),
     ]),
@@ -993,7 +1148,7 @@ function renderDump(body) {
             text: `At startup “${s.ignoredConfigured}” could not be opened, so Vybecord fell back to ${s.path}. `
               + (s.configured && s.configured !== s.ignoredConfigured
                 ? `Settings now points at “${s.configured}” — restart Vybecord to use it.`
-                : 'Check the path in Settings → LRCLIB dump path, then restart Vybecord.'),
+                : 'Check the path in Settings → Lyrics & translation, then restart Vybecord.'),
           }),
         );
         return;
@@ -1048,32 +1203,31 @@ function dumpRow(r) {
 
 // ── Flagged ───────────────────────────────────────────────────────────────────
 
-async function renderFlagged(body, refresh) {
+async function renderFlagged(body, refresh, _handover, ctx) {
   const list = el('div', { class: 'list' });
-  body.replaceChildren(el('div', { class: 'card' }, [
-    el('div', { class: 'card-head' }, [el('h2', { text: 'Flagged tracks' })]),
-    el('div', { class: 'row-desc', style: 'margin-bottom:12px;max-width:none' },
-      'Lyrics you marked as wrong. The app will not reuse those results for these tracks — clear a flag to let it try again.'),
-    list,
-  ]));
+  body.replaceChildren(
+    el('div', { class: 'muted', style: 'padding:0 4px', text: 'Lyrics you marked as wrong. The app never uses those versions for these tracks again — allow one back to let it retry.' }),
+    el('div', { class: 'card', style: 'padding:8px' }, [list]),
+  );
 
   try {
     const rows = (await api.listFlagged()) || [];
+    ctx?.setCount('flagged', rows.length);
     list.replaceChildren(...(rows.length
       ? rows.map((f) => el('div', { class: 'item' }, [
+          rowGlyph(GLYPH.flag),
           el('div', { class: 'item-body' }, [
             el('div', { class: 'item-title', text: f.track || '(unknown)' }),
-            el('div', { class: 'item-sub', text: f.artist || '' }),
+            el('div', { class: 'item-sub', text: `${f.artist || ''}${f.count > 1 ? ` · ${f.count} versions blocked` : ''}` }),
           ]),
-          el('div', { class: 'item-meta', text: `${f.count} flagged` }),
           el('div', { class: 'item-actions' }, [
-            el('button', {
-              class: 'btn btn-sm', text: 'Clear',
-              onclick: async () => { await api.unflag(f.key); toast('Cleared', 'ok'); refresh(); },
+            glyphBtn('btn btn-sm', GLYPH.check, 'Allow again', {
+              title: 'Let the app use these lyrics for this track again',
+              onclick: async () => { await api.unflag(f.key); toast('Allowed again', 'ok'); refresh(); },
             }),
           ]),
         ]))
-      : [el('div', { class: 'empty', text: 'Nothing flagged.' })]));
+      : [el('div', { class: 'empty', text: 'Nothing blocked. Lyrics you mark as wrong on Now playing show up here.' })]));
   } catch (e) {
     list.replaceChildren(el('div', { class: 'empty', text: `Could not load: ${e.message}` }));
   }

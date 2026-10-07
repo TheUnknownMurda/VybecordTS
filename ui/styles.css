@@ -3,26 +3,38 @@
  *
  * Two themes, switched by data-theme on <html>. Every colour goes through a
  * token so the light theme only has to redefine the tokens, never the rules.
+ *
+ * Text tokens are chosen for contrast on the card surface, not on the page
+ * ground: the cards are where nearly all the text sits. --text-muted and
+ * --text-faint both clear 4.5:1 there — the previous greys did not, which is
+ * why descriptions under the switches read as disabled.
  */
 
 :root {
   --accent: 16, 185, 129;
   --accent-hex: #10b981;
+  /* The accent as text on a card — a lighter step in the dark theme, a darker
+     one in the light theme, so a link or a value never drops below 4.5:1. */
+  --accent-text: #34d399;
+  /* Text sitting on a filled accent button. */
+  --on-accent: #04140d;
 
-  --bg-base: #06060a;
-  --bg-elevated: #0e0e14;
-  --bg-surface: #14141c;
-  --bg-hover: #1a1a24;
+  --bg-base: #0b0b10;
+  --bg-side: #0f0f15;
+  --bg-elevated: #14141c;
+  --bg-surface: #1c1c26;
+  --bg-hover: #23232e;
+  --bg-sunken: #101017;
 
-  --border-s: rgba(255, 255, 255, 0.05);
-  --border-d: rgba(255, 255, 255, 0.09);
-  --border-a: rgba(var(--accent), 0.22);
+  --border-s: rgba(255, 255, 255, 0.07);
+  --border-d: rgba(255, 255, 255, 0.13);
+  --border-a: rgba(var(--accent), 0.4);
 
-  --text-primary: #fafafa;
-  --text-secondary: #d4d4d8;
-  --text-tertiary: #a1a1aa;
-  --text-muted: #71717a;
-  --text-faint: #52525b;
+  --text-primary: #f4f4f5;
+  --text-secondary: #c8c8d0;
+  --text-tertiary: #b0b0bb;
+  --text-muted: #9d9daa;
+  --text-faint: #8a8a96;
 
   --red: #f87171;
   --amber: #fbbf24;
@@ -34,24 +46,32 @@
 
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --titlebar-h: 38px;
-  --sidebar-w: 76px;
-  --sidebar-w-open: 208px;
+  --sidebar-w: 224px;
 }
 
 html[data-theme='light'] {
-  --bg-base: #f7f7f9;
-  --bg-elevated: #ffffff;
-  --bg-surface: #ffffff;
-  --bg-hover: #eeeef2;
+  --accent-text: #047857;
+  --on-accent: #04140d;
 
-  --border-s: rgba(0, 0, 0, 0.06);
-  --border-d: rgba(0, 0, 0, 0.11);
+  --bg-base: #f4f4f7;
+  --bg-side: #ececf1;
+  --bg-elevated: #ffffff;
+  --bg-surface: #f1f1f5;
+  --bg-hover: #e7e7ee;
+  --bg-sunken: #f7f7fa;
+
+  --border-s: rgba(0, 0, 0, 0.08);
+  --border-d: rgba(0, 0, 0, 0.14);
+  --border-a: rgba(var(--accent), 0.45);
 
   --text-primary: #18181b;
   --text-secondary: #3f3f46;
-  --text-tertiary: #52525b;
-  --text-muted: #71717a;
-  --text-faint: #a1a1aa;
+  --text-tertiary: #4b4b55;
+  --text-muted: #5f5f6b;
+  --text-faint: #6b6b76;
+
+  --red: #dc2626;
+  --amber: #b45309;
 }
 
 *,
@@ -92,6 +112,20 @@ body {
   user-select: none;
 }
 
+a {
+  color: var(--accent-text);
+}
+
+/*
+ * `hidden` has to win over the component's own display. The browser's rule
+ * for it is a plain `display: none` that any `.thing { display: flex }`
+ * outranks, so every flex block the pages hide with the attribute stayed on
+ * screen. This and the reduced-motion block are the only !important rules.
+ */
+[hidden] {
+  display: none !important;
+}
+
 /* ── Ambient glow ─────────────────────────────────────────────────────────── */
 
 #ambient {
@@ -107,21 +141,21 @@ body {
   height: 46vw;
   border-radius: 50%;
   filter: blur(140px);
-  opacity: 0.16;
+  opacity: 0.12;
   background: var(--orb, var(--accent-hex));
   transition: background 1.2s var(--ease-out), opacity 1.2s var(--ease-out);
 }
 .orb-a {
   top: -16vw;
-  left: -10vw;
+  right: -10vw;
 }
 .orb-b {
   bottom: -20vw;
-  right: -12vw;
-  opacity: 0.1;
+  right: 20vw;
+  opacity: 0.07;
 }
 html[data-theme='light'] .orb {
-  opacity: 0.14;
+  opacity: 0.1;
 }
 
 /* ── Title bar ────────────────────────────────────────────────────────────── */
@@ -134,7 +168,7 @@ html[data-theme='light'] .orb {
   display: flex;
   align-items: stretch;
   justify-content: space-between;
-  background: transparent;
+  background: var(--bg-side);
   border-bottom: 1px solid var(--border-s);
 }
 .tb-drag {
@@ -142,41 +176,32 @@ html[data-theme='light'] .orb {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding-left: 14px;
+  padding-left: 16px;
   -webkit-app-region: drag;
 }
 .tb-mark {
-  width: 9px;
-  height: 9px;
-  border-radius: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
   background: var(--accent-hex);
-  box-shadow: 0 0 12px rgba(var(--accent), 0.7);
+  color: var(--on-accent);
+  display: grid;
+  place-items: center;
+}
+.tb-mark svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .tb-title {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text-tertiary);
-  letter-spacing: 0.02em;
-}
-.tb-status {
-  font-size: 11.5px;
-  color: var(--text-faint);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.tb-status .dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--text-faint);
-}
-.tb-status .dot.on {
-  background: var(--accent-hex);
-  box-shadow: 0 0 8px rgba(var(--accent), 0.8);
-}
-.tb-status .dot.off {
-  background: var(--red);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.005em;
 }
 
 .tb-buttons {
@@ -184,7 +209,7 @@ html[data-theme='light'] .orb {
   -webkit-app-region: no-drag;
 }
 .tb-btn {
-  width: 44px;
+  width: 46px;
   border: 0;
   background: transparent;
   color: var(--text-tertiary);
@@ -228,10 +253,10 @@ html[data-theme='light'] .orb {
   align-items: center;
   gap: 10px;
   padding: 9px 16px 9px 22px;
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.5;
   color: var(--text-secondary);
-  background: rgba(var(--accent), 0.09);
+  background: rgba(var(--accent), 0.1);
   border-bottom: 1px solid var(--border-a);
 }
 /* The attribute alone would lose to display:flex above. */
@@ -243,87 +268,148 @@ html[data-theme='light'] .orb {
   min-width: 0;
 }
 #updateBar b {
-  color: var(--accent-hex);
+  color: var(--accent-text);
   font-weight: 600;
 }
+
+/* ── Sidebar ──
+ * Labels are always on. The bar used to be a column of icons that only named
+ * themselves on hover, which is a guessing game for anyone opening the app
+ * for the first time — and four sections fit with their names. */
 
 #sidebar {
   width: var(--sidebar-w);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 12px 10px;
+  gap: 4px;
+  padding: 16px 12px 14px;
+  background: var(--bg-side);
   border-right: 1px solid var(--border-s);
-  transition: width 0.22s var(--ease-out);
-  overflow: hidden;
-}
-#sidebar:hover {
-  width: var(--sidebar-w-open);
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 .nav-spacer {
   flex: 1;
+  min-height: 16px;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 14px;
-  height: 44px;
-  padding: 0 15px;
+  gap: 12px;
+  min-height: 42px;
+  padding: 0 12px;
   border: 0;
-  border-radius: var(--r-md);
+  border-radius: 10px;
   background: transparent;
   color: var(--text-muted);
   font: inherit;
-  font-size: 13.5px;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
   cursor: pointer;
   white-space: nowrap;
   transition: background 0.15s, color 0.15s;
 }
 .nav-item svg {
-  width: 19px;
-  height: 19px;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.6;
+  stroke-width: 1.7;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.nav-item span {
-  opacity: 0;
-  transition: opacity 0.18s;
-}
-#sidebar:hover .nav-item span {
-  opacity: 1;
-}
 .nav-item:hover {
-  background: var(--bg-hover);
-  color: var(--text-secondary);
+  background: var(--bg-surface);
+  color: var(--text-primary);
 }
 .nav-item.active {
-  background: rgba(var(--accent), 0.11);
-  color: var(--accent-hex);
-}
-.nav-quit:hover {
-  background: rgba(248, 113, 113, 0.12);
-  color: var(--red);
+  background: rgba(var(--accent), 0.14);
+  color: var(--accent-text);
 }
 .nav-item:focus-visible {
   outline: 2px solid var(--accent-hex);
   outline-offset: -2px;
 }
 
+/* Connection status, where the eye already is rather than in the title bar. */
+.side-status {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 6px 0;
+  padding: 13px 14px;
+  border-radius: var(--r-md);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-s);
+}
+.ss-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.ss-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.ss-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--text-faint);
+}
+.dot.on {
+  background: var(--accent-hex);
+  box-shadow: 0 0 8px rgba(var(--accent), 0.7);
+}
+.dot.off {
+  background: var(--red);
+}
+
+/* A narrow window gives the room back to the content: icons only, names in
+   the tooltip, as before — but only when there is genuinely no room. */
+@media (max-width: 1000px) {
+  #sidebar {
+    width: 72px;
+    padding: 16px 10px 14px;
+  }
+  .nav-item {
+    justify-content: center;
+    padding: 0;
+  }
+  .nav-item span,
+  .side-status .ss-text {
+    display: none;
+  }
+  .side-status {
+    align-items: center;
+    padding: 12px 0;
+  }
+}
+
 #content {
   flex: 1;
+  min-width: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 26px 32px 40px;
+  padding: 24px 30px 36px;
 }
 .page {
   display: none;
-  max-width: 1000px;
+  max-width: 1080px;
   margin: 0 auto;
   animation: fade 0.24s var(--ease-out);
 }
@@ -340,24 +426,41 @@ html[data-theme='light'] .orb {
 /* ── Typography & layout primitives ───────────────────────────────────────── */
 
 h1 {
-  font-size: 22px;
+  font-size: 26px;
   font-weight: 700;
   color: var(--text-primary);
   letter-spacing: -0.02em;
 }
 h2 {
-  font-size: 15px;
-  font-weight: 650;
+  font-size: 16px;
+  font-weight: 700;
   color: var(--text-primary);
   letter-spacing: -0.01em;
 }
 .sub {
-  font-size: 13px;
+  font-size: 13.5px;
   color: var(--text-muted);
   margin-top: 4px;
 }
 .page-head {
-  margin-bottom: 22px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.page-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
 
 .card {
@@ -367,13 +470,11 @@ h2 {
   padding: 20px;
   margin-bottom: 16px;
 }
-.card + .card {
-  margin-top: 0;
-}
 .card-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 14px;
 }
@@ -391,10 +492,10 @@ h2 {
   gap: 14px;
 }
 .grid-2 {
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 .grid-3 {
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
 }
 
 .muted {
@@ -404,7 +505,7 @@ h2 {
 .empty {
   padding: 34px 20px;
   text-align: center;
-  color: var(--text-faint);
+  color: var(--text-muted);
   font-size: 13.5px;
 }
 
@@ -413,18 +514,31 @@ h2 {
 .btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  height: 34px;
-  padding: 0 14px;
+  min-height: 38px;
+  padding: 0 15px;
   border: 1px solid var(--border-d);
-  border-radius: var(--r-sm);
+  border-radius: 10px;
   background: var(--bg-surface);
-  color: var(--text-secondary);
+  color: var(--text-primary);
   font: inherit;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 13.5px;
+  font-weight: 600;
   cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
   transition: background 0.14s, border-color 0.14s, color 0.14s;
+}
+.btn svg {
+  width: 17px;
+  height: 17px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .btn:hover:not(:disabled) {
   background: var(--bg-hover);
@@ -436,42 +550,56 @@ h2 {
 }
 /*
  * The most numerous control in the app was the only one without a focus style
- * of its own. It was never invisible — .btn does not clear the outline, so the
- * browser's default ring survived — but every sibling control (nav items,
- * fields, switches, the lyrics block) wears the accent, and the buttons did not.
- * :focus-visible rather than :focus, so a mouse click does not draw it.
+ * of its own. :focus-visible rather than :focus, so a mouse click does not
+ * draw it.
  */
 .btn:focus-visible {
   outline: 2px solid var(--accent-hex);
   outline-offset: 2px;
 }
+/* The one thing to do on a screen: filled, so it reads before anything else. */
 .btn-primary {
-  background: rgba(var(--accent), 0.14);
-  border-color: var(--border-a);
-  color: var(--accent-hex);
+  background: var(--accent-hex);
+  border-color: var(--accent-hex);
+  color: var(--on-accent);
 }
 .btn-primary:hover:not(:disabled) {
-  background: rgba(var(--accent), 0.22);
-  color: var(--accent-hex);
+  background: #34d399;
+  border-color: #34d399;
+  color: var(--on-accent);
+}
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-secondary);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--bg-surface);
 }
 .btn-danger {
   color: var(--red);
-  border-color: rgba(248, 113, 113, 0.28);
+  border-color: rgba(248, 113, 113, 0.32);
 }
 .btn-danger:hover:not(:disabled) {
   background: rgba(248, 113, 113, 0.12);
   color: var(--red);
 }
 .btn-sm {
-  height: 28px;
-  padding: 0 10px;
-  font-size: 12px;
+  min-height: 32px;
+  padding: 0 11px;
+  font-size: 12.5px;
 }
 .btn-lg {
-  height: 44px;
+  min-height: 44px;
   padding: 0 22px;
   font-size: 14px;
-  font-weight: 600;
+}
+.btn-icon {
+  width: 38px;
+  padding: 0;
+}
+.btn-sm.btn-icon {
+  width: 32px;
 }
 
 input[type='text'],
@@ -481,15 +609,20 @@ input[type='password'],
 select,
 textarea {
   width: 100%;
+  min-height: 38px;
   padding: 8px 11px;
   border: 1px solid var(--border-d);
-  border-radius: var(--r-sm);
-  background: var(--bg-base);
+  border-radius: 10px;
+  background: var(--bg-sunken);
   color: var(--text-primary);
   font: inherit;
-  font-size: 13px;
+  font-size: 13.5px;
   user-select: text;
   transition: border-color 0.14s;
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-faint);
 }
 input:focus,
 select:focus,
@@ -511,8 +644,41 @@ label.field {
 label.field > span {
   display: block;
   font-size: 12.5px;
+  font-weight: 600;
   color: var(--text-tertiary);
   margin-bottom: 6px;
+}
+
+/* A search box with its glass inside it. */
+.search {
+  position: relative;
+  display: block;
+}
+.search svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  width: 17px;
+  height: 17px;
+  transform: translateY(-50%);
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+.search input {
+  padding-left: 37px;
+}
+
+/* Visually hidden, still read out. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 /* Toggle rows */
@@ -521,21 +687,23 @@ label.field > span {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 11px 0;
+  padding: 12px 0;
   border-bottom: 1px solid var(--border-s);
 }
 .row:last-child {
   border-bottom: 0;
 }
 .row-label {
-  font-size: 13.5px;
-  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 .row-desc {
-  font-size: 12px;
-  color: var(--text-faint);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
   margin-top: 2px;
-  max-width: 62ch;
+  max-width: 64ch;
 }
 .row-control {
   flex-shrink: 0;
@@ -543,13 +711,13 @@ label.field > span {
 }
 .row-control select,
 .row-control input {
-  width: 190px;
+  width: 200px;
 }
 
 .switch {
   position: relative;
-  width: 40px;
-  height: 22px;
+  width: 46px;
+  height: 26px;
   flex-shrink: 0;
   cursor: pointer;
 }
@@ -565,123 +733,532 @@ label.field > span {
   position: absolute;
   inset: 0;
   border-radius: 99px;
-  background: var(--bg-hover);
-  border: 1px solid var(--border-d);
-  transition: background 0.18s, border-color 0.18s;
+  background: var(--bg-surface);
+  /* The off track needs an edge that holds 3:1 against the card, or the
+     switch is a pale pill nobody can tell is a control. */
+  box-shadow: inset 0 0 0 1px #6b6b78;
+  transition: background 0.18s, box-shadow 0.18s;
   pointer-events: none;
 }
 .switch .thumb {
   position: absolute;
   top: 3px;
   left: 3px;
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
-  background: var(--text-faint);
+  background: var(--text-secondary);
   transition: transform 0.18s var(--ease-out), background 0.18s;
   pointer-events: none;
 }
 .switch input:checked ~ .track {
-  background: rgba(var(--accent), 0.25);
-  border-color: var(--border-a);
+  background: var(--accent-hex);
+  box-shadow: none;
 }
 .switch input:checked ~ .thumb {
-  transform: translateX(18px);
-  background: var(--accent-hex);
+  transform: translateX(20px);
+  background: #fff;
 }
 .switch input:focus-visible ~ .track {
   outline: 2px solid var(--accent-hex);
   outline-offset: 2px;
 }
 
+/* Segmented control — presences, time ranges, anything that picks one of a few. */
+.seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--r-md);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-s);
+}
+.seg-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 260px;
+}
+.seg-btn:hover {
+  color: var(--text-primary);
+}
+.seg-btn.active {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+.seg-btn .seg-sub {
+  font-weight: 500;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.seg-btn:focus-visible {
+  outline: 2px solid var(--accent-hex);
+  outline-offset: 1px;
+}
+
 /* ── Now playing ──────────────────────────────────────────────────────────── */
 
-.np {
+/*
+ * Now playing fits the window instead of scrolling, down to a point.
+ *
+ * The page holds a fixed set of cards, so it is laid out as a column at least
+ * the height of the content area, and the lyric block takes whatever the other
+ * cards leave over. Below a usable height the lyric block stops shrinking and
+ * the page scrolls instead: with the track and the Discord card stacked, the
+ * smallest window would otherwise have left the lyrics a sliver.
+ */
+.page[data-page='now'].active {
   display: flex;
-  gap: 22px;
-  align-items: flex-start;
+  flex-direction: column;
+  gap: calc(12px + var(--np-ramp) * 0.025);
+  min-height: 100%;
 }
-.np-art {
-  /* Kept small on purpose: the cover is the least useful thing on this page,
-     and the room it gives back goes to the lyrics underneath. */
-  width: 118px;
-  height: 118px;
-  flex-shrink: 0;
+/*
+ * One ramp for every size on this page that follows the window's height: 0
+ * at 700px tall and below, 160px at 860px (the default window) and above.
+ * Each of those sizes runs from its short-window value to its full one along
+ * it. It replaces a single step at 760px, where one pixel more grew the card
+ * by 84px and took 103px from the lyrics — five lines down to three, so a
+ * 761-815px window gave them less room than a 700px one. Along the ramp the
+ * card grows about half a pixel per pixel of window, so a taller window
+ * always leaves the lyrics at least as much room as a shorter one. The one
+ * step left is at 761px, in the max-height: 760px rule further down.
+ */
+.page[data-page='now'] {
+  --np-ramp: clamp(0px, 100vh - 700px, 160px);
+}
+.page[data-page='now'] .card {
+  margin-bottom: 0;
+}
+/*
+ * As much room under the cards as over them. The 36px the other pages keep
+ * at the bottom is for a page that scrolls, and here it was what made the
+ * smallest window (866x614 inside, at 150% scaling) scroll by 6px: with
+ * Windows' own font every line of the card is a little taller than the
+ * layout was measured with.
+ */
+#content:has(> .page[data-page='now'].active) {
+  padding-bottom: 24px;
+}
+
+.np-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 46px;
+}
+
+/*
+ * The song and its Discord card, as one card. It keeps its height; the lyrics
+ * take whatever is left.
+ */
+.np-card {
+  flex: none;
+  padding: 0;
+  /* The cover's wash has to stop at the rounded corners. */
+  overflow: hidden;
+}
+.np-track {
+  display: flex;
+  /* Top, not centre: a title on two lines grew the text past the cover, and
+     centred, the cover slid down away from the line that names the player. */
+  align-items: flex-start;
+  gap: calc(16px + var(--np-ramp) * 0.025);
+  padding: calc(10px + var(--np-ramp) * 0.05) calc(18px + var(--np-ramp) * 0.025);
+  /* A wash of the cover's colour, set by setAmbient(), fading out before the
+     text — strong enough to say "this cover", weak enough to leave the title
+     on the card's own colour. Without a cover it is no wash at all. */
+  --np-wash: 16%;
+  background: linear-gradient(100deg, color-mix(in srgb, var(--np-tint, transparent) var(--np-wash), transparent), transparent 55%);
+}
+html[data-theme='light'] .np-track {
+  --np-wash: 12%;
+}
+.np-cover {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  /* 84px at the bottom of the ramp, 100px at the top: within a few pixels of
+     the text column beside it (eyebrow, one-line title, artist, bar) all the
+     way up, so the cover neither adds height nor leaves the bar hanging below
+     it. At 72px the bar sat 12px under the cover at 880x620. */
+  --np-cover: calc(84px + var(--np-ramp) * 0.1);
+  width: var(--np-cover);
+  height: var(--np-cover);
   border-radius: var(--r-md);
+  overflow: hidden;
   background: var(--bg-surface);
-  border: 1px solid var(--border-s);
+  color: var(--text-faint);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.38);
+}
+html[data-theme='light'] .np-cover {
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.14);
+}
+.np-cover svg {
+  width: 36%;
+  height: 36%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* Over the note glyph: a cover hides it, the blank placeholder lets it through. */
+.np-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4);
 }
 .np-meta {
   flex: 1;
   min-width: 0;
-}
-.np-title {
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--text-primary);
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-  word-break: break-word;
-}
-.np-artist {
-  font-size: 15px;
-  color: var(--text-tertiary);
-  margin-top: 5px;
-}
-.np-album {
-  font-size: 13px;
-  color: var(--text-faint);
-  margin-top: 2px;
-}
-.np-badges {
   display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-  margin-top: 14px;
+  flex-direction: column;
+  gap: 2px;
 }
-.badge {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  padding: 4px 9px;
-  border-radius: 99px;
-  background: var(--bg-hover);
-  border: 1px solid var(--border-s);
-  color: var(--text-muted);
+/*
+ * One row, always. Four chips used to wrap onto a second one, which pushed
+ * the title and everything under it down — and as the cover grows with the
+ * window, the row narrows, so they wrapped in a taller window and not in a
+ * shorter one. Short of room, the chips drop their words instead and keep
+ * their glyph and tooltip: see fitChips().
+ */
+.np-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: calc(2px + var(--np-ramp) * 0.025);
 }
-.badge.accent {
-  background: rgba(var(--accent), 0.13);
-  border-color: var(--border-a);
-  color: var(--accent-hex);
+.np-state:empty {
+  display: none;
 }
-/* Shuffle, repeat and the rest are glyphs — the wording lives in the tooltip. */
-.badge-icon {
-  display: inline-grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border-radius: 9px;
-  color: var(--text-tertiary);
+.np-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
 }
-.badge-icon svg {
-  width: 16px;
-  height: 16px;
+/* The pulse fades to 55% and back; on a white card, under the cover's wash,
+   that read as a pale smudge. The light theme takes the darker green and
+   keeps only the ring, so the dot itself never fades. */
+html[data-theme='light'] .np-source .pulse {
+  background: var(--accent-text);
+  animation-name: np-halo;
+}
+@keyframes np-halo {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(4, 120, 87, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(4, 120, 87, 0);
+  }
+}
+.np-glyph {
+  display: inline-flex;
+}
+.np-glyph svg {
+  width: 12px;
+  height: 12px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.7;
+  stroke-width: 3.2;
+  stroke-linecap: round;
+}
+/* Sized to the eyebrow's cap height, so the line keeps its height with the
+   tag in front of it rather than growing a row taller than the chips. */
+.np-source .live-tag {
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  line-height: 12px;
+  letter-spacing: 0.08em;
+}
+/*
+ * The chips overhang the eyebrow's 14px line instead of making it 22px tall.
+ * Sized to the row, turning shuffle on or going away pushed the title, the
+ * preview and the whole Lyrics card down 7px, for what is only a label. Not
+ * a min-height on the row: that would cost the same 7px with no chip at all.
+ */
+.np-state .badge {
+  min-height: 22px;
+  margin-block: -4px;
+  padding: 0 8px;
+  font-size: 11.5px;
+}
+.np-state .badge svg {
+  width: 13px;
+  height: 13px;
+}
+.np-title {
+  font-size: calc(22px + var(--np-ramp) * 0.0125);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/*
+ * A stream's title (its "artist") and its game (its "album") share a line
+ * while they fit, and the game wraps under the title when they do not. Not
+ * one clamped run of text: after a two-line title, the game was always the
+ * part the clamp cut off.
+ */
+.np-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 14px;
+  min-width: 0;
+  /* Clips the album's separator once it wraps — see .np-album::before. */
+  overflow: hidden;
+}
+/*
+ * One line for a song: a list of featured artists on two lines, with the
+ * album pushed to a third, grew the card by 40px and made the page scroll at
+ * 880x620 and from 761 to 790px tall. Two for a stream, whose "artist" is its
+ * title, and for the hint shown while nothing plays. The whole of it is in
+ * the tooltip.
+ */
+.np-artist {
+  font-size: calc(14px + var(--np-ramp) * 0.00625);
+  line-height: 1.35;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.np-card.is-live .np-artist,
+.np-card.is-idle .np-artist {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+/*
+ * A song's album stays on the artist's line: wrapped under a long list of
+ * featured artists it was a line of its own, and that line made the page
+ * scroll at 880x620. The album takes what the artist leaves, and never less
+ * than the separator and a few letters: from a zero basis it only grows, so
+ * any shrinking falls on the artist, and only once the album is down to that.
+ * Shared in proportion instead, a short artist was cut so a long album could
+ * show ("Ludwig van Beeth… · Beethoven: The Complete Symphonies…"), and even
+ * a lopsided share cut it, as a fraction of a pixel is enough for an ellipsis.
+ */
+.np-card:not(.is-live) .np-sub {
+  flex-wrap: nowrap;
+}
+.np-card:not(.is-live) .np-artist {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.np-card:not(.is-live) .np-album {
+  flex: 1 0 0;
+  min-width: calc(14px + 4.5em);
+}
+.np-album {
+  /* Pulled back over the gap by the separator's width: beside the artist the
+     dot lands in the gap, and on a line of its own it lands outside the box,
+     where the overflow clips it, so a wrapped album never starts with "·". */
+  margin-left: -14px;
+  max-width: calc(100% + 14px);
+  font-size: calc(13px + var(--np-ramp) * 0.003125);
+  line-height: 1.35;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.np-album::before {
+  content: '·';
+  display: inline-block;
+  width: 14px;
+  text-align: center;
+}
+/* An album with no artist then starts the line, and its separator lands
+   outside the box, where the overflow clips it, as it does when it wraps. */
+.np-artist:empty,
+.np-album:empty {
+  display: none;
+}
+.np-card.is-idle .np-track {
+  align-items: center;
+}
+.np-card.is-idle .np-title {
+  font-size: 19px;
+  letter-spacing: -0.01em;
+}
+.np-card.is-idle .np-artist {
+  font-size: 13.5px;
+  color: var(--text-muted);
+}
+.np-card.is-idle .np-cover {
+  --np-cover: calc(64px + var(--np-ramp) * 0.05);
+  box-shadow: none;
+}
+.np-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: calc(6px + var(--np-ramp) * 0.025);
+}
+.np-progress .np-bar {
+  flex: 1;
+  height: 5px;
+}
+/* --bg-hover is a near-white grey on the light card: the unplayed part of
+   the bar vanished and the fill looked like a floating stripe. */
+html[data-theme='light'] .np-progress .np-bar {
+  background: var(--border-d);
+}
+/* Grey while paused, as the eyebrow's glyph says: a green bar standing still
+   still read as playing. */
+.np-card.is-paused .np-fill {
+  background: var(--text-faint);
+}
+.np-time {
+  min-width: 34px;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.np-time:last-child {
+  text-align: right;
+}
+
+/*
+ * The preview, set into the bottom of the card: its own card chrome goes, and
+ * a hairline and its eyebrow are what separate it from the song. Scoped to
+ * this page — Settings shows the same preview as a card of its own.
+ */
+.page[data-page='now'] .np-card > .dc-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: 'eyebrow note link' 'dc dc dc';
+  align-items: center;
+  gap: calc(6px + var(--np-ramp) * 0.025) 16px;
+  padding: calc(8px + var(--np-ramp) * 0.025) calc(18px + var(--np-ramp) * 0.025) calc(10px + var(--np-ramp) * 0.05);
+  border: 0;
+  border-top: 1px solid var(--border-s);
+  border-radius: 0;
+  background: none;
+}
+/*
+ * The note on how the lyric lines work goes up beside the eyebrow, as its
+ * caption. Under the card it was a row of its own, and that row was what
+ * made the page scroll at 1180x816 — a 1536x864 screen, maximised.
+ */
+.page[data-page='now'] .np-card .dc-head {
+  display: contents;
+}
+.page[data-page='now'] .np-card .dc-head .eyebrow {
+  grid-area: eyebrow;
+}
+.page[data-page='now'] .np-card .dc-head button {
+  grid-area: link;
+}
+/*
+ * One row, cut with an ellipsis, like the preview's lines below. Below about
+ * 1180px wide it wrapped to two rows (36px beside a 14px eyebrow), and it
+ * shows from 761px tall, at the same pixel as the title's second line: the
+ * card grew 46px in one step, and the lyrics went from five lines to three
+ * until 854px tall. Its opening words carry the point.
+ */
+.page[data-page='now'] .np-card .dc-note {
+  grid-area: note;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/*
+ * Two clocks in one card: the song's bar right above and the preview's own,
+ * in two type styles. The song's bar is the one with the local clock, so the
+ * preview's goes, at every height. A stream's time since it went live is
+ * kept, at every height too: nothing above counts it, and the 640px rule
+ * further down would otherwise hide it with the song's.
+ */
+.page[data-page='now'] .np-card .dc-time-slot:has(.dc-time) {
+  display: none;
+}
+.page[data-page='now'] .np-card .dc-time-slot:has(.dc-elapsed) {
+  display: block;
+}
+/* The song's own cover is just above, at full size; this one only has to read
+   as Discord's. 16px of art and padding given back to the lyrics. */
+.page[data-page='now'] .np-card .dc {
+  grid-area: dc;
+  gap: calc(6px + var(--np-ramp) * 0.0375);
+  padding: calc(8px + var(--np-ramp) * 0.025) calc(14px + var(--np-ramp) * 0.0125);
+}
+.page[data-page='now'] .np-card .dc-lines {
+  gap: calc(1px + var(--np-ramp) * 0.0125);
+}
+.page[data-page='now'] .np-card .dc-art-wrap,
+.page[data-page='now'] .np-card .dc-art {
+  width: calc(56px + var(--np-ramp) * 0.15);
+  height: calc(56px + var(--np-ramp) * 0.15);
+}
+.page[data-page='now'] .np-card .dc-small {
+  width: calc(22px + var(--np-ramp) * 0.05);
+  height: calc(22px + var(--np-ramp) * 0.05);
+  right: -6px;
+  bottom: -6px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0 10px;
+  border-radius: 99px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-s);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.badge.accent {
+  background: rgba(var(--accent), 0.14);
+  border-color: var(--border-a);
+  color: var(--accent-text);
+}
+.badge svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
-.np-progress {
-  margin-top: 18px;
-}
 .np-bar {
-  height: 4px;
+  height: 6px;
   border-radius: 99px;
   background: var(--bg-hover);
   overflow: hidden;
@@ -693,83 +1270,703 @@ label.field > span {
   background: var(--accent-hex);
   transition: width 0.25s linear;
 }
-.np-times {
+.live-tag {
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: #b91c1c;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+/* Source picker: pins the focused presence to a player, or back to automatic. */
+.src-wrap {
+  position: relative;
+}
+.src-btn .src-label {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+/* Words the Now header sheds when its row is short of room — see fitHead(). */
+.src-short,
+.np-head.tight-src .src-long,
+.np-head.tight-word .seg-word,
+.np-head.tight-sub .seg-sub {
+  display: none;
+}
+.np-head.tight-src .src-short {
+  display: inline;
+}
+/* The number alone, or a number and a player: the gap after the dot is
+   enough, and the one before the player stays. */
+.np-head.tight-word .seg-btn {
+  padding: 0 12px;
+}
+.src-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 40;
+  width: min(380px, 80vw);
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 6px;
+  border-radius: var(--r-md);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-d);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+  animation: fade 0.14s var(--ease-out);
+}
+.src-menu[hidden] {
+  display: none;
+}
+.src-opt {
   display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.src-opt:hover,
+.src-opt:focus-visible {
+  background: var(--bg-surface);
+  outline: none;
+}
+.src-opt.active .src-check {
+  opacity: 1;
+}
+.src-check {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  opacity: 0;
+  fill: none;
+  stroke: var(--accent-text);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.src-note {
+  padding: 8px 10px 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border-s);
+  margin-top: 4px;
+}
+
+/* ── Discord preview ──
+ * Drawn in Discord's own dark greys in both themes: it is a picture of their
+ * card, and a light version of it would show the user something nobody sees. */
+
+.dc-card {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  /* The card lays itself out from its own width: wide on Now playing, narrow
+     in the Settings column. */
+  container-type: inline-size;
+}
+.dc-head {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
-  font-size: 11.5px;
-  color: var(--text-faint);
-  margin-top: 6px;
+  gap: 8px;
+}
+.dc-head button {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-text);
+  cursor: pointer;
+}
+.dc-head button:hover {
+  text-decoration: underline;
+}
+/*
+ * Laid out as Discord's profile card lays it out — see discord-model.js for
+ * which field goes where, and .dc-l below for why each line keeps to one row.
+ */
+.dc {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--r-md);
+  background: #28282d;
+  color: #f2f3f5;
+  min-height: 150px;
+}
+/* One line, cut with an ellipsis — Discord's header does not wrap. */
+.dc-verb {
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dc-body {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  min-width: 0;
+}
+.dc-art-wrap {
+  position: relative;
+  flex: none;
+  width: 92px;
+  height: 92px;
+}
+.dc-art {
+  width: 92px;
+  height: 92px;
+  border-radius: 10px;
+  object-fit: cover;
+  background: #3a3a40;
+}
+/* The platform badge, ringed in the card colour so it reads as sitting on the cover. */
+.dc-small {
+  position: absolute;
+  right: -7px;
+  bottom: -7px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #28282d;
+  border: 3px solid #28282d;
+  box-sizing: content-box;
+}
+.dc-lines {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow-wrap: anywhere;
+}
+.dc-l1 {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.dc-l {
+  font-size: 13.5px;
+  line-height: 1.35;
+  color: #dbdee1;
+}
+/*
+ * One row per line, cut with an ellipsis, as Discord's profile popout cuts
+ * them. Wrapped, the Settings preview put a long title over three rows, and
+ * on Now playing, where the first two lines are the lyric, the card grew and
+ * shrank with every line sung — the Lyrics card under it changed height each
+ * time, and its outer two lines blinked out and back. The two previews now
+ * agree, and each line carries its whole text as a tooltip.
+ */
+.dc-l1,
+.dc-l {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dc-time-slot:empty {
+  display: none;
+}
+.dc-time-slot {
+  margin-top: 5px;
+}
+.dc-time {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: 'Cascadia Mono', Consolas, ui-monospace, monospace;
+  font-size: 12.5px;
+  color: #dbdee1;
   font-variant-numeric: tabular-nums;
+}
+.dc-time .dc-bar {
+  flex: 1;
+  height: 4px;
+  border-radius: 99px;
+  background: #4e5058;
+  overflow: hidden;
+}
+.dc-time .dc-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 99px;
+  background: #f2f3f5;
+}
+/* Time since it started — Discord prints it in green beside a note. */
+.dc-elapsed {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Cascadia Mono', Consolas, ui-monospace, monospace;
+  font-size: 13px;
+  color: #3ba55c;
+  font-variant-numeric: tabular-nums;
+}
+.dc-elapsed svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.dc-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: auto;
+}
+.dc-button {
+  padding: 7px;
+  border-radius: 8px;
+  background: #3a3a40;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dc-buttons-note {
+  font-size: 11.5px;
+  color: #b5bac1;
+  text-align: center;
+}
+.dc-hidden {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 12px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: #b5bac1;
+}
+.dc-note {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+.dc-note:empty {
+  display: none;
+}
+
+/*
+ * Wide enough, the buttons move beside the lines instead of under them, the
+ * way Discord's full profile lays an activity out. That keeps the card about
+ * as tall as its cover, so the lyrics below keep their room.
+ */
+@container (min-width: 640px) {
+  .dc {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
+    grid-template-areas: 'verb verb' 'body buttons';
+    column-gap: 24px;
+    row-gap: 12px;
+    align-items: center;
+    min-height: 0;
+  }
+  .dc-verb {
+    grid-area: verb;
+  }
+  .dc-body {
+    grid-area: body;
+  }
+  .dc-buttons {
+    grid-area: buttons;
+    margin-top: 0;
+  }
+  .dc:not(:has(.dc-buttons)) .dc-body,
+  .dc-hidden {
+    grid-column: 1 / -1;
+  }
 }
 
 /* Lyrics */
 
-/*
- * Now playing fits the window instead of scrolling.
- *
- * The page holds a fixed set of cards, so it is laid out as a column the height
- * of the content area, and the lyric block takes whatever the other cards leave
- * over. The words then get as much room as the window can spare — a taller
- * fixed block bought that height by pushing the offset row off the bottom.
- *
- * The card scrolls inside itself as a last resort, so a window short enough to
- * squeeze the block past its content still never scrolls the page.
- */
-.page[data-page='now'].active {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
 .lyr-card {
   display: flex;
   flex-direction: column;
-  flex: 1;
+  /* A 0px basis, not flex: 1's 0%: the page's height is only a minimum now,
+     and against that a percentage basis falls back to the content's height,
+     which grew the page past the window by a few pixels. */
+  flex: 1 1 0px;
   /* A flex item refuses to shrink past its content until it is told it may. */
   min-height: 0;
-  margin-bottom: 0;
-  overflow-y: auto;
+  padding: 0;
+  overflow: hidden;
+}
+/* No lines to show (a live stream, lyrics off, nothing playing): one short
+   message, not half the page held open around it. With lines, enough for the
+   bar, the foot, the stage's padding and three lines (84-100px measured from
+   620 to 860px tall), so the line before and after the current one are whole
+   even at the minimum: 200px at the bottom of the ramp, 230px at the top,
+   where that leaves room for the current line on two rows. 290 kept two more
+   lines but made the page scroll from 760 to 800px. */
+.lyr-card:not(.is-empty) {
+  min-height: calc(200px + var(--np-ramp) * 0.1875);
+}
+.lyr-card.is-empty {
+  flex: none;
+}
+.lyr-card.is-empty .lyr-empty {
+  padding: 18px 24px;
+}
+.lyr-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: calc(5px + var(--np-ramp) * 0.01875) 12px calc(5px + var(--np-ramp) * 0.01875) 20px;
+  border-bottom: 1px solid var(--border-s);
+}
+.lyr-bar-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.lyr-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
 /*
  * The lines scale with the window rather than sitting at one fixed size: the
  * block is handed the leftover height, and on a short window a fixed size would
- * spend height the page does not have and push the offset row out of the card.
+ * spend height the page does not have.
  */
 .lyr {
   display: flex;
   flex-direction: column;
   flex: 1;
-  gap: clamp(10px, 1.8vh, 24px);
-  min-height: clamp(110px, 16vh, 260px);
+  min-height: 0;
+  --lyr-gap: clamp(8px, 1.6vh, 18px);
+  gap: var(--lyr-gap);
   justify-content: center;
   text-align: center;
-  padding: clamp(6px, 1vh, 16px) 0;
+  /*
+   * The lines are centred, so in a tall stage the padding is never seen; it
+   * only decides how close to the edges the outer two may come before they
+   * are dropped. It was 2vh, up to 17px at the default window, and that
+   * dropped them for every two-line title there. Lines that cannot fit fade
+   * into it instead of being cut — the fade is the padding and no more, so a
+   * line inside the content box is never under it.
+   */
+  --lyr-pad: 8px;
+  padding: var(--lyr-pad) 24px;
+  /* Hidden, not auto: each line is cut to a fixed number of rows and the
+     query below drops the outer two before they could overflow, so all a
+     scrollbar could ever move is a few pixels of fade. */
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, transparent, #000 var(--lyr-pad), #000 calc(100% - var(--lyr-pad)), transparent);
+  /* Its own height decides how many lines it shows — see below. */
+  container-type: size;
 }
-.lyr-prev,
-.lyr-next {
-  font-size: clamp(14px, 1.6vh, 16.5px);
-  color: var(--text-faint);
-  min-height: clamp(18px, 2vh, 24px);
+/*
+ * Every line keeps its height. Squeezed by the flex column instead, a lyric
+ * that wrapped kept its 1.3em box and drew its second row over the next line.
+ * Each is cut to a fixed number of rows instead — one for the lines around
+ * the current one, two for the current line — so the block's height is known
+ * whatever the song says, and the query below can count on it.
+ */
+.lyr > * {
+  flex-shrink: 0;
 }
-.lyr-cur {
-  font-size: clamp(21px, 2.5vh, 30px);
-  font-weight: 650;
-  color: var(--text-primary);
-  line-height: 1.32;
-  min-height: clamp(26px, 3.4vh, 40px);
-  transition: opacity 0.2s;
-}
+.lyr-far,
+.lyr-near,
 .lyr-tr {
-  font-size: clamp(13.5px, 1.5vh, 15.5px);
-  color: rgba(var(--accent), 0.85);
+  min-height: 1.3em;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/*
+ * The outer two lines only when all five fit inside the padding, with the
+ * current line on two rows: cut in half they read as a rendering fault rather
+ * than as context. Asked of the stage rather than of the window, because the
+ * card above it changes height with the track and with the window's width.
+ * Two rows whether or not this line needs them, so that a long line coming
+ * round does not make the outer two blink out and back. The sum is the rules
+ * below, term by term: two far lines, two near ones, the current line's two
+ * rows and four gaps.
+ */
+@container (max-height: calc(2.6 * clamp(14px, 1.6vh, 17px) + 2.6 * clamp(15px, 1.9vh, 19px) + 2.3 * clamp(22px, 3vh, 32px) + 4 * clamp(8px, 1.6vh, 18px))) {
+  .lyr-far {
+    display: none;
+  }
+}
+/* With the translation line too, 2px under the current one. */
+@container (max-height: calc(2.6 * clamp(14px, 1.6vh, 17px) + 2.6 * clamp(15px, 1.9vh, 19px) + 2.3 * clamp(22px, 3vh, 32px) + 1.3 * clamp(14px, 1.7vh, 16.5px) + 4 * clamp(8px, 1.6vh, 18px) + 2px)) {
+  .lyr.with-tr .lyr-far {
+    display: none;
+  }
+}
+/* Too short even for the line either side of a translated line on two rows —
+   880x620 with translations on: the current line keeps to one row, rather
+   than push the lines either side half out of the stage. */
+@container (max-height: calc(2.6 * clamp(15px, 1.9vh, 19px) + 2.3 * clamp(22px, 3vh, 32px) + 1.3 * clamp(14px, 1.7vh, 16.5px) + 2 * clamp(8px, 1.6vh, 18px) + 2px)) {
+  .lyr.with-tr .lyr-cur {
+    -webkit-line-clamp: 1;
+  }
+}
+.lyr-far {
+  font-size: clamp(14px, 1.6vh, 17px);
+  color: var(--text-faint);
+}
+.lyr-near {
+  font-size: clamp(15px, 1.9vh, 19px);
+  color: var(--text-tertiary);
+}
+/* Its rows set as a heading's, close: at 1.25, a line on two rows did not
+   fit with the line either side of it in the shortest stage, 880x620. */
+.lyr-cur {
+  font-size: clamp(22px, 3vh, 32px);
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  min-height: 1.15em;
+  transition: opacity 0.2s;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* Tucked under the line it translates, as its gloss, rather than a gap away
+   like the next line: a full gap above it made the stage overflow at 880x620
+   with only three lines left in it. */
+.lyr-tr {
+  font-size: clamp(14px, 1.7vh, 16.5px);
+  color: var(--accent-text);
   font-style: italic;
-  min-height: clamp(16px, 1.8vh, 21px);
+  margin-top: calc(2px - var(--lyr-gap));
 }
 /* Reserved only when translations are switched on — see paintTrSlot(). Left in
    the layout otherwise, its height opens a hole under the current line and the
-   three lines stop reading as evenly spaced. */
+   lines stop reading as evenly spaced. */
 .lyr:not(.with-tr) .lyr-tr {
   display: none;
+}
+/*
+ * Words without timings — see paintPlain(). The stage stops being lines
+ * centred on the one being sung and becomes the song from the top, scrolled
+ * with the wheel: the fade at the bottom says there is more, and the room
+ * under the last line lets it scroll clear of the fade.
+ */
+.lyr.is-plain {
+  justify-content: flex-start;
+  mask-image: linear-gradient(to bottom, transparent, #000 var(--lyr-pad), #000 calc(100% - 28px), transparent);
+}
+.lyr.is-plain > :not(.lyr-plain),
+.lyr:not(.is-plain) > .lyr-plain {
+  display: none;
+}
+.lyr-plain {
+  flex: 1 1 0px;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 0 28px;
+}
+.lyr-plain-line {
+  flex: none;
+  font-size: clamp(15px, 1.9vh, 19px);
+  line-height: 1.4;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.lyr-plain-gap {
+  flex: none;
+  height: 0.6em;
+}
+/* The block is a button in disguise: the hover state is what says so. */
+.lyr-clickable {
+  cursor: pointer;
+  transition: background 0.14s;
+}
+.lyr-clickable:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+html[data-theme='light'] .lyr-clickable:hover {
+  background: rgba(0, 0, 0, 0.02);
+}
+.lyr-clickable:focus-visible {
+  outline: 2px solid var(--border-a);
+  outline-offset: -4px;
+}
+.lyr-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 24px;
+  text-align: center;
+}
+.lyr-empty-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.lyr-empty-desc:empty {
+  display: none;
+}
+.lyr-empty-desc {
+  font-size: 13.5px;
+  color: var(--text-muted);
+  max-width: 48ch;
+}
+
+.lyr-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: calc(5px + var(--np-ramp) * 0.01875) 12px calc(5px + var(--np-ramp) * 0.01875) 20px;
+  border-top: 1px solid var(--border-s);
+}
+.lyr-offset {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.lyr-offset-label {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-right: 4px;
+}
+.lyr-offset-hint {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  margin-left: 4px;
+}
+#npOffset {
+  min-width: 74px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+/* On the right whether or not the timing row is beside it: words without
+   timings hide that row, and the button slid over to the left. */
+#npReport {
+  margin-left: auto;
+}
+/* A lyric offset saved for the playing track, rather than the global default.
+   Marked because otherwise the number looks like a setting that changed by
+   itself when a corrected song comes round. */
+#npOffset.per-track {
+  color: var(--accent-text);
+}
+
+/*
+ * A short window. The sizes that scale go down the ramp (see --np-ramp); what
+ * is left here are the changes that cannot be gradual: the title cut to one
+ * line, and the preview without its buttons and note.
+ *
+ * At 880x620, the smallest window, a long title, a list of featured artists
+ * and the preview repeating both over four lines grew the card by 77px, and
+ * with the lyrics held at their minimum the page scrolled 66px. Each of them
+ * is one line here; the song carries the whole text in its tooltips. At
+ * 761px a long title gets its second line back and the preview its note, on
+ * one row beside the eyebrow: 28px from the lyrics in one step, the only one
+ * left, and all five lines stay. A short title gains only the note's 3px.
+ */
+@media (max-height: 760px) {
+  /* Not a one-line clamp: that breaks at the first space, and "📺 " before a
+     long channel name showed as the emoji and an ellipsis. */
+  .np-title {
+    display: block;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .np-state .badge {
+    min-height: 18px;
+    margin-block: -2px;
+    font-size: 11px;
+  }
+  .dc-card {
+    padding: 14px 16px;
+  }
+  .dc {
+    min-height: 0;
+  }
+  .dc-art-wrap,
+  .dc-art {
+    width: 72px;
+    height: 72px;
+  }
+  .dc-buttons,
+  .dc-note {
+    display: none;
+  }
+  /* The buttons' column goes with them. */
+  .dc-body {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-height: 640px) {
+  .dc-time-slot {
+    display: none;
+  }
+}
+
+/*
+ * "Wrong lyrics?" — the two answers, opened in place of the lines and the
+ * timing row until one is picked or it is cancelled. Under the lines, at
+ * 880x620 it pushed the timing row out of the card and left a 16px strip of
+ * lyrics above itself.
+ */
+.lyr-ask {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: center;
+  gap: 10px;
+  padding: 14px 20px;
+  background: var(--bg-sunken);
+}
+.lyr-ask[hidden] {
+  display: none;
+}
+.lyr-card:has(.lyr-ask:not([hidden])) :is(.lyr, .lyr-foot) {
+  display: none;
+}
+.lyr-ask-title {
+  flex: 1 1 100%;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
 }
 
 /* ── Lists ────────────────────────────────────────────────────────────────── */
@@ -782,27 +1979,46 @@ label.field > span {
   display: flex;
   align-items: center;
   gap: 13px;
-  padding: 10px 12px;
-  border-radius: var(--r-sm);
+  padding: 9px 12px;
+  border-radius: 10px;
   transition: background 0.14s;
 }
 .item:hover {
-  background: var(--bg-hover);
+  background: var(--bg-surface);
 }
 .item-art {
   width: 42px;
   height: 42px;
   border-radius: var(--r-sm);
   object-fit: cover;
-  background: var(--bg-hover);
+  background: var(--bg-surface);
   flex-shrink: 0;
+}
+.item-glyph {
+  width: 42px;
+  height: 42px;
+  border-radius: var(--r-sm);
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  background: var(--bg-surface);
+  color: var(--text-muted);
+}
+.item-glyph svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .item-rank {
   width: 22px;
   text-align: center;
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 700;
-  color: var(--text-faint);
+  color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
 }
@@ -811,15 +2027,15 @@ label.field > span {
   min-width: 0;
 }
 .item-title {
-  font-size: 13.5px;
+  font-size: 14px;
   color: var(--text-primary);
-  font-weight: 500;
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .item-sub {
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -827,136 +2043,20 @@ label.field > span {
   margin-top: 1px;
 }
 .item-meta {
-  font-size: 12px;
-  color: var(--text-faint);
+  font-size: 12.5px;
+  color: var(--text-muted);
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
 }
 .item-actions {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   flex-shrink: 0;
 }
 
-/*
- * Now playing: the presence tiles, shown only while several cards are on air.
- *
- * One row, one column per card in play — five tiles at the default width are
- * narrow but whole, and a title that does not fit is cut with an ellipsis. It
- * used to wrap once the tiles ran out of room, and a second row is what pushed
- * the lyrics off the bottom of the window.
- */
-.presences {
-  display: grid;
-  grid-template-columns: repeat(var(--presences, 2), minmax(0, 1fr));
-  gap: 12px;
-  margin-bottom: 16px;
-}
-.presence-tile {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border: 1px solid var(--border-s);
-  border-radius: var(--r-md);
-  background: var(--bg-elevated);
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  min-width: 0;
-  transition: border-color 0.15s, background 0.15s;
-}
-.presence-tile:hover {
-  background: var(--bg-hover);
-}
-.presence-tile.focused {
-  border-color: var(--border-a);
-  background: rgba(var(--accent), 0.07);
-}
-.presence-tile.idle .item-title {
-  color: var(--text-faint);
-  font-weight: 400;
-}
-.presence-art {
-  width: 44px;
-  height: 44px;
-  flex-shrink: 0;
-  border-radius: var(--r-sm);
-  background: var(--bg-surface);
-  border: 1px solid var(--border-s);
-  object-fit: cover;
-}
-.presence-pos {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  margin-bottom: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.presence-tile.focused .presence-pos {
-  color: var(--accent-hex);
-}
-
-/* Players page */
-.player-card {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  min-width: 0;
-  padding: 14px;
-  border: 1px solid var(--border-s);
-  border-radius: var(--r-md);
-  background: var(--bg-elevated);
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
-}
-.player-card:hover {
-  background: var(--bg-hover);
-}
-.player-card.pinned {
-  border-color: var(--border-a);
-  background: rgba(var(--accent), 0.07);
-}
-/* With two presences the card is not itself a button — the pin buttons are. */
-.player-card.has-pins {
-  cursor: default;
-}
-.player-card.has-pins:hover {
-  background: var(--bg-elevated);
-}
-.pin-btns {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 6px;
-  flex-shrink: 0;
-  /* Five buttons still leave the title some room on a narrow window. */
-  max-width: 55%;
-}
-.pin-btns .pin-label {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-right: 2px;
-}
-.player-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--r-sm);
-  display: grid;
-  place-items: center;
-  background: var(--bg-hover);
-  font-size: 17px;
-  flex-shrink: 0;
-}
 .pulse {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--accent-hex);
   flex-shrink: 0;
@@ -979,7 +2079,7 @@ label.field > span {
 .tile {
   background: var(--bg-elevated);
   border: 1px solid var(--border-s);
-  border-radius: var(--r-md);
+  border-radius: var(--r-lg);
   padding: 16px 18px;
 }
 .tile-value {
@@ -990,38 +2090,493 @@ label.field > span {
   font-variant-numeric: tabular-nums;
 }
 .tile-label {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
-  margin-top: 3px;
+  margin-top: 2px;
+}
+
+/* ── Activity ─────────────────────────────────────────────────────────────── */
+
+.act-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.act-row > .card {
+  margin-bottom: 0;
+  min-width: 0;
+}
+
+/*
+ * Bars for listening time. One series, so one colour and no legend — the
+ * title names it. Rounded at the data end only, anchored to the baseline,
+ * with a 2px gap of card between neighbours.
+ */
+.chart {
+  position: relative;
+  height: 220px;
+  margin-top: 12px;
+}
+.chart-grid {
+  position: absolute;
+  left: 40px;
+  right: 0;
+  border-top: 1px dashed var(--border-s);
+}
+.chart-tick {
+  position: absolute;
+  left: 0;
+  width: 34px;
+  transform: translateY(-50%);
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.chart-plot {
+  position: absolute;
+  left: 40px;
+  right: 0;
+  top: 0;
+  bottom: 24px;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  border-bottom: 1px solid var(--border-d);
+}
+.chart-col {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  position: relative;
+}
+.chart-bar {
+  width: 72%;
+  max-width: 40px;
+  min-height: 0;
+  border-radius: 4px 4px 0 0;
+  background: var(--accent-hex);
+  transition: filter 0.15s;
+}
+.chart-col:hover .chart-bar {
+  filter: brightness(1.2);
+}
+.chart-tip {
+  position: absolute;
+  bottom: calc(var(--h, 0px) + 6px);
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s;
+}
+.chart-col:hover .chart-tip,
+.chart-col.peak .chart-tip {
+  opacity: 1;
+}
+.chart-col.peak:not(:hover) .chart-tip {
+  background: transparent;
+  padding: 0;
+}
+.chart-x {
+  position: absolute;
+  left: 40px;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  gap: 2px;
+}
+.chart-x span {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.meter-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 6px 0;
+}
+.meter-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13.5px;
+}
+.meter-name {
+  color: var(--text-primary);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.meter-val {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+.meter {
+  height: 6px;
+  border-radius: 99px;
+  background: var(--bg-hover);
+  overflow: hidden;
+}
+.meter > div {
+  height: 100%;
+  border-radius: 99px;
+  background: var(--accent-hex);
+}
+
+/* ── Settings ─────────────────────────────────────────────────────────────── */
+
+.set-layout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  align-items: flex-start;
+}
+.set-cats {
+  flex: 0 0 210px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: sticky;
+  top: 0;
+}
+.set-cats .search {
+  margin-bottom: 10px;
+}
+.set-cat {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.set-cat:hover {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+.set-cat.active {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  box-shadow: inset 3px 0 0 var(--accent-hex);
+}
+.set-cat:focus-visible {
+  outline: 2px solid var(--accent-hex);
+  outline-offset: -2px;
+}
+.set-panel {
+  flex: 1 1 440px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.set-panel-head h2 {
+  font-size: 19px;
+}
+/* The preview is sized for a row on Now playing; in this column it is just a card. */
+.set-panel .dc-card {
+  flex: none;
+  margin-bottom: 0;
+}
+.set-panel .dc {
+  max-width: 420px;
+}
+/* Capped at 420px, it must not take the wide layout its column would allow. */
+.set-panel .dc-card {
+  container-type: normal;
+}
+.set-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.set-group > .eyebrow {
+  padding-left: 4px;
+}
+.set-group .card {
+  margin-bottom: 0;
+}
+.set-group .card.rows {
+  padding: 2px 18px;
+}
+.set-group-desc {
+  padding-left: 4px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  max-width: 72ch;
+}
+.set-group[hidden],
+.set-group .row[hidden] {
+  display: none;
+}
+
+/* ── Lyrics library ───────────────────────────────────────────────────────── */
+
+.lib-layout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-start;
+}
+.lib-main {
+  flex: 999 1 460px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.lib-main .card {
+  margin-bottom: 0;
+}
+.lib-side {
+  flex: 1 1 260px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.lib-side .card {
+  margin-bottom: 0;
+  padding: 16px 18px;
+}
+.src-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  margin-top: 12px;
+}
+.src-list li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.src-n {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-d);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+.src-li-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.src-li-state {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.src-li-state.on {
+  color: var(--accent-text);
+}
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
 }
 
 /* ── Tabs ─────────────────────────────────────────────────────────────────── */
 
 .tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   margin-bottom: 16px;
   border-bottom: 1px solid var(--border-s);
 }
 .tab {
-  padding: 8px 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 14px;
   border: 0;
   background: transparent;
   color: var(--text-muted);
   font: inherit;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
   transition: color 0.14s, border-color 0.14s;
 }
 .tab:hover {
-  color: var(--text-secondary);
+  color: var(--text-primary);
 }
 .tab.active {
-  color: var(--accent-hex);
+  color: var(--text-primary);
   border-bottom-color: var(--accent-hex);
+}
+.tab-count {
+  min-width: 22px;
+  padding: 1px 7px;
+  border-radius: 99px;
+  background: var(--bg-surface);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.tab-count:empty {
+  display: none;
+}
+
+/* ── Welcome ──────────────────────────────────────────────────────────────── */
+
+.welcome {
+  max-width: 680px;
+  margin: 12px auto 0;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.wel-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+.wel-mark {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: var(--accent-hex);
+  color: var(--on-accent);
+  display: grid;
+  place-items: center;
+}
+.wel-mark svg {
+  width: 28px;
+  height: 28px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.wel-head p {
+  max-width: 50ch;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+.wel-steps {
+  /* Padding is the card's: zeroing it here (to drop the list indent) put the
+     step circles against the border. */
+  list-style: none;
+  margin: 0;
+}
+.wel-step {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 16px 0;
+  border-top: 1px solid var(--border-s);
+}
+.wel-step:first-child {
+  border-top: 0;
+  padding-top: 2px;
+}
+.wel-step:last-child {
+  padding-bottom: 2px;
+}
+.wel-n {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 700;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-d);
+  color: var(--text-secondary);
+}
+.wel-step.done .wel-n {
+  background: rgba(var(--accent), 0.14);
+  border-color: var(--border-a);
+  color: var(--accent-text);
+}
+.wel-n svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.wel-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.wel-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.wel-desc {
+  margin-top: 2px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+.wel-opt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 14px;
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  background: var(--bg-sunken);
+  border: 1px solid var(--border-s);
+}
+.wel-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
 }
 
 /* ── Toasts ───────────────────────────────────────────────────────────────── */
@@ -1038,22 +2593,22 @@ label.field > span {
 }
 .toast {
   padding: 11px 15px;
-  border-radius: var(--r-sm);
+  border-radius: 10px;
   background: var(--bg-surface);
   border: 1px solid var(--border-d);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 13.5px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
   animation: toast-in 0.24s var(--ease-out);
   max-width: 380px;
 }
 .toast.err {
-  border-color: rgba(248, 113, 113, 0.4);
+  border-color: rgba(248, 113, 113, 0.45);
   color: var(--red);
 }
 .toast.ok {
   border-color: var(--border-a);
-  color: var(--accent-hex);
+  color: var(--accent-text);
 }
 @keyframes toast-in {
   from {
@@ -1075,8 +2630,8 @@ label.field > span {
   animation: fade 0.16s var(--ease-out);
 }
 .modal {
-  width: min(620px, 100%);
-  max-height: 82vh;
+  width: min(640px, 100%);
+  max-height: 84vh;
   overflow-y: auto;
   background: var(--bg-elevated);
   border: 1px solid var(--border-d);
@@ -1089,7 +2644,7 @@ label.field > span {
 .steps {
   margin: 0 0 18px;
   padding-left: 20px;
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.65;
   color: var(--text-tertiary);
 }
@@ -1097,10 +2652,10 @@ label.field > span {
   margin-bottom: 4px;
 }
 .steps li::marker {
-  color: var(--text-faint);
+  color: var(--text-muted);
 }
 .steps b {
-  color: var(--text-secondary);
+  color: var(--text-primary);
   font-weight: 600;
 }
 .steps code {
@@ -1125,12 +2680,12 @@ label.field > span {
   font-family: 'Cascadia Mono', ui-monospace, monospace;
   font-size: 19px;
   font-variant-numeric: tabular-nums;
-  color: var(--accent-hex);
+  color: var(--accent-text);
   min-width: 96px;
 }
 .sync-total {
-  font-size: 11.5px;
-  color: var(--text-faint);
+  font-size: 12px;
+  color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   min-width: 44px;
   text-align: right;
@@ -1155,7 +2710,7 @@ label.field > span {
   min-width: 66px;
   text-align: center;
   font-variant-numeric: tabular-nums;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--text-secondary);
 }
 
@@ -1165,7 +2720,7 @@ label.field > span {
   overflow-y: auto;
   border: 1px solid var(--border-s);
   border-radius: var(--r-sm);
-  background: var(--bg-base);
+  background: var(--bg-sunken);
   padding: 6px;
 }
 .sync-line {
@@ -1175,7 +2730,7 @@ label.field > span {
   padding: 5px 9px;
   border-radius: 6px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 13.5px;
   color: var(--text-muted);
   scroll-margin: 12px;
 }
@@ -1213,7 +2768,7 @@ label.field > span {
   font-variant-numeric: tabular-nums;
 }
 .sync-line.is-timed .sync-line-time {
-  color: var(--accent-hex);
+  color: var(--accent-text);
 }
 .sync-line-text {
   flex: 1;
@@ -1221,43 +2776,15 @@ label.field > span {
   word-break: break-word;
 }
 
-/* ── Report-wrong-lyrics call to action ───────────────────────────────────── */
-
-.lyr-report {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
-  padding: 14px 0 4px;
-  border-top: 1px solid var(--border-s);
-  margin-top: 4px;
-}
-.lyr-report .btn-lg {
-  /* Loud on purpose: wrong lyrics are the thing people most need to act on,
-     and this used to be a 28px button sharing a corner with "Copy .lrc". */
-  background: rgba(248, 113, 113, 0.12);
-  border-color: rgba(248, 113, 113, 0.4);
-}
-.lyr-report .btn-lg:hover:not(:disabled) {
-  background: rgba(248, 113, 113, 0.2);
-}
-.lyr-report-hint {
-  flex: 1;
-  min-width: 220px;
-  font-size: 12px;
-  line-height: 1.55;
-  color: var(--text-muted);
-}
-
 /* ── Notice box ───────────────────────────────────────────────────────────── */
 
 .notice,
 .sync-playing {
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.55;
   color: var(--text-tertiary);
-  padding: 9px 12px;
-  border-radius: var(--r-sm);
+  padding: 10px 13px;
+  border-radius: 10px;
   background: var(--bg-surface);
   border: 1px solid var(--border-s);
   margin-bottom: 12px;
@@ -1265,19 +2792,23 @@ label.field > span {
 .notice.is-warn,
 .sync-playing.is-warn {
   color: var(--amber);
-  border-color: rgba(251, 191, 36, 0.28);
+  border-color: rgba(251, 191, 36, 0.3);
   background: rgba(251, 191, 36, 0.07);
 }
 
-/* ── Pick-one rows in a dialog ────────────────────────────────────────────── */
+/* ── Pick-one answers ─────────────────────────────────────────────────────── */
 
 .choice {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  flex: 1 1 220px;
   width: 100%;
   text-align: left;
-  padding: 13px 15px;
+  padding: 12px 14px;
   border: 1px solid var(--border-d);
-  border-radius: var(--r-sm);
+  border-radius: var(--r-md);
   background: var(--bg-surface);
   color: inherit;
   font: inherit;
@@ -1285,21 +2816,27 @@ label.field > span {
   transition: border-color 0.14s, background 0.14s;
 }
 .choice + .choice {
+  margin-top: 0;
+}
+.modal .choice + .choice {
   margin-top: 10px;
 }
 .choice:hover {
   background: var(--bg-hover);
   border-color: var(--border-a);
 }
+.choice:focus-visible {
+  outline: 2px solid var(--accent-hex);
+  outline-offset: 2px;
+}
 .choice-title {
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 4px;
 }
 .choice-desc {
-  font-size: 12px;
-  line-height: 1.55;
+  font-size: 12.5px;
+  line-height: 1.5;
   color: var(--text-muted);
 }
 
@@ -1328,7 +2865,7 @@ label.field > span {
   margin-top: 1px;
   border-radius: 50%;
   border: 1px solid var(--border-d);
-  color: var(--accent-hex);
+  color: var(--accent-text);
   font-size: 12px;
   font-weight: 700;
   display: grid;
@@ -1343,7 +2880,7 @@ label.field > span {
   min-width: 0;
 }
 .guide-title {
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 4px;
@@ -1353,7 +2890,7 @@ label.field > span {
   font-weight: 500;
 }
 .guide-desc {
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.6;
   color: var(--text-muted);
   word-break: break-word;
@@ -1365,7 +2902,7 @@ label.field > span {
   margin-top: 8px;
   padding: 8px 10px;
   border-radius: var(--r-sm);
-  background: var(--bg-base);
+  background: var(--bg-sunken);
   border: 1px solid var(--border-d);
 }
 .guide-cmd code {
@@ -1387,27 +2924,6 @@ label.field > span {
 
 /* ── Full lyrics ──────────────────────────────────────────────────────────── */
 
-/* The three lines on the card are a button in disguise — the hover state is
-   what says so, since a big centred block does not read as clickable on its own. */
-.lyr-clickable {
-  cursor: pointer;
-  border-radius: var(--r-md);
-  transition: background 0.14s;
-}
-.lyr-clickable:hover {
-  background: var(--bg-hover);
-}
-.lyr-clickable:focus-visible {
-  outline: 1px solid var(--border-a);
-  outline-offset: 2px;
-}
-/*
- * No caption under the lines: it either spent height the lines were competing
- * for, or — pulled out of the flow to stop that — landed on top of them. The
- * hover tint, the tooltip and the "Full lyrics" button say the same thing
- * without taking any room.
- */
-
 .lyr-full-head {
   display: flex;
   align-items: baseline;
@@ -1415,12 +2931,12 @@ label.field > span {
   gap: 12px;
 }
 .lyr-full-meta {
-  font-size: 11.5px;
-  color: var(--text-faint);
+  font-size: 12px;
+  color: var(--text-muted);
   white-space: nowrap;
 }
 .lyr-full-track {
-  font-size: 13px;
+  font-size: 13.5px;
   color: var(--text-tertiary);
   margin: 6px 0 2px;
 }
@@ -1430,7 +2946,7 @@ label.field > span {
   overflow-y: auto;
   border: 1px solid var(--border-s);
   border-radius: var(--r-sm);
-  background: var(--bg-base);
+  background: var(--bg-sunken);
   padding: 8px;
   user-select: text;
 }
@@ -1463,7 +2979,7 @@ label.field > span {
   font-variant-numeric: tabular-nums;
 }
 .lyr-full-line.is-current .lyr-full-time {
-  color: var(--accent-hex);
+  color: var(--accent-text);
 }
 .lyr-full-text {
   flex: 1;
@@ -1473,15 +2989,15 @@ label.field > span {
 .lyr-full-tr {
   display: block;
   margin-top: 2px;
-  font-size: 12px;
+  font-size: 12.5px;
   font-style: italic;
   font-weight: 400;
-  color: rgba(var(--accent), 0.85);
+  color: var(--accent-text);
 }
 .lyr-full-empty {
   padding: 22px 10px;
   text-align: center;
-  font-size: 13px;
+  font-size: 13.5px;
   color: var(--text-muted);
 }
 .lyr-full-foot {
@@ -1496,19 +3012,175 @@ label.field > span {
   margin-right: auto;
 }
 
+/* ── Big lyrics ───────────────────────────────────────────────────────────────
+ *
+ * Spotify's lyrics view: the cover's colour fills the window and the song is
+ * a column of big bold lines. What was sung stays readable, the line being
+ * sung is white, and what is coming is dimmed. The tint is the cover's average
+ * colour pulled towards black, so a white or pale cover still leaves white
+ * type readable; it is dark in the light theme too, as Spotify's is.
+ */
+
+.lyr-big {
+  --big-tint: var(--accent-hex);
+  position: fixed;
+  inset: var(--titlebar-h) 0 0 0;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  color: #fff;
+  background:
+    radial-gradient(120% 80% at 15% 0%, color-mix(in srgb, var(--big-tint) 62%, #000) 0%, transparent 70%),
+    linear-gradient(180deg, color-mix(in srgb, var(--big-tint) 46%, #0a0a0d), color-mix(in srgb, var(--big-tint) 22%, #0a0a0d));
+  transition: background 1.2s var(--ease-out);
+  animation: big-in 0.22s var(--ease-out);
+}
+@keyframes big-in {
+  from {
+    opacity: 0;
+  }
+}
+.lyr-big-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px clamp(20px, 5vw, 64px) 6px;
+}
+.lyr-big-art {
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
+  object-fit: cover;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  flex: none;
+}
+.lyr-big-id {
+  flex: 1;
+  min-width: 0;
+}
+.lyr-big-title {
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lyr-big-artist {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lyr-big .btn-ghost {
+  color: rgba(255, 255, 255, 0.85);
+}
+.lyr-big .btn-ghost:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+.lyr-big-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18vh clamp(20px, 5vw, 64px) 44vh;
+  scrollbar-width: none;
+  user-select: text;
+  /* Lines fade out at the edges instead of being cut by them. */
+  mask-image: linear-gradient(180deg, transparent 0, #000 12%, #000 82%, transparent 100%);
+}
+.lyr-big-list::-webkit-scrollbar {
+  display: none;
+}
+.lyr-big-list .lyr-full-line {
+  display: block;
+  max-width: 980px;
+  padding: 0;
+  margin: 0 0 0.55em;
+  border-radius: 0;
+  font-size: clamp(26px, 3.3vw, 46px);
+  font-weight: 800;
+  line-height: 1.22;
+  letter-spacing: -0.015em;
+  color: rgba(255, 255, 255, 0.62);
+  scroll-margin: 0;
+  transition: color 0.3s var(--ease-out), opacity 0.3s var(--ease-out);
+}
+.lyr-big-list .lyr-full-line.is-blank {
+  padding: 0;
+  color: rgba(255, 255, 255, 0.62);
+}
+/* What is still to come: everything after the current line, or all of it before the first. */
+.lyr-big-list .lyr-full-line.is-current ~ .lyr-full-line,
+.lyr-big-list:not(.has-current):not(.is-plain) .lyr-full-line {
+  color: rgba(255, 255, 255, 0.34);
+}
+.lyr-big-list .lyr-full-line.is-current {
+  background: none;
+  box-shadow: none;
+  color: #fff;
+  font-weight: 800;
+}
+.lyr-big-list.is-plain .lyr-full-line {
+  color: rgba(255, 255, 255, 0.92);
+}
+/* Nothing to follow, so no room is kept above for a current line to sit in. */
+.lyr-big-list.is-plain {
+  padding-top: 4vh;
+}
+.lyr-big-list .lyr-full-tr {
+  margin-top: 0.15em;
+  font-size: 0.5em;
+  font-style: normal;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: inherit;
+  opacity: 0.8;
+}
+.lyr-big-list .lyr-full-empty {
+  padding: 0;
+  text-align: left;
+  font-size: clamp(22px, 2.6vw, 34px);
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.75);
+}
+.lyr-big-foot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 22px;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+.lyr-big-follow {
+  pointer-events: auto;
+  border-radius: 999px;
+  padding: 9px 18px;
+  font-weight: 700;
+  color: #000;
+  background: #fff;
+  border-color: transparent;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.lyr-big-follow:hover {
+  background: #f2f2f2;
+}
+.lyr-big-follow.is-idle {
+  visibility: hidden;
+}
+
 /* ── Reduced motion ───────────────────────────────────────────────────────── */
 /*
  * "Reduce motion" is a system setting people turn on for vestibular disorders
- * and for migraine, and this stylesheet had no media query of any kind — so it
- * had no way to honour it. The pulse dot is the one that matters most: it is
+ * and for migraine. The pulse dot is the one that matters most: it is
  * `infinite`, so it never stops on its own.
  *
  * Animations are not merely slowed. A 0.01ms duration lets an animation still
  * *run* — so anything that relies on an animation completing still fires its
- * `animationend` — while nothing perceptible moves. Transitions get the same
- * treatment, and scroll behaviour goes back to instant.
+ * `animationend` — while nothing perceptible moves.
  *
- * `!important` is used here, and nowhere else in this file, deliberately: this
+ * `!important` is used here deliberately (and on [hidden] at the top): this
  * block has to beat whatever specificity a rule above it happened to need.
  */
 @media (prefers-reduced-motion: reduce) {
@@ -1525,11 +3197,4 @@ label.field > span {
   .pulse {
     opacity: 1;
   }
-}
-
-/* A lyric offset saved for the playing track, rather than the global default.
-   Marked because otherwise the number looks like a setting that changed by
-   itself when a corrected song comes round. */
-#npOffset.per-track {
-  color: var(--accent-hex);
 }
