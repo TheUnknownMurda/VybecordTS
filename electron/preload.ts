@@ -11,7 +11,7 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 /** Backend events the renderer may subscribe to. */
 const EVENTS = [
   'trackUpdate', 'progressUpdate', 'lyricsUpdate', 'plainLyricsUpdate', 'activityUpdate',
-  'statusUpdate', 'configUpdate', 'fatal', 'updateStatus',
+  'statusUpdate', 'configUpdate', 'fatal', 'updateStatus', 'navigate',
 ] as const;
 type BackendEvent = typeof EVENTS[number];
 

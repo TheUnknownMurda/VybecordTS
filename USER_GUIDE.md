@@ -31,7 +31,7 @@ Your Discord status updates on its own. The first time, Vybecord opens on **Help
 
 ### Closing the window does not quit
 
-Vybecord keeps running in the notification area, next to the clock. Click the icon to bring the window back, or right-click → **Quit** to actually exit. The same right-click menu has **Show on Discord** and **Lyrics on Discord**, to switch your status or its lyrics without opening the window.
+Vybecord keeps running in the notification area, next to the clock. Click the icon to bring the window back, or right-click → **Quit** to actually exit. The same right-click menu works without opening the window: it shows the song playing, opens any page (**Go to**), and has switches for **Show on Discord**, **Lyrics on Discord**, **Translate lyrics on Discord**, the number of **Presences**, **Hide when paused**, **Hide when I’m away**, **Hide during Spotify ads** and **Launch at sign-in**, plus **Check for updates**. They are the same settings as in the window.
 
 You can change this under **Settings → App & window → Close to tray**.
 

@@ -74,7 +74,8 @@ const FORWARDED_EVENTS = [
 ] as const;
 
 // `updateStatus` is pushed by the updater itself rather than the backend, so it
-// is not in the list above — see initUpdater().
+// is not in the list above — see initUpdater(). Nor is `navigate`, which the
+// tray menu sends — see openPage() in main.ts.
 
 // ── Bug report guards ──
 /**
