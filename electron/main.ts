@@ -317,6 +317,12 @@ function createTray(): void {
 /** The per-card lyrics switches, by position; `show_lyrics` is presence 1's. */
 const LYRICS_KEYS = ['show_lyrics', 'show_lyrics_2', 'show_lyrics_3', 'show_lyrics_4', 'show_lyrics_5'] as const;
 const PRESENCE_COUNTS = ['One', 'Two', 'Three', 'Four', 'Five'];
+/** The players Settings → Detection lists, in its order and with its names. */
+const DETECT_KEYS: [string, string][] = [
+  ['detect_spotify', 'Spotify'], ['detect_apple_music', 'Apple Music'], ['detect_youtube', 'YouTube and YouTube Music'],
+  ['detect_soundcloud', 'SoundCloud'], ['detect_browser', 'Other browser tabs'], ['detect_twitch', 'Twitch'],
+  ['detect_kick', 'Kick'], ['detect_other_apps', 'Other desktop apps'],
+];
 /** The sidebar's pages, in its order and with its names. */
 const TRAY_PAGES: [string, string][] = [['now', 'Now playing'], ['library', 'Lyrics'], ['activity', 'Activity'], ['settings', 'Settings']];
 
@@ -324,8 +330,8 @@ let trayMenuKey = '';
 
 /*
  * The switches people reach for while the window is closed, in the tray menu:
- * the presence and what it shows, when it hides, how many cards there are,
- * starting with Windows and updates. Same keys as Settings and Now playing,
+ * the presence and what it shows, when it hides, which players it detects,
+ * how many cards there are, starting with Windows and updates. Same keys as Settings and Now playing,
  * so each place shows what the others changed. Lyrics is one item for every
  * presence in play, since the menu has no room to say which card is which; it
  * reads on while any of them has lyrics, and flips them all together.
@@ -344,6 +350,8 @@ function refreshTrayMenu(): void {
     away: on('rpc_hide_when_away'),
     ads: on('filter_spotify_ads'),
     startup: on('launch_on_startup', false),
+    detectAll: on('detect_all_media'),
+    detect: DETECT_KEYS.map(([k]) => on(k)),
   };
   const playing = trayNowPlaying(backend.getCurrentTrack());
   const update = updateState();
@@ -366,6 +374,14 @@ function refreshTrayMenu(): void {
     toggle('Show on Discord', flags.presence, (v) => ({ rpc_enabled: v })),
     toggle('Lyrics on Discord', flags.lyrics, (v) => Object.fromEntries(lyricsKeys.map((k) => [k, v]))),
     toggle('Translate lyrics on Discord', flags.translate, (v) => ({ rpc_translate_lyrics: v })),
+    {
+      label: 'Detection',
+      submenu: [
+        toggle('Detect everything', flags.detectAll, (v) => ({ detect_all_media: v })),
+        { type: 'separator' },
+        ...DETECT_KEYS.map(([k, label], i) => toggle(label, flags.detect[i], (v) => ({ [k]: v }))),
+      ],
+    },
     {
       label: 'Presences',
       submenu: PRESENCE_COUNTS.map((label, i) => ({

@@ -210,7 +210,7 @@ The first time, Vybecord opens on **Help & setup**: a checklist that ticks itsel
 
 Vybecord connects to Discord in the background. The bottom of the sidebar shows two status lines: whether **Discord** is connected (and, when it is, whether your status is live or why it is hidden), and whether media is being **detected** (and from which source).
 
-Closing the window hides it to the notification area, and the presence keeps running. Click the tray icon to bring the window back. Right-click it and choose **Quit**, or press **Ctrl+Q** in the window, to exit for good. The same menu shows presence 1's song, opens a page (**Go to**), and switches `rpc_enabled` (**Show on Discord**), the lyrics of every presence in play together (**Lyrics on Discord**), `rpc_translate_lyrics`, `presence_count` (**Presences**), `rpc_only_when_playing`, `rpc_hide_when_away`, `filter_spotify_ads` and `launch_on_startup`; its last item checks for an update, or restarts to install one that is ready.
+Closing the window hides it to the notification area, and the presence keeps running. Click the tray icon to bring the window back. Right-click it and choose **Quit**, or press **Ctrl+Q** in the window, to exit for good. The same menu shows presence 1's song, opens a page (**Go to**), and switches `rpc_enabled` (**Show on Discord**), the lyrics of every presence in play together (**Lyrics on Discord**), `rpc_translate_lyrics`, `presence_count` (**Presences**), the `detect_*` switches of Settings → Detection (**Detection**), `rpc_only_when_playing`, `rpc_hide_when_away`, `filter_spotify_ads` and `launch_on_startup`; its last item checks for an update, or restarts to install one that is ready.
 
 ### The window
 
