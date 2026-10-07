@@ -31,7 +31,7 @@ Ton statut Discord se met à jour tout seul. La première fois, Vybecord s'ouvre
 
 ### Fermer la fenêtre n'arrête pas l'appli
 
-Vybecord continue dans la zone de notification (à côté de l'horloge). Clique sur l'icône pour rouvrir la fenêtre, ou clic droit → **Quit** pour vraiment quitter. Le même menu du clic droit a **Show on Discord** et **Lyrics on Discord**, pour couper ou remettre ton statut ou ses paroles sans ouvrir la fenêtre.
+Vybecord continue dans la zone de notification (à côté de l'horloge). Clique sur l'icône pour rouvrir la fenêtre, ou clic droit → **Quit** pour vraiment quitter. Le même menu du clic droit marche sans ouvrir la fenêtre : il affiche la chanson en cours, ouvre n'importe quelle page (**Go to**) et a des interrupteurs pour **Show on Discord**, **Lyrics on Discord**, **Translate lyrics on Discord**, le nombre de présences (**Presences**), **Hide when paused**, **Hide when I’m away**, **Hide during Spotify ads** et **Launch at sign-in**, plus **Check for updates**. Ce sont les mêmes réglages que dans la fenêtre.
 
 Tu peux changer ça dans **Settings → App & window → Close to tray**.
 

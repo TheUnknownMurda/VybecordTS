@@ -77,9 +77,11 @@ function setState(next: UpdateState): void {
  * Wire the updater up.
  *
  * @param getWindow  used to push state to the window when it exists
+ * @param onChange   told of every change too — the tray menu's update item
  */
-export function initUpdater(getWindow: () => BrowserWindow | null): void {
+export function initUpdater(getWindow: () => BrowserWindow | null, onChange?: () => void): void {
   notify = (s) => {
+    onChange?.();
     const win = getWindow();
     if (win && !win.isDestroyed()) win.webContents.send('backend:updateStatus', s);
   };

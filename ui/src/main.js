@@ -165,6 +165,17 @@ async function firstPage() {
 async function main() {
   wireChrome();
 
+  // The tray menu's "Go to". It can arrive while the window is still booting,
+  // and opening the page then would be undone by the first page below, so it
+  // is held until then and opened in that one's place.
+  let booted = false;
+  let asked = null;
+  api.on('navigate', (page) => {
+    if (!PAGES[page]) return;
+    if (booted) navigate(page);
+    else asked = page;
+  });
+
   api.onWindowState(({ maximized }) => {
     $('#btnMax').title = maximized ? 'Restore' : 'Maximise';
   });
@@ -195,7 +206,9 @@ async function main() {
   subscribe('slots', paintStatus);
   mountUpdateBanner();
 
-  navigate(await firstPage());
+  const first = await firstPage();
+  booted = true;
+  navigate(asked || first);
 }
 
 main();
