@@ -94,25 +94,41 @@ function mirrorFocus() {
   set({ track: s.track, lyrics: s.lyrics, activity: s.activity ?? null, progress: s.progress, lastTrack: s.lastTrack ?? null });
 }
 
-/**
- * Look at one presence. The Now page calls this when a card is clicked; the
- * state calls it itself when the one being looked at goes quiet while the
- * other plays on, so the page never sits on "Nothing playing" beside a track.
- */
 const slotIndex = (index) => Math.max(0, Math.min(MAX_SLOTS - 1, Number.isInteger(index) ? index : 0));
 
-export function setFocus(index) {
-  const i = slotIndex(index);
+/**
+ * An empty presence the user picked by hand, or -1: picked on purpose, it is
+ * not taken away from them. Cleared once something plays on it, after which
+ * it is moved off like any other when it goes quiet.
+ */
+let chosen = -1;
+
+function focusOn(i) {
   if (i === state.focus) return;
   set({ focus: i });
   mirrorFocus();
 }
 
+/** Look at one presence: the Now page calls this when a card is clicked. */
+export function setFocus(index) {
+  const i = slotIndex(index);
+  chosen = i;
+  focusOn(i);
+}
+
+/*
+ * The state moves the view itself when the presence being looked at has
+ * nothing to show while another plays, so the page never sits on "Nothing
+ * playing" beside a track. A paused song is something to show: it ran on
+ * every update of any presence, and with a live stream on the other card
+ * that is every second, so clicking the paused card showed it for a moment
+ * and then jumped back to the stream. Nor does it undo a click.
+ */
 function autoFocus() {
   const cur = state.slots[state.focus];
-  if (cur?.track) return;
+  if (cur?.track || cur?.lastTrack || chosen === state.focus) return;
   const other = state.slots.findIndex((s) => s?.track);
-  if (other >= 0) setFocus(other);
+  if (other >= 0) focusOn(other);
 }
 
 /** Apply a backend event to one presence's slice, and to the mirrors if it is the focused one. */
@@ -120,6 +136,7 @@ function updateSlot(index, patch) {
   const i = slotIndex(index);
   const slots = [...state.slots];
   slots[i] = { ...slots[i], ...patch };
+  if (i === chosen && slots[i].track) chosen = -1;
   set({ slots });
   if (i === state.focus) set(patch);
   autoFocus();
@@ -204,7 +221,7 @@ export async function init() {
     if (status && 'preferredPlayer' in status) set({ preferredPlayer: status.preferredPlayer });
     if (status && Array.isArray(status.preferredPlayers)) set({ preferredPlayers: status.preferredPlayers });
     // A card beyond the new count is gone, whatever it showed.
-    if (status && typeof status.presenceCount === 'number' && state.focus >= status.presenceCount) setFocus(0);
+    if (status && typeof status.presenceCount === 'number' && state.focus >= status.presenceCount) focusOn(0);
   });
 
   /*
