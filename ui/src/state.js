@@ -9,7 +9,7 @@
 
 const api = window.vybecord;
 
-const emptySlot = () => ({ track: null, lyrics: null, activity: null, progress: { progress_ms: 0, duration_ms: 0 } });
+const emptySlot = () => ({ track: null, lyrics: null, activity: null, progress: { progress_ms: 0, duration_ms: 0 }, lastTrack: null });
 /** How many presence cards the app can hold — matches MAX_SLOTS in the backend. */
 export const MAX_SLOTS = 5;
 
@@ -26,6 +26,15 @@ export const state = {
   /** The card the engine last built for the focused presence — the Discord preview. */
   activity: null,
   progress: { progress_ms: 0, duration_ms: 0 },
+  /*
+   * The song a presence was playing when it stopped, paused where it stopped.
+   * The backend takes the track down on a pause — Discord's card reads
+   * "Nothing playing" then — so without this a paused Spotify read as
+   * "Waiting for a player… Play something in Spotify", with Spotify open on
+   * the song. Null once anything
+   * plays again, and never a live stream: one that stops has ended.
+   */
+  lastTrack: null,
   slots: Array.from({ length: MAX_SLOTS }, emptySlot),
   focus: 0,
   players: [],
@@ -82,7 +91,7 @@ export function set(patch) {
 /** Point the single-track mirrors at the focused presence. */
 function mirrorFocus() {
   const s = state.slots[state.focus] || emptySlot();
-  set({ track: s.track, lyrics: s.lyrics, activity: s.activity ?? null, progress: s.progress });
+  set({ track: s.track, lyrics: s.lyrics, activity: s.activity ?? null, progress: s.progress, lastTrack: s.lastTrack ?? null });
 }
 
 /**
@@ -125,6 +134,7 @@ export async function init() {
         lyrics: s?.lyrics ?? null,
         activity: s?.activity ?? null,
         progress: s?.track ? (s.progress || trackProgress(s.track)) : trackProgress(null),
+        lastTrack: null,
       }))
     : [{ track: snap.track, lyrics: snap.lyrics, progress: trackProgress(snap.track) }];
   while (slots.length < MAX_SLOTS) slots.push(emptySlot());
@@ -153,18 +163,40 @@ export async function init() {
     // Compared against its own presence. This read `slot === 1 ? 1 : 0` from
     // when there were two, so presences 3 to 5 measured every track against
     // presence 1's and kept or dropped their lyrics on the strength of it.
-    const prev = state.slots[slotIndex(slot)]?.track;
+    const was = state.slots[slotIndex(slot)];
+    const prev = was?.track;
     const same = (track?.track_id || '') === (prev?.track_id || '');
     // A different track means the bar belongs to the new one -- at its own
     // position, or empty when playback simply stopped. Same reasoning as the
     // lyrics beside it: what the previous track left behind is not an
     // approximation of the new state, it is the wrong state. The card built
     // for the previous track goes with them.
-    updateSlot(slot, same ? { track } : { track, lyrics: null, activity: null, progress: trackProgress(track) });
+    const stopped = !track && prev && !prev.is_live
+      ? { ...prev, is_playing: false, progress_ms: was.progress?.progress_ms ?? prev.progress_ms }
+      : null;
+    updateSlot(slot, same ? { track } : {
+      track, lyrics: null, activity: null, progress: trackProgress(track), lastTrack: stopped,
+    });
   });
   api.on('progressUpdate', (progress, slot) => updateSlot(slot, { progress }));
-  api.on('lyricsUpdate', (lyrics, slot) => updateSlot(slot, { lyrics }));
-  api.on('plainLyricsUpdate', (lyrics, slot) => updateSlot(slot, { lyrics }));
+  /*
+   * The words-only fallback and the engine's state share one slice, and the
+   * engine keeps talking after the fallback lands: a song with no synced lines
+   * still gets its "♪♪" tick, and that tick replaced the 39 plain lines a
+   * moment after they arrived, so they never showed. Each event now carries
+   * over what the other one set. A new track still starts clean — trackUpdate
+   * drops the slice on a change of id — and synced lines, once there, win.
+   */
+  api.on('lyricsUpdate', (lyrics, slot) => {
+    const prev = state.slots[slotIndex(slot)]?.lyrics;
+    const synced = Array.isArray(lyrics?.lyrics) && lyrics.lyrics.length > 0;
+    const keep = !synced && Array.isArray(prev?.lines) && prev.lines.length > 0;
+    updateSlot(slot, { lyrics: keep ? { ...lyrics, lines: prev.lines } : lyrics });
+  });
+  api.on('plainLyricsUpdate', (plain, slot) => {
+    const prev = state.slots[slotIndex(slot)]?.lyrics;
+    updateSlot(slot, { lyrics: { ...prev, lines: plain?.lines ?? [] } });
+  });
   api.on('activityUpdate', (activity, slot) => updateSlot(slot, { activity }));
   api.on('configUpdate', (config) => set({ config }));
   api.on('statusUpdate', (status) => {

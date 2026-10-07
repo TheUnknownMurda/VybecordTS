@@ -39,9 +39,9 @@ You can change this under **Settings → App & window → Close to tray**.
 
 | Page | What it does |
 | --- | --- |
-| **Now playing** | The current track (cover, title, artist, album, player and progress), a preview of your Discord card as your friends see it right under it, and the scrolling lyrics (click them for the whole song, or **Big lyrics** to fill the window with them, Spotify style; **Esc** closes it). The **Source** menu picks which player it follows. |
+| **Now playing** | The current track (cover, title, artist, album, player and progress; paused, it stays on the card with its bar stopped), a preview of your Discord card as your friends see it right under it, and the scrolling lyrics (click them for the whole song, or **Big lyrics** to fill the window with them, Spotify style; **Esc** closes it). Lyrics found without timings show as plain text you can scroll, marked **Words only**. The **Source** menu picks which player it follows. |
 | **Lyrics** | Your own lyrics library: **My lyrics**, **Blocked** (lyrics you marked as wrong) and the offline **LRCLIB dump**. **Add lyrics** imports or writes new ones. |
-| **Activity** | What you listened to over 7 days, 30 days, 12 months or all time: time listened, a chart, top artists and tracks, and your recent plays (**See all** opens the full history). |
+| **Activity** | What you listened to over 7 days, 30 days, 12 months or all time: time listened, a chart, top artists and tracks, and your recent plays (**See all** opens the full history). It updates by itself as songs finish. |
 | **Settings** | Discord presence, Lyrics & translation, Detection, Integrations (browser extension, Spotify, Last.fm), App & window, and About. The search box finds any setting. |
 | **Help & setup** | The setup checklist, at the bottom of the sidebar. |
 

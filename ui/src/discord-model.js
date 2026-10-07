@@ -4,10 +4,10 @@
  * The preview used to pick fields by guesswork, and guessed wrong in the ways
  * that matter: it dropped the cover text, which Discord's profile shows as a
  * third line (title | artist | album | playlist under the lyrics), it left out
- * the platform badge on the cover, it cut a stream title to one line where
- * Discord wraps it, and it printed its own clock format. So the mapping lives
- * here, apart from the DOM, where harness/test-discord-preview.ts can hold it
- * against the activities the engine really builds.
+ * the platform badge on the cover, and it printed its own clock format. So
+ * the mapping lives here, apart from the DOM, where
+ * harness/test-discord-preview.ts can hold it against the activities the
+ * engine really builds.
  *
  * The rules, read off Discord's profile card:
  *   header   "<verb> <name>" on one line — the activity's name, else the app's

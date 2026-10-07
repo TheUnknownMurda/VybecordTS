@@ -216,9 +216,9 @@ Closing the window hides it to the notification area, and the presence keeps run
 
 | Key | Page | What it does |
 | --- | --- | --- |
-| `1` | **Now playing** | One card for the track: its cover, title, artist and album, the player it comes from, whether it is paused or live, chips for shuffle, repeat, a local file or being away, and the progress bar. Under a line in the same card, **What your friends see** previews your Discord card (the song's progress bar shows once, above it; a stream's live time stays in the preview). Then the scrolling lyrics. With several presences, a strip of cards picks which one the page shows. The **Source** menu lists every media session Windows reports and pins the presence to one, or puts it back on **Automatic**. Above the lyrics, **Big lyrics** fills the window with them, Spotify style (large lines on the cover's colour, following the song; **Esc** closes it), **Full lyrics** lists every line with its timestamp, and **Copy .lrc** copies them. Under them you can adjust the timing offset and report wrong lyrics. |
+| `1` | **Now playing** | One card for the track: its cover, title, artist and album, the player it comes from, whether it is paused (a paused song stays on the card, its bar stopped where it paused) or live, chips for shuffle, repeat, a local file or being away, and the progress bar. Under a line in the same card, **What your friends see** previews your Discord card (the song's progress bar shows once, above it; a stream's live time stays in the preview). Then the scrolling lyrics, or, for lyrics found without timings, the words as plain text to scroll, marked **Words only** (the timing row and **Copy .lrc** step aside for them). With several presences, a strip of cards picks which one the page shows. The **Source** menu lists every media session Windows reports and pins the presence to one, or puts it back on **Automatic**. Above the lyrics, **Big lyrics** fills the window with them, Spotify style (large lines on the cover's colour, following the song; **Esc** closes it), **Full lyrics** lists every line with its timestamp, and **Copy .lrc** copies them. Under them you can adjust the timing offset and report wrong lyrics. |
 | `2` | **Lyrics** | Your lyrics library, with three tabs: **My lyrics**, **Blocked** (lyrics you marked as wrong) and **LRCLIB dump**. **Add lyrics** opens the import form. |
-| `3` | **Activity** | Your listening over **7 days**, **30 days**, **12 months** or **All time**: time listened, tracks played, different artists, a chart of listening time, top artists, top tracks and recently played. **See all** opens the full log, with the time actually listened for each play. |
+| `3` | **Activity** | Your listening over **7 days**, **30 days**, **12 months** or **All time**: time listened, tracks played, different artists, a chart of listening time, top artists, top tracks and recently played. **See all** opens the full log, with the time actually listened for each play. The page refreshes itself when a track changes. Dates are in English, on the 12- or 24-hour clock of the system's language. |
 | `4` | **Settings** | Six categories: **Discord presence**, **Lyrics & translation**, **Detection**, **Integrations** (browser extension, Spotify through Spicetify, Last.fm, cover images), **App & window**, and **About**. A search box filters every setting. Changes apply immediately. |
 | | **Help & setup** | The setup checklist, at the bottom of the sidebar. |
 
@@ -265,7 +265,7 @@ Discord shows one card per application. Each card publishes under its platform's
 5. **LRCLIB fuzzy search**, with scoring.
 6. **YouTube captions**, only for YouTube and unidentified browser tabs, and only when everything above found nothing.
 
-If none of these finds synced lyrics, plain lyrics (LRCLIB, then Genius) are shown in the window only, never on Discord. Live streams are never looked up.
+If none of these finds synced lyrics, plain lyrics (LRCLIB, then Genius) are shown in the window only, marked **Words only**, never on Discord. Live streams are never looked up.
 
 **Fixing lyrics**
 

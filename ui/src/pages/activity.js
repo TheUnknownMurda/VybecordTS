@@ -7,7 +7,8 @@
  * with the full history one click away.
  */
 
-import { el, artUrl, fmtDate, fmtDuration, platformInfo, toast, modal, BLANK_ART } from '../util.js';
+import { el, artUrl, fmtDate, fmtDay, fmtDuration, platformInfo, plural, toast, modal, BLANK_ART } from '../util.js';
+import { state, subscribe } from '../state.js';
 
 const api = window.vybecord;
 const PAGE_SIZE = 50;
@@ -54,14 +55,15 @@ export function render(root) {
     })));
   }
 
-  async function load() {
+  /** `quiet` keeps what is on screen until the new numbers are in — see below. */
+  async function load(quiet = false) {
     const mine = ++token;
-    tiles.replaceChildren(el('div', { class: 'empty', text: 'Crunching…' }));
+    if (!quiet) tiles.replaceChildren(el('div', { class: 'empty', text: 'Crunching…' }));
     let w;
     try {
       w = await api.getWrapped(range || undefined);
     } catch (e) {
-      if (mine !== token) return;
+      if (mine !== token || quiet) return;
       tiles.replaceChildren(el('div', { class: 'empty', text: `Could not compute: ${e.message}` }));
       return;
     }
@@ -72,7 +74,7 @@ export function render(root) {
       tile(has ? fmtDuration(w.totalListenedMs) : '—', 'Time listened'),
       tile(has ? String(w.totalTracks) : '—', 'Tracks played'),
       tile(has ? String(w.uniqueArtists) : '—', 'Different artists'),
-      tile(has ? fmtDuration(w.avgDailyMs) : '—', `Daily average · ${has ? w.activeDays : 0} active days`),
+      tile(has ? fmtDuration(w.avgDailyMs) : '—', `Daily average · ${plural(has ? w.activeDays : 0, 'active day')}`),
     );
     paintChart(chartCard, has ? w : null);
     paintArtists(artistsCard, has ? w : null);
@@ -81,7 +83,31 @@ export function render(root) {
 
   paintSeg();
   load();
-  paintRecent(recentCard);
+  const recent = paintRecent(recentCard);
+
+  /*
+   * A play is written to the history as the next track starts, so a change of
+   * track on any presence is when these numbers move. With the page open the
+   * song that just ended stayed out of every tile and list ("2 tracks") while
+   * See all already counted it ("3 of 3"). Reloaded a moment after the change,
+   * since nothing promises the play is written before the track is announced,
+   * and quietly: "Crunching…" on every song change would blink the page under
+   * whoever is reading it.
+   */
+  const playingKey = () => state.slots.map((s) => s.track?.track_id || '').join('|');
+  let key = playingKey();
+  let timer = 0;
+  const unsub = subscribe('slots', () => {
+    const k = playingKey();
+    if (k === key) return;
+    key = k;
+    clearTimeout(timer);
+    timer = setTimeout(() => { load(true); recent.reload(); }, 1500);
+  });
+  return () => {
+    unsub();
+    clearTimeout(timer);
+  };
 }
 
 function tile(value, label) {
@@ -123,9 +149,9 @@ function buckets(w) {
       return {
         ms,
         label: range === 7
-          ? d.toLocaleDateString(undefined, { weekday: 'short' })
+          ? fmtDay(d, { weekday: 'short' })
           : (i % 5 === 4 || i === range - 1 ? String(d.getDate()) : ''),
-        tip: d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' }),
+        tip: fmtDay(d, { weekday: 'long', month: 'short', day: 'numeric' }),
       };
     });
   }
@@ -143,8 +169,8 @@ function buckets(w) {
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     out.push({
       ms: months.get(key) || 0,
-      label: d.toLocaleDateString(undefined, { month: 'short' }),
-      tip: d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }),
+      label: fmtDay(d, { month: 'short' }),
+      tip: fmtDay(d, { month: 'long', year: 'numeric' }),
     });
   }
   // Past two years a label per month no longer fits; keep every third.
@@ -188,7 +214,7 @@ function paintChart(card, w) {
     const y = PLOT_H - (v / top) * PLOT_H;
     return [
       el('div', { class: 'chart-grid', style: `top:${y}px` }),
-      el('div', { class: 'chart-tick', style: `top:${y}px`, text: `${v} ${unit}` }),
+      el('div', { class: 'chart-tick', style: `top:${y}px`, text: `${v}${unit}` }),
     ];
   };
 
@@ -216,7 +242,7 @@ function paintArtists(card, w) {
   card.replaceChildren(head, ...list.map((a) => el('div', { class: 'meter-row' }, [
     el('div', { class: 'meter-top' }, [
       el('span', { class: 'meter-name', text: a.name }),
-      el('span', { class: 'meter-val', text: `${fmtDuration(a.totalMs)} · ${a.plays} plays` }),
+      el('span', { class: 'meter-val', text: `${fmtDuration(a.totalMs)} · ${plural(a.plays, 'play')}` }),
     ]),
     el('div', { class: 'meter', 'aria-hidden': 'true' }, [el('div', { style: `width:${Math.max(2, Math.round((a.totalMs / max) * 100))}%` })]),
   ])));
@@ -253,7 +279,8 @@ function logRow(e) {
   ]);
 }
 
-async function paintRecent(card) {
+/** The last few plays. Returns `reload`, which refills the list in place. */
+function paintRecent(card) {
   const list = el('div', { class: 'list' }, [el('div', { class: 'empty', text: 'Loading…' })]);
   card.replaceChildren(
     el('div', { class: 'card-head', style: 'margin:0 0 6px 10px' }, [
@@ -262,15 +289,25 @@ async function paintRecent(card) {
     ]),
     list,
   );
-  try {
-    const res = await api.getHistory(6, 0);
-    const entries = res?.entries || [];
-    list.replaceChildren(...(entries.length
-      ? entries.map(logRow)
-      : [el('div', { class: 'empty', text: 'Nothing listened to yet.' })]));
-  } catch (e) {
-    list.replaceChildren(el('div', { class: 'empty', text: `Could not load history: ${e.message}` }));
+  // Same guard as the range token: two reloads close together must not let
+  // the older answer paint last.
+  let token = 0;
+  async function reload() {
+    const mine = ++token;
+    try {
+      const res = await api.getHistory(6, 0);
+      if (mine !== token) return;
+      const entries = res?.entries || [];
+      list.replaceChildren(...(entries.length
+        ? entries.map(logRow)
+        : [el('div', { class: 'empty', text: 'Nothing listened to yet.' })]));
+    } catch (e) {
+      if (mine !== token) return;
+      list.replaceChildren(el('div', { class: 'empty', text: `Could not load history: ${e.message}` }));
+    }
   }
+  void reload();
+  return { reload };
 }
 
 /** Every track the app has seen, newest first, a page at a time. */

@@ -107,7 +107,7 @@ export function discordPreview(opts = {}) {
           m.smallImage ? el('img', { class: 'dc-small', alt: '', src: m.smallImage, title: m.smallText }) : null,
         ]),
         el('div', { class: 'dc-lines' }, [
-          ...m.lines.map((line, i) => el('div', { class: i === 0 ? 'dc-l1' : 'dc-l', text: line })),
+          ...m.lines.map((line, i) => el('div', { class: i === 0 ? 'dc-l1' : 'dc-l', text: line, title: line })),
           timeSlot,
         ]),
       ]),

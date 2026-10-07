@@ -46,12 +46,16 @@ export function render(root) {
    * the steps once a second would swallow clicks on their buttons.
    */
   let key = '';
+  /** Asks the add-ons where they stand again; set once the extras are drawn. */
+  let recheck = null;
   function paintLive() {
     const s = state.status || {};
     const playing = state.slots.map((x) => x.track).find(Boolean) || null;
     const k = [s.discordConnected, s.mediaSourceReady, playing?.track_name, playing?.media_source].join('|');
     if (k === key) return;
     key = k;
+    // An add-on connects by reporting what plays, so this is when it changes.
+    recheck?.();
 
     step(discordStep, s.discordConnected, 1, 'Discord is open',
       s.discordConnected
@@ -70,7 +74,7 @@ export function render(root) {
     step(mediaStep, !!playing, 2, 'Play something', desc);
   }
 
-  /** The optional extras, each with what it is for and where it stands. */
+  /** The optional extras, each with what it is for and where it stands. Returns a re-check. */
   function paintExtras() {
     const ext = el('span', { class: 'badge', text: 'Checking…' });
     const spot = el('span', { class: 'badge', text: 'Checking…' });
@@ -86,15 +90,18 @@ export function render(root) {
     const toIntegrations = (label) => el('button', {
       type: 'button', class: 'btn btn-sm', text: label, onclick: () => goto('settings', { cat: 'integrations' }),
     });
+    const extBtn = toIntegrations('Set up');
+    const spotBtn = toIntegrations('Set up');
+    const fmBtn = toIntegrations('Connect');
 
     const body = el('div', { class: 'wel-body' }, [
       el('div', {}, [
         el('div', { class: 'wel-title' }, ['Make it better ', el('span', { style: 'font-weight:500;color:var(--text-muted)', text: '— optional' })]),
         el('div', { class: 'wel-desc', text: 'Any time from Settings → Integrations.' }),
       ]),
-      opt('Browser extension', 'Recognises YouTube, SoundCloud, Twitch and Kick tabs by name, with the exact position.', ext, toIntegrations('Set up')),
-      opt('Spotify, through Spicetify', 'Spotify’s own synced lyrics, every artist, the playlist you are in.', spot, toIntegrations('Set up')),
-      opt('Last.fm', 'Scrobble everything you play.', fm, toIntegrations('Connect')),
+      opt('Browser extension', 'Recognises YouTube, SoundCloud, Twitch and Kick tabs by name, with the exact position.', ext, extBtn),
+      opt('Spotify, through Spicetify', 'Spotify’s own synced lyrics, every artist, the playlist you are in.', spot, spotBtn),
+      opt('Last.fm', 'Scrobble everything you play.', fm, fmBtn),
       el('div', { class: 'wel-opt', style: 'padding:0 14px' }, [
         el('div', { style: 'flex:1' }, [
           toggleRow('Start with Windows', 'Runs in the background, without opening this window.',
@@ -107,22 +114,46 @@ export function render(root) {
     extraStep.replaceChildren(n, body);
 
     // A connected add-on has nothing left to set up, so its button goes: "Connected"
-    // beside "Set up" read as a contradiction.
-    const done = (badge, on, text) => {
+    // beside "Set up" read as a contradiction. Hidden rather than removed, since
+    // the answer can change while the page is open.
+    const done = (badge, button, on, text) => {
       badge.className = `badge${on ? ' accent' : ''}`;
       badge.textContent = text;
-      if (on) badge.nextElementSibling?.remove();
+      button.hidden = !!on;
     };
-    api.extensionInfo().then((i) => done(ext, i?.connected, i?.connected ? 'Connected' : 'Not set up')).catch(() => done(ext, false, 'Unknown'));
-    api.spicetifyInfo().then((i) => done(spot, i?.connected, i?.connected ? 'Connected' : i?.installed && i?.extensionEnabled ? 'Installed' : 'Not set up'))
-      .catch(() => done(spot, false, 'Unknown'));
-    api.lastfmStatus().then((s) => done(fm, s?.scrobbling, s?.scrobbling ? 'Connected' : 'Not connected')).catch(() => done(fm, false, 'Unknown'));
+    api.lastfmStatus().then((s) => done(fm, fmBtn, s?.scrobbling, s?.scrobbling ? 'Connected' : 'Not connected'))
+      .catch(() => done(fm, fmBtn, false, 'Unknown'));
+
+    /*
+     * The two add-ons are asked more than once. On a first launch this page
+     * opens before Spotify's extension has said hello — 0.8s after start on a
+     * real PC — and the single answer it got left "Installed" and "Set up" on
+     * screen for an add-on that was connected by the time anyone read them.
+     * The newest question is the one that paints: the extension's answer
+     * looks for browsers on disk and can come back after a later one.
+     */
+    let asked = 0;
+    return function check() {
+      const mine = ++asked;
+      api.extensionInfo()
+        .then((i) => { if (mine === asked) done(ext, extBtn, i?.connected, i?.connected ? 'Connected' : 'Not set up'); })
+        .catch(() => { if (mine === asked) done(ext, extBtn, false, 'Unknown'); });
+      api.spicetifyInfo()
+        .then((i) => { if (mine === asked) done(spot, spotBtn, i?.connected, i?.connected ? 'Connected' : i?.installed && i?.extensionEnabled ? 'Installed' : 'Not set up'); })
+        .catch(() => { if (mine === asked) done(spot, spotBtn, false, 'Unknown'); });
+    };
   }
 
   paintLive();
-  paintExtras();
+  recheck = paintExtras();
+  recheck();
+  // A few times over the first seconds, for the add-ons still starting up.
+  const retries = [1500, 4000, 10000].map((ms) => setTimeout(() => recheck(), ms));
   const unsubs = [subscribe('status', paintLive), subscribe('slots', paintLive)];
-  return () => unsubs.forEach((fn) => fn());
+  return () => {
+    retries.forEach(clearTimeout);
+    unsubs.forEach((fn) => fn());
+  };
 }
 
 /** Fill one of the two required steps: a tick when it is done, its number when not. */

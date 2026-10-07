@@ -64,11 +64,33 @@ export function fmtDuration(ms) {
   return `${Math.floor(min / 60)}h ${min % 60}m`;
 }
 
+/** "1 play", "2 plays" — `many` for the words that do not just take an s. */
+export function plural(n, one, many = `${one}s`) {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+/*
+ * Dates in English, like every word around them, on the clock the system's
+ * language reads time with. Formatted for that language outright, a French
+ * Windows wrote "jeu. ven. sam." under the chart and "7 oct., 11:14" in the
+ * history, in the middle of an English window. Plain US English instead would
+ * have turned its 24-hour clock into "11:14 AM"; the hour cycle is the one
+ * thing worth keeping from it.
+ */
+const HOUR_CYCLE = new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hourCycle;
+const TWELVE_HOUR = HOUR_CYCLE === 'h12' || HOUR_CYCLE === 'h11';
+
+/** A date's day, month or weekday in English: `opts` as for toLocaleDateString. */
+export function fmtDay(d, opts) {
+  return d.toLocaleDateString('en-US', opts);
+}
+
 export function fmtDate(value) {
   const d = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleString(undefined, {
-    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+  return d.toLocaleString('en-US', {
+    month: 'short', day: 'numeric', hour: TWELVE_HOUR ? 'numeric' : '2-digit', minute: '2-digit',
+    ...(HOUR_CYCLE ? { hourCycle: HOUR_CYCLE } : {}),
   });
 }
 

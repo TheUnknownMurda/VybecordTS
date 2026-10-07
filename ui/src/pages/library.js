@@ -10,7 +10,7 @@
  * already there, and a blank form is a strange way to greet them.
  */
 
-import { el, modal, toast, fmtTime } from '../util.js';
+import { el, modal, toast, fmtTime, plural } from '../util.js';
 import { state, subscribe } from '../state.js';
 import { goto } from '../router.js';
 
@@ -163,7 +163,7 @@ function sourcesAside() {
   const items = [
     ['My lyrics', async () => {
       const r = await api.listCustom(1, 0);
-      return [`${r?.total || 0} tracks — always used first`, (r?.total || 0) > 0];
+      return [`${plural(r?.total || 0, 'track')} — always used first`, (r?.total || 0) > 0];
     }],
     ['Spotify’s own lyrics', async () => {
       const s = await api.spicetifyInfo();

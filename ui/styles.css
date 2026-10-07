@@ -843,6 +843,16 @@ label.field > span {
 .page[data-page='now'] .card {
   margin-bottom: 0;
 }
+/*
+ * As much room under the cards as over them. The 36px the other pages keep
+ * at the bottom is for a page that scrolls, and here it was what made the
+ * smallest window (866x614 inside, at 150% scaling) scroll by 6px: with
+ * Windows' own font every line of the card is a little taller than the
+ * layout was measured with.
+ */
+#content:has(> .page[data-page='now'].active) {
+  padding-bottom: 24px;
+}
 
 .np-head {
   display: flex;
@@ -1206,19 +1216,6 @@ html[data-theme='light'] .np-progress .np-bar {
 .page[data-page='now'] .np-card .dc-lines {
   gap: calc(1px + var(--np-ramp) * 0.0125);
 }
-/*
- * One row per line, cut with an ellipsis. Discord wraps them, and Settings
- * still shows them wrapped; here the first two are the lyric, which changes
- * length every few seconds, and wrapped they grew and shrank the card with
- * it — the Lyrics card under it changed height on every line, and its outer
- * two lines blinked out and back. The song above carries the whole text.
- */
-.page[data-page='now'] .np-card .dc-l1,
-.page[data-page='now'] .np-card .dc-l {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 .page[data-page='now'] .np-card .dc-art-wrap,
 .page[data-page='now'] .np-card .dc-art {
   width: calc(56px + var(--np-ramp) * 0.15);
@@ -1386,9 +1383,7 @@ html[data-theme='light'] .np-progress .np-bar {
 }
 /*
  * Laid out as Discord's profile card lays it out — see discord-model.js for
- * which field goes where. The text wraps rather than ellipsing, because
- * Discord wraps it: a stream title runs to several lines there, and cutting
- * it to one here made the preview look tidier than the real thing.
+ * which field goes where, and .dc-l below for why each line keeps to one row.
  */
 .dc {
   flex: 1;
@@ -1458,6 +1453,20 @@ html[data-theme='light'] .np-progress .np-bar {
   font-size: 13.5px;
   line-height: 1.35;
   color: #dbdee1;
+}
+/*
+ * One row per line, cut with an ellipsis, as Discord's profile popout cuts
+ * them. Wrapped, the Settings preview put a long title over three rows, and
+ * on Now playing, where the first two lines are the lyric, the card grew and
+ * shrank with every line sung — the Lyrics card under it changed height each
+ * time, and its outer two lines blinked out and back. The two previews now
+ * agree, and each line carries its whole text as a tooltip.
+ */
+.dc-l1,
+.dc-l {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .dc-time-slot:empty {
   display: none;
@@ -1747,6 +1756,40 @@ html[data-theme='light'] .np-progress .np-bar {
 .lyr:not(.with-tr) .lyr-tr {
   display: none;
 }
+/*
+ * Words without timings — see paintPlain(). The stage stops being lines
+ * centred on the one being sung and becomes the song from the top, scrolled
+ * with the wheel: the fade at the bottom says there is more, and the room
+ * under the last line lets it scroll clear of the fade.
+ */
+.lyr.is-plain {
+  justify-content: flex-start;
+  mask-image: linear-gradient(to bottom, transparent, #000 var(--lyr-pad), #000 calc(100% - 28px), transparent);
+}
+.lyr.is-plain > :not(.lyr-plain),
+.lyr:not(.is-plain) > .lyr-plain {
+  display: none;
+}
+.lyr-plain {
+  flex: 1 1 0px;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 0 28px;
+}
+.lyr-plain-line {
+  flex: none;
+  font-size: clamp(15px, 1.9vh, 19px);
+  line-height: 1.4;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.lyr-plain-gap {
+  flex: none;
+  height: 0.6em;
+}
 /* The block is a button in disguise: the hover state is what says so. */
 .lyr-clickable {
   cursor: pointer;
@@ -1818,6 +1861,11 @@ html[data-theme='light'] .lyr-clickable:hover {
   font-weight: 600;
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
+}
+/* On the right whether or not the timing row is beside it: words without
+   timings hide that row, and the button slid over to the left. */
+#npReport {
+  margin-left: auto;
 }
 /* A lyric offset saved for the playing track, rather than the global default.
    Marked because otherwise the number looks like a setting that changed by

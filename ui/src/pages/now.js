@@ -118,7 +118,7 @@ export function render(root) {
         el('div', { class: 'lyr-actions', id: 'lyrActions' }, [
           iconBtn('btn btn-ghost btn-sm', BTN.expand, 'Big lyrics', { title: 'Fill the window with the lyrics, one big line at a time', onclick: openBigLyrics }),
           iconBtn('btn btn-ghost btn-sm', BTN.lines, 'Full lyrics', { title: 'Show every line of this song', onclick: openFullLyrics }),
-          iconBtn('btn btn-ghost btn-sm', BTN.copy, 'Copy .lrc', { title: 'Copy the synced lyrics to the clipboard', onclick: copyLrc }),
+          iconBtn('btn btn-ghost btn-sm', BTN.copy, 'Copy .lrc', { id: 'lyrCopy', title: 'Copy the synced lyrics to the clipboard', onclick: copyLrc }),
         ]),
       ]),
       // The block itself is the affordance: a few lines is a keyhole view of
@@ -142,6 +142,7 @@ export function render(root) {
         el('div', { class: 'lyr-tr', id: 'lyrTr' }),
         el('div', { class: 'lyr-near', id: 'lyrNext' }),
         el('div', { class: 'lyr-far', id: 'lyrNext2' }),
+        el('div', { class: 'lyr-plain', id: 'lyrPlain' }),
       ]),
       el('div', { class: 'lyr-empty', id: 'lyrEmpty', hidden: true }, [
         el('div', { class: 'lyr-empty-title', id: 'lyrEmptyTitle' }),
@@ -158,7 +159,7 @@ export function render(root) {
         el('button', { type: 'button', class: 'btn btn-ghost', text: 'Cancel', style: 'align-self:center', onclick: () => toggleAsk(false) }),
       ]),
       el('div', { class: 'lyr-foot', id: 'lyrFoot' }, [
-        el('div', { class: 'lyr-offset' }, [
+        el('div', { class: 'lyr-offset', id: 'lyrOffset' }, [
           el('span', { class: 'lyr-offset-label', text: 'Timing' }),
           iconBtn('btn btn-sm btn-icon', BTN.minus, '', { 'aria-label': 'Show lines 250 ms earlier', title: 'Earlier', onclick: () => nudgeOffset(-250) }),
           el('output', { id: 'npOffset', text: '0 ms' }),
@@ -290,7 +291,7 @@ function paintHead() {
   const count = presenceCount();
   const tabs = count > 1 ? state.slots.slice(0, count).map((s, i) => {
     const t = s.track;
-    return { i, sub: t ? platformInfo(t.media_source)[0] : 'Idle', playing: !!t?.is_playing };
+    return { i, sub: t ? platformInfo(t.media_source)[0] : s.lastTrack ? 'Paused' : 'Idle', playing: !!t?.is_playing };
   }) : [];
   const key = `${state.focus}|${tabs.map((t) => `${t.sub}:${t.playing}`).join(',')}`;
   if (key === headKey && left.childElementCount) return;
@@ -431,6 +432,14 @@ async function pin(appId) {
 
 /* ── Track ───────────────────────────────────────────────────────────────── */
 
+/**
+ * The song the card shows paused when the presence has none: the one that
+ * was playing when it stopped. Not during an ad, which has its own words.
+ */
+function pausedTrack() {
+  return !state.track && state.status?.adPlaying !== true ? state.lastTrack : null;
+}
+
 /** True while the presence is being withheld because the user is idle. */
 function hiddenForAway() {
   return state.status?.userAway === true && state.status?.hideWhenAway !== false;
@@ -479,13 +488,16 @@ function idleText() {
  * The top of the card: the cover, the song, and the states the Discord card
  * does not show — which player, paused, shuffle, a local file.
  */
-function paintTrack(track) {
+function paintTrack(playing) {
   const card = $('#npCard');
   if (!card) return;
   const art = $('#npArt');
   const title = $('#npTitle');
   const artist = $('#npArtist');
   const album = $('#npAlbum');
+  // Paused, the backend sends no track at all; the card keeps the song, as
+  // any player does, while the preview under it shows what Discord shows.
+  const track = playing || pausedTrack();
   card.classList.toggle('is-idle', !track);
   card.classList.toggle('is-paused', !!track && !track.is_playing);
   // A stream's "artist" is its title, so it keeps a second line — see .np-artist.
@@ -542,7 +554,7 @@ function paintTrack(track) {
   // Resolving local art needs a round trip, and the card may have moved on
   // meanwhile: switching tabs repaints with the old track first, and its
   // answer arrives after the new one's. The cover and the tint wait for it.
-  const current = () => state.track === track;
+  const current = () => (state.track || pausedTrack()) === track;
   // A different track blanks the cover while its own resolves; the previous
   // one beside the new title read as the wrong song. The tint is left alone so
   // the background does not flash on every skip.
@@ -570,7 +582,9 @@ function coverFor(track) {
 function paintProgress(p) {
   const box = $('#npProgress');
   if (!box) return;
-  const t = state.track;
+  const paused = pausedTrack();
+  const t = state.track || paused;
+  if (paused) p = { progress_ms: paused.progress_ms, duration_ms: paused.duration_ms };
   // No length, no bar. A stream has none, and the preview under it already
   // counts how long it has been live. Nor do many browser tabs and media apps
   // over SMTC: there the bar sat empty beside a "—" while the elapsed time
@@ -618,12 +632,14 @@ function paintLyrics(l) {
   const plain = !synced && Array.isArray(l?.lines) && l.lines.length > 0;
   kind.hidden = !(synced || plain);
   kind.textContent = synced ? 'Synced' : plain ? 'Words only' : '';
+  kind.title = plain ? 'Found without timings, so they cannot follow the song' : '';
 
   // What to say instead of lines, when there are none to show.
   let empty = null;
   // Not "Nothing playing": the card above already says so, and so does the
   // Discord preview inside it — three times in one window read as an error.
   if (!t && state.status?.adPlaying === true) empty = ['Back after the ad', ''];
+  else if (!t && pausedTrack()) empty = ['Paused', 'The lyrics come back with the song.'];
   else if (!t) empty = ['No lyrics yet', 'They show here, in time with the song, as soon as something plays.'];
   else if (t.is_live) empty = ['Live streams have no lyrics', 'This presence shows the stream title and how long it has been live instead.'];
   else if (state.config[state.focus === 0 ? 'show_lyrics' : `show_lyrics_${state.focus + 1}`] === false) {
@@ -642,6 +658,15 @@ function paintLyrics(l) {
     return;
   }
 
+  // Words with no times have no line to follow and nothing to re-time.
+  stage.classList.toggle('is-plain', plain);
+  $('#lyrOffset').hidden = plain;
+  $('#lyrCopy').hidden = plain;
+  if (plain) {
+    paintPlain(l.lines);
+    return;
+  }
+
   // The whole song rides along with every tick, so the lines either side of
   // the three the engine names come straight off it.
   const idx = Number.isInteger(l?.currentIndex) ? l.currentIndex : -1;
@@ -652,6 +677,22 @@ function paintLyrics(l) {
   $('#lyrNext').textContent = l?.next || '';
   $('#lyrNext2').textContent = idx >= 0 ? lineAt(arr, idx + 2) : '';
   $('#lyrTr').textContent = l?.translation || '';
+}
+
+/**
+ * Words found without timings: the song from the top as a block of text you
+ * can scroll, as a lyrics site shows it, instead of the moving lines, which
+ * would have no current line to centre on. Clicking still opens all of it.
+ * Rebuilt only when the words change: the engine keeps ticking regardless,
+ * and a rebuild would throw the reader back to the first line.
+ */
+function paintPlain(lines) {
+  const box = $('#lyrPlain');
+  const key = lines.join('\n');
+  if (box.dataset.key === key) return;
+  box.dataset.key = key;
+  box.replaceChildren(...lines.map((text) => el('div', { class: text.trim() ? 'lyr-plain-line' : 'lyr-plain-gap', text })));
+  box.scrollTop = 0;
 }
 
 /**
