@@ -18,6 +18,7 @@
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -39,15 +40,31 @@ if (!existsSync(moduleDir)) {
 
 const binary = path.join(moduleDir, 'build', 'Release', 'better_sqlite3.node');
 
+/*
+ * prebuild-install's own bin, run with this Node, not `npx.cmd`. Since the
+ * April 2024 security fix (CVE-2024-27980), Node refuses to spawn a .cmd
+ * without a shell (EINVAL), and the catch below reported that as a missing
+ * prebuild: `npm ci` failed on any current Node with a message blaming the
+ * Electron pin. A shell would bring back the unescaped arguments that fix is
+ * about. better-sqlite3 depends on prebuild-install, so this is the same copy
+ * npx was resolving.
+ */
+const prebuildInstall = createRequire(path.join(moduleDir, 'package.json')).resolve('prebuild-install/bin.js');
+
 console.log(`Fetching better-sqlite3 prebuild for Electron ${electronVersion}...`);
 try {
   execFileSync(
-    process.platform === 'win32' ? 'npx.cmd' : 'npx',
-    ['prebuild-install', '-r', 'electron', '-t', electronVersion, '--arch', process.arch],
+    process.execPath,
+    [prebuildInstall, '-r', 'electron', '-t', electronVersion, '--arch', process.arch],
     { cwd: moduleDir, stdio: 'inherit' },
   );
-} catch {
+} catch (err) {
   console.error('');
+  // No exit status means prebuild-install never ran, which says nothing about prebuilds.
+  if (typeof err.status !== 'number') {
+    console.error(`Could not run prebuild-install: ${err.message}`);
+    process.exit(1);
+  }
   console.error(`No prebuild published for Electron ${electronVersion}.`);
   console.error('Either pin an Electron version that has one, or install Visual Studio');
   console.error('Build Tools and run: npx @electron/rebuild -f -w better-sqlite3');

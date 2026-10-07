@@ -513,7 +513,7 @@ npm run dev
 
 Releases are built from the `desktop-app` branch. `main` is the default branch and is what the website deploys from.
 
-`npm install` runs `postinstall` → [`scripts/fetch-native.mjs`](scripts/fetch-native.mjs), which runs `prebuild-install` for the Electron version in `package.json`. If it fails, the script tells you to either choose an Electron version that has a prebuild or install the Build Tools and run `npx @electron/rebuild -f -w better-sqlite3`.
+`npm install` runs `postinstall` → [`scripts/fetch-native.mjs`](scripts/fetch-native.mjs), which runs `prebuild-install` for the Electron version in `package.json`. If no prebuild exists for that version, the script tells you to either choose an Electron version that has one or install the Build Tools and run `npx @electron/rebuild -f -w better-sqlite3`. If `prebuild-install` could not run at all, it prints why instead.
 
 For YouTube captions in development, download yt-dlp once into `vendor/`:
 
