@@ -246,10 +246,19 @@ export function render(root) {
   // The row's room changes with the window and with the cover beside it.
   const chipsRoom = new ResizeObserver(fitChips);
   chipsRoom.observe($('#npState'));
+  // Only the width: what fitHead() changes is the height, and watching that
+  // too would run it again for its own work.
+  let headWidth = 0;
+  const headRoom = new ResizeObserver(([entry]) => {
+    const w = Math.round(entry.contentRect.width);
+    if (w !== headWidth) { headWidth = w; fitHead(); }
+  });
+  headRoom.observe($('.np-head'));
 
   return () => {
     clearInterval(ticker);
     chipsRoom.disconnect();
+    headRoom.disconnect();
     unsubs.forEach((fn) => fn());
     preview.dispose();
     closeSourceMenu();
@@ -299,6 +308,7 @@ function paintHead() {
 
   if (!tabs.length) {
     left.replaceChildren(el('h1', { text: 'Now playing' }));
+    fitHead();
     return;
   }
   left.replaceChildren(el('div', { class: 'seg', role: 'tablist', 'aria-label': 'Presences on your profile' },
@@ -307,13 +317,42 @@ function paintHead() {
       class: `seg-btn${t.i === state.focus ? ' active' : ''}`,
       role: 'tab',
       'aria-selected': t.i === state.focus ? 'true' : 'false',
-      title: `Show presence ${t.i + 1}`,
+      // Its words can be cut down to the number — see fitHead() — so the
+      // name it is read out by is set whole.
+      'aria-label': `Presence ${t.i + 1}, ${t.sub}`,
+      title: `Show presence ${t.i + 1} (${t.sub})`,
       onclick: () => setFocus(t.i),
     }, [
       el('span', { class: `dot${t.playing ? ' on' : ''}` }),
-      `Presence ${t.i + 1}`,
+      el('span', {}, [el('span', { class: 'seg-word', text: 'Presence ' }), String(t.i + 1)]),
       el('span', { class: 'seg-sub', text: t.sub }),
     ]))));
+  fitHead();
+}
+
+/*
+ * Tabs and the source picker on one row, at any number of presences. Three
+ * or more tabs beside "Presence 1 source" did not fit the smallest window:
+ * the picker wrapped under them, and the 50px row that added made the page
+ * scroll by 43px with four. Short of room, the row sheds words in order —
+ * the picker's "Presence 1" (the selected tab already says it), then the
+ * tabs' "Presence", then the player under each number — and keeps them all
+ * whenever they fit. Measured, like fitChips(): the room depends on the
+ * window, the number of tabs and the players' names.
+ */
+const TIGHT = ['tight-src', 'tight-word', 'tight-sub'];
+
+function fitHead() {
+  const head = $('.np-head');
+  const left = $('#npHeadLeft');
+  const picker = $('.src-wrap');
+  if (!head || !left || !picker) return;
+  const wrapped = () => picker.getBoundingClientRect().top >= left.getBoundingClientRect().bottom - 1;
+  head.classList.remove(...TIGHT);
+  for (const step of TIGHT) {
+    if (!wrapped()) break;
+    head.classList.add(step);
+  }
 }
 
 let menuOpen = false;
@@ -337,10 +376,16 @@ function paintSourceButton() {
   const key = `${multi() ? state.focus : '-'}|${label}`;
   if (btn.dataset.key === key) return;
   btn.dataset.key = key;
-  btn.replaceChildren(el('span', { class: 'src-label', text: multi() ? `Presence ${state.focus + 1} source` : 'Source' }), label);
+  btn.replaceChildren(
+    el('span', { class: 'src-label' }, multi()
+      ? [el('span', { class: 'src-long', text: `Presence ${state.focus + 1} source` }), el('span', { class: 'src-short', text: 'Source' })]
+      : ['Source']),
+    label,
+  );
   btn.insertAdjacentHTML('beforeend', BTN.chevron);
   btn.title = 'Choose which player this presence follows';
   if (menuOpen) paintSourceMenu();
+  fitHead();
 }
 
 function openSourceMenu() {

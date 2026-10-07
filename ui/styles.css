@@ -1288,6 +1288,21 @@ html[data-theme='light'] .np-progress .np-bar {
   color: var(--text-muted);
   font-weight: 500;
 }
+/* Words the Now header sheds when its row is short of room — see fitHead(). */
+.src-short,
+.np-head.tight-src .src-long,
+.np-head.tight-word .seg-word,
+.np-head.tight-sub .seg-sub {
+  display: none;
+}
+.np-head.tight-src .src-short {
+  display: inline;
+}
+/* The number alone, or a number and a player: the gap after the dot is
+   enough, and the one before the player stays. */
+.np-head.tight-word .seg-btn {
+  padding: 0 12px;
+}
 .src-menu {
   position: absolute;
   right: 0;
