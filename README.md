@@ -339,6 +339,7 @@ Everything has a control in **Settings**, except the few keys marked *config onl
 | `listening-history.json` | Listening log, up to 10,000 entries. |
 | `flagged-lyrics.json` | Lyrics you marked as wrong. |
 | `lyrics-offsets.json` | Timing offsets per track, up to 1,000 tracks. |
+| `lyrics-cache.json` | Lyrics already found, up to 500 tracks for 30 days, so a song heard again shows its lyrics at once. The **Clear lyrics cache** button in **Settings** empties it. |
 | `translate-cache.json` | Translation cache, up to 5,000 lines. |
 | `lastfm-session.txt`, `lastfm-queue.json` | Last.fm session and scrobbles waiting to be sent. |
 | `window-state.json` | Last window position and size. Delete it to reset. |

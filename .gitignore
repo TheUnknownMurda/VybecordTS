@@ -10,6 +10,7 @@ envs/
 config.json
 flagged-lyrics.json
 translate-cache.json
+lyrics-cache.json
 stats-history.json
 listening-history.json
 window-state.json
