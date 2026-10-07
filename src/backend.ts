@@ -759,6 +759,14 @@ export class VybecordBackend extends EventEmitter {
         log.info('[SPOTIFY-LYRICS] Imported lyrics in use for this track — push ignored');
         return;
       }
+      // Nor over a flag. The extension pushes the same lines on every play,
+      // and a push landing after the track already had its lyrics put flagged
+      // official lines straight back on screen and into the cache. Since the
+      // cache outlives the session, that is how most replays begin.
+      if (isLyricsFlagged(cur.track_name, cur.artist_name, lines)) {
+        log.info('[SPOTIFY-LYRICS] These lines were flagged for this track — push ignored');
+        return;
+      }
       this.lyricsCache.set(slot.cacheKey, lines);
       slot.engine.injectLyrics(lines, cur);
       // These arrive after the track's own warm-up has already run over
@@ -1657,9 +1665,14 @@ export class VybecordBackend extends EventEmitter {
      * An import still wins. It is the one thing a listener sets deliberately,
      * and it is usually set precisely because the official version is the one
      * that reads wrong.
+     *
+     * So does a flag. Folding flagged lines in would overwrite what the cache
+     * holds for the track (the replacement found after the flag) only for the
+     * flag check below to throw both away and send the track back to the
+     * providers.
      */
     const pushed = this.pushedSpotifyLyrics(trackData);
-    if (pushed?.length && !imported) {
+    if (pushed?.length && !imported && !isLyricsFlagged(trackData.track_name, trackData.artist_name, pushed)) {
       this.lyricsCache.set(cacheKey, pushed);
       log.info(`[SPOTIFY-LYRICS] Using ${pushed.length} lines pushed for this track`);
     }
@@ -1672,6 +1685,7 @@ export class VybecordBackend extends EventEmitter {
     // can beat the debounced write that drops its entry. The providers skip
     // a flagged set on their own; a cache hit has to as well.
     if (cached?.length && isLyricsFlagged(trackData.track_name, trackData.artist_name, cached)) {
+      log.info(`[LYRICS] Cached lyrics for "${trackData.track_name}" were flagged — asking the providers instead`);
       this.lyricsCache.delete(cacheKey);
       cached = undefined;
     }
