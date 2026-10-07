@@ -32,7 +32,9 @@ function hiddenReason() {
 const NOTE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
 
 /**
- * @param {{ onCustomize?: () => void, title?: string }} opts
+ * @param {{ onCustomize?: () => void, title?: string, actions?: HTMLElement }} opts
+ *   `actions` goes in the header, before Customize — Now playing puts its
+ *   quick switches there.
  * @returns {{ node: HTMLElement, dispose: () => void }}
  */
 export function discordPreview(opts = {}) {
@@ -41,6 +43,7 @@ export function discordPreview(opts = {}) {
   const node = el('section', { class: 'card dc-card', 'aria-label': 'Preview of your Discord card' }, [
     el('div', { class: 'dc-head' }, [
       el('span', { class: 'eyebrow', text: opts.title || 'What your friends see' }),
+      opts.actions || null,
       opts.onCustomize ? el('button', { type: 'button', text: 'Customize', onclick: opts.onCustomize }) : null,
     ]),
     body,
