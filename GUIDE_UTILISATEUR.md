@@ -31,7 +31,7 @@ Ton statut Discord se met à jour tout seul. La première fois, Vybecord s'ouvre
 
 ### Fermer la fenêtre n'arrête pas l'appli
 
-Vybecord continue dans la zone de notification (à côté de l'horloge). Clique sur l'icône pour rouvrir la fenêtre, ou clic droit → **Quit** pour vraiment quitter.
+Vybecord continue dans la zone de notification (à côté de l'horloge). Clique sur l'icône pour rouvrir la fenêtre, ou clic droit → **Quit** pour vraiment quitter. Le même menu du clic droit a **Show on Discord** et **Lyrics on Discord**, pour couper ou remettre ton statut ou ses paroles sans ouvrir la fenêtre.
 
 Tu peux changer ça dans **Settings → App & window → Close to tray**.
 
@@ -39,7 +39,7 @@ Tu peux changer ça dans **Settings → App & window → Close to tray**.
 
 | Page | À quoi ça sert |
 | --- | --- |
-| **Now playing** | Le morceau en cours (pochette, titre, artiste, album, lecteur et progression ; en pause, il reste affiché avec sa barre arrêtée), juste en dessous un aperçu de ta carte Discord telle que tes amis la voient, et les paroles qui défilent (clique dessus pour voir tout le morceau, ou sur **Big lyrics** pour les afficher en grand dans toute la fenêtre, comme Spotify ; **Échap** ferme). Des paroles trouvées sans minutage s'affichent en texte simple à faire défiler, marquées **Words only**. Le menu **Source** choisit le lecteur suivi. |
+| **Now playing** | Le morceau en cours (pochette, titre, artiste, album, lecteur et progression ; en pause, il reste affiché avec sa barre arrêtée), juste en dessous un aperçu de ta carte Discord telle que tes amis la voient, avec deux interrupteurs au-dessus de l'aperçu : **Presence** retire ton statut de Discord ou le remet, et **Lyrics** active ou coupe les paroles sur cette carte, et les paroles qui défilent (clique dessus pour voir tout le morceau, ou sur **Big lyrics** pour les afficher en grand dans toute la fenêtre, comme Spotify ; **Échap** ferme). Des paroles trouvées sans minutage s'affichent en texte simple à faire défiler, marquées **Words only**. Le menu **Source** choisit le lecteur suivi. |
 | **Lyrics** | Ta bibliothèque de paroles perso : **My lyrics**, **Blocked** (les paroles signalées comme fausses) et le dump **LRCLIB** hors ligne. **Add lyrics** sert à importer ou écrire de nouvelles paroles. |
 | **Activity** | Ce que tu as écouté sur 7 jours, 30 jours, 12 mois ou depuis toujours : temps d'écoute, graphique, top artistes et titres, et tes dernières écoutes (**See all** ouvre tout l'historique). La page se met à jour toute seule à la fin de chaque morceau. |
 | **Settings** | Discord presence, Lyrics & translation, Detection, Integrations (extension navigateur, Spotify, Last.fm), App & window et About. La barre de recherche trouve n'importe quel réglage. |

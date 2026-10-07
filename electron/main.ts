@@ -149,6 +149,8 @@ async function start(): Promise<void> {
   let lastLaunchOnStartup = initialConfig.launch_on_startup === true;
   backend.on('configUpdate', (cfg: Record<string, unknown>) => {
     syncPushServer(cfg.extension_enabled !== false);
+    // The quick switches there show the config, whichever side changed it.
+    refreshTrayMenu();
 
     const trayEnabled = cfg.tray_enabled !== false;
     if (trayEnabled !== lastTrayEnabled) {
@@ -305,13 +307,51 @@ function createTray(): void {
   const icon = nativeImage.createFromPath(resourcePath('assets/icon.ico'));
   tray = new Tray(icon.isEmpty() ? nativeImage.createEmpty() : icon);
   tray.setToolTip('Vybecord');
+  trayMenuKey = '';
+  refreshTrayMenu();
+  tray.on('click', () => showWindow());
+  tray.on('double-click', () => showWindow());
+}
+
+/** The per-card lyrics switches, by position; `show_lyrics` is presence 1's. */
+const LYRICS_KEYS = ['show_lyrics', 'show_lyrics_2', 'show_lyrics_3', 'show_lyrics_4', 'show_lyrics_5'] as const;
+
+let trayMenuKey = '';
+
+/*
+ * The presence and its lyrics, switchable from the tray: with the window
+ * minimised there, it is the nearest thing to hand. Same keys as Settings and
+ * Now playing. Lyrics is one item for every presence in play, since the menu
+ * has no room to say which card is which; it reads on while any of them has
+ * lyrics, and flips them all together.
+ */
+function refreshTrayMenu(): void {
+  if (!tray || !backend) return;
+  const cfg = backend.getConfig() as unknown as Record<string, unknown>;
+  const count = Math.min(LYRICS_KEYS.length, Math.max(1, Math.round(Number(cfg.presence_count) || 1)));
+  const lyricsKeys = LYRICS_KEYS.slice(0, count);
+  const presenceOn = cfg.rpc_enabled !== false;
+  const lyricsOn = lyricsKeys.some((k) => cfg[k] !== false);
+  // Rebuilt only when it would change: configUpdate fires for every setting,
+  // and most have nothing to do with these two.
+  const key = `${presenceOn}|${lyricsOn}|${count}`;
+  if (key === trayMenuKey) return;
+  trayMenuKey = key;
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Open Vybecord', click: () => showWindow() },
     { type: 'separator' },
+    {
+      label: 'Show on Discord', type: 'checkbox', checked: presenceOn,
+      // Electron has already flipped `checked` by the time click runs.
+      click: (item) => backend?.updateConfig({ rpc_enabled: item.checked }),
+    },
+    {
+      label: 'Lyrics on Discord', type: 'checkbox', checked: lyricsOn,
+      click: (item) => backend?.updateConfig(Object.fromEntries(lyricsKeys.map((k) => [k, item.checked]))),
+    },
+    { type: 'separator' },
     { label: 'Quit', click: () => void quitApp() },
   ]));
-  tray.on('click', () => showWindow());
-  tray.on('double-click', () => showWindow());
 }
 
 function trayTooltip(track: TrackData | null): string {
