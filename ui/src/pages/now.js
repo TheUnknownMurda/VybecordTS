@@ -1,10 +1,10 @@
 /**
- * Now playing — what Discord shows for the track, and the live lyrics.
+ * Now playing — the track, what Discord shows for it, and the live lyrics.
  *
- * Two blocks, top to bottom: what their friends see, which names the track,
- * and the words. The player picker that used
- * to be a page of its own is the Source menu in the header — pinning is a
- * decision about the presence on screen, so it lives next to it.
+ * Two cards, top to bottom: the song together with its Discord card, then the
+ * words. The player picker that used to be a page of its own is the Source
+ * menu in the header — pinning is a decision about the presence on screen, so
+ * it lives next to it.
  */
 
 import { el, $, fmtTime, setArt, platformInfo, toast, modal, BLANK_ART } from '../util.js';
@@ -26,9 +26,6 @@ const multi = () => presenceCount() > 1;
  * a track can name, which is what makes `html` safe to use here.
  */
 const ICONS = {
-  live: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.2"/><path d="M8.2 8.2a5.4 5.4 0 000 7.6"/>'
-    + '<path d="M15.8 15.8a5.4 5.4 0 000-7.6"/><path d="M5.4 5.4a9.3 9.3 0 000 13.2"/>'
-    + '<path d="M18.6 18.6a9.3 9.3 0 000-13.2"/></svg>',
   local: '<svg viewBox="0 0 24 24"><rect x="3" y="13" width="18" height="7" rx="2"/>'
     + '<path d="M6 13l1.8-6.2A2 2 0 019.7 5.4h4.6a2 2 0 011.9 1.4L18 13"/><circle cx="17" cy="16.5" r="1"/></svg>',
   shuffle: '<svg viewBox="0 0 24 24"><path d="M3 6h3.5c1.3 0 2.5.6 3.2 1.7l4.6 6.6c.7 1.1 1.9 1.7 3.2 1.7H21"/>'
@@ -39,6 +36,12 @@ const ICONS = {
   repeatOne: '<svg viewBox="0 0 24 24"><path d="M7 7h10a3 3 0 013 3v1"/><path d="M17 17H7a3 3 0 01-3-3v-1"/>'
     + '<path d="M15 4l3 3-3 3"/><path d="M9 20l-3-3 3-3"/><path d="M11.3 10.6l1.4-1V15"/></svg>',
   away: '<svg viewBox="0 0 24 24"><path d="M20.5 13.4A8.6 8.6 0 0110.6 3.5a8.6 8.6 0 109.9 9.9z"/></svg>',
+  // In place of the pulse while paused: the dot going grey alone was too
+  // small a change to read from across the room.
+  pause: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg>',
+  // Behind the cover, so a track with no art, or no track, is not a blank tile.
+  note: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/>'
+    + '<circle cx="18" cy="16" r="3"/></svg>',
 };
 
 /** A few literal glyphs for the buttons; same rule as ICONS. */
@@ -65,22 +68,45 @@ function iconBtn(cls, glyph, label, props = {}) {
 export function render(root) {
   const preview = discordPreview({ onCustomize: () => goto('settings', { cat: 'presence' }) });
 
+  const cover = el('div', { class: 'np-cover' });
+  cover.innerHTML = ICONS.note;
+  cover.append(el('img', { class: 'np-art', id: 'npArt', alt: '', src: BLANK_ART }));
+
   root.replaceChildren(
     el('div', { class: 'np-head' }, [
-      el('div', { class: 'np-head-title' }, [
-        el('div', { id: 'npHeadLeft' }),
-        el('div', { class: 'np-status', id: 'npStatus', 'aria-live': 'polite' }),
-      ]),
+      el('div', { id: 'npHeadLeft' }),
       sourcePicker(),
     ]),
 
     /*
-     * The Discord preview is the track: it already shows the title, artist,
-     * cover and clock, so a track card above it said everything twice and
-     * pushed the lyrics down. What it cannot show — which player, paused,
-     * shuffle — is the status line under the heading.
+     * The song and its Discord card are one card, split by a hairline: what
+     * is playing, then how it shows on a profile. The preview alone could not
+     * name the song — while lyrics run its big line is the lyric, and the title
+     * sits small in the header — and as two cards, the second one read as a
+     * repeat of the first. Stacked, never side by side: beside the track the
+     * preview's text got about 190px and wrapped six or seven times.
      */
-    preview.node,
+    el('section', { class: 'card np-card', id: 'npCard', 'aria-label': 'Now playing' }, [
+      el('div', { class: 'np-track' }, [
+        cover,
+        el('div', { class: 'np-meta' }, [
+          // Polite, as the status line it replaced was: play, pause and going
+          // away are announced. Not the title, which changes with every track.
+          el('div', { class: 'np-state', id: 'npState', 'aria-live': 'polite' }),
+          el('div', { class: 'np-title', id: 'npTitle' }),
+          el('div', { class: 'np-sub' }, [
+            el('div', { class: 'np-artist', id: 'npArtist' }),
+            el('div', { class: 'np-album', id: 'npAlbum' }),
+          ]),
+          el('div', { class: 'np-progress', id: 'npProgress', hidden: true }, [
+            el('span', { class: 'np-time', id: 'npElapsed', text: '0:00' }),
+            el('div', { class: 'np-bar' }, [el('div', { class: 'np-fill', id: 'npFill' })]),
+            el('span', { class: 'np-time', id: 'npTotal', text: '0:00' }),
+          ]),
+        ]),
+      ]),
+      preview.node,
+    ]),
 
     // The card that takes the leftover height — see .lyr-card in the stylesheet.
     el('section', { class: 'card lyr-card', id: 'lyrCard', 'aria-label': 'Lyrics' }, [
@@ -152,17 +178,60 @@ export function render(root) {
   void refreshOffset();
   paintTrSlot();
 
+  /*
+   * Local clock for the progress bar.
+   *
+   * The backend reports progress once per poll (1s); this fills the gap so the
+   * bar and the elapsed time move smoothly. It reads the elapsed time from a
+   * timestamp rather than adding a fixed step per tick — setInterval fires late
+   * under load, and a fixed step would quietly lose that time on every tick and
+   * drift away from the player over the length of a track.
+   */
+  let base = state.progress.progress_ms || 0;
+  let baseAt = performance.now();
+  let running = !!state.track?.is_playing;
+
+  /** Where the song is now: the last report, moved on by the time since while it plays. */
+  const position = () => {
+    const duration = state.progress.duration_ms;
+    const elapsed = running ? base + (performance.now() - baseAt) : base;
+    return { progress_ms: duration > 0 ? Math.min(elapsed, duration) : elapsed, duration_ms: duration };
+  };
+
+  const onProgress = (p) => {
+    base = p?.progress_ms || 0;
+    baseAt = performance.now();
+    paintProgress(p);
+  };
+
+  /*
+   * Play and pause restart the clock from where it stands. Progress is only
+   * reported while something plays, so without this a resumed song had its
+   * whole pause added on, and the bar leapt ahead until the next report.
+   */
+  const onPlayState = (t) => {
+    const playing = !!t?.is_playing;
+    if (playing !== running) {
+      base = position().progress_ms;
+      baseAt = performance.now();
+      running = playing;
+    }
+    paintProgress(position());
+  };
+  onPlayState(state.track);
+
   const unsubs = [
-    subscribe('track', (t) => { paintTrack(t); paintLyrics(state.lyrics); }),
+    subscribe('track', (t) => { paintTrack(t); onPlayState(t); paintLyrics(state.lyrics); }),
+    subscribe('progress', onProgress),
     subscribe('lyrics', paintLyrics),
     subscribe('config', () => { void refreshOffset(); paintTrSlot(); paintLyrics(state.lyrics); }),
     // A new track may carry its own correction, or none.
     subscribe('track', () => { void refreshOffset(); }),
-    // An ad produces no track, so the status line has to be redrawn to explain
-    // it rather than sit there reading "Waiting for a player". Being away hides
+    // An ad produces no track, so both cards have to be redrawn to explain it
+    // rather than sit there reading "Waiting for a player". Being away hides
     // the presence without the song changing at all, so the chip that says so
     // cannot wait for the next trackUpdate to appear.
-    subscribe('status', () => { paintHead(); paintTrack(state.track); }),
+    subscribe('status', () => { paintHead(); paintTrack(state.track); paintLyrics(state.lyrics); }),
     // The other cards come and go with what is playing; the tabs read them.
     subscribe('slots', paintHead),
     subscribe('players', () => { paintHead(); if (menuOpen) paintSourceMenu(); }),
@@ -171,7 +240,15 @@ export function render(root) {
     subscribe('focus', () => { toggleAsk(false); paintHead(); paintTrack(state.track); paintLyrics(state.lyrics); void refreshOffset(); }),
   ];
 
+  const ticker = setInterval(() => { if (running) paintProgress(position()); }, 250);
+
+  // The row's room changes with the window and with the cover beside it.
+  const chipsRoom = new ResizeObserver(fitChips);
+  chipsRoom.observe($('#npState'));
+
   return () => {
+    clearInterval(ticker);
+    chipsRoom.disconnect();
     unsubs.forEach((fn) => fn());
     preview.dispose();
     closeSourceMenu();
@@ -359,59 +436,166 @@ function hiddenForAway() {
   return state.status?.userAway === true && state.status?.hideWhenAway !== false;
 }
 
-/** A status chip: a glyph and a word. */
-function statusChip(icon, label, accent = false) {
-  const chip = el('span', { class: `badge${accent ? ' accent' : ''}`, title: label });
+/** A status chip: a glyph and a word, the word in a node of its own — see fitChips(). */
+function statusChip(icon, label, accent = false, tip = label) {
+  const chip = el('span', { class: `badge${accent ? ' accent' : ''}`, title: tip });
   chip.innerHTML = ICONS[icon];
-  chip.append(document.createTextNode(label));
+  chip.append(el('span', { class: 'np-chip-label', text: label }));
   return chip;
 }
 
-/** Loads the cover off screen, only to tint the background from it. */
-const artProbe = new Image();
+/**
+ * Chips with their words while the row has room for them, glyphs alone when
+ * it does not — the last chip first, so "Away" is the one that keeps its word
+ * longest. The tooltip still names each one. Measured rather than set at a
+ * width: the room left depends on the player's name and on how many chips
+ * there are, as well as on the window.
+ */
+function fitChips() {
+  const row = $('#npState');
+  if (!row) return;
+  const labels = [...row.querySelectorAll('.np-chip-label')];
+  for (const l of labels) l.hidden = false;
+  for (let i = labels.length - 1; i >= 0 && row.scrollWidth > row.clientWidth; i--) labels[i].hidden = true;
+}
+
+/** The heading and the hint the card shows while this presence has no track. */
+function idleText() {
+  // The ad gets a heading and nothing else: the preview under it already says
+  // the status comes back with the music, and a second "comes back" here and a
+  // third in the Lyrics card read as the app repeating itself.
+  if (state.status?.adPlaying === true) {
+    return ['A Spotify ad is playing', ''];
+  }
+  // A pin is exclusive, so nothing playing may simply mean the pinned player
+  // is paused or closed. Saying which one, and how to undo it, avoids the app
+  // looking broken when it is doing exactly what it was told.
+  return [waitingText(), pins()[state.focus]
+    ? 'This presence follows that player only. Set Source to Automatic to follow anything.'
+    : 'Play something in Spotify, a browser tab or any media app.'];
+}
 
 /**
- * The line under the heading: where the presence on screen is playing from,
- * and the states the Discord card does not show — paused, shuffle, a local
- * file. The title itself is left to the preview.
+ * The top of the card: the cover, the song, and the states the Discord card
+ * does not show — which player, paused, shuffle, a local file.
  */
 function paintTrack(track) {
-  const line = $('#npStatus');
-  if (!line) return;
+  const card = $('#npCard');
+  if (!card) return;
+  const art = $('#npArt');
+  const title = $('#npTitle');
+  const artist = $('#npArtist');
+  const album = $('#npAlbum');
+  card.classList.toggle('is-idle', !track);
+  card.classList.toggle('is-paused', !!track && !track.is_playing);
+  // A stream's "artist" is its title, so it keeps a second line — see .np-artist.
+  card.classList.toggle('is-live', !!track?.is_live);
 
   if (!track) {
-    const ad = state.status?.adPlaying === true;
-    const away = !ad && hiddenForAway();
-    // A pin is exclusive, so nothing playing may simply mean the pinned player
-    // is paused or closed. Saying which one avoids the app looking broken when
-    // it is doing exactly what it was told.
-    line.replaceChildren(
-      el('span', { class: 'np-status-text', text: ad ? 'A Spotify ad is playing' : waitingText() }),
-      ...(away ? [statusChip('away', 'Away')] : []),
-    );
+    const [head, hint] = idleText();
+    const away = state.status?.adPlaying !== true && hiddenForAway();
+    $('#npState').replaceChildren(...(away ? [statusChip('away', 'Away', true, AWAY_TIP)] : []));
+    fitChips();
+    title.textContent = head;
+    artist.textContent = hint;
+    album.textContent = '';
+    for (const n of [title, artist, album]) n.removeAttribute('title');
+    art.src = BLANK_ART;
+    delete art.dataset.track;
     setAmbient(null);
     return;
   }
 
   const [label] = platformInfo(track.media_source);
-  const verb = track.is_live ? 'Live on' : track.is_playing ? 'Playing on' : 'Paused on';
-  line.replaceChildren(
-    el('span', { class: 'np-status-text' }, [
-      track.is_playing ? el('span', { class: 'pulse' }) : null,
-      `${verb} ${label}`,
-    ].filter(Boolean)),
+  /*
+   * What leads the line says what the player is doing: the pulse while it
+   * plays, a pause glyph when it stops, and for a stream the red LIVE tag
+   * everyone reads at a glance — paused too, since the stream goes on without
+   * the viewer. A stream is watched, not played — and "Live on" after a LIVE
+   * tag said it twice. The tag goes first so a paused stream's glyph sits
+   * next to its verb.
+   */
+  const lead = [];
+  if (track.is_live) lead.push(el('span', { class: 'live-tag', text: 'Live' }));
+  if (!track.is_playing) {
+    const glyph = el('span', { class: 'np-glyph' });
+    glyph.innerHTML = ICONS.pause;
+    lead.push(glyph);
+  }
+  if (!lead.length) lead.push(el('span', { class: 'pulse' }));
+  const verb = !track.is_playing ? 'Paused on' : track.is_live ? 'Watching on' : 'Playing on';
+  $('#npState').replaceChildren(
+    el('span', { class: 'eyebrow np-source' }, [...lead, `${verb} ${label}`]),
     ...badges(track).map((b) => statusChip(...b)),
   );
+  fitChips();
 
-  // Resolving local art needs a round trip, so the tint follows the image.
-  setArt(artProbe, track.album_art_url, track.track_id).then(setAmbient, () => setAmbient(null));
+  // Clamped in the stylesheet — a stream's "artist" is its title, and
+  // streamers write paragraphs there — so the whole of each is the tooltip.
+  title.textContent = track.track_name || 'Unknown track';
+  artist.textContent = track.artist_name || '';
+  album.textContent = track.album_name || '';
+  title.title = track.track_name || '';
+  artist.title = track.artist_name || '';
+  album.title = track.album_name || '';
+
+  // Resolving local art needs a round trip, and the card may have moved on
+  // meanwhile: switching tabs repaints with the old track first, and its
+  // answer arrives after the new one's. The cover and the tint wait for it.
+  const current = () => state.track === track;
+  // A different track blanks the cover while its own resolves; the previous
+  // one beside the new title read as the wrong song. The tint is left alone so
+  // the background does not flash on every skip.
+  if (art.dataset.track !== (track.track_id || '')) {
+    art.dataset.track = track.track_id || '';
+    art.src = BLANK_ART;
+  }
+  coverFor(track).then(
+    (url) => { if (current()) { art.src = url || BLANK_ART; setAmbient(url); } },
+    () => { if (current()) { art.src = BLANK_ART; setAmbient(null); } },
+  );
 }
 
-/** The chips after the source: what the track is doing that its title does not say. */
+/**
+ * The cover's URL, resolved into an image nobody sees. setArt() writes the
+ * image it is handed the moment it has an answer, and aimed at the one on
+ * screen, a slow local cover painted the previous track over the next one, or
+ * over the idle card. The caller decides whether the answer still applies.
+ */
+function coverFor(track) {
+  return setArt(new Image(), track?.album_art_url, track?.track_id);
+}
+
+/** The bar under the song: how far in, and how long it is. */
+function paintProgress(p) {
+  const box = $('#npProgress');
+  if (!box) return;
+  const t = state.track;
+  // No length, no bar. A stream has none, and the preview under it already
+  // counts how long it has been live. Nor do many browser tabs and media apps
+  // over SMTC: there the bar sat empty beside a "—" while the elapsed time
+  // counted up, which looked like a stalled player. The next progress report
+  // that carries a length brings the row back.
+  box.hidden = !t || !!t.is_live || !(p?.duration_ms > 0);
+  if (box.hidden) return;
+  const total = p.duration_ms;
+  const elapsed = Math.min(p.progress_ms || 0, total);
+  $('#npFill').style.width = `${(elapsed / total) * 100}%`;
+  $('#npElapsed').textContent = fmtTime(elapsed);
+  $('#npTotal').textContent = fmtTime(total);
+}
+
+/*
+ * One word on the chip: the preview right under it already explains that the
+ * status is hidden, and the long label cost the other chips their words at the
+ * default window.
+ */
+const AWAY_TIP = 'Away — your Discord status is hidden until you come back';
+
+/** The chips after the player: what the track is doing that its title does not say. */
 function badges(track) {
   const out = [];
-  if (hiddenForAway()) out.push(['away', 'Away — status hidden', true]);
-  if (track.is_live) out.push(['live', 'Live', true]);
+  if (hiddenForAway()) out.push(['away', 'Away', true, AWAY_TIP]);
   if (track.is_local) out.push(['local', 'Local file', false]);
   if (track.is_shuffle) out.push(['shuffle', 'Shuffle', false]);
   if (track.repeat_mode === 'track') out.push(['repeatOne', 'Repeat one', false]);
@@ -437,7 +621,10 @@ function paintLyrics(l) {
 
   // What to say instead of lines, when there are none to show.
   let empty = null;
-  if (!t) empty = ['Nothing playing', 'Lyrics show here, in time with the song, as soon as something plays.'];
+  // Not "Nothing playing": the card above already says so, and so does the
+  // Discord preview inside it — three times in one window read as an error.
+  if (!t && state.status?.adPlaying === true) empty = ['Back after the ad', ''];
+  else if (!t) empty = ['No lyrics yet', 'They show here, in time with the song, as soon as something plays.'];
   else if (t.is_live) empty = ['Live streams have no lyrics', 'This presence shows the stream title and how long it has been live instead.'];
   else if (state.config[state.focus === 0 ? 'show_lyrics' : `show_lyrics_${state.focus + 1}`] === false) {
     empty = ['Lyrics are switched off for this presence', 'Turn them back on in Settings → Discord presence.'];
@@ -483,9 +670,13 @@ function toggleAsk(open) {
   if (!ask) return;
   const show = open ?? ask.hidden;
   if (show && !state.track) return toast('Nothing is playing', 'err');
+  // The panel stands in for the timing row while it is open, button and all,
+  // so closing it from inside hands the focus back to that button.
+  const hadFocus = ask.contains(document.activeElement);
   ask.hidden = !show;
   $('#npReport')?.setAttribute('aria-expanded', show ? 'true' : 'false');
   if (show) ask.querySelector('.choice')?.focus();
+  else if (hadFocus) $('#npReport')?.focus();
 }
 
 /* ── Timing offset ───────────────────────────────────────────────────────── */
@@ -730,7 +921,13 @@ async function showFullLyrics(mode = 'panel') {
     bigTitle.textContent = t ? t.track_name || 'Unknown track' : 'Nothing playing';
     bigArtist.textContent = t?.artist_name || '';
     // Resolved art is cached by track, so this is the image Now already shows.
-    void setArt(bigArt, t?.album_art_url, t?.track_id).catch(() => { bigArt.src = BLANK_ART; });
+    // By id, not by object: this view is not repainted when the same track
+    // comes round again with more metadata.
+    const id = trackId;
+    coverFor(t).then(
+      (url) => { if (trackId === id) bigArt.src = url || BLANK_ART; },
+      () => { if (trackId === id) bigArt.src = BLANK_ART; },
+    );
   }
 
   /** A skip empties the panel until the new song's lines arrive. */
@@ -922,23 +1119,35 @@ function choice_(title, desc, onclick) {
   ]);
 }
 
+/*
+ * The cover setAmbient() was last asked for. Only that one may paint: a cover
+ * still loading when the presence went idle, or when the other tab was
+ * picked, landed afterwards and washed the card in the colour of a song no
+ * longer on it.
+ */
+let ambientUrl = null;
+
 /**
- * Tint the background orbs from the cover.
+ * Tint the background orbs, and the top of the card, from the cover.
  *
  * The image is drawn to a 1x1 canvas to get its average colour. It comes from
  * the local vybecord: scheme or an https CDN; either way it must not taint the
  * canvas, so a failed read is swallowed rather than allowed to throw.
  */
 function setAmbient(url) {
+  ambientUrl = url || null;
   const orbs = document.querySelectorAll('.orb');
+  const card = $('#npCard');
   if (!url) {
     orbs.forEach((o) => o.style.removeProperty('--orb'));
+    card?.style.removeProperty('--np-tint');
     setTint(null);
     return;
   }
   const img = new Image();
   img.crossOrigin = 'anonymous';
   img.onload = () => {
+    if (url !== ambientUrl) return;
     try {
       const canvas = document.createElement('canvas');
       canvas.width = canvas.height = 1;
@@ -946,6 +1155,9 @@ function setAmbient(url) {
       ctx.drawImage(img, 0, 0, 1, 1);
       const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
       orbs.forEach((o) => o.style.setProperty('--orb', `rgb(${r},${g},${b})`));
+      // The same colour washes the top of the card, so the cover and the
+      // song beside it read as one thing.
+      card?.style.setProperty('--np-tint', `rgb(${r},${g},${b})`);
       setTint(`rgb(${r},${g},${b})`);
     } catch {
       /* cross-origin cover — keep the default tint */
