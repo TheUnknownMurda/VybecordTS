@@ -2,281 +2,228 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Privacy Policy — Vybecord</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy Policy · Vybecord</title>
   <meta name="description" content="What the Vybecord browser extension reads, where it sends it, and what it never collects.">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <meta name="theme-color" content="#0b0b10">
+  <link rel="canonical" href="https://theunknownmurda.github.io/VybecordTS/privacy/">
   <link rel="icon" href="../favicon.svg" type="image/svg+xml">
-  <meta name="theme-color" content="#06060a">
-  <style>
-    /* Same tokens as the landing page, kept inline so this page stands alone. */
-    :root {
-      --bg: #06060a;
-      --fg: #fafafa;
-      --fg-2: #c9c9d3;
-      --fg-3: #9090a0;
-      --fg-4: #63636f;
-      --accent: #10b981;
-      --accent-2: #34d399;
-      --line: rgba(255, 255, 255, 0.07);
-      color-scheme: dark;
-    }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      background: var(--bg);
-      color: var(--fg-2);
-      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      line-height: 1.7;
-      padding: 3.5rem 1.5rem 6rem;
-      -webkit-font-smoothing: antialiased;
-    }
-    body::before {
-      content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
-      background: radial-gradient(46rem 28rem at 78% -6%, rgba(16, 185, 129, .1), transparent 62%);
-    }
-    .wrap { max-width: 44rem; margin: 0 auto; }
-    a { color: var(--accent-2); text-decoration-color: rgba(52, 211, 153, .4); }
-    .home {
-      display: inline-flex; align-items: center; gap: .55rem; margin-bottom: 2.75rem;
-      font-size: .875rem; font-weight: 500; color: var(--fg-3); text-decoration: none;
-    }
-    .home:hover { color: var(--accent-2); }
-    .home .mark {
-      width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center;
-      color: #04120c; background: linear-gradient(150deg, var(--accent-2), var(--accent) 55%, #0e9f6e);
-    }
-    .home .mark svg { width: 15px; height: 15px; }
-    h1 {
-      color: var(--fg); font-size: clamp(2rem, 5vw, 2.5rem); line-height: 1.15;
-      letter-spacing: -.03em; font-weight: 700; margin-bottom: .5rem;
-    }
-    h2 {
-      color: var(--fg); font-size: 1.2rem; font-weight: 650; letter-spacing: -.02em;
-      margin: 2.75rem 0 .75rem; padding-top: 2rem; border-top: 1px solid var(--line);
-    }
-    h2:first-of-type { border-top: 0; padding-top: 0; }
-    p, li { margin-bottom: .75rem; text-wrap: pretty; }
-    ul { padding-left: 1.25rem; }
-    li::marker { color: var(--accent-2); }
-    strong { color: var(--fg); font-weight: 600; }
-    .date { color: var(--fg-4); font-size: .875rem; margin-bottom: 2.5rem; }
-    .callout {
-      border: 1px solid var(--line);
-      border-left: 2px solid rgba(16, 185, 129, .55);
-      background: linear-gradient(180deg, rgba(16, 185, 129, .06), rgba(255, 255, 255, .012));
-      border-radius: 14px; padding: 1.35rem 1.6rem; margin: 1.75rem 0;
-    }
-    .callout p:last-child { margin-bottom: 0; }
-    code {
-      background: rgba(255, 255, 255, .06); border: 1px solid var(--line); border-radius: 5px;
-      padding: .1em .4em; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      font-size: .85em; color: var(--fg);
-    }
-    footer {
-      margin-top: 4rem; padding-top: 2rem; border-top: 1px solid var(--line);
-      font-size: .875rem; color: var(--fg-4);
-    }
-  </style>
+  <link rel="stylesheet" href="../styles.css">
+  <script src="../site.js" defer></script>
 </head>
 <body>
-  <div class="wrap">
-    <a class="home" href="../">
-      <span class="mark" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
-        </svg>
-      </span>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-note" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+</svg>
+
+<nav class="nav" id="nav" aria-label="Main">
+  <div class="wrap nav-inner">
+    <a href="../" class="brand">
+      <span class="mark" aria-hidden="true"><svg><use href="#i-note"/></svg></span>
       Vybecord
     </a>
-    <h1>Privacy Policy</h1>
-    <p class="date">Vybecord browser extension and desktop app · Last updated 20 August 2026</p>
-
-    <div class="callout">
-      <p>
-        <strong>The short version.</strong> The extension reads what is playing in your
-        music tabs and sends it to the Vybecord app running on your own computer, at
-        <code>127.0.0.1</code>. It has no server, no account, and no analytics.
-      </p>
-      <p>
-        The desktop app makes one exception, and only one. When you play a file whose
-        cover art exists nowhere on the internet &mdash; something you ripped or recorded
-        yourself &mdash; it publishes that one image so Discord has something to display.
-        Never the audio, and nothing that identifies you. It is described in full
-        below, and it has a switch.
-      </p>
-    </div>
-
-    <h2>What the extension reads</h2>
-    <p>
-      On the six sites it supports &mdash; Spotify, YouTube and YouTube Music, SoundCloud,
-      Bandcamp, Twitch and Kick &mdash; it reads the metadata of what is currently playing:
-    </p>
-    <ul>
-      <li>Track, video, or stream title</li>
-      <li>Artist, uploader, or channel name</li>
-      <li>Album or release name, where the site shows one</li>
-      <li>Cover or thumbnail image address</li>
-      <li>Playback position, duration, and whether playback is paused</li>
-      <li>The address of the item playing, so the app can link to it</li>
-    </ul>
-    <p>
-      It reads this from the page you already have open. It does not sign in on your
-      behalf, and it has no access to your account on any of these services.
-    </p>
-
-    <h2>Where that data goes</h2>
-    <p>
-      To one place: <code>http://127.0.0.1:8888</code> &mdash; the Vybecord desktop app, on the
-      machine you are sitting at. <code>127.0.0.1</code> is the address a computer uses to talk
-      to itself; traffic to it never reaches a network. It is the only address the
-      extension's manifest permits it to contact, and the only place what you are
-      playing is ever sent.
-    </p>
-    <p>
-      One request goes elsewhere, and it carries none of that. On <code>kick.com</code>, the
-      extension asks Kick for the current channel's stream start time, because the page
-      does not show it and the elapsed timer would otherwise be wrong. That request goes
-      to the site you are already looking at, is the same one the Kick page makes for
-      itself, and contains only the channel name already in your address bar. Kick is the
-      only site this happens on; everywhere else the extension reads the page and asks
-      no one anything.
-    </p>
-    <p>
-      The desktop app then publishes what you are playing to your Discord profile, which
-      is the purpose of installing it. That step is Discord's, and is covered by
-      <a href="https://discord.com/privacy" target="_blank" rel="noopener">Discord's privacy policy</a>.
-      If the app is not running, pushes from the extension simply fail and nothing happens.
-    </p>
-
-    <h2>Cover art the desktop app publishes</h2>
-    <p>
-      This section is about the desktop app, not the extension. The extension uploads
-      nothing, anywhere, ever.
-    </p>
-    <p>
-      Discord displays artwork by address, not by file. For anything that was ever
-      released, the app finds a cover already on the internet by looking the album up on
-      a public music catalogue &mdash; Deezer, then Apple. That sends only the track and
-      artist name, and nothing of yours is uploaded.
-    </p>
-    <p>
-      Music you ripped or recorded yourself is in no catalogue. Its artwork exists only
-      inside your own file, so there is no address for Discord to load and your profile
-      would show a blank placeholder. For those tracks, and only those, the app publishes
-      that single image to a store we run at
-      <code>vybecord-art.vybecord.workers.dev</code>, hosted on Cloudflare, and hands
-      Discord the resulting address.
-    </p>
-    <p>Precisely what that involves:</p>
-    <ul>
-      <li>
-        <strong>The cover image, and nothing else.</strong> Not the audio file, not its
-        name, not its folder, not its tags, and nothing about the rest of your library.
-      </li>
-      <li>
-        <strong>Metadata is stripped before it leaves your machine.</strong> EXIF, XMP and
-        embedded comments are removed &mdash; camera model, timestamps and GPS coordinates
-        among them. Only the picture itself is sent.
-      </li>
-      <li>
-        <strong>The address is the image.</strong> A cover is stored under the SHA&#8209;256
-        hash of its own bytes. That address carries no username, no account, no device
-        identifier and no timestamp. Two people who own the same cover produce the same
-        address and share one stored file.
-      </li>
-      <li>
-        <strong>Nothing is recorded alongside it.</strong> The store holds images. It has
-        no accounts, keeps no log tying an upload to a person, and cannot link two
-        uploads to each other.
-      </li>
-      <li>
-        <strong>Stored covers are publicly readable</strong> by anyone holding the address
-        &mdash; that is what lets Discord fetch them. An address cannot be guessed, but it
-        is not a secret either: anyone who already has the identical image file can
-        compute the same address. Treat this as publishing the picture, because it is.
-      </li>
-      <li>
-        <strong>It is a switch, not a fact of life.</strong> Settings &rarr; Cover images
-        &rarr; <em>Publish artwork that exists only on this PC</em>. Turned off, nothing is
-        ever uploaded and local-only tracks fall back to the default placeholder. You can
-        also point the app at your own store instead of ours.
-      </li>
-    </ul>
-
-    <h2>What is stored, and where</h2>
-    <ul>
-      <li>
-        <strong>Your per-site switches</strong> (which of the six sites are enabled) are kept
-        in the browser's synced extension storage. If you are signed into your browser,
-        it syncs them across your devices the same way it syncs your bookmarks. They are
-        six true/false values and nothing else.
-      </li>
-      <li>
-        <strong>A stream start time</strong> is kept in the page's local storage, under keys
-        beginning with <code>vybecord:</code>, so a live stream's elapsed counter survives a
-        page reload.
-      </li>
-    </ul>
-    <p>Uninstalling the extension removes both.</p>
-
-    <h2>What is never collected</h2>
-    <ul>
-      <li>No browsing history, and no awareness of any tab other than the supported sites</li>
-      <li>No passwords, cookies, form data, or payment information</li>
-      <li>No name, email address, or account identifier</li>
-      <li>No analytics, telemetry, crash reporting, or advertising identifiers</li>
-      <li>
-        No data sold or rented, by the extension or the app. The cover store above is the
-        only service we operate: it holds images, has no accounts, and receives nothing
-        else
-      </li>
-    </ul>
-
-    <h2>Permissions, and why each is needed</h2>
-    <ul>
-      <li>
-        <strong>Access to the six supported sites</strong> &mdash; to read the metadata of what is
-        playing. Without it there is nothing to report.
-      </li>
-      <li>
-        <strong>Access to <code>http://127.0.0.1:8888</code></strong> &mdash; to reach the desktop app.
-        This is a local address, not a website.
-      </li>
-      <li>
-        <strong><code>storage</code></strong> &mdash; to remember which sites you switched off.
-      </li>
-    </ul>
-
-    <h2>Your control</h2>
-    <p>
-      Every site has its own switch in the extension's options, and turning one off stops
-      the reporting for that site immediately, without a page reload. Closing the desktop
-      app stops everything. Uninstalling the extension removes it and its stored settings.
-    </p>
-    <p>
-      Cover publishing has its own switch in the app, under Settings &rarr; Cover images,
-      and turning it off takes effect on the next track. If a cover of yours is already in
-      the store and you want it gone, open an issue with its address and it will be
-      deleted; because the address is a hash of the image, nothing else can be relying
-      on it.
-    </p>
-
-    <h2>Changes and contact</h2>
-    <p>
-      If this policy changes, the revision date above changes with it and the previous
-      version stays in the site's public git history.
-    </p>
-    <p>
-      Questions, or something here that does not match what you observe? Open an issue at
-      <a href="https://github.com/TheUnknownMurda/VybecordTS/issues" target="_blank" rel="noopener">github.com/TheUnknownMurda/VybecordTS/issues</a>.
-      The extension is open source: you can read every line of what is described above.
-    </p>
-
-    <footer>
-      <a href="../">&larr; Back to Vybecord</a>
-    </footer>
+    <a href="../download/" class="btn btn-primary btn-sm nav-cta" data-dl>
+      <svg class="i" aria-hidden="true"><use href="#i-download"/></svg>
+      Download
+    </a>
   </div>
+</nav>
+
+<main class="doc">
+  <h1>Privacy Policy</h1>
+  <p class="date">Vybecord browser extension and desktop app · Last updated 20 August 2026</p>
+
+  <div class="callout">
+    <p>
+      <strong>The short version.</strong> The extension reads what is playing in your
+      music tabs and sends it to the Vybecord app running on your own computer, at
+      <code>127.0.0.1</code>. It has no server, no account, and no analytics.
+    </p>
+    <p>
+      The desktop app makes one exception, and only one. When you play a file whose
+      cover art exists nowhere on the internet &mdash; something you ripped or recorded
+      yourself &mdash; it publishes that one image so Discord has something to display.
+      Never the audio, and nothing that identifies you. It is described in full
+      below, and it has a switch.
+    </p>
+  </div>
+
+  <h2>What the extension reads</h2>
+  <p>
+    On the six sites it supports &mdash; Spotify, YouTube and YouTube Music, SoundCloud,
+    Bandcamp, Twitch and Kick &mdash; it reads the metadata of what is currently playing:
+  </p>
+  <ul>
+    <li>Track, video, or stream title</li>
+    <li>Artist, uploader, or channel name</li>
+    <li>Album or release name, where the site shows one</li>
+    <li>Cover or thumbnail image address</li>
+    <li>Playback position, duration, and whether playback is paused</li>
+    <li>The address of the item playing, so the app can link to it</li>
+  </ul>
+  <p>
+    It reads this from the page you already have open. It does not sign in on your
+    behalf, and it has no access to your account on any of these services.
+  </p>
+
+  <h2>Where that data goes</h2>
+  <p>
+    To one place: <code>http://127.0.0.1:8888</code> &mdash; the Vybecord desktop app, on the
+    machine you are sitting at. <code>127.0.0.1</code> is the address a computer uses to talk
+    to itself; traffic to it never reaches a network. It is the only address the
+    extension's manifest permits it to contact, and the only place what you are
+    playing is ever sent.
+  </p>
+  <p>
+    One request goes elsewhere, and it carries none of that. On <code>kick.com</code>, the
+    extension asks Kick for the current channel's stream start time, because the page
+    does not show it and the elapsed timer would otherwise be wrong. That request goes
+    to the site you are already looking at, is the same one the Kick page makes for
+    itself, and contains only the channel name already in your address bar. Kick is the
+    only site this happens on; everywhere else the extension reads the page and asks
+    no one anything.
+  </p>
+  <p>
+    The desktop app then publishes what you are playing to your Discord profile, which
+    is the purpose of installing it. That step is Discord's, and is covered by
+    <a href="https://discord.com/privacy" target="_blank" rel="noopener">Discord's privacy policy</a>.
+    If the app is not running, pushes from the extension simply fail and nothing happens.
+  </p>
+
+  <h2>Cover art the desktop app publishes</h2>
+  <p>
+    This section is about the desktop app, not the extension. The extension uploads
+    nothing, anywhere, ever.
+  </p>
+  <p>
+    Discord displays artwork by address, not by file. For anything that was ever
+    released, the app finds a cover already on the internet by looking the album up on
+    a public music catalogue &mdash; Deezer, then Apple. That sends only the track and
+    artist name, and nothing of yours is uploaded.
+  </p>
+  <p>
+    Music you ripped or recorded yourself is in no catalogue. Its artwork exists only
+    inside your own file, so there is no address for Discord to load and your profile
+    would show a blank placeholder. For those tracks, and only those, the app publishes
+    that single image to a store we run at
+    <code>vybecord-art.vybecord.workers.dev</code>, hosted on Cloudflare, and hands
+    Discord the resulting address.
+  </p>
+  <p>Precisely what that involves:</p>
+  <ul>
+    <li>
+      <strong>The cover image, and nothing else.</strong> Not the audio file, not its
+      name, not its folder, not its tags, and nothing about the rest of your library.
+    </li>
+    <li>
+      <strong>Metadata is stripped before it leaves your machine.</strong> EXIF, XMP and
+      embedded comments are removed &mdash; camera model, timestamps and GPS coordinates
+      among them. Only the picture itself is sent.
+    </li>
+    <li>
+      <strong>The address is the image.</strong> A cover is stored under the SHA&#8209;256
+      hash of its own bytes. That address carries no username, no account, no device
+      identifier and no timestamp. Two people who own the same cover produce the same
+      address and share one stored file.
+    </li>
+    <li>
+      <strong>Nothing is recorded alongside it.</strong> The store holds images. It has
+      no accounts, keeps no log tying an upload to a person, and cannot link two
+      uploads to each other.
+    </li>
+    <li>
+      <strong>Stored covers are publicly readable</strong> by anyone holding the address
+      &mdash; that is what lets Discord fetch them. An address cannot be guessed, but it
+      is not a secret either: anyone who already has the identical image file can
+      compute the same address. Treat this as publishing the picture, because it is.
+    </li>
+    <li>
+      <strong>It is a switch, not a fact of life.</strong> Settings &rarr; Integrations
+      &rarr; Cover images &rarr; <em>Publish artwork that exists only on this PC</em>. Turned off, nothing is
+      ever uploaded and local-only tracks fall back to the default placeholder. You can
+      also point the app at your own store instead of ours.
+    </li>
+  </ul>
+
+  <h2>What is stored, and where</h2>
+  <ul>
+    <li>
+      <strong>Your per-site switches</strong> (which of the six sites are enabled) are kept
+      in the browser's synced extension storage. If you are signed into your browser,
+      it syncs them across your devices the same way it syncs your bookmarks. They are
+      six true/false values and nothing else.
+    </li>
+    <li>
+      <strong>A stream start time</strong> is kept in the page's local storage, under keys
+      beginning with <code>vybecord:</code>, so a live stream's elapsed counter survives a
+      page reload.
+    </li>
+  </ul>
+  <p>Uninstalling the extension removes both.</p>
+
+  <h2>What is never collected</h2>
+  <ul>
+    <li>No browsing history, and no awareness of any tab other than the supported sites</li>
+    <li>No passwords, cookies, form data, or payment information</li>
+    <li>No name, email address, or account identifier</li>
+    <li>No analytics, telemetry, crash reporting, or advertising identifiers</li>
+    <li>
+      No data sold or rented, by the extension or the app. The cover store above is the
+      only service we operate: it holds images, has no accounts, and receives nothing
+      else
+    </li>
+  </ul>
+
+  <h2>Permissions, and why each is needed</h2>
+  <ul>
+    <li>
+      <strong>Access to the six supported sites</strong> &mdash; to read the metadata of what is
+      playing. Without it there is nothing to report.
+    </li>
+    <li>
+      <strong>Access to <code>http://127.0.0.1:8888</code></strong> &mdash; to reach the desktop app.
+      This is a local address, not a website.
+    </li>
+    <li>
+      <strong><code>storage</code></strong> &mdash; to remember which sites you switched off.
+    </li>
+  </ul>
+
+  <h2>Your control</h2>
+  <p>
+    Every site has its own switch in the extension's options, and turning one off stops
+    the reporting for that site immediately, without a page reload. Closing the desktop
+    app stops everything. Uninstalling the extension removes it and its stored settings.
+  </p>
+  <p>
+    Cover publishing has its own switch in the app, under Settings &rarr; Integrations &rarr; Cover images,
+    and turning it off takes effect on the next track. If a cover of yours is already in
+    the store and you want it gone, open an issue with its address and it will be
+    deleted; because the address is a hash of the image, nothing else can be relying
+    on it.
+  </p>
+
+  <h2>Changes and contact</h2>
+  <p>
+    If this policy changes, the revision date above changes with it and the previous
+    version stays in the site's public git history.
+  </p>
+  <p>
+    Questions, or something here that does not match what you observe? Open an issue at
+    <a href="https://github.com/TheUnknownMurda/VybecordTS/issues" target="_blank" rel="noopener">github.com/TheUnknownMurda/VybecordTS/issues</a>.
+    The extension is open source: you can read every line of what is described above.
+  </p>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap footer-bottom" style="margin-top:0;padding-top:0;border-top:0">
+    <span>&copy; 2026 Vybecord &middot; MIT licence</span>
+    <a href="../">&larr; Back to Vybecord</a>
+  </div>
+</footer>
+
 </body>
 </html>
