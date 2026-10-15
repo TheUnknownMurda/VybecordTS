@@ -120,6 +120,20 @@ a:hover {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+/* Links in running text are underlined: the green alone is too close to the
+   grey around it to mark them. */
+.doc a,
+.faq .a a,
+.sec-head p a,
+p.addon-foot a,
+.center-page p a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(52, 211, 153, 0.5);
+}
+.doc a {
+  overflow-wrap: anywhere;
+}
 
 img,
 svg {
@@ -407,13 +421,15 @@ h2 {
   border-radius: var(--r-xl);
 }
 
-/* Sections arrive with a short rise; with reduced motion they are simply there. */
-.reveal {
+/* Sections arrive with a short rise; with reduced motion they are simply there.
+   Only under .js, which index.html sets and takes back if site.js fails to
+   load: without the script nothing would ever reveal them. */
+.js .reveal {
   opacity: 0;
   transform: translateY(18px);
   transition: opacity 0.7s var(--ease-out), transform 0.7s var(--ease-out);
 }
-.reveal.in {
+.js .reveal.in {
   opacity: 1;
   transform: none;
 }
@@ -625,6 +641,12 @@ h2 {
   font-size: 13px;
   font-weight: 400;
   color: var(--text-muted);
+}
+/* On the narrowest phones both tabs do not fit with their player names. */
+@media (max-width: 400px) {
+  .w-tab small {
+    display: none;
+  }
 }
 .w-tab.on {
   background: var(--bg-surface);
@@ -873,6 +895,11 @@ h2 {
   font-size: 13.5px;
   line-height: 1.35;
   color: var(--dc-text-2);
+}
+/* Empty on the song's last line: kept at its height so the card, and the
+   page under it, do not jump once a loop. */
+.dc-l.next {
+  min-height: 1.35em;
 }
 .dc-time {
   display: flex;
@@ -1309,7 +1336,7 @@ h2 {
   font-weight: 700;
   font-size: 15px;
 }
-.step h3 {
+.step :is(h2, h3) {
   margin-bottom: 8px;
   font-size: 18px;
   font-weight: 650;
@@ -1626,7 +1653,7 @@ h2 {
   margin-top: 14px;
   color: var(--text-muted);
 }
-.footer h4 {
+.footer h2 {
   margin-bottom: 12px;
   font-size: 12.5px;
   font-weight: 700;
@@ -1745,7 +1772,14 @@ h2 {
     animation: none !important;
     transition: none !important;
   }
-  .reveal {
+  .js .reveal {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media print {
+  .js .reveal {
     opacity: 1;
     transform: none;
   }
@@ -1766,8 +1800,10 @@ h2 {
   margin-bottom: 14px;
   font-size: 14px;
 }
-.next-steps .step h3 {
+.next-steps .step h2 {
   font-size: 16.5px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
 }
 .next-steps .step p {
   font-size: 14.5px;

@@ -124,8 +124,13 @@
       timer = 0;
     };
     if ('IntersectionObserver' in window) {
-      new IntersectionObserver(([e]) => (e.isIntersecting && !document.hidden ? play() : stop())).observe(dc);
-      document.addEventListener('visibilitychange', () => (document.hidden ? stop() : play()));
+      let onScreen = false;
+      const update = () => (onScreen && !document.hidden ? play() : stop());
+      new IntersectionObserver(([e]) => {
+        onScreen = e.isIntersecting;
+        update();
+      }).observe(dc);
+      document.addEventListener('visibilitychange', update);
     } else {
       play();
     }
@@ -141,6 +146,7 @@
    */
   const CACHE_KEY = 'vybecord.latestRelease';
   const CACHE_MS = 10 * 60 * 1000;
+  const FETCH_MS = 5000;
 
   async function latestRelease() {
     try {
@@ -149,9 +155,18 @@
     } catch {
       /* storage unavailable: just ask */
     }
-    const res = await fetch('https://api.github.com/repos/' + REPO + '/releases/latest', {
-      headers: { Accept: 'application/vnd.github+json' },
-    });
+    // A stalled request must fail rather than hang: download/ waits on it.
+    const abort = new AbortController();
+    const timeout = setTimeout(() => abort.abort(), FETCH_MS);
+    let res;
+    try {
+      res = await fetch('https://api.github.com/repos/' + REPO + '/releases/latest', {
+        headers: { Accept: 'application/vnd.github+json' },
+        signal: abort.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const r = await res.json();
     // Keep only what the page uses; a release body can be long.
@@ -181,6 +196,8 @@
   // download/ is the one page that starts the download itself.
   const isDownloadPage = document.body.dataset.page === 'download';
   const toReleasePage = () => location.replace(RELEASES + '/latest');
+  // Whatever happens below, nobody is left on "Your download is starting".
+  const fallback = isDownloadPage ? setTimeout(toReleasePage, 8000) : 0;
 
   async function fillDownloads() {
     let release;
@@ -213,6 +230,7 @@
 
     if (isDownloadPage) {
       // A file download leaves this page where it is, showing the next steps.
+      clearTimeout(fallback);
       location.href = installer.url;
       return;
     }

@@ -21,8 +21,10 @@
   <meta property="og:image:alt" content="Vybecord: a Discord profile card showing the song playing and its current lyric line.">
   <meta name="twitter:card" content="summary_large_image">
 
+  <!-- Sections start hidden and rise in, but only while site.js is there to reveal them. -->
+  <script>document.documentElement.classList.add('js')</script>
   <link rel="stylesheet" href="styles.css">
-  <script src="site.js" defer></script>
+  <script src="site.js" defer onerror="document.documentElement.classList.remove('js')"></script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
@@ -90,8 +92,8 @@
 
       <p class="hero-sub">
         Vybecord puts whatever is playing on your PC on your Discord profile, with the lyric
-        being sung right now. Spotify, YouTube, Apple Music, Twitch and every other player
-        Windows can see. Install it, press play, and that's it.
+        being sung right now. Spotify, YouTube, Apple Music, Twitch and most other players
+        on Windows. Install it, press play, and that's it.
       </p>
 
       <div class="hero-actions">
@@ -213,7 +215,7 @@
       <li>VLC</li>
       <li>foobar2000</li>
       <li>MusicBee</li>
-      <li class="more">and anything in the Windows volume overlay</li>
+      <li class="more">and most players in the Windows volume overlay</li>
     </ul>
   </div>
 </section>
@@ -229,7 +231,7 @@
 
     <div class="bento">
       <article class="card feat wide reveal">
-        <div class="feat-ico"><svg class="i"><use href="#i-mic"/></svg></div>
+        <div class="feat-ico" aria-hidden="true"><svg class="i"><use href="#i-mic"/></svg></div>
         <h3>The line being sung, on your card</h3>
         <p>
           Your status shows the current lyric with the next one under it, timed to the millisecond
@@ -254,7 +256,7 @@
       </article>
 
       <article class="card feat reveal">
-        <div class="feat-ico"><svg class="i"><use href="#i-layers"/></svg></div>
+        <div class="feat-ico" aria-hidden="true"><svg class="i"><use href="#i-layers"/></svg></div>
         <h3>Up to five presences</h3>
         <p>Spotify on one card, a YouTube video on the next, a Twitch stream on a third. Each has its own lyrics switch and can be pinned to its own player.</p>
         <div class="demo stack" aria-hidden="true">
@@ -274,7 +276,7 @@
       </article>
 
       <article class="card feat reveal">
-        <div class="feat-ico"><svg class="i"><use href="#i-expand"/></svg></div>
+        <div class="feat-ico" aria-hidden="true"><svg class="i"><use href="#i-expand"/></svg></div>
         <h3>Big lyrics</h3>
         <p>One click fills the window with the words, large, on the colour of the cover. Press Esc to come back.</p>
         <div class="demo" aria-hidden="true">
@@ -287,7 +289,7 @@
       </article>
 
       <article class="card feat reveal">
-        <div class="feat-ico"><svg class="i"><use href="#i-badge"/></svg></div>
+        <div class="feat-ico" aria-hidden="true"><svg class="i"><use href="#i-badge"/></svg></div>
         <h3>The real name on the card</h3>
         <p>Your card says Spotify, YouTube, SoundCloud, Apple Music, Twitch or Kick, not the name of some app. Pick the activity type, what the status line shows and a button of your own.</p>
         <ul class="sources demo" aria-hidden="true">
@@ -299,7 +301,7 @@
       </article>
 
       <article class="card feat reveal">
-        <div class="feat-ico"><svg class="i"><use href="#i-globe"/></svg></div>
+        <div class="feat-ico" aria-hidden="true"><svg class="i"><use href="#i-globe"/></svg></div>
         <h3>Translated and romanised</h3>
         <p>Translate lyrics into 16 languages, in the window and on Discord if you like. Romanisation covers Japanese with kanji, Korean, Chinese, Cyrillic and more.</p>
         <div class="demo" aria-hidden="true">
@@ -312,9 +314,9 @@
       </article>
 
       <article class="card feat reveal">
-        <div class="feat-ico"><svg class="i"><use href="#i-chart"/></svg></div>
+        <div class="feat-ico" aria-hidden="true"><svg class="i"><use href="#i-chart"/></svg></div>
         <h3>Your listening, charted</h3>
-        <p>Time listened each day, your top artists and tracks, over a week, a month, a year or all time. Last.fm scrobbling is one setting away.</p>
+        <p>Time listened each day, your top artists and tracks, over a week, a month, a year or all time. Optional Last.fm scrobbling, with your own Last.fm API key.</p>
         <div class="demo" aria-hidden="true">
           <div class="chart">
             <i style="height:38%"></i><i style="height:62%"></i><i style="height:45%"></i><i style="height:80%"></i><i style="height:54%"></i><i class="on" style="height:96%"></i><i style="height:70%"></i>
@@ -323,9 +325,9 @@
       </article>
 
       <article class="card feat reveal">
-        <div class="feat-ico"><svg class="i"><use href="#i-shield"/></svg></div>
+        <div class="feat-ico" aria-hidden="true"><svg class="i"><use href="#i-shield"/></svg></div>
         <h3>No ads on your status</h3>
-        <p>During an ad break, Spotify swaps the song for the advertiser. Vybecord spots it and keeps your card clear until the music is back, without hiding real short tracks.</p>
+        <p>During an ad break, Spotify swaps the song for the advertiser. Vybecord spots it and keeps your card clear until the music is back, while sparing interludes from the album you're playing.</p>
         <div class="demo vs" aria-hidden="true">
           <div class="no"><b>Without</b><span>Zephyr Energy, 50% off this week</span></div>
           <div class="yes"><b>With</b><span>Nothing shown until the music is back</span></div>
@@ -333,7 +335,7 @@
       </article>
 
       <article class="card feat reveal">
-        <div class="feat-ico"><svg class="i"><use href="#i-tray"/></svg></div>
+        <div class="feat-ico" aria-hidden="true"><svg class="i"><use href="#i-tray"/></svg></div>
         <h3>Stays out of your way</h3>
         <ul class="ticks demo">
           <li><svg class="i" aria-hidden="true"><use href="#i-check"/></svg>Lives in the tray. Closing the window keeps your status up.</li>
@@ -399,7 +401,7 @@
     <div class="addons">
       <article class="card addon reveal">
         <div class="addon-top">
-          <span class="addon-ico" style="color:#1ed760"><svg class="i-fill"><use href="#i-spotify"/></svg></span>
+          <span class="addon-ico" aria-hidden="true" style="color:#1ed760"><svg class="i-fill"><use href="#i-spotify"/></svg></span>
           <div>
             <h3>Spicetify extension</h3>
             <span class="for">For the Spotify desktop app</span>
@@ -419,7 +421,7 @@
 
       <article class="card addon reveal">
         <div class="addon-top">
-          <span class="addon-ico"><svg class="i"><use href="#i-puzzle"/></svg></span>
+          <span class="addon-ico" aria-hidden="true"><svg class="i"><use href="#i-puzzle"/></svg></span>
           <div>
             <h3>Browser extension</h3>
             <span class="for">Chrome, Edge, Brave, Opera, Vivaldi and Firefox</span>
@@ -464,27 +466,28 @@
     <div class="sec-head center reveal">
       <span class="eyebrow">Privacy</span>
       <h2>Your listening stays yours</h2>
-      <p>Vybecord talks to Discord through the Discord app on your own PC. There's no Vybecord server in between.</p>
+      <p>Vybecord talks to Discord through the Discord app on your own PC. The one exception is cover art that exists only in
+        your own files: it can be published so Discord can show it, and <a href="privacy/#cover-art">that has a switch</a>.</p>
     </div>
 
     <div class="promises">
       <div class="card promise reveal">
-        <div class="feat-ico"><svg class="i"><use href="#i-user-off"/></svg></div>
+        <div class="feat-ico" aria-hidden="true"><svg class="i"><use href="#i-user-off"/></svg></div>
         <h3>No account</h3>
         <p>Nothing to sign up for, and it never asks for your Discord login.</p>
       </div>
       <div class="card promise reveal">
-        <div class="feat-ico"><svg class="i"><use href="#i-eye-off"/></svg></div>
+        <div class="feat-ico" aria-hidden="true"><svg class="i"><use href="#i-eye-off"/></svg></div>
         <h3>No telemetry</h3>
         <p>No analytics and no tracking. A problem report goes out only when you send one.</p>
       </div>
       <div class="card promise reveal">
-        <div class="feat-ico"><svg class="i"><use href="#i-lock"/></svg></div>
+        <div class="feat-ico" aria-hidden="true"><svg class="i"><use href="#i-lock"/></svg></div>
         <h3>Kept on your PC</h3>
         <p>Your history, your lyrics and your settings live in your own data folder.</p>
       </div>
       <div class="card promise reveal">
-        <div class="feat-ico"><svg class="i"><use href="#i-search"/></svg></div>
+        <div class="feat-ico" aria-hidden="true"><svg class="i"><use href="#i-search"/></svg></div>
         <h3>Only what's needed</h3>
         <p>Lookups send the song's title and artist to find lyrics and covers. Nothing about you.</p>
       </div>
@@ -537,9 +540,13 @@
         <summary>Which players does it work with?</summary>
         <div class="a">
           <p>
-            Anything that shows up in the Windows volume overlay: Spotify, Apple Music, Deezer, Tidal,
+            Most of what shows up in the Windows volume overlay: Spotify, Apple Music, Deezer, Tidal,
             Amazon Music, VLC, foobar2000, MusicBee, AIMP, Winamp, MediaMonkey, and music or video playing
             in Chrome, Edge, Firefox, Brave, Opera, Vivaldi or Zen.
+          </p>
+          <p>
+            Not Windows Media Player, Groove Music, Movies &amp; TV or the SoundCloud app from the Microsoft Store.
+            For SoundCloud, play it in a browser with the extension instead.
           </p>
           <p>The <a href="#addons">browser extension</a> tells YouTube, SoundCloud, Twitch and the other sites apart.</p>
         </div>
@@ -638,21 +645,21 @@
         </p>
       </div>
       <div class="footer-col">
-        <h4>Product</h4>
+        <h2>Product</h2>
         <a href="#features">Features</a>
         <a href="#setup">Setup</a>
         <a href="#addons">Add-ons</a>
         <a href="download/">Download</a>
       </div>
       <div class="footer-col">
-        <h4>Help</h4>
+        <h2>Help</h2>
         <a href="#faq">FAQ</a>
         <a href="https://github.com/TheUnknownMurda/VybecordTS/blob/desktop-app/USER_GUIDE.md">User guide</a>
         <a href="https://github.com/TheUnknownMurda/VybecordTS/blob/desktop-app/GUIDE_UTILISATEUR.md" lang="fr">Guide en français</a>
         <a href="https://github.com/TheUnknownMurda/VybecordTS/issues">Report a problem</a>
       </div>
       <div class="footer-col">
-        <h4>Project</h4>
+        <h2>Project</h2>
         <a href="https://github.com/TheUnknownMurda/VybecordTS">GitHub</a>
         <a href="https://github.com/TheUnknownMurda/VybecordTS/releases">Releases</a>
         <a href="privacy/">Privacy</a>

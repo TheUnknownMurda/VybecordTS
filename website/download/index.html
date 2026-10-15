@@ -14,12 +14,12 @@
     GitHub Pages cannot answer with a redirect, so site.js finds the installer
     on the latest release and starts it from here, leaving this page on screen
     with what to do next. Without JavaScript, the refresh below sends the
-    visitor to the release page instead; if the release cannot be read,
-    site.js does the same.
+    visitor to the release page instead; if site.js cannot load, or the
+    release cannot be read in time, the visitor lands there too.
   -->
   <noscript><meta http-equiv="refresh" content="0; url=https://github.com/TheUnknownMurda/VybecordTS/releases/latest"></noscript>
   <link rel="stylesheet" href="../styles.css">
-  <script src="../site.js" defer></script>
+  <script src="../site.js" defer onerror="location.replace('https://github.com/TheUnknownMurda/VybecordTS/releases/latest')"></script>
 </head>
 <body data-page="download">
 
@@ -48,15 +48,15 @@
 
     <ol class="steps next-steps">
       <li class="card step">
-        <h3>Run the installer</h3>
+        <h2>Run the installer</h2>
         <p>Open the file from your browser's downloads.</p>
       </li>
       <li class="card step">
-        <h3>If Windows warns you</h3>
+        <h2>If Windows warns you</h2>
         <p>Choose <strong>More info</strong>, then <strong>Run anyway</strong>. The installer just isn't code-signed.</p>
       </li>
       <li class="card step">
-        <h3>Press play</h3>
+        <h2>Press play</h2>
         <p>Open the Discord desktop app and play some music. Your card updates on its own.</p>
       </li>
     </ol>

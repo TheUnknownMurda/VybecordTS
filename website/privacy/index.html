@@ -33,7 +33,7 @@
 
 <main class="doc">
   <h1>Privacy Policy</h1>
-  <p class="date">Vybecord browser extension and desktop app · Last updated 20 August 2026</p>
+  <p class="date">Vybecord browser extension and desktop app · Last updated 15 October 2026</p>
 
   <div class="callout">
     <p>
@@ -92,7 +92,7 @@
     If the app is not running, pushes from the extension simply fail and nothing happens.
   </p>
 
-  <h2>Cover art the desktop app publishes</h2>
+  <h2 id="cover-art">Cover art the desktop app publishes</h2>
   <p>
     This section is about the desktop app, not the extension. The extension uploads
     nothing, anywhere, ever.
@@ -156,12 +156,15 @@
       six true/false values and nothing else.
     </li>
     <li>
-      <strong>A stream start time</strong> is kept in the page's local storage, under keys
-      beginning with <code>vybecord:</code>, so a live stream's elapsed counter survives a
-      page reload.
+      <strong>A stream start time</strong>, with the channel or video it belongs to, is kept
+      in that site's own local storage, under keys beginning with <code>vybecord:</code>, so
+      a live stream's elapsed counter survives a page reload.
     </li>
   </ul>
-  <p>Uninstalling the extension removes both.</p>
+  <p>
+    Uninstalling the extension removes the switches. The stream start time stays in that
+    site's storage until you clear the site's data in your browser.
+  </p>
 
   <h2>What is never collected</h2>
   <ul>
