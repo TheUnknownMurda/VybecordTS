@@ -27,12 +27,14 @@ export const state = {
   activity: null,
   progress: { progress_ms: 0, duration_ms: 0 },
   /*
-   * The song a presence was playing when it stopped, paused where it stopped.
+   * The song a presence was playing when it paused, paused where it stopped.
    * The backend takes the track down on a pause — Discord's card reads
    * "Nothing playing" then — so without this a paused Spotify read as
    * "Waiting for a player… Play something in Spotify", with Spotify open on
-   * the song. Null once anything
-   * plays again, and never a live stream: one that stops has ended.
+   * the song. The backend says which stops are pauses (pausedUpdate): this
+   * used to be any stop at all, so switching Spotify's detection off while
+   * it played left "Paused on Spotify" on the card, the clock frozen, the
+   * music going. Null once anything plays again.
    */
   lastTrack: null,
   slots: Array.from({ length: MAX_SLOTS }, emptySlot),
@@ -131,6 +133,20 @@ function autoFocus() {
   if (other >= 0) focusOn(other);
 }
 
+/*
+ * Judged once the events of one backend pass have all arrived. A song
+ * starting under a video moves the video to the second card, and the first
+ * is told "nothing here" a moment before it is told the song: judged in
+ * between, the view followed the video to its card and stayed there. A
+ * paused copy of the video used to fill that gap by accident; the paused
+ * song is now only ever a real one.
+ */
+let focusTimer = 0;
+function autoFocusSoon() {
+  clearTimeout(focusTimer);
+  focusTimer = setTimeout(autoFocus, 100);
+}
+
 /** Apply a backend event to one presence's slice, and to the mirrors if it is the focused one. */
 function updateSlot(index, patch) {
   const i = slotIndex(index);
@@ -139,7 +155,7 @@ function updateSlot(index, patch) {
   if (i === chosen && slots[i].track) chosen = -1;
   set({ slots });
   if (i === state.focus) set(patch);
-  autoFocus();
+  autoFocusSoon();
 }
 
 /** Load the full snapshot and wire the backend event stream. */
@@ -151,7 +167,7 @@ export async function init() {
         lyrics: s?.lyrics ?? null,
         activity: s?.activity ?? null,
         progress: s?.track ? (s.progress || trackProgress(s.track)) : trackProgress(null),
-        lastTrack: null,
+        lastTrack: s?.track ? null : (s?.paused ?? null),
       }))
     : [{ track: snap.track, lyrics: snap.lyrics, progress: trackProgress(snap.track) }];
   while (slots.length < MAX_SLOTS) slots.push(emptySlot());
@@ -180,21 +196,21 @@ export async function init() {
     // Compared against its own presence. This read `slot === 1 ? 1 : 0` from
     // when there were two, so presences 3 to 5 measured every track against
     // presence 1's and kept or dropped their lyrics on the strength of it.
-    const was = state.slots[slotIndex(slot)];
-    const prev = was?.track;
+    const prev = state.slots[slotIndex(slot)]?.track;
     const same = (track?.track_id || '') === (prev?.track_id || '');
     // A different track means the bar belongs to the new one -- at its own
     // position, or empty when playback simply stopped. Same reasoning as the
     // lyrics beside it: what the previous track left behind is not an
     // approximation of the new state, it is the wrong state. The card built
-    // for the previous track goes with them.
-    const stopped = !track && prev && !prev.is_live
-      ? { ...prev, is_playing: false, progress_ms: was.progress?.progress_ms ?? prev.progress_ms }
-      : null;
+    // for the previous track goes with them. A stop leaves the paused song
+    // to pausedUpdate, which the backend sends just before it.
     updateSlot(slot, same ? { track } : {
-      track, lyrics: null, activity: null, progress: trackProgress(track), lastTrack: stopped,
+      track, lyrics: null, activity: null, progress: trackProgress(track), ...(track ? { lastTrack: null } : {}),
     });
   });
+  // Stopped where the player stopped: the backend reads the spot from the
+  // player itself, closer than the window's last progress tick.
+  api.on('pausedUpdate', (paused, slot) => updateSlot(slot, { lastTrack: paused ?? null }));
   api.on('progressUpdate', (progress, slot) => updateSlot(slot, { progress }));
   /*
    * The words-only fallback and the engine's state share one slice, and the
