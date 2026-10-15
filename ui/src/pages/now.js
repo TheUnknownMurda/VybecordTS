@@ -241,6 +241,9 @@ export function render(root) {
     subscribe('slots', paintHead),
     subscribe('players', () => { paintHead(); if (menuOpen) paintSourceMenu(); }),
     subscribe('preferredPlayers', () => { paintHead(); if (!state.track) paintTrack(null); }),
+    // The backend also drops a paused song, or brings it back, with no track
+    // change to repaint for: the player closed, a detection switch or a pin.
+    subscribe('lastTrack', () => { if (state.track) return; paintTrack(null); paintProgress(position()); paintLyrics(state.lyrics); }),
     // A different presence picked: everything below the header is its now.
     subscribe('focus', () => { toggleAsk(false); paintQuick(); paintHead(); paintTrack(state.track); paintLyrics(state.lyrics); void refreshOffset(); }),
   ];

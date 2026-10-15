@@ -50,6 +50,23 @@ export class PresenceSlot {
    * away, so the preview is right the moment the card goes back up.
    */
   lastActivity: DiscordActivity | null = null;
+  /**
+   * The song this presence stopped on, for as long as its player holds it
+   * paused. Kept apart from `paused` so a song hidden by a detection switch
+   * or a pin comes back when that is undone. Null while a track plays.
+   */
+  stopped: TrackData | null = null;
+  /** When `stopped` ran to its end; 0 when it was paused or lost. See ENDED_HOLD_MS. */
+  endedAt = 0;
+  /** The title its desktop app's media session showed for `stopped`; '' for a push. */
+  stoppedTitle = '';
+  /** Whether the push `stopped` came from has said "paused" since it stopped. */
+  pauseSeen = false;
+  /**
+   * What the window shows paused on this card: `stopped`, while this presence
+   * would show it on Play. See refreshPaused() in backend.ts.
+   */
+  paused: TrackData | null = null;
   /** Cached per track: avoids WEB_SOURCES.some() on every poll. */
   isWebSource = false;
   /** Grace-period timestamp for an OS session that stopped reporting. */

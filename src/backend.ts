@@ -37,7 +37,7 @@ import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { createLogger } from './core/logger.js';
 import { ConfigManager, sanitizeConfigUpdate, normalizeUserPath } from './core/config.js';
-import { NativeMediaSource, looksLikeSpotifyAd, sourcePriority, type DetectedPlayer } from './core/native-media-source.js';
+import { NativeMediaSource, looksLikeSpotifyAd, sourceFromAppId, sourcePriority, type DetectedPlayer } from './core/native-media-source.js';
 import { SpicetifySource } from './core/spicetify-source.js';
 import { YouTubeSource } from './core/youtube-source.js';
 import { SoundCloudSource } from './core/soundcloud-source.js';
@@ -121,6 +121,14 @@ const PUSH_PRIORITY: Record<string, number> = {
  * which is a fresh play tens of seconds away from wherever the last one was.
  */
 const HANDOFF_DRIFT_MS = 10_000;
+
+/**
+ * How long a song that ran to its end stays on its card as paused while its
+ * player still reports it playing. A player moves on to the next song within
+ * a second or two, and that song replaces it; without the wait, the card read
+ * "Waiting for a player" between the two at the end of a song.
+ */
+const ENDED_HOLD_MS = 3_000;
 
 /**
  * The second presence button, which is not the user's to change.
@@ -888,14 +896,11 @@ export class VybecordBackend extends EventEmitter {
       for (const track of this.media.listPlayingTracks()) {
         const src = track.media_source || '';
         // Per-platform detection gate — waived for the player the user pinned.
-        const pinnedHere = this.isPinnedSource(src);
-        if (!pinnedHere && !this.config.get('detect_all_media') && !MUSIC_APPS.has(src)) continue;
-        const pKey = platformConfigKey(src);
-        if (!pinnedHere && pKey && this.config.get(pKey) === false) continue;
+        if (!this.detects(src, false)) continue;
         // A pin outranks the stand-aside too: somebody pinned this very
         // session, and a candidate a pin accepts is that pin's alone (see
         // assignCandidates), so it cannot double up with the push elsewhere.
-        if (!pinnedHere && this.coveredByPush(src)) continue;
+        if (!this.isPinnedSource(src) && this.coveredByPush(src)) continue;
         out.push({
           track,
           service: src,
@@ -910,6 +915,19 @@ export class VybecordBackend extends EventEmitter {
     }
 
     return out;
+  }
+
+  /**
+   * Whether the detection switches let a track from `src` through: its
+   * platform's switch, and for a desktop app outside MUSIC_APPS, "detect all
+   * media" as well. A pin waives both. Pushes have no "all media" gate; the
+   * extensions only ever report their own site.
+   */
+  private detects(src: string, fromPush: boolean): boolean {
+    if (this.isPinnedSource(src)) return true;
+    if (!fromPush && !this.config.get('detect_all_media') && !MUSIC_APPS.has(src)) return false;
+    const key = platformConfigKey(src);
+    return !key || this.config.get(key) !== false;
   }
 
   /**
@@ -1023,7 +1041,12 @@ export class VybecordBackend extends EventEmitter {
       // The two positions may run under different lyric settings.
       if (s.track) s.engine.updateConfig(this.rpcConfigForTrack(s, s.track));
       // The window keys everything by position: tell it what each now holds.
+      // A paused song goes out on the side of the trackUpdate that keeps the
+      // card full: before an empty one, as in onTrackStopped, and after a
+      // track, which the window is then already painting.
+      if (!s.track) this.emit('pausedUpdate', s.paused, s.index);
       this.emit('trackUpdate', s.track, s.index);
+      if (s.track) this.emit('pausedUpdate', s.paused, s.index);
       if (s.track) {
         this.emit('progressUpdate', {
           progress_ms: Math.round(s.engine.getElapsed()),
@@ -1062,6 +1085,11 @@ export class VybecordBackend extends EventEmitter {
       }
       this.releaseSlotApp(slot);
     }
+    // A paused song follows the player and the settings on every pass: it
+    // leaves the card when the player closes or plays on, and when a switch
+    // or a pin would keep it off this presence — and comes back if that is
+    // undone while the player still sits on it.
+    for (let i = 0; i < this.slots.length; i++) this.refreshPaused(this.slots[i], i);
     // Last, once every position knows its track: which application each
     // publishes under depends on the other's, so it is settled in position
     // order rather than as each track arrives.
@@ -1384,7 +1412,8 @@ export class VybecordBackend extends EventEmitter {
     this.emit('trackUpdate', merged, slot.index);
   }
 
-  private onTrackStopped(slot: PresenceSlot): void {
+  /** @param ended  the song ran to its end rather than being paused or lost. */
+  private onTrackStopped(slot: PresenceSlot, ended = false): void {
     if (slot.track) {
       log.info(`Music paused [${slot.name}]`);
       if (slot.primary) {
@@ -1397,10 +1426,23 @@ export class VybecordBackend extends EventEmitter {
         // entry stays open so resuming this same track continues it.
         historyTrackPause();
       }
+      const track = slot.track;
+      const session = track._session_id && !track._from_push
+        ? this.media?.listPlayers().find(p => p.appId === track._session_id)
+        : undefined;
+      // Never a live stream: one that stops has ended.
+      slot.stopped = track.is_live ? null : { ...track, is_playing: false, progress_ms: this.stoppedAt(slot, session) };
+      // An ad cuts a song off: its title is not the song's.
+      slot.stoppedTitle = session && !session.isAd ? session.title : '';
+      slot.endedAt = ended ? Date.now() : 0;
+      slot.pauseSeen = false;
       slot.track = null;
       slot.trackKey = '';
       slot.cacheKey = '';
       slot.engine.stop();
+      // Before the track comes down, so the window goes straight from the
+      // song playing to the song paused, never through "Waiting for a player".
+      this.refreshPaused(slot, slot.index);
       this.emit('trackUpdate', null, slot.index);
       slot.lastLyricsState = null;
       this.emit('lyricsUpdate', { current: '', next: '', prev: '' }, slot.index);
@@ -1423,6 +1465,119 @@ export class VybecordBackend extends EventEmitter {
     }
     if (!slot.primary) this.releaseSlotApp(slot);
     this.setIdlePresence();
+  }
+
+  /**
+   * Tell the window what presence `i` shows paused, when that changes.
+   *
+   * A presence loses its track whenever nothing it may show is playing, and a
+   * pause is only one way to get there: the platform's detection switched off,
+   * the presence pinned to another player, the player closed. The window took
+   * every one of them for a pause, so Spotify, still playing or not running at
+   * all, sat on the card as "Paused on Spotify" with a clock that never moved.
+   * The song a presence stopped on is now kept only while its player holds it
+   * paused (stillPaused), and shown only while this presence would show it
+   * again on Play (wouldShow).
+   */
+  private refreshPaused(slot: PresenceSlot, i: number): void {
+    const held = () => Date.now() - slot.endedAt < ENDED_HOLD_MS || this.stillPaused(slot);
+    if (slot.track || (slot.stopped && !held())) slot.stopped = null;
+    const paused = slot.stopped && this.wouldShow(slot.stopped, i) ? slot.stopped : null;
+    if (paused === slot.paused) return;
+    slot.paused = paused;
+    this.emit('pausedUpdate', paused, slot.index);
+  }
+
+  /**
+   * Whether the player `slot.stopped` came from still holds it, paused.
+   *
+   * A desktop app is asked through its own media session: gone means closed,
+   * playing means the song plays on where this presence does not show it, and
+   * another title means the player moved on. Through an advertisement the song
+   * is kept: it is what comes back after.
+   *
+   * A push source answers itself while it is still reporting. Spicetify keeps
+   * reporting through a pause; the YouTube script goes quiet a few seconds
+   * after one, and a tab's session often shows another tab's title, or the
+   * title before the script cleaned it. So once a push that said "paused" goes
+   * quiet, the song stays unless Windows contradicts it: the song playing in
+   * a session, or nothing left that could be its player. A push that went
+   * quiet without ever saying "paused" (the extension switched off mid-song)
+   * needs Windows to show the song paused.
+   */
+  private stillPaused(slot: PresenceSlot): boolean {
+    const track = slot.stopped!;
+    if (track.track_id && this.slots.some(s => s.track?.track_id === track.track_id)) return false;
+    const src = track.media_source || '';
+    if (track._from_push) {
+      const push = this.pushSourceFor(src);
+      if (push?.isActive) {
+        if (push.isPaused) slot.pauseSeen = true;
+        return push.isPaused;
+      }
+    }
+    // Nobody to ask: keep the song, as the window always did.
+    if (!this.media?.isReady) return true;
+    const players = this.media.listPlayers();
+    if (!track._from_push) {
+      const own = players.find(p => p.appId === track._session_id);
+      if (!own) return false;
+      if (own.isAd) return true;
+      return !own.playing && (!slot.stoppedTitle || own.title === slot.stoppedTitle);
+    }
+    const showing = players.filter(p => titlesAgree(p.title, track.track_name));
+    if (showing.some(p => p.playing && !p.isAd)) return false;
+    if (showing.length) return true;
+    // Spotify's push comes from the desktop client or from the web player in
+    // a tab; any other push, from a tab.
+    const hosts = players.filter(p => {
+      const app = sourceFromAppId(p.appId);
+      return src === 'spotify' ? app === 'spotify' : app.startsWith('browser_') || app === 'unknown';
+    });
+    return slot.pauseSeen && hosts.length > 0;
+  }
+
+  /** The push source reporting `src`, for the services that can pause. */
+  private pushSourceFor(src: string): { readonly isActive: boolean; readonly isPaused: boolean } | null {
+    if (src === 'spotify') return this.spicetify;
+    if (src === 'youtube' || src === 'youtube_music') return this.youtubeSource;
+    if (src === 'soundcloud') return this.soundcloudSource;
+    if (src === 'bandcamp') return this.bandcampSource;
+    return null;
+  }
+
+  /**
+   * Whether presence `i` would show `track` if it played again: the detection
+   * switches and the pins as gatherCandidates and assignCandidates apply them.
+   */
+  private wouldShow(track: TrackData, i: number): boolean {
+    if (i >= this.activeSlotCount) return false;
+    const src = track.media_source || '';
+    if (!this.detects(src, !!track._from_push)) return false;
+    // A pinned presence shows its player and nothing else, even while that
+    // player is not running; a pinned player is nobody else's to show.
+    for (let j = 0; j < this.activeSlotCount; j++) {
+      const pinnedHere = j === i && !!this.media?.getPreferredSource(i);
+      const pin = this.pinnedService(j);
+      if (pinnedHere && (pin === null || !this.pinAccepts(pin, src))) return false;
+      if (j !== i && pin !== null && this.pinAccepts(pin, src)) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Where the song stood when it stopped. A paused desktop app's session holds
+   * the exact spot, where the engine's clock ran on through the grace given to
+   * a player that went quiet. A push stops the moment it says paused, so the
+   * engine is right there; at the end of a song it has stopped itself, and the
+   * player's last report is what is left.
+   */
+  private stoppedAt(slot: PresenceSlot, session: DetectedPlayer | undefined): number {
+    const track = slot.track!;
+    const at = session && !session.playing
+      ? session.positionMs
+      : slot.engine.isRunning() ? Math.round(slot.engine.getElapsed()) : track.progress_ms;
+    return track.duration_ms > 0 ? Math.min(at, track.duration_ms) : at;
   }
 
   /**
@@ -1464,7 +1619,7 @@ export class VybecordBackend extends EventEmitter {
         const isAtEnd = track.progress_ms >= track.duration_ms - 2000 || elapsed >= track.duration_ms - 2000;
         if (isAtEnd && track.progress_ms > 5000) {
           log.info(`[END] Track ended naturally (progress=${track.progress_ms}ms, duration=${track.duration_ms}ms)`);
-          this.onTrackStopped(slot);
+          this.onTrackStopped(slot, true);
         }
       }
     }
@@ -2255,9 +2410,10 @@ export class VybecordBackend extends EventEmitter {
   getCurrentLyricsState(slotIndex = 0) { return this.slotAt(slotIndex).lastLyricsState; }
 
   /** What every presence holds, by position — the window's snapshot. */
-  getSlotStates(): { track: TrackData | null; lyrics: LyricsState | null; activity: DiscordActivity | null; progress: { progress_ms: number; duration_ms: number } }[] {
+  getSlotStates(): { track: TrackData | null; paused: TrackData | null; lyrics: LyricsState | null; activity: DiscordActivity | null; progress: { progress_ms: number; duration_ms: number } }[] {
     return this.slots.map(s => ({
       track: s.track,
+      paused: s.track ? null : s.paused,
       lyrics: s.lastLyricsState,
       activity: s.track ? s.lastActivity : null,
       progress: {
