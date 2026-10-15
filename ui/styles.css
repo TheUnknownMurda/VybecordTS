@@ -1403,50 +1403,49 @@ html[data-theme='light'] .np-progress .np-bar {
 /*
  * Quick switches in the preview's header on Now playing: the presence and the
  * lyrics on it, each a word and a small switch drawn like the Settings ones.
- * The whole pill is the button, so the word is part of the target.
+ * The whole of it is the button, so the word is part of the target. No pill
+ * around them: at 26px tall a bordered pill made the header row 9px taller
+ * than the eyebrow and the Customize link (17px), and the page scrolled again
+ * at the smallest window. 16px fits inside the row as it was.
  */
 .qt-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 14px;
 }
 .qt {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  min-height: 26px;
-  padding: 0 5px 0 10px;
+  gap: 6px;
+  height: 16px;
+  padding: 0;
+  border: 0;
   border-radius: 99px;
-  border: 1px solid var(--border-s);
-  background: var(--bg-surface);
+  background: none;
   color: var(--text-secondary);
   font: inherit;
   font-size: 12px;
   font-weight: 600;
+  line-height: 16px;
   white-space: nowrap;
   cursor: pointer;
-  transition: background 0.18s, border-color 0.18s, color 0.18s;
+  transition: color 0.18s;
 }
 .qt:hover {
-  border-color: var(--border-a);
   color: var(--text-primary);
 }
 .qt:focus-visible {
   outline: 2px solid var(--accent-hex);
-  outline-offset: 2px;
-}
-.qt.on {
-  background: rgba(var(--accent), 0.14);
-  border-color: var(--border-a);
-  color: var(--accent-text);
+  outline-offset: 3px;
 }
 .qt-track {
   position: relative;
+  flex-shrink: 0;
   width: 28px;
   height: 16px;
   border-radius: 99px;
-  background: var(--bg-elevated);
-  /* Same 3:1 edge as .switch: off, the pill still has to read as a control. */
+  background: var(--bg-surface);
+  /* Same 3:1 edge as .switch: off, it still has to read as a control. */
   box-shadow: inset 0 0 0 1px #6b6b78;
   transition: background 0.18s, box-shadow 0.18s;
 }

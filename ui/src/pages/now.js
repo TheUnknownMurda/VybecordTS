@@ -295,45 +295,53 @@ const lyricsKey = () => (state.focus > 0 ? `show_lyrics_${state.focus + 1}` : 's
 /*
  * The two switches people reach for while something plays, one click away
  * beside the card they change, rather than a page and a category away in
- * Settings. They write the same keys Settings writes; nothing new is stored. Rebuilt from a key, like the tabs, so a config save that changed
- * neither leaves the focus where it was.
+ * Settings. They write the same keys Settings writes; nothing new is stored.
+ *
+ * Built once and updated in place: rebuilt, a switch that changed key with
+ * the presence on screen (Lyrics goes from show_lyrics to show_lyrics_2)
+ * took the keyboard focus with it.
  */
-let quickKey = '';
-
 function paintQuick() {
   const row = $('#npQuick');
   if (!row) return;
+  if (!row.childElementCount) row.append(quickSwitch('Presence'), quickSwitch('Lyrics'));
+  const [presence, lyrics] = row.children;
   const presenceOn = state.config.rpc_enabled !== false;
   const lyricsOn = state.config[lyricsKey()] !== false;
-  const which = multi() ? ` on presence ${state.focus + 1}` : '';
-  const key = `${presenceOn}|${lyricsOn}|${which}`;
-  if (key === quickKey && row.childElementCount) return;
-  quickKey = key;
 
-  const focused = document.activeElement?.closest?.('#npQuick') ? document.activeElement.dataset.key : null;
-  row.replaceChildren(
-    quickSwitch('rpc_enabled', 'Presence', presenceOn,
-      presenceOn ? 'Your activity is on Discord. Off clears your status right away.' : 'Nothing is on your Discord profile. On puts your status back.'),
-    quickSwitch(lyricsKey(), 'Lyrics', lyricsOn,
-      lyricsOn ? `Lyrics follow the song${which}. Off keeps the title and artist.` : `No lyrics${which}. On shows the line being sung.`),
-  );
-  if (focused) row.querySelector(`[data-key="${focused.replace(/[^\w]/g, '')}"]`)?.focus();
+  // With several cards it is the only switch here that is not about the one
+  // on screen, so it says so: next to the per-presence tabs, "Presence" read
+  // as this presence alone.
+  setQuick(presence, 'rpc_enabled', presenceOn, multi() ? 'All presences' : 'Presence', presenceOn
+    ? `Your activity is on Discord${multi() ? ', on every presence' : ''}. Off clears your status right away.`
+    : 'Nothing is on your Discord profile. On puts your status back.');
+  const which = multi() ? ` on presence ${state.focus + 1}` : '';
+  setQuick(lyrics, lyricsKey(), lyricsOn, 'Lyrics', lyricsOn
+    ? `Lyrics follow the song${which}, here and on Discord. Off hides them in both; the card keeps the title and artist.`
+    : `No lyrics${which}, here or on Discord. On shows them again.`);
 }
 
-/** A labelled pill switch that flips one boolean config key. */
-function quickSwitch(key, label, on, tip) {
-  return el('button', {
+/** A labelled switch that flips the boolean config key it currently holds. */
+function quickSwitch(label) {
+  const b = el('button', {
     type: 'button',
-    class: `qt${on ? ' on' : ''}`,
+    class: 'qt',
     role: 'switch',
-    'aria-checked': on ? 'true' : 'false',
-    dataset: { key },
-    title: tip,
-    onclick: () => { void saveConfig({ [key]: !on }); },
+    onclick: () => { void saveConfig({ [b.dataset.key]: b.getAttribute('aria-checked') !== 'true' }); },
   }, [
     el('span', { class: 'qt-label', text: label }),
     el('span', { class: 'qt-track', 'aria-hidden': 'true' }, [el('span', { class: 'qt-thumb' })]),
   ]);
+  return b;
+}
+
+function setQuick(b, key, on, label, tip) {
+  b.dataset.key = key;
+  b.classList.toggle('on', on);
+  b.setAttribute('aria-checked', on ? 'true' : 'false');
+  b.title = tip;
+  const text = b.querySelector('.qt-label');
+  if (text.textContent !== label) text.textContent = label;
 }
 
 /* ── Header: presence tabs and the source picker ─────────────────────────── */

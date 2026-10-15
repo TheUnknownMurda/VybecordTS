@@ -87,9 +87,11 @@ export function discordPreview(opts = {}) {
     appName = platformInfo(t.media_source)[0];
     draw(null, t);
 
-    // The one thing about the lyric layout nobody would guess.
+    // The one thing about the lyric layout nobody would guess. Short enough
+    // to fit whole beside the eyebrow and the quick switches on Now playing
+    // at the default window: the longer wording was cut there.
     if (state.lyrics?.current && activity.details && activity.details.trim() !== (t.track_name || '').trim()) {
-      note.textContent = 'The first two lines follow the song, line by line. The one under them names the track.';
+      note.textContent = 'The first two lines follow the song; the third names it.';
     }
   }
 
