@@ -323,18 +323,21 @@ const DETECT_KEYS: [string, string][] = [
   ['detect_soundcloud', 'SoundCloud'], ['detect_browser', 'Other browser tabs'], ['detect_twitch', 'Twitch'],
   ['detect_kick', 'Kick'], ['detect_other_apps', 'Other desktop apps'],
 ];
-/** The sidebar's pages, in its order and with its names. */
-const TRAY_PAGES: [string, string][] = [['now', 'Now playing'], ['library', 'Lyrics'], ['activity', 'Activity'], ['settings', 'Settings']];
+/** The sidebar's pages, in its order and with its names ('&&' shows one '&'). */
+const TRAY_PAGES: [string, string][] = [
+  ['now', 'Now playing'], ['library', 'Lyrics'], ['activity', 'Activity'], ['settings', 'Settings'], ['welcome', 'Help && setup'],
+];
 
 let trayMenuKey = '';
 
 /*
  * The switches people reach for while the window is closed, in the tray menu:
  * the presence and what it shows, when it hides, which players it detects,
- * how many cards there are, starting with Windows and updates. Same keys as Settings and Now playing,
- * so each place shows what the others changed. Lyrics is one item for every
- * presence in play, since the menu has no room to say which card is which; it
- * reads on while any of them has lyrics, and flips them all together.
+ * how many cards there are, starting with Windows and updates. Same keys as
+ * Settings and Now playing, so each place shows what the others changed.
+ * With several presences, lyrics are one switch per presence, as in Settings:
+ * a single item for all of them could only flip them together, and lost a
+ * card's own choice on the way.
  */
 function refreshTrayMenu(): void {
   if (!tray || !backend) return;
@@ -344,7 +347,7 @@ function refreshTrayMenu(): void {
   const on = (k: string, dflt = true) => (dflt ? cfg[k] !== false : cfg[k] === true);
   const flags = {
     presence: on('rpc_enabled'),
-    lyrics: lyricsKeys.some((k) => cfg[k] !== false),
+    lyrics: lyricsKeys.map((k) => on(k)),
     translate: on('rpc_translate_lyrics', false),
     paused: on('rpc_only_when_playing', false),
     away: on('rpc_hide_when_away'),
@@ -361,9 +364,20 @@ function refreshTrayMenu(): void {
   if (key === trayMenuKey) return;
   trayMenuKey = key;
 
-  // Electron has already flipped `checked` by the time click runs.
-  const toggle = (label: string, checked: boolean, write: (v: boolean) => Record<string, unknown>): MenuItemConstructorOptions => ({
-    label, type: 'checkbox', checked, click: (item) => backend?.updateConfig(write(item.checked)),
+  /*
+   * Electron flips an item's `checked` itself before click runs, and the menu
+   * keeps that state. A write that changes nothing — the radio item already
+   * chosen, a value the config refuses — leaves the key as it was, so the
+   * menu is rebuilt from the config regardless rather than left showing a
+   * flip that did not happen.
+   */
+  const write = (updates: Record<string, unknown>) => {
+    backend?.updateConfig(updates);
+    trayMenuKey = '';
+    refreshTrayMenu();
+  };
+  const toggle = (label: string, checked: boolean, updates: (v: boolean) => Record<string, unknown>): MenuItemConstructorOptions => ({
+    label, type: 'checkbox', checked, click: (item) => write(updates(item.checked)),
   });
 
   const template: MenuItemConstructorOptions[] = [
@@ -372,7 +386,10 @@ function refreshTrayMenu(): void {
     { label: 'Go to', submenu: TRAY_PAGES.map(([page, label]) => ({ label, click: () => openPage(page) })) },
     { type: 'separator' },
     toggle('Show on Discord', flags.presence, (v) => ({ rpc_enabled: v })),
-    toggle('Lyrics on Discord', flags.lyrics, (v) => Object.fromEntries(lyricsKeys.map((k) => [k, v]))),
+    // Not "on Discord": the same switch takes them out of the window too.
+    count === 1
+      ? toggle('Show lyrics', flags.lyrics[0], (v) => ({ show_lyrics: v }))
+      : { label: 'Show lyrics', submenu: lyricsKeys.map((k, i) => toggle(`Presence ${i + 1}`, flags.lyrics[i], (v) => ({ [k]: v }))) },
     toggle('Translate lyrics on Discord', flags.translate, (v) => ({ rpc_translate_lyrics: v })),
     {
       label: 'Detection',
@@ -386,7 +403,7 @@ function refreshTrayMenu(): void {
       label: 'Presences',
       submenu: PRESENCE_COUNTS.map((label, i) => ({
         label, type: 'radio', checked: count === i + 1,
-        click: () => backend?.updateConfig({ presence_count: i + 1 }),
+        click: () => write({ presence_count: i + 1 }),
       })),
     },
     { type: 'separator' },
@@ -402,13 +419,16 @@ function refreshTrayMenu(): void {
   tray.setContextMenu(Menu.buildFromTemplate(template));
 }
 
-/** What presence 1 is playing, as a menu heading; '' when nothing plays. */
+/**
+ * What presence 1 is playing, as a menu heading; '' when nothing plays. A
+ * pause clears it with the rest: the backend reports no track while paused.
+ */
 function trayNowPlaying(track: TrackData | null): string {
   if (!track?.track_name) return '';
   const full = track.artist_name ? `${track.track_name} — ${track.artist_name}` : track.track_name;
   const cut = full.length > 60 ? `${full.slice(0, 59)}…` : full;
   // A single & is a mnemonic marker in a Windows menu label and would vanish.
-  return `${track.is_playing ? '♪' : '⏸'} ${cut.replace(/&/g, '&&')}`;
+  return `♪ ${cut.replace(/&/g, '&&')}`;
 }
 
 /** The update item: a check, the check under way, or the restart that installs it. */

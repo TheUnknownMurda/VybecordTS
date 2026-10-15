@@ -206,7 +206,10 @@ async function main() {
   subscribe('slots', paintStatus);
   mountUpdateBanner();
 
-  const first = await firstPage();
+  // A page asked for from the tray skips firstPage(), which marks the welcome
+  // as seen: opened in its place, Help & setup would never have shown, and
+  // the next launch greets the newcomer instead.
+  const first = asked ? '' : await firstPage();
   booted = true;
   navigate(asked || first);
 }
