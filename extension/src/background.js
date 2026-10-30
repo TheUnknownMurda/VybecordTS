@@ -21,6 +21,10 @@ const APP_BASE = 'http://127.0.0.1:8888';
  * `/api/spotify-lyrics` is not here. The app still serves it — the Tampermonkey
  * userscripts posted to it — but no site script in this extension does: see the
  * header of sites/spotify.js for why the lyrics path did not survive the port.
+ *
+ * Nor is `/api/youtube-cookies`: only this worker posts there (see
+ * sendYouTubeCookies), and leaving it out is what stops a site script from
+ * relaying anything to it.
  */
 const ENDPOINT_SITE = {
   '/api/spicetify': 'spotify',
@@ -107,6 +111,79 @@ function setBadge(ok) {
   chrome.action.setTitle({ title: ok ? 'Vybecord — connected' : 'Vybecord — desktop app not running' });
 }
 
+/**
+ * Lending the app the browser's YouTube session, for age-restricted captions.
+ *
+ * Off unless the user turns it on in the options page, which is what grants
+ * the `cookies` permission and access to youtube.com in the first place: both
+ * are optional in the manifest, so an install that never flips the switch
+ * cannot read a single cookie. Firefox 140+ additionally asks for consent to
+ * share authentication data, which the options page requests with the rest.
+ *
+ * Even when on, cookies are sent only when the app asks, and the app asks only
+ * after a video has come back age-restricted signed out. They go to
+ * 127.0.0.1 and nowhere else, and only the youtube.com ones.
+ */
+const YT_COOKIE_PERMISSIONS = { permissions: ['cookies'], origins: ['https://*.youtube.com/*'] };
+
+/**
+ * Whether the switch is on: the permissions are the setting, so the two can
+ * never disagree. Firefox's data consent is checked too where it exists; its
+ * getAll() lists `data_collection` only on a browser that has the feature.
+ */
+async function youtubeCookiesAllowed() {
+  try {
+    if (!(await chrome.permissions.contains(YT_COOKIE_PERMISSIONS))) return false;
+    const all = await chrome.permissions.getAll();
+    return !all.data_collection || all.data_collection.includes('authenticationInfo');
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * At most one handover per half minute. The app asks on every reply until
+ * the cookies land, and a reply comes every couple of seconds; this file is
+ * re-evaluated on every wake, so the worst case after a restart is one extra.
+ */
+const COOKIE_EXPORT_GAP_MS = 30_000;
+let lastCookieExport = 0;
+
+async function sendYouTubeCookies() {
+  if (Date.now() - lastCookieExport < COOKIE_EXPORT_GAP_MS) return;
+  lastCookieExport = Date.now();
+  if (!(await youtubeCookiesAllowed()) || !chrome.cookies) return;
+
+  let jar;
+  try {
+    jar = await chrome.cookies.getAll({ domain: 'youtube.com' });
+  } catch {
+    // Firefox with first-party isolation (LibreWolf, resistFingerprinting
+    // setups) refuses a query that does not name a first-party domain.
+    try { jar = await chrome.cookies.getAll({ domain: 'youtube.com', firstPartyDomain: null }); }
+    catch { return; }
+  }
+  if (!jar?.length) return;
+
+  const cookies = jar.map(c => ({
+    domain: c.domain,
+    path: c.path,
+    secure: c.secure,
+    expires: c.session ? 0 : Math.floor(c.expirationDate || 0),
+    name: c.name,
+    value: c.value,
+  }));
+  try {
+    await fetch(APP_BASE + '/api/youtube-cookies', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cookies }),
+    });
+  } catch {
+    // The app closed between the reply and this; it will ask again.
+  }
+}
+
 /** Match a push to its switch, check the switch, and forward it to the app. */
 async function relay(msg) {
   const path = (() => {
@@ -140,6 +217,12 @@ async function relay(msg) {
     });
     connected = res.ok;
     setBadge(res.ok);
+    // The one reply worth reading: the app asking for the YouTube session.
+    // Anything unreadable is simply no request.
+    if (res.ok && site === 'youtube') {
+      const reply = await res.json().catch(() => null);
+      if (reply?.wantCookies) void sendYouTubeCookies();
+    }
     return res.ok ? { ok: true } : { ok: false, error: `HTTP ${res.status}` };
   } catch (e) {
     // The app being closed is the normal case here, not an error worth

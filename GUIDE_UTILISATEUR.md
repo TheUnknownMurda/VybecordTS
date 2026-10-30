@@ -79,6 +79,8 @@ Les sous-titres sont un recours : ils ne servent que si aucune parole synchronis
 
 Toutes les vidéos n'ont pas de sous-titres, et la vidéo doit être retrouvable par son titre et sa chaîne : le navigateur dit à Windows ce qui joue, mais pas sur quelle page — Vybecord la cherche donc sur YouTube.
 
+Une vidéo **à âge restreint** affiche « 🔞 CC unavailable » : YouTube ne donne ses sous-titres qu'à un compte connecté dont l'âge est vérifié. Si tu la regardes dans un navigateur avec l'extension, active **Share my YouTube sign-in for captions** dans les options de l'extension (désactivé par défaut ; ton navigateur demande la permission). L'extension passe alors tes cookies YouTube à Vybecord, seulement pour les vidéos à âge restreint, et les sous-titres remplacent la ligne 🔞 quelques secondes plus tard. Vybecord garde les cookies en mémoire seulement. Un navigateur qui n'est pas connecté à YouTube n'a rien à prêter.
+
 ### Les paroles sont décalées
 
 Sur **Now playing**, utilise les boutons **−250 / +250** sous les paroles. Le décalage est enregistré pour ce morceau uniquement : il sera juste la prochaine fois que la chanson repassera, sans décaler toutes les autres. Les morceaux que tu n'as jamais corrigés utilisent la valeur par défaut de **Settings → Lyrics & translation → Default timing offset**.
@@ -123,9 +125,10 @@ Windows dit à Vybecord ce qui joue, pas sur quel site : un onglet SoundCloud et
 L'extension navigateur optionnelle corrige ça. **Settings → Integrations → Browser extension** te guide :
 
 - **Chrome, Edge, Brave, Opera, Vivaldi** — clique sur **Open the extension folder**, ouvre la page des extensions de ton navigateur (le panneau copie son adresse pour toi), active le **Mode développeur**, clique sur **Charger l'extension non empaquetée** et choisis ce dossier.
-- **Firefox 121 ou plus récent** — télécharge `vybecord-extension-<version>-firefox.zip` depuis la [page des releases](https://github.com/TheUnknownMurda/VybecordTS/releases/latest), ouvre `about:debugging#/runtime/this-firefox`, clique sur **Charger un module complémentaire temporaire** et choisis le zip. Firefox retire les modules temporaires à sa fermeture.
+- **Firefox 140 ou plus récent** (aussi Zen, LibreWolf, Waterfox, Floorp) — télécharge `vybecord-extension-<version>-firefox.zip` depuis la [page des releases](https://github.com/TheUnknownMurda/VybecordTS/releases/latest), ouvre `about:debugging#/runtime/this-firefox`, clique sur **Charger un module complémentaire temporaire** et choisis le zip. Firefox retire les modules temporaires à sa fermeture.
+- **Safari** n'est pas pris en charge : Safari n'existe pas sur Windows.
 
-Son icône ouvre une page de réglages avec un interrupteur par site — Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick — tous actifs par défaut.
+Son icône ouvre une page de réglages avec un interrupteur par site — Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick — tous actifs par défaut, et l'interrupteur optionnel **Share my YouTube sign-in for captions** (désactivé par défaut, voir la section sur les sous-titres plus haut).
 
 Avec elle, chaque site est correctement identifié, la présence pointe directement vers le morceau, et la barre de progression lit l'élément audio de la page au lieu de la position système, plus grossière. Sans elle, tout ce qui suit reste valable.
 

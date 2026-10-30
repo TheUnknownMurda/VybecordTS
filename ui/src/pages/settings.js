@@ -435,9 +435,10 @@ function captionsGroup(langOptions) {
       selectRow('Caption language', 'Automatic follows your system language, then English.',
         cfg('cc_lang', 'auto'), [['auto', 'Automatic'], ...langOptions], (v) => put('cc_lang', v)),
       inputRow('Cookies file',
-        'YouTube will not give captions for an age-restricted video to a signed-out viewer. '
-        + 'Export your cookies to a cookies.txt with a browser extension and point this at it. '
-        + 'Leave empty if you do not watch age-restricted videos.',
+        'YouTube gives captions of an age-restricted video only to a signed-in, age-verified account. '
+        + 'The easy way: in the Vybecord browser extension\'s options, turn on "Share my YouTube sign-in '
+        + 'for captions". Or export a cookies.txt and point this at it; a file set here is used instead. '
+        + 'Leave empty otherwise.',
         cfg('cc_cookies_file', ''), (v) => put('cc_cookies_file', v),
         { placeholder: 'C:\\Users\\you\\cookies.txt' }),
     ]),

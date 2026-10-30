@@ -7,8 +7,12 @@
  * shut. This one:
  *
  *   - binds 127.0.0.1 only, so nothing off the machine can reach it;
- *   - answers POST on seven push paths and nothing else — no config, no reads,
- *     no way to learn anything about the user;
+ *   - answers POST on eight push paths and nothing else — no config, no reads,
+ *     no way to learn anything about the user. The one thing a reply carries
+ *     besides "ok" is a request: `wantCookies` on the YouTube path, asking the
+ *     extension for the browser's YouTube session after an age-restricted
+ *     video (see youtube-captions.ts). Cookies only ever travel *to* the app;
+ *     nothing here sends them back out;
  *   - accepts only extension origins, because an extension's origin is
  *     something the browser sets and a page cannot forge. A shared secret
  *     would be no use here: an extension's code is public by construction.
@@ -38,6 +42,12 @@ const PUSH_PATHS = new Set([
   '/api/twitch',
   '/api/kick',
   '/api/spotify-lyrics',
+  /*
+   * Posted by the extension's background, never by a site script, and only
+   * when its opt-in switch has granted it the cookies permission. The body is
+   * a few dozen cookies, well under MAX_BODY.
+   */
+  '/api/youtube-cookies',
 ]);
 
 /**
@@ -251,7 +261,11 @@ export class PushServer {
       'Access-Control-Allow-Origin': origin,
       Vary: 'Origin',
     });
-    res.end('{"ok":true}');
+    // The app cannot call the extension, so a request for cookies rides on the
+    // reply to the YouTube tab's next push, which comes every few seconds.
+    res.end(path === '/api/youtube' && this.backend.wantsYouTubeCookies()
+      ? '{"ok":true,"wantCookies":true}'
+      : '{"ok":true}');
   }
 
   /**
@@ -277,6 +291,7 @@ export class PushServer {
       case '/api/twitch': this.backend.handleTwitchPush(data); break;
       case '/api/kick': this.backend.handleKickPush(data); break;
       case '/api/spotify-lyrics': this.backend.handleSpotifyLyrics(data); break;
+      case '/api/youtube-cookies': this.backend.handleYouTubeCookies(data); break;
     }
   }
 }

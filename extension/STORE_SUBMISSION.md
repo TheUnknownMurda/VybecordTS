@@ -63,6 +63,14 @@ place only — the app on your own machine, at 127.0.0.1. There is no server, no
 account, and no analytics. On Kick, the extension additionally asks Kick's own
 site for the stream's start time, the same way the page you have open does.
 
+Optional, and off unless you turn it on: YouTube serves captions of an
+age-restricted video only to a signed-in, age-verified account. One switch lets
+the extension hand your youtube.com cookies to the desktop app when such a video
+comes back restricted, so the app can fetch that one video's captions signed
+in. Your browser asks for the permission when you turn it on; the cookies go
+only to the app on your own machine, which keeps them in memory and uses them
+for nothing else.
+
 Open source: https://github.com/TheUnknownMurda/VybecordTS
 ```
 
@@ -78,6 +86,10 @@ Read the metadata of the media currently playing on six supported sites and
 send it to the Vybecord desktop application on the same computer, so it can be
 displayed as the user's Discord status.
 ```
+
+The optional YouTube cookie switch sits inside that purpose rather than beside
+it: it exists so the app can show the captions of the video being reported in
+that same status. Say so if a reviewer asks.
 
 ---
 
@@ -102,14 +114,39 @@ machine. It is the only host the extension requests permission to contact, and
 the extension does nothing at all when the desktop app is not running.
 ```
 
+**`cookies` — optional, requested only when the user turns the switch on**
+
+```
+Off by default, and not granted at install: it is an optional permission that
+the browser asks the user for when they turn on "Share my YouTube sign-in for
+captions" in the extension's options. YouTube serves the captions of an
+age-restricted video only to a signed-in, age-verified account, and the
+Vybecord desktop app shows those captions as lyrics. When the app reports that
+the video playing has come back age-restricted, the extension reads the
+youtube.com cookies and posts them to the desktop app at 127.0.0.1, which uses
+them to fetch that one video's captions and keeps them in memory only. No
+cookie of any other site is read, and no cookie leaves the user's machine.
+Turning the switch off removes the permission.
+```
+
+**Optional host permission — `https://*.youtube.com/*`**
+
+```
+Requested together with `cookies`, and only then: the browser lets an
+extension read a site's cookies only with access to that site. The extension
+makes no request to youtube.com with it; the content script already runs there
+under its normal match pattern.
+```
+
 **Content scripts on the six supported sites**
 
 ```
 The extension reads the title, artist, album, artwork address, playback
 position and duration of what is playing, from the page the user already has
 open. This is the data the extension exists to report; without access to these
-sites there is nothing to read. No other site is matched, and the extension
-does not read credentials, cookies, or anything the user has typed.
+sites there is nothing to read. No other site is matched, and the content
+scripts do not read credentials, cookies, or anything the user has typed (the
+optional cookie switch above works through the cookies API, not the page).
 It reads these pages and never writes to them: nothing is inserted, hidden,
 removed or restyled.
 
@@ -152,8 +189,16 @@ reporter's single purpose. Anything that changes a page again makes this
 sentence false, and moves the extension into a category reviewers read
 differently.
 
-**"Does not read credentials."** Holds as long as no script lifts a session
-token out of a page. The Tampermonkey originals did exactly that on Spotify, to
+**"Reads cookies only when the user turns it on."** Holds as long as `cookies`
+and `https://*.youtube.com/*` stay under `optional_permissions` and
+`optional_host_permissions` in `manifest.json`, and `src/background.js` posts
+them only to `/api/youtube-cookies` on 127.0.0.1, only the youtube.com jar, and
+only when the app's reply asks for them. Moving either permission into the
+required lists would grant them at install to everybody, and the description,
+the justification above and the privacy policy would all become false at once.
+
+**"The content scripts do not read credentials."** Holds as long as no script
+lifts a session token out of a page. The Tampermonkey originals did exactly that on Spotify, to
 reach the official lyrics API, by patching `window.fetch` and `XMLHttpRequest`.
 The port dropped it because a content script's isolated world patches its own
 copies and never sees the page's requests. Restoring the feature would mean
@@ -183,9 +228,12 @@ Reviewers do not always read it that way, and under-disclosing is what gets an
 extension pulled. So disclose it, and explain:
 
 - Tick **Website content** — the extension does read data out of the page.
+- Tick **Authentication information** — with the optional switch on, the
+  extension hands the youtube.com session cookies to the desktop app. The
+  dashboard asks what the extension *can* do, not what it does by default.
 - Leave every other category unticked. None of them apply: no PII, no
-  authentication information, no location, no web history, no personal
-  communications, no financial or health data.
+  location, no web history, no personal communications, no financial or
+  health data.
 
 All three certifications are true and can be ticked:
 
@@ -208,6 +256,12 @@ channel's stream start time from Kick's own public channel endpoint, because
 the page does not expose it. That request is same-origin, identical to one the
 Kick page itself makes, carries only the channel name already visible in the
 address bar, and its response is used for a single timestamp.
+
+The optional cookie switch is off by default and its permissions are not
+granted at install. When the user turns it on, and only when the desktop app
+reports an age-restricted video, the extension reads the youtube.com cookies
+and posts them to the same desktop app at 127.0.0.1, which needs a signed-in
+session to fetch that video's captions. They are never sent to any server.
 ```
 
 ---
@@ -225,6 +279,44 @@ A second screenshot showing a Discord profile with the status live makes the
 point of the extension clear in a way the options page alone cannot.
 
 ---
+
+## Firefox Add-ons (AMO)
+
+Upload `release/vybecord-extension-<version>-firefox.zip`, not the Chromium one.
+The listing text, permission answers and privacy policy above apply unchanged.
+
+Only a copy signed by Mozilla stays installed in Firefox; anything else is a
+temporary add-on, dropped when the browser closes. Signing does not require a
+public listing: AMO can sign an **unlisted** version, which is then shipped as an
+`.xpi` from the releases page instead of the store. Either way it goes through
+an AMO account.
+
+**Data collection.** Since 2025-11-03 AMO refuses a new extension that does not
+declare `browser_specific_settings.gecko.data_collection_permissions`, and
+Mozilla's `addons-linter` flags its absence. The manifest declares
+`"required": ["websiteContent"]`, and Firefox shows that on the install prompt,
+plus `"optional": ["authenticationInfo"]` for the YouTube cookie switch, which
+the options page requests together with the cookie permission.
+`"none"` would have been the strict reading, as with Chrome above, since
+nothing leaves the machine. But Mozilla counts data handled outside the browser
+as transmitted, and the desktop app is outside the browser, so the same
+deliberate answer is given here as in the Chrome disclosure: the extension reads
+website content and hands it on. Nothing else is declared, for the reasons given
+there.
+
+The key is understood from Firefox 140, which is also why `strict_min_version`
+is 140 (see the extension README for the other reason). `npx addons-linter
+release/vybecord-extension-<version>-firefox.zip` must report no errors before
+an upload, and one warning only: `KEY_FIREFOX_ANDROID_UNSUPPORTED_BY_MIN_VERSION`,
+because Firefox for Android learned the key in 142. Android does not matter
+here, since there is no desktop app on a phone to send anything to: on AMO,
+leave **Firefox for Android** unticked under compatibility.
+
+## Opera add-ons
+
+addons.opera.com takes the Chromium zip as it is. It is optional: Opera can
+install from the Chrome Web Store too, so the Chrome listing reaches Opera users
+on its own, and Opera's review queue is slow.
 
 ## After it is published
 

@@ -19,10 +19,34 @@
 
     <ul id="sites" class="sites"></ul>
 
+    <h2>Age-restricted YouTube videos</h2>
+    <ul class="sites">
+      <li>
+        <label class="site" for="yt-cookies">
+          <div class="site-text">
+            <div class="site-name">Share my YouTube sign-in for captions</div>
+            <div class="site-detail">
+              Off by default. YouTube serves captions of an age-restricted video only to a signed-in,
+              age-verified account. When one comes back restricted, this hands your youtube.com cookies
+              to Vybecord on this computer so it can retry that one video signed in. Vybecord keeps them
+              in memory and never uses them for any other video. Your browser asks for permission when
+              you turn this on.
+            </div>
+            <div id="yt-cookies-note" class="site-note" hidden></div>
+          </div>
+          <span class="switch">
+            <input type="checkbox" id="yt-cookies" />
+            <span class="track"></span>
+            <span class="thumb"></span>
+          </span>
+        </label>
+      </li>
+    </ul>
+
     <footer>
       <p>
-        Playback is sent only to Vybecord on this computer, over <code>127.0.0.1</code>.
-        Nothing is sent anywhere else.
+        Playback, and your YouTube cookies if you turn that on, are sent only to Vybecord on this
+        computer, over <code>127.0.0.1</code>. Nothing is sent anywhere else.
       </p>
     </footer>
 

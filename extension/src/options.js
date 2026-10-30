@@ -77,6 +77,68 @@ function refreshStatus() {
   });
 }
 
+/**
+ * The YouTube sign-in switch.
+ *
+ * Its state is the permissions themselves rather than a stored flag, so the
+ * switch cannot claim to be on after the user revoked access in the browser's
+ * own settings. Repeated from background.js for the same reason as SITES.
+ */
+const YT_COOKIE_PERMISSIONS = { permissions: ['cookies'], origins: ['https://*.youtube.com/*'] };
+const ytInput = document.getElementById('yt-cookies');
+const ytNote = document.getElementById('yt-cookies-note');
+
+/**
+ * What to request, worked out before any click.
+ *
+ * Firefox 140+ also asks consent per kind of data, and only lists
+ * `data_collection` from getAll() when it does. The request itself has to be
+ * the first thing the click handler does: Firefox refuses permissions.request
+ * once an await has run, because the click no longer counts as the user's.
+ */
+let ytRequest = YT_COOKIE_PERMISSIONS;
+
+async function renderYouTubeCookies() {
+  try {
+    const all = await chrome.permissions.getAll();
+    const firefoxConsent = Array.isArray(all.data_collection);
+    if (firefoxConsent) ytRequest = { ...YT_COOKIE_PERMISSIONS, data_collection: ['authenticationInfo'] };
+    const granted = await chrome.permissions.contains(YT_COOKIE_PERMISSIONS)
+      && (!firefoxConsent || all.data_collection.includes('authenticationInfo'));
+    ytInput.checked = granted;
+  } catch {
+    ytInput.checked = false;
+  }
+}
+
+ytInput.addEventListener('change', () => {
+  ytNote.hidden = true;
+  if (ytInput.checked) {
+    chrome.permissions.request(ytRequest).then((ok) => {
+      ytInput.checked = ok;
+      if (!ok) {
+        ytNote.textContent = 'Permission was not given, so nothing is shared.';
+        ytNote.hidden = false;
+      }
+    }).catch((e) => {
+      ytInput.checked = false;
+      ytNote.textContent = `The browser refused the request: ${e?.message || e}`;
+      ytNote.hidden = false;
+    });
+  } else {
+    // Dropping the permissions is what turns it off. The app would forget the
+    // cookies it holds on its own within ten minutes; an empty handover makes
+    // that immediate.
+    chrome.permissions.remove(ytRequest).catch(() => {}).finally(renderYouTubeCookies);
+    fetch('http://127.0.0.1:8888/api/youtube-cookies', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{"cookies":[]}',
+    }).catch(() => {});
+  }
+});
+
 render();
+renderYouTubeCookies();
 refreshStatus();
 setInterval(refreshStatus, 3000);
