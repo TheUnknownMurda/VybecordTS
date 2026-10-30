@@ -19,6 +19,25 @@ import { PushFreshness } from './push-freshness.js';
 
 const log = createLogger('Spicetify');
 
+/**
+ * How long a song the extension last reported as playing is held without a
+ * push.
+ *
+ * A hidden Spotify only wakes its timers about once a minute (Chromium's
+ * intensive wake-up throttling), and the heartbeat with them. The freshness
+ * window starts at ten seconds and only widens after the first long gap has
+ * ended, so that first gap used to take the card down, and the fallback could
+ * not cover it: on Sam's PC Windows has no media session for Spotify at all,
+ * so "falling back to SMTC" meant falling back to nothing. Fourteen gaps of 3
+ * to 51 seconds in five days of his log, each one ending at the minute mark.
+ *
+ * Holding is safe because the song's own clock says what should be playing:
+ * the hold ends when the extrapolated position passes the end of the track,
+ * and quitting Spotify announces itself (the extension's `closed` beacon).
+ * A pause is pushed from Spotify's own event rather than from the timer.
+ */
+const PLAYING_GRACE_MS = 70_000;
+
 /** Shape of JSON pushed by the Spicetify extension. */
 export interface SpicetifyPayload {
   track_id: string;
@@ -44,6 +63,8 @@ export interface SpicetifyPayload {
   is_dj?: boolean;
   /** The DJ is talking between songs rather than a track playing. */
   dj_narration?: boolean;
+  /** Spotify is quitting: the extension's last word. */
+  closed?: boolean;
 }
 
 /**
@@ -80,6 +101,7 @@ export function normalizeSpicetifyPayload(raw: unknown): SpicetifyPayload {
     is_local: asBool(d.is_local),
     is_dj: asBool(d.is_dj),
     dj_narration: asBool(d.dj_narration),
+    closed: asBool(d.closed),
   };
 }
 
@@ -99,6 +121,12 @@ export class SpicetifySource {
    */
   update(raw: unknown): SpicetifyPayload {
     const data = normalizeSpicetifyPayload(raw);
+    if (data.closed) {
+      this.latestData = null;
+      if (this._wasActive) log.info('Spotify closed — Spicetify extension disconnected');
+      this._wasActive = false;
+      return data;
+    }
     this.latestData = data;
     this.receivedAt = performance.now();
     this.freshness.seen(this.receivedAt);
@@ -168,12 +196,21 @@ export class SpicetifySource {
   /** True while pushes are still arriving at the cadence this source has been keeping. */
   get isActive(): boolean {
     if (!this.latestData) return false;
-    const stale = this.freshness.isStale(performance.now());
+    const now = performance.now();
+    const stale = this.freshness.isStale(now) && !this.holdingPlayback(now);
     if (stale && this._wasActive) {
       this._wasActive = false;
       log.warn(`Spicetify extension stale (>${this.freshness.windowSeconds}s) — falling back to SMTC`);
     }
     return !stale;
+  }
+
+  /** Whether a quiet extension's last word was a song still playing — see PLAYING_GRACE_MS. */
+  private holdingPlayback(now: number): boolean {
+    const d = this.latestData;
+    if (!d?.is_playing) return false;
+    const elapsed = now - this.receivedAt;
+    return elapsed < PLAYING_GRACE_MS && (!d.duration_ms || d.progress_ms + elapsed < d.duration_ms);
   }
 
   /** Whether the extension reports playback is paused. */

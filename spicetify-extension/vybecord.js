@@ -421,17 +421,60 @@
    * every reader downstream gates on it.
    */
   function startProgressSync() {
-    if (progressTimer) clearInterval(progressTimer);
-    progressTimer = setInterval(() => {
+    if (progressTimer) progressTimer();
+    progressTimer = startTicker(() => {
       const data = getTrackData();
       if (data) send(data);
     }, PROGRESS_INTERVAL_MS);
+  }
+
+  /**
+   * Call `fn` every `ms`, from a worker's clock when one can be had. Returns a
+   * function that stops it.
+   *
+   * With Spotify minimised or behind other windows, Chromium's intensive
+   * wake-up throttling holds the page's own timers to about one wake-up a
+   * minute. The heartbeat went quiet for up to sixty seconds, Vybecord called
+   * the extension gone after ten, and the card vanished until the next minute
+   * mark: Sam's log has fourteen such gaps, every reconnection at hh:mm:39.97.
+   * A dedicated worker's timers are not throttled that way, and its message
+   * runs the push on the page straight away.
+   *
+   * Plain setInterval is the fallback for a client that refuses the worker.
+   */
+  function startTicker(fn, ms) {
+    const plain = () => { const id = setInterval(fn, ms); return () => clearInterval(id); };
+    let stop;
+    try {
+      const url = URL.createObjectURL(new Blob(
+        [`setInterval(() => postMessage(0), ${Number(ms)});`], { type: 'text/javascript' }));
+      const worker = new Worker(url);
+      URL.revokeObjectURL(url);
+      worker.onmessage = () => fn();
+      // A worker blocked by the page's policy fails after construction, not in it.
+      worker.onerror = () => { worker.terminate(); stop = plain(); };
+      stop = () => worker.terminate();
+    } catch {
+      stop = plain();
+    }
+    return () => stop();
   }
 
   // ── Wire events ──
   Spicetify.Player.addEventListener('songchange', onSongChange);
   Spicetify.Player.addEventListener('onplaypause', onPlayPause);
   startProgressSync();
+
+  // Quitting Spotify: say so, rather than leave Vybecord waiting out the
+  // silence. It holds a playing song through a minute without pushes (see
+  // spicetify-source.ts), which would otherwise keep a closed Spotify on the
+  // card for that long. A beacon is the one request a closing page still sends;
+  // as text/plain it needs no preflight.
+  addEventListener('pagehide', () => {
+    try {
+      navigator.sendBeacon(ENDPOINT, new Blob([JSON.stringify({ closed: true })], { type: 'text/plain' }));
+    } catch { /* VybecordTS not running — ignore */ }
+  });
 
   // ── Initial push (extension loaded while music is already playing) ──
   const initial = getTrackData();
