@@ -61,7 +61,7 @@ Each of the six sites has its own switch, so you can report your music without
 reporting your streams, or the other way round. Your listening is sent to one
 place only — the app on your own machine, at 127.0.0.1. There is no server, no
 account, and no analytics. On Kick, the extension additionally asks Kick's own
-site for the stream's start time, the same way the page you have open does.
+site about the channel or video you have open, the same way the page does.
 
 Optional, and off unless you turn it on: YouTube serves captions of an
 age-restricted video only to a signed-in, age-verified account. One switch lets
@@ -150,13 +150,14 @@ optional cookie switch above works through the cookies API, not the page).
 It reads these pages and never writes to them: nothing is inserted, hidden,
 removed or restyled.
 
-On kick.com only, the content script also makes one same-origin request, to
-Kick's own /api/v1/channels/<channel> endpoint, to read the stream's start
-time — which the page does not otherwise expose, and which is needed to show
-how long a stream has been running. It is the same request the Kick page
-makes for itself, to the site the user is already on, and it requires no host
-permission. The response is read for a single timestamp field; nothing from
-it is stored or forwarded anywhere except that timestamp, which goes to the
+On kick.com only, the content script also makes same-origin requests to
+Kick's own API (/api/v1/channels/<channel>, /api/v1/video/<id> or
+/api/v2/clips/<id>, for whatever the tab is showing), to read the channel's
+name and picture, the stream's title, category, live status and start time —
+which the page does not reliably expose. They are the same requests the Kick
+page makes for itself, to the site the user is already on, and they require no
+host permission. Those fields are all that is read from the response, and they
+go nowhere except, like everything else the extension reports, to the
 desktop app with the rest of the stream data.
 ```
 
@@ -218,8 +219,8 @@ extension transmits the user's data only to `127.0.0.1`, which by definition
 never leaves the machine — so a strict reading is that it collects nothing.
 
 The one request that does leave the machine sends none of it: on kick.com the
-content script asks Kick, same-origin, for the current channel's stream start
-time. It carries the channel name that is already in the address bar and no
+content script asks Kick, same-origin, about the channel, video or clip open
+in the tab. It carries the id that is already in the address bar and no
 user data, and it goes to the site the user is on rather than to us. Say so if
 it comes up — a reviewer reading `sites/kick.js` will see the call, and a
 disclosure that pretends it is not there is worse than the call itself.

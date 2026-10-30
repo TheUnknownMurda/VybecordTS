@@ -240,6 +240,7 @@ When several players are active, the highest-ranked one wins:
 | 6 | YouTube, Twitch, Kick (identified browser tab) |
 | 5 | VLC, foobar2000, MusicBee, AIMP, Winamp, MediaMonkey |
 | 1 | Any other app, or a browser tab whose site could not be identified |
+| Lowest | A Twitch or Kick channel that is offline: it only takes a card nothing else wants |
 
 Windows Media Player (both the classic and the new app), Groove Music, Movies & TV and the Microsoft Store SoundCloud app are never announced. That SoundCloud app reports no position or duration, so use SoundCloud in a browser with the extension instead.
 
@@ -459,13 +460,13 @@ Your history, imported lyrics, settings and Last.fm session stay on your machine
 | `api.deezer.com`, `itunes.apple.com` | Cover lookup | Track and artist. |
 | `vybecord-art.vybecord.workers.dev` | Cover publishing (`art_upload_enabled`) | The cover image only, with its metadata removed. |
 | YouTube (through yt-dlp) | YouTube captions | Video title and channel, or the video ID. |
-| `gql.twitch.tv` | Twitch stream through the extension | Channel name, to get the real stream start time. |
+| `gql.twitch.tv` | Twitch tab through the extension | The channel name, or the past broadcast's id or the clip's slug, to get the channel's name, picture, live status and stream start time, or the video's title and length. |
 | Google Translate, Lingva mirrors, MyMemory | Translation turned on | The lyric lines. |
 | `ws.audioscrobbler.com` (Last.fm) | Scrobbling turned on | Plays. |
 | GitHub Releases | Update checks (installed builds) | Nothing beyond the request itself. |
 | The maintainer's Discord webhook | Only when you send a report | The report's contents. |
 
-The browser extension sends data to `127.0.0.1:8888` and nowhere else. The one exception: on kick.com it asks Kick's own API for the stream start time. The full policy is on the [website](https://theunknownmurda.github.io/VybecordTS/privacy/).
+The browser extension sends data to `127.0.0.1:8888` and nowhere else. The one exception: on kick.com it asks Kick's own API about the channel, past broadcast or clip open in the tab (its name, picture, title, category and whether it is live). The full policy is on the [website](https://theunknownmurda.github.io/VybecordTS/privacy/).
 
 ## Interfaces
 

@@ -44,6 +44,7 @@ import { SoundCloudSource } from './core/soundcloud-source.js';
 import { BandcampSource } from './core/bandcamp-source.js';
 import { KickSource } from './core/kick-source.js';
 import { TwitchSource } from './core/twitch-source.js';
+import { isBroadcastSource } from './core/broadcast-track.js';
 import { DiscordPool } from './core/discord-pool.js';
 import { PresenceSlot, type LyricsState } from './core/presence-slot.js';
 import { fetchLyrics, fetchPlainLyrics, findCustomLyrics } from './core/provider.js';
@@ -396,7 +397,8 @@ export class VybecordBackend extends EventEmitter {
     this.soundcloudSource = new SoundCloudSource();
     this.bandcampSource = new BandcampSource();
     this.kickSource = new KickSource();
-    this.twitchSource = new TwitchSource();
+    // A held tab is shown as soon as Twitch answers, not at its next push.
+    this.twitchSource = new TwitchSource(() => this.reconcile(false));
 
     // React to config toggles in real-time
     this.on('configUpdate', (cfg) => {
@@ -863,9 +865,10 @@ export class VybecordBackend extends EventEmitter {
       { source: this.soundcloudSource, configKey: 'detect_soundcloud', label: 'soundcloud-userscript', web: true },
       // Bandcamp has no switch of its own; it rides the "other apps" one.
       { source: this.bandcampSource,   configKey: 'detect_other_apps', label: 'bandcamp-userscript',   web: true },
-      // A stream is live or it is not; there is no pause to report.
-      { source: this.kickSource,       configKey: 'detect_kick',       label: 'kick-userscript',       web: true, live: true },
-      { source: this.twitchSource,     configKey: 'detect_twitch',     label: 'twitch-userscript',     web: true, live: true },
+      // Not `live` as a source: a tab can be on a past broadcast or a clip,
+      // which has a length and a position like any video. Each track says.
+      { source: this.kickSource,       configKey: 'detect_kick',       label: 'kick-userscript',       web: true },
+      { source: this.twitchSource,     configKey: 'detect_twitch',     label: 'twitch-userscript',     web: true },
     );
   }
 
@@ -957,11 +960,14 @@ export class VybecordBackend extends EventEmitter {
         out.push({
           track,
           service,
-          priority: PUSH_PRIORITY[service] ?? 100,
+          // An offline channel is a tab left open, not something playing: it
+          // takes a card only when nothing else wants it, a song from an OS
+          // session included. Push sources otherwise outrank every OS session.
+          priority: track.context_type === 'offline' ? 0 : PUSH_PRIORITY[service] ?? 100,
           push: true,
-          // Per track, not per source: Kick and Twitch are always a broadcast,
-          // but YouTube is one only when the video is, and a premiere sitting in
-          // the same tab as ordinary videos has to be read from the track itself.
+          // Per track, not per source: a YouTube premiere sits in the same tab
+          // as ordinary videos, and a Twitch or Kick tab can be on a past
+          // broadcast as easily as a live channel, so it is read off the track.
           live: !!spec.live || track.is_live === true,
           label: spec.label,
           web: spec.web,
@@ -1508,8 +1514,10 @@ export class VybecordBackend extends EventEmitter {
       const session = track._session_id && !track._from_push
         ? this.media?.listPlayers().find(p => p.appId === track._session_id)
         : undefined;
-      // Never a live stream: one that stops has ended.
-      slot.stopped = track.is_live ? null : { ...track, is_playing: false, progress_ms: this.stoppedAt(slot, session) };
+      // Never a live stream: one that stops has ended. Nor an offline channel,
+      // which was never playing anything to pause.
+      slot.stopped = track.is_live || track.context_type === 'offline'
+        ? null : { ...track, is_playing: false, progress_ms: this.stoppedAt(slot, session) };
       // An ad cuts a song off: its title is not the song's.
       slot.stoppedTitle = session && !session.isAd ? session.title : '';
       slot.endedAt = ended ? Date.now() : 0;
@@ -1621,6 +1629,8 @@ export class VybecordBackend extends EventEmitter {
     if (src === 'youtube' || src === 'youtube_music') return this.youtubeSource;
     if (src === 'soundcloud') return this.soundcloudSource;
     if (src === 'bandcamp') return this.bandcampSource;
+    if (src === 'twitch') return this.twitchSource;
+    if (src === 'kick') return this.kickSource;
     return null;
   }
 
@@ -1685,7 +1695,10 @@ export class VybecordBackend extends EventEmitter {
     // Every source, not a chosen few: the position reported here is how the
     // scrobbler tells listening apart from a player sitting on a paused song,
     // and a source that never reaches it can only ever scrobble at track end.
-    if (slot.primary) checkAndScrobble(track.progress_ms);
+    // Except Twitch and Kick, which never start a scrobble (see recordPlay):
+    // the one still open is the song paused before the video, and a video's
+    // position would count towards it.
+    if (slot.primary && !STREAM_SOURCES.has(track.media_source)) checkAndScrobble(track.progress_ms);
     this.emit('progressUpdate', { progress_ms: track.progress_ms, duration_ms: track.duration_ms }, slot.index);
 
     // Detect track end: engine stopped but progress is at the end (not a repeat loop)
@@ -1814,9 +1827,12 @@ export class VybecordBackend extends EventEmitter {
      * title to look up, and the catalogue would be free to answer anyway — the
      * artist check only rejects a wrong *artist*, so a channel name that
      * happens to read like a band would come back with that band's record.
+     * Twitch and Kick are excluded whatever the page shows, for the same
+     * reason: a past broadcast's title is no more an album than a stream's.
      */
     const declaredArt = trackData.album_art_url || '';
-    if (!trackData.is_live && !trackData.is_dj_narration && !/^https?:\/\//.test(declaredArt)) {
+    const broadcast = trackData.is_live || isBroadcastSource(trackData.media_source);
+    if (!broadcast && !trackData.is_dj_narration && !/^https?:\/\//.test(declaredArt)) {
       const allowUpload = declaredArt === '/api/thumbnail' && (localArtExtracted || this.thumbBelongsTo(trackData));
       this.resolveDiscordArt(slot, trackData, signal, allowUpload);
     }
@@ -1905,7 +1921,7 @@ export class VybecordBackend extends EventEmitter {
       /** Set when the answer is the age-restricted notice rather than lyrics. */
       let ageGated = false;
       // Spotify's DJ talking is not a song either; see spicetify-source.ts.
-      const lyricsPromise = (!trackData.is_live && !trackData.is_dj_narration)
+      const lyricsPromise = (!broadcast && !trackData.is_dj_narration)
         ? (async (): Promise<LyricLine[]> => {
             // Spotify's own lyrics do not come through here: the Spicetify
             // extension pushes them, and they are picked up from the cache above.
@@ -2111,10 +2127,10 @@ export class VybecordBackend extends EventEmitter {
       const isYt = trackData.media_source === 'youtube' || trackData.media_source === 'youtube_music'
         || trackData.media_source.startsWith('browser_');
       // A live stream never reached a provider -- the fetch above is gated on
-      // is_live -- so reporting that the lookup failed puts a fault in the log
+      // it -- so reporting that the lookup failed puts a fault in the log
       // that never happened, 41 times in one real session.
-      const noLyricsSource = trackData.is_live
-        ? 'live stream, not looked up'
+      const noLyricsSource = broadcast
+        ? 'stream or stream video, not looked up'
         : trackData.is_dj_narration ? 'Spotify DJ talking, not looked up'
         : isYt ? 'CC fetch failed or empty' : 'LRCLib/Netease fetch failed';
       log.info(`[LYRICS] No lyrics found for "${trackData.track_name}" — ${noLyricsSource}`);
@@ -2123,13 +2139,13 @@ export class VybecordBackend extends EventEmitter {
       /*
        * Async: plain (unsynced) lyrics for the dashboard only, never the RPC.
        *
-       * Gated on is_live for the same reason the synced fetch above is: a
+       * Gated on the same test as the synced fetch above, for the same reason: a
        * stream's title is a channel banner and its artist a streamer, so the
        * lookup is an LRCLib round-trip followed by a Genius search and a page
        * scrape that cannot match anything. The synced path already knew that;
        * this one was still asking, once per stream event.
        */
-      if (!signal.aborted && !trackData.is_live && !trackData.is_dj_narration) {
+      if (!signal.aborted && !broadcast && !trackData.is_dj_narration) {
         fetchPlainLyrics(trackData.track_name, trackData.artist_name, trackData.album_name, trackData.duration_ms, signal)
           .then(lines => {
             if (lines && lines.length > 0 && slot.trackKey === expectedKey) {
@@ -2869,9 +2885,11 @@ export class VybecordBackend extends EventEmitter {
    * history module sees the open entry and continues that listen.
    */
   private recordPlay(t: TrackData): void {
-    // The DJ talking between songs: held like an ad break below, for the same
-    // reason, without the guesswork.
-    if (t.is_dj_narration) {
+    // An offline channel is a tab left open, not something watched: no row in
+    // the history. The clock of whatever played before it stops, as it would
+    // for a pause. The DJ talking between songs is held the same way, like an
+    // ad break below, without the guesswork.
+    if (t.context_type === 'offline' || t.is_dj_narration) {
       historyTrackPause();
       return;
     }
