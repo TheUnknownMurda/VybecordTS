@@ -278,7 +278,7 @@ If none of these finds synced lyrics, plain lyrics (LRCLIB, then Genius) are sho
 **Translation and romanisation** are under **Settings → Lyrics & translation**:
 
 - *Translate in this window* and *Translate on Discord too*. Target languages: English, French, Spanish, German, Portuguese, Italian, Russian, Japanese, Korean, Chinese, Arabic, Hindi, Turkish, Polish, Dutch, Swedish.
-- *Romanise Japanese / Korean* also covers the other scripts listed under [Features](#features). Japanese text containing kanji uses the bundled kuromoji dictionary, which is only loaded when it is needed.
+- *Romanise lyrics* covers every script listed under [Features](#features). Japanese text containing kanji uses the bundled kuromoji dictionary, which is only loaded when it is needed.
 
 **YouTube captions** are under **Settings → Lyrics & translation → YouTube captions**. They need yt-dlp, which ships with the app. The card shows which copy is in use. To use your own copy, put `yt-dlp.exe` in `%APPDATA%\Vybecord\bin`, which is checked first. After that come the bundled copy, then `PATH`. Captions in *Automatic* follow your system language, then English. Age-restricted videos need a **Cookies file** (a `cookies.txt` exported from your browser). Without the browser extension, the video is found by searching for its title. With it, the exact video is used.
 
@@ -380,7 +380,7 @@ The second presence button is fixed. It links to what is playing and is labelled
 | Key | Default | Accepted values | Setting |
 | --- | --- | --- | --- |
 | `show_lyrics` | `true` | boolean | Show lyrics (presence 1; with one presence it is also **Lyrics on the card** under Discord presence) |
-| `romanize_lyrics` | `false` | boolean | Romanise Japanese and Korean |
+| `romanize_lyrics` | `false` | boolean | Romanise lyrics |
 | `lyrics_offset_ms` | `0` | −60000 to 60000 | Default timing offset: for tracks without their own offset |
 | `lrclib_dump_path` | `""` | up to 1024 characters | LRCLIB dump path (**restart required**) |
 | `cc_enabled` | `true` | boolean | Use captions as lyrics |

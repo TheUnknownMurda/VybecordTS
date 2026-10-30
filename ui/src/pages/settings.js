@@ -347,7 +347,9 @@ function lyricsCat(body) {
         ? null
         : toggleRow('Show lyrics', 'Off keeps the presence but stops fetching and showing lyrics.',
             cfg('show_lyrics', true) !== false, (v) => put('show_lyrics', v)),
-      toggleRow('Romanise Japanese and Korean', 'Converts kana and hangul to Latin script.',
+      toggleRow('Romanise lyrics',
+        'Writes lyrics in Latin letters: Japanese (kanji included), Korean, Chinese, Russian and other Cyrillic, '
+        + 'Greek, Thai, Arabic, Hindi and other Devanagari, Georgian and Armenian.',
         cfg('romanize_lyrics') === true, (v) => put('romanize_lyrics', v)),
       inputRow('Default timing offset (ms)', 'Negative shows lines earlier, positive later. '
         + 'A track corrected on Now playing keeps its own offset instead.',
