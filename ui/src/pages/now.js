@@ -1022,11 +1022,13 @@ async function showFullLyrics(mode = 'panel') {
   // One node per line, kept and mutated: the highlight moves several times a
   // minute and rebuilding the list would throw away the scroll position each time.
   let rows = [];
+  let shown = [];                                // the lines `rows` were built from
   let cur = -1;
   let follow = true;
   let signature = '';                            // what the rendered list is of
   let trackId = state.track?.track_id || '';
   let waitTimer = 0;
+  let live = false;                              // a stream's captions, not a song's lines
 
   paintTrack_();
   paint(data);
@@ -1131,31 +1133,59 @@ async function showFullLyrics(mode = 'panel') {
     const next = resolved || readLines();
     if (!next) return;
 
-    const sig = `${trackId}|${next.synced}|${next.lines.length}`;
+    live = next.synced && !!state.track?.is_live;
+    /*
+     * The count alone told one list from the next until live captions: they
+     * keep their last forty lines, so from the forty-first on a new line drops
+     * the oldest, the count stays put, and the view froze on lines long gone.
+     * The first line's time changes when that happens.
+     */
+    const sig = `${trackId}|${next.synced}|${next.lines.length}|${next.lines[0]?.time}`;
     const rebuilt = sig !== signature;
+    // Captions gaining a line, on the stream already shown: rebuilt, but the
+    // reader keeps their place and the view glides on to the new line.
+    const growing = rebuilt && live && rows.length > 0;
 
     if (rebuilt) {
       clearTimeout(waitTimer);
+      // The rows still listed are kept, translation and all: a caption line
+      // never changes once cut, and its time is its own.
+      const reuse = growing ? new Map(shown.map((line, i) => [line.time, rows[i]])) : null;
+      const shift = growing ? droppedHeight(next.lines) : 0;
+      rows[cur]?.classList.remove('is-current');
       signature = sig;
       cur = -1;
-      rows = next.lines.map((line) => el('div', { class: `lyr-full-line${line.text ? '' : ' is-blank'}` }, [
-        next.synced && !big ? el('span', { class: 'lyr-full-time', text: fmtTime(line.time) }) : null,
+      shown = next.lines;
+      rows = next.lines.map((line) => reuse?.get(line.time) || el('div', { class: `lyr-full-line${line.text ? '' : ' is-blank'}` }, [
+        // A caption's time is when the app heard it, which means nothing to a reader.
+        next.synced && !big && !live ? el('span', { class: 'lyr-full-time', text: fmtTime(line.time) }) : null,
         el('span', { class: 'lyr-full-text', text: line.text || '♪' }),
       ]));
       list.replaceChildren(...rows);
-      meta.textContent = next.synced
-        ? `${next.lines.length} lines · follows the song`
+      if (shift) list.scrollTop -= shift;
+      meta.textContent = live ? `${next.lines.length} lines · live captions`
+        : next.synced ? `${next.lines.length} lines · follows the song`
         : `${next.lines.length} lines · no timings, so it cannot follow along`;
       followBtn.hidden = !next.synced;
       list.classList.toggle('is-plain', !next.synced);
-      setFollow(true);
+      if (!growing) setFollow(true);
       translateAll(next.lines);
     }
 
     const idx = next.synced && Number.isInteger(state.lyrics?.currentIndex)
       ? state.lyrics.currentIndex
       : -1;
-    highlight(idx, rebuilt ? 'auto' : 'smooth');
+    highlight(idx, rebuilt && !growing ? 'auto' : 'smooth');
+  }
+
+  /**
+   * How far the rows that dropped off the top of the captions reached, so the
+   * list can move back by as much and the lines still there stay put.
+   */
+  function droppedHeight(lines) {
+    const first = lines[0]?.time;
+    const kept = shown.findIndex((line) => line.time >= first);
+    return kept > 0 ? rows[kept].offsetTop - rows[0].offsetTop : 0;
   }
 
   function highlight(idx, behavior) {
@@ -1173,7 +1203,7 @@ async function showFullLyrics(mode = 'panel') {
 
   function setFollow(on) {
     follow = on;
-    followBtn.textContent = on ? 'Following the song' : 'Back to the current line';
+    followBtn.textContent = on ? (live ? 'Following the stream' : 'Following the song') : 'Back to the current line';
     followBtn.disabled = on;
     // A disabled "Following the song" is noise over big type; it shows only
     // when there is somewhere to go back to.
@@ -1232,7 +1262,9 @@ async function showFullLyrics(mode = 'panel') {
       if (!Object.hasOwn(res.translations, line.text)) return;
       const tr = res.translations[line.text];
       if (!tr || tr === line.text) return;
-      rows[i]?.querySelector('.lyr-full-text')?.append(el('span', { class: 'lyr-full-tr', text: tr }));
+      const box = rows[i]?.querySelector('.lyr-full-text');
+      // A caption row kept from the list before has its translation already.
+      if (box && !box.querySelector('.lyr-full-tr')) box.append(el('span', { class: 'lyr-full-tr', text: tr }));
     });
   }
 }
