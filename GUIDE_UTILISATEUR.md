@@ -156,7 +156,7 @@ Chaque carte est une application Discord à part, et Spotify, YouTube, SoundClou
 Oui. Vybecord ne parle jamais à l'API de Spotify — il lit ce que Windows sait déjà.
 
 **Faut-il installer Spicetify ou une extension de navigateur ?**
-Non. Les anciennes versions le demandaient, plus celle-ci. Ce sont deux bonus optionnels : Spicetify apporte les changements de morceau instantanés et les paroles officielles de Spotify (à configurer dans **Settings → Integrations → Spotify**), et l'extension navigateur indique à Vybecord sur quel site joue un onglet.
+Non. Les anciennes versions le demandaient, plus celle-ci. Ce sont deux bonus optionnels : Spicetify apporte les changements de morceau instantanés, les paroles officielles de Spotify et le DJ (la carte l'indique, et la voix du DJ entre les chansons n'a ni paroles ni historique) (à configurer dans **Settings → Integrations → Spotify**), et l'extension navigateur indique à Vybecord sur quel site joue un onglet.
 
 **Ça marche avec quoi ?**
 Tout ce qui apparaît dans l'encart média de Windows : Spotify, les onglets de navigateur (YouTube, SoundCloud, Deezer…), VLC, foobar2000, MusicBee, AIMP, Apple Music, Tidal, Amazon Music.

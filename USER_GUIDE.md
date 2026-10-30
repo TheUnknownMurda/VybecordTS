@@ -156,7 +156,7 @@ Each card is a Discord application of its own, and Spotify, YouTube, SoundCloud,
 No. Vybecord never talks to Spotify's API — it reads what Windows already knows.
 
 **Do I need Spicetify or a browser extension?**
-No. Older versions did; this one does not. Both are optional extras: Spicetify adds instant track changes and Spotify's own lyrics (set it up under **Settings → Integrations → Spotify**), and the browser extension tells Vybecord which site a tab is on.
+No. Older versions did; this one does not. Both are optional extras: Spicetify adds instant track changes, Spotify's own lyrics and the DJ (the card names it, and the DJ's voice between songs gets no lyrics and no history) (set it up under **Settings → Integrations → Spotify**), and the browser extension tells Vybecord which site a tab is on.
 
 **What does it work with?**
 Anything that appears in the Windows media overlay: Spotify, browser tabs (YouTube, SoundCloud, Deezer…), VLC, foobar2000, MusicBee, AIMP, Apple Music, Tidal, Amazon Music.

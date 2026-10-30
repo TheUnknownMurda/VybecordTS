@@ -373,7 +373,7 @@ The current track's artwork is also written to `%TEMP%\vybecord_thumb.jpg`.
 | `rpc_button1_url` | `""` | up to 512 characters | Buttons → Your button's link |
 | `discord_app_id` | `""` | up to 32 characters | *config only*: replaces the built-in default Discord application |
 
-The second presence button is fixed. It links to what is playing and is labelled with the platform ("Listen on Spotify", "Watch on YouTube", …).
+The second presence button is fixed. It links to what is playing and is labelled with the platform ("Listen on Spotify", "Watch on YouTube", …). Discord only accepts web links on a button, so for Spotify the link goes through a page on the Vybecord website (`/open/spotify/`) that opens the Spotify app, with the web player as a fallback.
 
 **Lyrics & translation** (Settings → Lyrics & translation)
 
