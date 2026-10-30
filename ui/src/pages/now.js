@@ -170,7 +170,7 @@ export function render(root) {
           el('button', { type: 'button', class: 'btn btn-ghost btn-sm', id: 'npOffsetReset', text: 'Reset', onclick: () => setOffset(0) }),
           el('span', { class: 'lyr-offset-hint', id: 'npOffsetHint' }),
         ]),
-        iconBtn('btn btn-ghost btn-sm', BTN.flag, 'Wrong lyrics?', { id: 'npReport', 'aria-expanded': 'false', onclick: () => toggleAsk() }),
+        iconBtn('btn btn-sm', BTN.flag, 'Wrong lyrics?', { id: 'npReport', 'aria-expanded': 'false', onclick: () => toggleAsk() }),
       ]),
     ]),
   );
