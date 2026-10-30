@@ -59,8 +59,8 @@ Vybecord is a Windows desktop app (Electron + TypeScript). It reads the Windows 
 - The current lyric line goes on the card, with the next line under it. The cover tooltip shows the title, artist, album and playlist.
 - **Up to five presence cards at once.** For example: Spotify on card 1, a YouTube video on card 2, a Twitch stream on card 3. Each card has its own lyrics switch and can be pinned to its own player.
 - **A Discord application per platform**, so the card header reads *Spotify*, *YouTube*, *SoundCloud*, *Apple Music*, *Twitch* or *Kick*. Seven applications are built in, and you can add up to four spare ones.
-- **Customisable card.** You choose the activity type (Listening / Playing / Watching / Competing), what the one-line status shows (including a custom template), the small-icon style, and one custom button. The title, artist and cover are clickable.
-- **Cover art.** Released music gets its cover from Deezer, with the iTunes Search API as fallback. Artwork that exists only in your own files can be published to Vybecord's cover store (a switch in Settings).
+- **Customisable card.** You choose the activity type (Listening / Playing / Watching / Competing, per presence when there are several), what the one-line status shows (including a custom template), the small-icon style (including one that matches the cover's colour), and one custom button. The title, artist and cover are clickable.
+- **Cover art.** The player's own cover (Spotify, Apple Music, or a local file's) is published to Vybecord's cover store so Discord shows exactly that one (a switch in Settings). Only when there is none, the cover is looked up on Deezer, with the iTunes Search API as fallback.
 - **Away-aware.** The presence goes down when your machine has been idle long enough for Discord to mark you Idle (10 minutes by default), and comes back on the first key press.
 
 **Lyrics**
@@ -373,7 +373,7 @@ The current track's artwork is also written to `%TEMP%\vybecord_thumb.jpg`.
 | `presence_count` | `1` | 1–5 | Several presences → Presences at once |
 | `show_lyrics_2` … `show_lyrics_5` | `true` | boolean | Lyrics on presence 2–5 |
 | `discord_app_id_2` … `discord_app_id_5` | `""` | up to 32 characters | Spare application ID 1–4 |
-| `dance_mode`, `radiate_mode`, `purple_rad_mode`, `blue_rad_mode`, `rouge_mode`, `bleeding_mode`, `random_icon_mode`, `lrc_off_mode`, `hide_small_icon` | `false` | boolean, at most one `true` | Small icon |
+| `auto_icon_mode`, `dance_mode`, `radiate_mode`, `purple_rad_mode`, `blue_rad_mode`, `rouge_mode`, `bleeding_mode`, `random_icon_mode`, `lrc_off_mode`, `hide_small_icon` | `false` | boolean, at most one `true` | Small icon (`auto_icon_mode` is **Match the cover**) |
 | `rpc_button1_label` | `""` | up to 128 characters (cut to 32 on the card) | Buttons → Your button's label (empty hides the button) |
 | `rpc_button1_url` | `""` | up to 512 characters | Buttons → Your button's link |
 | `discord_app_id` | `""` | up to 32 characters | *config only*: replaces the built-in default Discord application |

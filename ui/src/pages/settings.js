@@ -45,7 +45,8 @@ const presenceCount = () => Math.max(1, Math.min(5, Number(cfg('presence_count',
  * and clears the rest on change.
  */
 const ICON_MODES = [
-  ['', 'Platform default'], ['dance_mode', 'Dance'], ['radiate_mode', 'Radiate'],
+  ['', 'Platform default'], ['auto_icon_mode', 'Match the cover'],
+  ['dance_mode', 'Dance'], ['radiate_mode', 'Radiate'],
   ['purple_rad_mode', 'Purple'], ['blue_rad_mode', 'Blue'], ['rouge_mode', 'Red'],
   ['bleeding_mode', 'Bleeding'], ['random_icon_mode', 'Random each track'],
   // The engine has always known this mode; the list simply never listed it, so
@@ -298,7 +299,9 @@ function presenceCat(body, { search }) {
         ? inputRow('Status template', 'Placeholders: {title} {artist} {album} {platform}',
             cfg('rpc_status_template', ''), (v) => put('rpc_status_template', v))
         : null,
-      selectRow('Small icon', 'The little badge in the corner of the album art.', iconMode, ICON_MODES, (v) => {
+      selectRow('Small icon', 'The little badge in the corner of the album art, on Spotify. '
+        + 'Match the cover picks the red, blue, purple or green one from the cover’s main colour, and keeps the Spotify logo on a cover without one.',
+        iconMode, ICON_MODES, (v) => {
         // Exactly one mode may be set, so clear them all and set the chosen one.
         const patch = Object.fromEntries(ICON_KEYS.map((k) => [k, false]));
         if (v) patch[v] = true;

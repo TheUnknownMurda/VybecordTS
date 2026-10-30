@@ -56,6 +56,7 @@ const DEFAULTS: VybecordConfig = {
   bleeding_mode: false,
   blue_rad_mode: false,
   random_icon_mode: false,
+  auto_icon_mode: false,
   hide_small_icon: false,
   // Accepted by CONFIG_SCHEMA and read by getRpcConfig()/the icon-mode ladder,
   // so it belongs here too — without it the key was simply absent from a fresh
@@ -179,6 +180,7 @@ export const CONFIG_SCHEMA: Record<string, FieldSpec> = {
   blue_rad_mode: { type: 'boolean' },
   lrc_off_mode: { type: 'boolean' },
   random_icon_mode: { type: 'boolean' },
+  auto_icon_mode: { type: 'boolean' },
   hide_small_icon: { type: 'boolean' },
   cc_enabled: { type: 'boolean' },
   cc_lang: { type: 'string', maxLength: 16 },

@@ -215,6 +215,8 @@ export interface VybecordConfig {
   lrc_off_mode: boolean;
   /** Random icon mode: pick a random small icon each track */
   random_icon_mode: boolean;
+  /** Small icon picked from the cover's dominant colour (see cover-tone.ts). */
+  auto_icon_mode: boolean;
   /** Hide small icon: remove the small image entirely */
   hide_small_icon: boolean;
   /** Enable/disable YouTube CC (closed captions) as lyrics source */

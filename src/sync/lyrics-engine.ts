@@ -17,6 +17,7 @@ import { createLogger } from '../core/logger.js';
 import { romanize } from '../core/romanize.js';
 import { getCachedTranslation, isTranslationWorthFetching, translateText } from '../core/translate.js';
 import { evictOldest } from '../core/utils.js';
+import { coverTone, type CoverTone } from '../core/cover-tone.js';
 import type { LyricLine, DiscordActivity, TrackData } from '../core/types.js';
 
 const log = createLogger('LyricsEngine');
@@ -95,6 +96,15 @@ const RANDOM_ICON_POOL: [string, string][] = [
   ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/HrMk6Gy5NrHDuNewWnUOR.gif', '🔴 Rouge'],
   ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/BUo3vfJ4QVWlghZJYuyIB.gif', '💙 Blue Rad'],
 ];
+
+// ── Icons the 'auto' mode picks from, by the cover's colour (see cover-tone.ts) ──
+const TONE_ICONS: Record<CoverTone, [string, string]> = {
+  red: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/HrMk6Gy5NrHDuNewWnUOR.gif', '🔴 Rouge'],
+  dark_red: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/6sALSWqWzao3chNZzHCXy.gif', '🩸 Bleeding'],
+  blue: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/BUo3vfJ4QVWlghZJYuyIB.gif', '💙 Blue Rad'],
+  purple: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/I9CeTrPc17wqbDilQPN9K.gif', '💜 Purple Rad'],
+  green: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/VVjYzmfdMIF5hHA8SUnbi.gif', '✨ Radiate'],
+};
 
 // ── Platform icons (external URLs — rendered by Discord image proxy) ──
 // Note: Discord no longer supports external URLs for small_image. Using compatible host.
@@ -263,7 +273,9 @@ export class LyricsEngine {
   private cachedStatusName = '';
   private cfgShowPlaylist = true;
   private cfgHideSmallIcon = false;
-  private cfgIconMode: 'default' | 'dance' | 'radiate' | 'purple_rad' | 'rouge' | 'lrc_off' | 'bleeding' | 'blue_rad' | 'random' = 'default';
+  private cfgIconMode: 'default' | 'dance' | 'radiate' | 'purple_rad' | 'rouge' | 'lrc_off' | 'bleeding' | 'blue_rad' | 'random' | 'auto' = 'default';
+  /** The cover's colour, for the 'auto' icon mode; null until known, or when no icon matches. */
+  private cachedTone: CoverTone | null = null;
   private cfgRpcTranslate = false;
   private cfgTranslateLang = '';
   /**
@@ -1303,6 +1315,7 @@ export class LyricsEngine {
     this.cfgIconMode =
       this.cfgHideSmallIcon ? 'default' :
       !isSpotify ? 'default' :
+      (this.rpcConfig.auto_icon_mode as boolean) ? 'auto' :
       (this.rpcConfig.random_icon_mode as boolean) ? 'random' :
       (this.rpcConfig.lrc_off_mode as boolean) ? 'lrc_off' :
       (this.rpcConfig.rouge_mode as boolean) ? 'rouge' :
@@ -1311,6 +1324,16 @@ export class LyricsEngine {
       (this.rpcConfig.purple_rad_mode as boolean) ? 'purple_rad' :
       (this.rpcConfig.radiate_mode as boolean) ? 'radiate' :
       (this.rpcConfig.dance_mode as boolean) ? 'dance' : 'default';
+    // Asked again on every rebuild, which includes the one that follows the
+    // cover resolving to a URL: the tone belongs to that URL, not the track.
+    const toneUrl = this.cachedLargeImage;
+    this.cachedTone = this.cfgIconMode === 'auto'
+      ? coverTone(toneUrl, () => {
+          if (!this.running || this.cachedLargeImage !== toneUrl || this.cfgIconMode !== 'auto') return;
+          this.cachedTone = coverTone(toneUrl, () => {});
+          this.pushRpcNow();
+        })
+      : null;
 
     // Pre-resolve clickable URLs (avoids 3× config lookups + switch per emit)
     // Kick/Twitch: make only state non-clickable (details remains clickable to profile)
@@ -1615,6 +1638,14 @@ export class LyricsEngine {
     if (this.cfgHideSmallIcon) return;
     const pt = this.cachedPlatText; // Pre-built per-track (no concat per emit)
     switch (this.cfgIconMode) {
+      case 'auto': {
+        const icon = this.cachedTone ? TONE_ICONS[this.cachedTone] : this.cachedIcon;
+        if (icon) {
+          activity.assets!.small_image = icon[0];
+          activity.assets!.small_text = pt || icon[1];
+        }
+        break;
+      }
       case 'random':
         if (this.randomIconPick) {
           activity.assets!.small_image = this.randomIconPick[0];

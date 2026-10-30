@@ -2913,6 +2913,7 @@ export class VybecordBackend extends EventEmitter {
       blue_rad_mode: cfg.blue_rad_mode,
       lrc_off_mode: cfg.lrc_off_mode,
       random_icon_mode: cfg.random_icon_mode,
+      auto_icon_mode: cfg.auto_icon_mode,
       hide_small_icon: cfg.hide_small_icon,
       lyrics_offset_ms: cfg.lyrics_offset_ms,
       romanize_lyrics: cfg.romanize_lyrics,
