@@ -735,6 +735,13 @@ function badges(track) {
 /** The text of line `i` of a synced array, '' outside it. */
 const lineAt = (arr, i) => (i >= 0 && i < arr.length ? arr[i]?.text || '' : '');
 
+/**
+ * Whether this card's lines, when it has any, are Kick's captions rather than
+ * a song's: a live channel's, or a past broadcast's as it plays. Both are read
+ * off Kick's player as they are said, so neither has timings to show or fix.
+ */
+const kickCaptions = (t) => t?.media_source === 'kick' && (!!t.is_live || t.context_type === 'vod');
+
 function paintLyrics(l) {
   const stage = $('#lyrStage');
   if (!stage) return;
@@ -743,9 +750,15 @@ function paintLyrics(l) {
 
   const synced = Array.isArray(l?.lyrics) && l.lyrics.length > 0;
   const plain = !synced && Array.isArray(l?.lines) && l.lines.length > 0;
+  // A Kick stream's captions, cut into lines as they are spoken: shown like a
+  // song's lines, with nothing to re-time, report or copy.
+  const captions = synced && kickCaptions(t);
   kind.hidden = !(synced || plain);
-  kind.textContent = synced ? 'Synced' : plain ? 'Words only' : '';
-  kind.title = plain ? 'Found without timings, so they cannot follow the song' : '';
+  kind.textContent = captions ? (t.is_live ? 'Live captions' : 'Captions') : synced ? 'Synced' : plain ? 'Words only' : '';
+  kind.title = plain ? 'Found without timings, so they cannot follow the song'
+    : captions ? (t.is_live ? 'Kick\'s captions, as the stream goes' : 'Kick\'s captions, as the video plays') : '';
+  const lyricsOff = state.config[state.focus === 0 ? 'show_lyrics' : `show_lyrics_${state.focus + 1}`] === false;
+  const offMsg = ['Lyrics are switched off for this presence', 'Turn them back on with the Lyrics switch above.'];
 
   // What to say instead of lines, when there are none to show.
   let empty = null;
@@ -754,20 +767,23 @@ function paintLyrics(l) {
   if (!t && state.status?.adPlaying === true) empty = ['Back after the ad', ''];
   else if (!t && pausedTrack()) empty = ['Paused', 'The lyrics come back with the song.'];
   else if (!t) empty = ['No lyrics yet', 'They show here, in time with the song, as soon as something plays.'];
+  else if (kickCaptions(t)) {
+    if (lyricsOff) empty = offMsg;
+    else if (!synced) empty = ['No captions yet', 'Turn on captions (CC) in Kick\'s player: what is said shows here and on the card, as lyrics.'];
+  }
   else if (t.is_live) empty = ['Live streams have no lyrics', 'This presence shows the stream title and how long it has been live instead.'];
   else if (t.context_type === 'offline') empty = ['This channel is offline', 'This presence shows the channel as offline until it goes live.'];
   else if (t.media_source === 'twitch' || t.media_source === 'kick') {
     empty = ['Stream videos have no lyrics', 'This presence shows the channel and the video\'s title instead.'];
   }
-  else if (state.config[state.focus === 0 ? 'show_lyrics' : `show_lyrics_${state.focus + 1}`] === false) {
-    empty = ['Lyrics are switched off for this presence', 'Turn them back on with the Lyrics switch above.'];
-  }
+  else if (lyricsOff) empty = offMsg;
 
   stage.hidden = !!empty;
   $('#lyrCard').classList.toggle('is-empty', !!empty);
   $('#lyrEmpty').hidden = !empty;
-  $('#lyrFoot').hidden = !!empty;
+  $('#lyrFoot').hidden = !!empty || captions;
   $('#lyrActions').hidden = !!empty;
+  if (captions && !$('#lyrAsk').hidden) toggleAsk(false);
   if (empty) {
     toggleAsk(false);
     $('#lyrEmptyTitle').textContent = empty[0];
@@ -778,7 +794,7 @@ function paintLyrics(l) {
   // Words with no times have no line to follow and nothing to re-time.
   stage.classList.toggle('is-plain', plain);
   $('#lyrOffset').hidden = plain;
-  $('#lyrCopy').hidden = plain;
+  $('#lyrCopy').hidden = plain || captions;
   if (plain) {
     paintPlain(l.lines);
     return;
@@ -1013,11 +1029,13 @@ async function showFullLyrics(mode = 'panel') {
   // One node per line, kept and mutated: the highlight moves several times a
   // minute and rebuilding the list would throw away the scroll position each time.
   let rows = [];
+  let shown = [];                                // the lines `rows` were built from
   let cur = -1;
   let follow = true;
   let signature = '';                            // what the rendered list is of
   let trackId = state.track?.track_id || '';
   let waitTimer = 0;
+  let captions = false;                          // Kick's captions, not a song's lines
 
   paintTrack_();
   paint(data);
@@ -1122,31 +1140,59 @@ async function showFullLyrics(mode = 'panel') {
     const next = resolved || readLines();
     if (!next) return;
 
-    const sig = `${trackId}|${next.synced}|${next.lines.length}`;
+    captions = next.synced && kickCaptions(state.track);
+    /*
+     * The count alone told one list from the next until Kick's captions: they
+     * keep their last forty lines, so from the forty-first on a new line drops
+     * the oldest, the count stays put, and the view froze on lines long gone.
+     * The first line's time changes when that happens.
+     */
+    const sig = `${trackId}|${next.synced}|${next.lines.length}|${next.lines[0]?.time}`;
     const rebuilt = sig !== signature;
+    // Captions gaining a line, on the stream already shown: rebuilt, but the
+    // reader keeps their place and the view glides on to the new line.
+    const growing = rebuilt && captions && rows.length > 0;
 
     if (rebuilt) {
       clearTimeout(waitTimer);
+      // The rows still listed are kept, translation and all: a caption line
+      // never changes once cut, and its time is its own.
+      const reuse = growing ? new Map(shown.map((line, i) => [line.time, rows[i]])) : null;
+      const shift = growing ? droppedHeight(next.lines) : 0;
+      rows[cur]?.classList.remove('is-current');
       signature = sig;
       cur = -1;
-      rows = next.lines.map((line) => el('div', { class: `lyr-full-line${line.text ? '' : ' is-blank'}` }, [
-        next.synced && !big ? el('span', { class: 'lyr-full-time', text: fmtTime(line.time) }) : null,
+      shown = next.lines;
+      rows = next.lines.map((line) => reuse?.get(line.time) || el('div', { class: `lyr-full-line${line.text ? '' : ' is-blank'}` }, [
+        // A caption's time is when the app heard it, which means nothing to a reader.
+        next.synced && !big && !captions ? el('span', { class: 'lyr-full-time', text: fmtTime(line.time) }) : null,
         el('span', { class: 'lyr-full-text', text: line.text || '♪' }),
       ]));
       list.replaceChildren(...rows);
-      meta.textContent = next.synced
-        ? `${next.lines.length} lines · follows the song`
+      if (shift) list.scrollTop -= shift;
+      meta.textContent = captions ? `${next.lines.length} lines · ${state.track?.is_live ? 'live captions' : 'captions'}`
+        : next.synced ? `${next.lines.length} lines · follows the song`
         : `${next.lines.length} lines · no timings, so it cannot follow along`;
       followBtn.hidden = !next.synced;
       list.classList.toggle('is-plain', !next.synced);
-      setFollow(true);
+      if (!growing) setFollow(true);
       translateAll(next.lines);
     }
 
     const idx = next.synced && Number.isInteger(state.lyrics?.currentIndex)
       ? state.lyrics.currentIndex
       : -1;
-    highlight(idx, rebuilt ? 'auto' : 'smooth');
+    highlight(idx, rebuilt && !growing ? 'auto' : 'smooth');
+  }
+
+  /**
+   * How far the rows that dropped off the top of the captions reached, so the
+   * list can move back by as much and the lines still there stay put.
+   */
+  function droppedHeight(lines) {
+    const first = lines[0]?.time;
+    const kept = shown.findIndex((line) => line.time >= first);
+    return kept > 0 ? rows[kept].offsetTop - rows[0].offsetTop : 0;
   }
 
   function highlight(idx, behavior) {
@@ -1164,7 +1210,7 @@ async function showFullLyrics(mode = 'panel') {
 
   function setFollow(on) {
     follow = on;
-    followBtn.textContent = on ? 'Following the song' : 'Back to the current line';
+    followBtn.textContent = on ? (captions ? 'Following the stream' : 'Following the song') : 'Back to the current line';
     followBtn.disabled = on;
     // A disabled "Following the song" is noise over big type; it shows only
     // when there is somewhere to go back to.
@@ -1223,7 +1269,9 @@ async function showFullLyrics(mode = 'panel') {
       if (!Object.hasOwn(res.translations, line.text)) return;
       const tr = res.translations[line.text];
       if (!tr || tr === line.text) return;
-      rows[i]?.querySelector('.lyr-full-text')?.append(el('span', { class: 'lyr-full-tr', text: tr }));
+      const box = rows[i]?.querySelector('.lyr-full-text');
+      // A caption row kept from the list before has its translation already.
+      if (box && !box.querySelector('.lyr-full-tr')) box.append(el('span', { class: 'lyr-full-tr', text: tr }));
     });
   }
 }

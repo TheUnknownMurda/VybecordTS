@@ -249,6 +249,12 @@ export class LyricsEngine {
   // extension-fed source (Spicetify, YouTube, SoundCloud, Bandcamp, Kick,
   // Twitch) — see _from_push in types.ts.
   private isPushSource = false;
+  /**
+   * The lyrics are captions from setLiveLines: shown as they are said, not
+   * timed against the playhead, so nothing that walks the lines by position
+   * may touch them.
+   */
+  private liveLines = false;
   private lastRecalibTime = 0;
 
   // Auto-offset detection: compensates for systematically early/late lyrics
@@ -459,6 +465,7 @@ export class LyricsEngine {
       this.rebuildTrackCache();
     }
     this.lyrics = lyrics;
+    this.liveLines = false;
     const wasCC = this.isCC;
     this.isCC = lyrics.length > 0 && lyrics[0].source === 'cc';
     this.buildGroupTable();
@@ -496,6 +503,74 @@ export class LyricsEngine {
   }
 
   /**
+   * Captions, as they are spoken (see live-captions.ts): a live stream's, or a
+   * past broadcast's as it plays.
+   *
+   * Not injectLyrics: those lines are timed against a song and the scheduler
+   * walks them, while these arrive already in the past and the newest is always
+   * where the stream is. So the scheduler stays out of it (liveLines), and the
+   * card shows the two newest lines, the newer one under the arrow where a
+   * song's next line goes. A past broadcast's captions are read off its player
+   * the same way, rather than timed against its position: they are only known
+   * once the player has shown them.
+   *
+   * Every new line turns the page, where a song's card turns one every two
+   * lines. A song can afford that because its next line is known in advance; a
+   * stream's is not. Held back for the line after it, the newest line reached
+   * the card three to five seconds late, and never at all when the streamer
+   * stopped talking there (replaying a real Kick tab's pushes). Turned on each
+   * line, the card scrolls the way Kick's own two-line captions do, at one push
+   * per line — about one every three seconds while someone talks, well under
+   * what a song with fast lyrics sends.
+   *
+   * The array is replaced, never edited, so an unchanged transcript is the
+   * same array and costs nothing.
+   */
+  setLiveLines(lines: LyricLine[]): void {
+    if (!this.running || !this.trackData) return;
+    if (lines === this.lyrics || (!lines.length && !this.lyrics.length)) return;
+    /*
+     * How long nothing new has been said. A line this call brought was cut
+     * just now. Lines handed to an engine that had none are as old as they
+     * are: a card started again — a paused past broadcast playing on — takes
+     * up the transcript it left, and under a fresh wait the last thing said
+     * before the pause went back on the card as if it were being said.
+     */
+    const quietMs = this.lyrics.length || !lines.length ? 0 : performance.now() - lines[lines.length - 1].time;
+    /*
+     * The line before the newest goes on top, as the context it is — unless
+     * the card had gone back to the title. Then it was said before a quiet, a
+     * seek or a pause, and on top of the newest it read as said just now.
+     */
+    const showing = !this.inLyricGap;
+    const paired = lines.length > 1 && showing;
+    this.lyrics = lines;
+    this.liveLines = lines.length > 0;
+    this.cancelTimer();
+    this.buildGroupTable();
+    this.currentIdx = paired ? lines.length - 2 : lines.length - 1;
+    this.resetCoverage();
+    /*
+     * A stream that has gone quiet goes back to its title and category after
+     * the same wait as a song's instrumental break, rather than leaving the
+     * last thing said on the card for the rest of the stream.
+     */
+    this.inLyricGap = quietMs >= LYRIC_GAP_MS;
+    if (lines.length && !this.inLyricGap) {
+      this.gapTimer = setTimeout(() => {
+        if (!this.running) return;
+        this.inLyricGap = true;
+        this.resetDedup();
+        this.emitUpdate();
+      }, LYRIC_GAP_MS - quietMs);
+    }
+    // Lines taken away (a past broadcast skipped through) make no new pair
+    // due, and without this the card kept them until the next heartbeat.
+    if (!lines.length && showing) this.forceRpcPush();
+    this.emitUpdate();
+  }
+
+  /**
    * Hot-update track metadata (e.g. enriched album art) without restarting the engine.
    */
   updateTrackData(trackData: TrackData): void {
@@ -528,7 +603,8 @@ export class LyricsEngine {
    */
   updateOffset(offsetMs: number): void {
     this.rpcConfig.lyrics_offset_ms = offsetMs;
-    if (!this.running || !this.lyrics.length) return;
+    // Captions are not timed against anything an offset could move.
+    if (!this.running || !this.lyrics.length || this.liveLines) return;
 
     // Re-position within lyrics
     const baseMs = this.isCC ? 50 : BASE_OFFSET_MS;
@@ -619,6 +695,27 @@ export class LyricsEngine {
     const drift = Math.abs(currentElapsed - progressMs);
     const threshold = this.isCC ? CC_DRIFT_THRESHOLD_MS : DRIFT_THRESHOLD_MS;
     const now = performance.now();
+
+    /*
+     * A past broadcast showing its captions: the clock follows the player as
+     * for any video, but the lines are not looked up by position, which
+     * captions do not have. A seek puts the title back until the player shows
+     * what is said where it landed — the source starts the lines over then
+     * (see KickSource), and this push would otherwise go out first, with the
+     * lines from before the jump.
+     */
+    if (this.liveLines) {
+      if (drift > threshold) {
+        this.anchorClock(progressMs);
+        if (drift > SEEK_DRIFT_MS) {
+          this.inLyricGap = true;
+          this.clearGapTimer();
+        }
+        this.forceRpcPush();
+        this.emitUpdate();
+      }
+      return;
+    }
 
     // Detect track repeat/loop: progress jumped far backward (e.g. 240s → 0s).
     // This bypasses the cooldown — the track genuinely restarted.
@@ -728,6 +825,7 @@ export class LyricsEngine {
     this.clearRpcFlush();
     this.forceRpc = false;
     this.lyrics = [];
+    this.liveLines = false;
     this.currentIdx = -1;
     this.lastEmittedIdx = -1;
   }
@@ -828,7 +926,7 @@ export class LyricsEngine {
 
   /** Schedule a timeout for exactly when the next lyric line begins. */
   private scheduleNext(): void {
-    if (!this.running || !this.lyrics.length) return;
+    if (!this.running || !this.lyrics.length || this.liveLines) return;
 
     const nextIdx = this.currentIdx + 1;
     if (nextIdx >= this.lyrics.length) {
@@ -1380,7 +1478,11 @@ export class LyricsEngine {
     this.cachedPlayModeSuffix =
       d.is_shuffle ? ' | 🔀' :
       d.repeat_mode === 'track' ? ' | 🔂' : '';
-    this.cachedInfoText = buildInfoText(d, '', '', this.cfgShowPlaylist);
+    // A Kick stream's card while its captions show: channel, title, category,
+    // without the note, microphone and disc a song's fields are marked with.
+    this.cachedInfoText = d.media_source === 'kick' || d.media_source === 'twitch'
+      ? truncate([d.track_name, this.cachedDisplayArtist, d.album_name].filter(Boolean).join(' | ') || '  ', 128)
+      : buildInfoText(d, '', '', this.cfgShowPlaylist);
     // Insert play mode suffix after context/album in infoText (visible in large_text when lyrics are showing)
     if (this.cachedPlayModeSuffix) {
       this.cachedInfoText = truncate(this.cachedInfoText + this.cachedPlayModeSuffix, 128);
