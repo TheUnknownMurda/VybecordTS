@@ -146,7 +146,9 @@ Avec l'extension, un onglet Twitch ou Kick a une carte pour ce qu'il affiche :
 - **Une chaîne hors ligne** — la chaîne et **Offline**, avec le titre de son dernier stream sur la pochette. Elle ne prend qu'une carte que rien d'autre ne veut, donc la musique passe toujours avant.
 - **Une rediffusion ou un clip** — la chaîne, le titre de la vidéo et une barre de progression. Avant, ils s'affichaient comme YouTube.
 
-Le nom et la photo de la chaîne viennent de Twitch lui‑même (et du site de Kick sur Kick) : la carte ne s'ouvre plus sur le nom de quelqu'un d'autre ni sur ton propre avatar pendant que la page charge. Les streams et leurs vidéos n'ont pas de paroles. Après une mise à jour de Vybecord, clique sur la flèche de rechargement de l'extension dans la page des extensions de ton navigateur pour qu'elle prenne la nouvelle version.
+Le nom et la photo de la chaîne viennent de Twitch lui‑même (et du site de Kick sur Kick) : la carte ne s'ouvre plus sur le nom de quelqu'un d'autre ni sur ton propre avatar pendant que la page charge. Après une mise à jour de Vybecord, clique sur la flèche de rechargement de l'extension dans la page des extensions de ton navigateur pour qu'elle prenne la nouvelle version.
+
+**Les sous-titres de Kick comme paroles.** Active les sous-titres (**CC**) dans le lecteur de Kick et, sur une chaîne en direct, ce qui se dit s'affiche sur la carte comme les paroles d'une chanson : la ligne d'avant en haut, la plus récente en dessous, une seconde ou deux après le lecteur. La fenêtre **Now playing** les marque **Live captions**. Ça marche avec les deux sortes que Kick propose : les sous-titres fournis avec le stream, et ceux que Chrome tire du son du stream. L'extension les lit sur le lecteur, donc elle ne les voit que s'ils sont activés, et la carte revient au titre du stream quand personne n'a parlé depuis 25 secondes. L'interrupteur **Lyrics** les coupe comme n'importe quelles paroles. Les streams Twitch, et les rediffusions et clips des deux sites, n'ont pas de paroles.
 
 ### Deux choses jouent en même temps
 

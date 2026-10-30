@@ -718,6 +718,26 @@ export class VybecordBackend extends EventEmitter {
     // needs answered, and nothing else in the log says it.
     this.ingestPush(raw, this.kickSource, 'kick-userscript',
       d => `tab=${d.tab_id || '(none)'} user=${d.username} live=${d.is_live}`);
+    this.showKickCaptions();
+  }
+
+  /**
+   * Kick's captions onto the presence showing that stream, as its lyrics.
+   *
+   * Run after every Kick push rather than on a timer: the lines only change
+   * when a tab reports, and setLiveLines does nothing when they have not. After
+   * the reconcile, so a card that has just started takes the lines at once.
+   */
+  private showKickCaptions(): void {
+    for (const slot of this.slots) {
+      const t = slot.track;
+      if (t?.media_source !== 'kick' || !t.is_live) continue;
+      const lines = this.kickSource.captionLines(t.track_id);
+      if (lines.length && !slot.engine.getLyrics().length) {
+        log.info(`[CAPTIONS] Kick captions on "${t.track_name}" [${slot.name}]`);
+      }
+      slot.engine.setLiveLines(lines);
+    }
   }
 
   isKickSourceActive(): boolean { return this.kickSource.isActive; }

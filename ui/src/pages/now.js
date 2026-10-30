@@ -743,9 +743,15 @@ function paintLyrics(l) {
 
   const synced = Array.isArray(l?.lyrics) && l.lyrics.length > 0;
   const plain = !synced && Array.isArray(l?.lines) && l.lines.length > 0;
+  // A Kick stream's captions, cut into lines as they are spoken: shown like a
+  // song's lines, with nothing to re-time, report or copy.
+  const captions = synced && !!t?.is_live;
   kind.hidden = !(synced || plain);
-  kind.textContent = synced ? 'Synced' : plain ? 'Words only' : '';
-  kind.title = plain ? 'Found without timings, so they cannot follow the song' : '';
+  kind.textContent = captions ? 'Live captions' : synced ? 'Synced' : plain ? 'Words only' : '';
+  kind.title = plain ? 'Found without timings, so they cannot follow the song'
+    : captions ? 'Kick\'s captions, as the stream goes' : '';
+  const lyricsOff = state.config[state.focus === 0 ? 'show_lyrics' : `show_lyrics_${state.focus + 1}`] === false;
+  const offMsg = ['Lyrics are switched off for this presence', 'Turn them back on with the Lyrics switch above.'];
 
   // What to say instead of lines, when there are none to show.
   let empty = null;
@@ -754,20 +760,23 @@ function paintLyrics(l) {
   if (!t && state.status?.adPlaying === true) empty = ['Back after the ad', ''];
   else if (!t && pausedTrack()) empty = ['Paused', 'The lyrics come back with the song.'];
   else if (!t) empty = ['No lyrics yet', 'They show here, in time with the song, as soon as something plays.'];
+  else if (t.is_live && t.media_source === 'kick') {
+    if (lyricsOff) empty = offMsg;
+    else if (!synced) empty = ['No captions yet', 'Turn on captions (CC) in Kick\'s player: what is said shows here and on the card, as lyrics.'];
+  }
   else if (t.is_live) empty = ['Live streams have no lyrics', 'This presence shows the stream title and how long it has been live instead.'];
   else if (t.context_type === 'offline') empty = ['This channel is offline', 'This presence shows the channel as offline until it goes live.'];
   else if (t.media_source === 'twitch' || t.media_source === 'kick') {
     empty = ['Stream videos have no lyrics', 'This presence shows the channel and the video\'s title instead.'];
   }
-  else if (state.config[state.focus === 0 ? 'show_lyrics' : `show_lyrics_${state.focus + 1}`] === false) {
-    empty = ['Lyrics are switched off for this presence', 'Turn them back on with the Lyrics switch above.'];
-  }
+  else if (lyricsOff) empty = offMsg;
 
   stage.hidden = !!empty;
   $('#lyrCard').classList.toggle('is-empty', !!empty);
   $('#lyrEmpty').hidden = !empty;
-  $('#lyrFoot').hidden = !!empty;
+  $('#lyrFoot').hidden = !!empty || captions;
   $('#lyrActions').hidden = !!empty;
+  if (captions && !$('#lyrAsk').hidden) toggleAsk(false);
   if (empty) {
     toggleAsk(false);
     $('#lyrEmptyTitle').textContent = empty[0];
@@ -778,7 +787,7 @@ function paintLyrics(l) {
   // Words with no times have no line to follow and nothing to re-time.
   stage.classList.toggle('is-plain', plain);
   $('#lyrOffset').hidden = plain;
-  $('#lyrCopy').hidden = plain;
+  $('#lyrCopy').hidden = plain || captions;
   if (plain) {
     paintPlain(l.lines);
     return;

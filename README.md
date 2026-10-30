@@ -68,6 +68,7 @@ Vybecord is a Windows desktop app (Electron + TypeScript). It reads the Windows 
 - **Several sources, tried in order:** your own library, then Spotify's lyrics (with Spicetify), then an offline LRCLIB dump, then LRCLIB, Netease and Musixmatch in parallel, then an LRCLIB fuzzy search, then YouTube captions. When there are no synced lyrics, a plain-text version (from LRCLIB or Genius) is shown in the window.
 - **Lyrics library.** Paste timed `.lrc` lyrics or untimed text, then time it with the built-in *Sync while playing* tool. You can edit and delete entries and search an offline LRCLIB dump.
 - **Corrections.** Mark a wrong match so it is never used for that track again. Timing offsets are saved per track.
+- **Kick captions.** On a live Kick channel with captions on in Kick's player, what is said shows on the card as lyrics (needs the browser extension).
 - **Translation** into 16 languages, in the window and optionally on Discord. **Romanisation** of Japanese (kanji included), Korean, Chinese, Cyrillic, Greek, Thai, Arabic, Devanagari, Georgian and Armenian.
 
 **App**
@@ -157,7 +158,7 @@ The extension also adds a Vybecord entry to the Spicetify Marketplace's *Install
 
 ### 3. Optional: browser extension
 
-Windows reports *what* is playing in a browser, but not *which site* it's on: a SoundCloud tab and a YouTube tab both show up as just "the browser". The extension in [`extension/`](extension/) reads the page instead. It supports Spotify Web, YouTube and YouTube Music, SoundCloud, Bandcamp, Twitch and Kick, and adds the site, the canonical link, the exact position (read from the page's own media element) and the live-stream start time. The extension isn't published on any browser store, so you load it manually.
+Windows reports *what* is playing in a browser, but not *which site* it's on: a SoundCloud tab and a YouTube tab both show up as just "the browser". The extension in [`extension/`](extension/) reads the page instead. It supports Spotify Web, YouTube and YouTube Music, SoundCloud, Bandcamp, Twitch and Kick, and adds the site, the canonical link, the exact position (read from the page's own media element), the live-stream start time and, on Kick, the player's captions. The extension isn't published on any browser store, so you load it manually.
 
 **Chrome, Edge, Brave, Opera, Vivaldi**
 
@@ -270,6 +271,8 @@ Discord shows one card per application. Each card publishes under its platform's
 6. **YouTube captions**, only for YouTube and unidentified browser tabs, and only when everything above found nothing.
 
 If none of these finds synced lyrics, plain lyrics (LRCLIB, then Genius) are shown in the window only, marked **Words only**, never on Discord. Live streams are never looked up.
+
+**Kick captions.** A live Kick channel has no lyrics to look up, but with captions (**CC**) on in Kick's player the extension reports what the caption overlay says, and the app turns that into lines (`src/core/live-captions.ts`) and shows them as the lyrics, marked **Live captions**: the line before on top, the newest under it. The overlay is a window of the last words heard, rewritten as Kick's speech recognition changes its mind, so the reports are stitched back into one transcript and the last few words wait for a later report to confirm them; lines usually reach the card one to three seconds after the player shows them. Both of Kick's kinds work, captions carried by the stream and Chrome's on-device recognition. After 25 seconds with nothing said, the card goes back to the stream's title.
 
 **Fixing lyrics**
 

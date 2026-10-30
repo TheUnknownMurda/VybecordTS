@@ -150,6 +150,12 @@ optional cookie switch above works through the cookies API, not the page).
 It reads these pages and never writes to them: nothing is inserted, hidden,
 removed or restyled.
 
+On kick.com, when the user has turned captions on in Kick's player, the
+content script also reads the text of the player's caption overlay, so the
+desktop app can show what is being said as the stream's lyrics. It is read off
+the page like everything else, sent only to the desktop app, and nothing is
+read while captions are off.
+
 On kick.com only, the content script also makes same-origin requests to
 Kick's own API (/api/v1/channels/<channel>, /api/v1/video/<id> or
 /api/v2/clips/<id>, for whatever the tab is showing), to read the channel's
@@ -252,11 +258,12 @@ no account system, and no analytics of any kind. What the user does with the
 desktop app afterwards, including displaying a Discord status, is that
 application's function and is disclosed in its own documentation.
 
-The extension makes one request to a site: on kick.com it reads the current
-channel's stream start time from Kick's own public channel endpoint, because
-the page does not expose it. That request is same-origin, identical to one the
-Kick page itself makes, carries only the channel name already visible in the
-address bar, and its response is used for a single timestamp.
+The extension makes one request to a site: on kick.com it asks Kick's own
+API about the channel, past broadcast or clip open in the tab -- its name,
+picture, title, category, live status and start time -- because the page does
+not expose them reliably. That request is same-origin, identical to one the
+Kick page itself makes, carries only the channel name or video id already
+visible in the address bar, and only those fields are read from the response.
 
 The optional cookie switch is off by default and its permissions are not
 granted at install. When the user turns it on, and only when the desktop app

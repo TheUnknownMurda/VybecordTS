@@ -146,7 +146,9 @@ With the extension, a Twitch or Kick tab gets a card for whatever it is on:
 - **An offline channel** — the channel and **Offline**, with its last stream's title on the cover. It only takes a card nothing else wants, so music always comes first.
 - **A past broadcast or a clip** — the channel, the video's title and a progress bar. These used to show up as YouTube.
 
-The channel's name and picture come from Twitch itself (and from Kick's own site on Kick), so a card no longer opens on somebody else's name or on your own avatar while the page loads. Streams and their videos have no lyrics. After updating Vybecord, click the reload arrow on the extension in your browser's extensions page so it picks up the new version.
+The channel's name and picture come from Twitch itself (and from Kick's own site on Kick), so a card no longer opens on somebody else's name or on your own avatar while the page loads. After updating Vybecord, click the reload arrow on the extension in your browser's extensions page so it picks up the new version.
+
+**Kick captions as lyrics.** Turn on captions (**CC**) in Kick's player and, on a live channel, what is said shows on the card the way a song's lyrics do: the line before on top, the newest under it, a second or two behind the player. The **Now playing** window marks them **Live captions**. It works with both kinds Kick offers: captions that come with the stream, and the ones Chrome makes from the stream's sound. The extension reads them off the player, so it only sees them while they are on, and the card goes back to the stream's title when nobody has spoken for 25 seconds. The **Lyrics** switch turns them off like any lyrics. Twitch streams, and past broadcasts and clips on either site, have no lyrics.
 
 ### Two things playing at once
 

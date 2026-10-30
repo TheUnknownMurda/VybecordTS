@@ -496,6 +496,52 @@ export class LyricsEngine {
   }
 
   /**
+   * A live stream's captions, as they are spoken (see live-captions.ts).
+   *
+   * Not injectLyrics: those lines are timed against a song and the scheduler
+   * walks them, while these arrive already in the past and the newest is always
+   * where the stream is. So the scheduler stays out of it, and the card shows
+   * the two newest lines, the newer one under the arrow where a song's next
+   * line goes.
+   *
+   * Every new line turns the page, where a song's card turns one every two
+   * lines. A song can afford that because its next line is known in advance; a
+   * stream's is not. Held back for the line after it, the newest line reached
+   * the card three to five seconds late, and never at all when the streamer
+   * stopped talking there (replaying a real Kick tab's pushes). Turned on each
+   * line, the card scrolls the way Kick's own two-line captions do, at one push
+   * per line — about one every three seconds while someone talks, well under
+   * what a song with fast lyrics sends.
+   *
+   * The array is replaced, never edited, so an unchanged transcript is the
+   * same array and costs nothing.
+   */
+  setLiveLines(lines: LyricLine[]): void {
+    if (!this.running || !this.trackData?.is_live) return;
+    if (lines === this.lyrics || (!lines.length && !this.lyrics.length)) return;
+    this.lyrics = lines;
+    this.buildGroupTable();
+    this.currentIdx = lines.length > 1 ? lines.length - 2 : lines.length - 1;
+    this.resetCoverage();
+    /*
+     * A stream that has gone quiet goes back to its title and category after
+     * the same wait as a song's instrumental break, rather than leaving the
+     * last thing said on the card for the rest of the stream.
+     */
+    this.inLyricGap = false;
+    this.clearGapTimer();
+    if (lines.length) {
+      this.gapTimer = setTimeout(() => {
+        if (!this.running) return;
+        this.inLyricGap = true;
+        this.resetDedup();
+        this.emitUpdate();
+      }, LYRIC_GAP_MS);
+    }
+    this.emitUpdate();
+  }
+
+  /**
    * Hot-update track metadata (e.g. enriched album art) without restarting the engine.
    */
   updateTrackData(trackData: TrackData): void {
@@ -528,7 +574,8 @@ export class LyricsEngine {
    */
   updateOffset(offsetMs: number): void {
     this.rpcConfig.lyrics_offset_ms = offsetMs;
-    if (!this.running || !this.lyrics.length) return;
+    // A stream's captions are not timed against anything an offset could move.
+    if (!this.running || !this.lyrics.length || this.trackData?.is_live) return;
 
     // Re-position within lyrics
     const baseMs = this.isCC ? 50 : BASE_OFFSET_MS;
@@ -1380,7 +1427,11 @@ export class LyricsEngine {
     this.cachedPlayModeSuffix =
       d.is_shuffle ? ' | 🔀' :
       d.repeat_mode === 'track' ? ' | 🔂' : '';
-    this.cachedInfoText = buildInfoText(d, '', '', this.cfgShowPlaylist);
+    // A Kick stream's card while its captions show: channel, title, category,
+    // without the note, microphone and disc a song's fields are marked with.
+    this.cachedInfoText = d.media_source === 'kick' || d.media_source === 'twitch'
+      ? truncate([d.track_name, this.cachedDisplayArtist, d.album_name].filter(Boolean).join(' | ') || '  ', 128)
+      : buildInfoText(d, '', '', this.cfgShowPlaylist);
     // Insert play mode suffix after context/album in infoText (visible in large_text when lyrics are showing)
     if (this.cachedPlayModeSuffix) {
       this.cachedInfoText = truncate(this.cachedInfoText + this.cachedPlayModeSuffix, 128);

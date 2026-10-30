@@ -10,14 +10,19 @@
  * Several tabs at once are several cards at once — one entry per tab, one
  * track per channel or video. See push-instances.ts and the same note in
  * twitch-source.ts.
+ *
+ * A live channel's tab also reports what Kick's caption overlay says, when the
+ * viewer has captions on; each tab's reports are stitched into lines here (see
+ * live-captions.ts) and the backend puts them on the card as lyrics.
  */
 
 import { performance } from 'node:perf_hooks';
 import { createLogger } from './logger.js';
 import { asBool, asNonNegativeInt, asRecord, asText, asUrl } from './utils.js';
-import type { TrackData } from './types.js';
+import type { LyricLine, TrackData } from './types.js';
 import { PushInstances, type PushInstance } from './push-instances.js';
 import { broadcastTrack, type BroadcastView } from './broadcast-track.js';
+import { LiveCaptions } from './live-captions.js';
 
 const log = createLogger('KickSource');
 
@@ -49,6 +54,14 @@ export interface KickPayload {
   paused: boolean;
   /** Which tab pushed this — see the same field in twitch-source.ts. */
   tab_id?: string;
+  /** What Kick's caption overlay said when the tab pushed; '' with captions off or nothing said. */
+  caption: string;
+  /** When the overlay last changed, by the tab's clock (epoch ms); 0 if it never has. */
+  caption_at: number;
+  /** How long it had been unchanged when the tab pushed. */
+  caption_age_ms: number;
+  /** Captions the stream carries ('manifest', Kick's word) rather than speech recognition. */
+  caption_from_stream: boolean;
 }
 
 const RE_VIDEO_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -81,6 +94,11 @@ export function normalizeKickPayload(raw: unknown): KickPayload {
     position_ms: asNonNegativeInt(d.position_ms),
     duration_ms: asNonNegativeInt(d.duration_ms),
     paused: asBool(d.paused),
+    // Twenty words at most, as Kick shows them; the slack is for long words.
+    caption: asText(d.caption, 400),
+    caption_at: asNonNegativeInt(d.caption_at),
+    caption_age_ms: asNonNegativeInt(d.caption_age_ms),
+    caption_from_stream: asText(d.caption_source, 16) === 'manifest',
   };
 }
 
@@ -89,7 +107,11 @@ interface KickTab extends KickPayload {
   startEstimateMs: number;
   /** performance.now() of the first push on this page, which an offline card counts from. */
   pageSince: number;
+  /** The captions this tab has reported on this page, as lines. Handed on from push to push. */
+  captions: LiveCaptions;
 }
+
+const NO_LINES: LyricLine[] = [];
 
 /** What a tab is showing, as one key: `ch:<slug>`, `v:<uuid>` or `c:<clip id>`. */
 function pageKey(d: KickPayload): string {
@@ -129,8 +151,33 @@ export class KickSource {
     // earlier, else now. Reset when the stream goes offline.
     const startEstimateMs = !data.is_live ? 0
       : data.stream_start_time_ms || (samePage ? prev!.startEstimateMs : 0) || Date.now();
-    this.tabs.seen(key, { ...data, startEstimateMs, pageSince: samePage ? prev!.pageSince : now }, now);
+    /*
+     * A new page, or a stream that went off the air, starts a new transcript:
+     * the last channel's words do not belong under this one's name.
+     */
+    const captions = samePage && data.is_live ? prev!.captions : new LiveCaptions();
+    if (data.is_live && data.page_kind === 'channel') {
+      captions.add(data.caption, data.caption_at, data.caption_age_ms, data.caption_from_stream, now);
+    }
+    this.tabs.seen(key, { ...data, startEstimateMs, pageSince: samePage ? prev!.pageSince : now, captions }, now);
     return data;
+  }
+
+  /**
+   * The caption lines for a live card, by its track id (`kick:<channel>`) —
+   * from whichever fresh tab on that channel has the most, since a second tab
+   * with captions off reports none. An empty list when no tab has any.
+   */
+  captionLines(trackId: string): LyricLine[] {
+    if (!trackId.startsWith('kick:')) return NO_LINES;
+    const page = `ch:${trackId.slice(5).toLowerCase()}`;
+    let best = NO_LINES;
+    for (const t of this.tabs.fresh(performance.now())) {
+      if (!t.data.is_live || pageKey(t.data) !== page) continue;
+      const lines = t.data.captions.lines;
+      if (lines.length > best.length) best = lines;
+    }
+    return best;
   }
 
   /** What one tab should be shown as, or null for nothing (paused, not a page). */

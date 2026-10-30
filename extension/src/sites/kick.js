@@ -276,8 +276,98 @@
         return info;
     }
 
+    // ── Captions ──
+
+    /*
+     * Kick's captions, read off the player the way the viewer sees them.
+     *
+     * Kick has two kinds, drawn in the same overlay, `[data-caption-source]`:
+     * "manifest", captions the stream itself carries, and "browser", Chrome's
+     * on-device speech recognition run on the stream's sound. Reading the
+     * overlay covers both, and it is in step with the picture by construction.
+     *
+     * The stream's caption tracks could be fetched directly — they are WebVTT
+     * playlists listed in the stream's own manifest — but they sit on another
+     * host (live-video.net), which this extension would then be contacting and
+     * the privacy policy would have to name, they run seconds ahead of the
+     * delayed picture, and they would miss the speech-recognition kind
+     * altogether. So nothing is fetched: with captions off in Kick's player
+     * there is no overlay, and nothing is sent.
+     *
+     * The overlay is a window — the last words heard, rewritten as the
+     * recogniser changes its mind — not a line. Turning it into lines is the
+     * app's job (src/core/live-captions.ts); this only reports what it says,
+     * when it changes, and once more when it has gone still.
+     */
+    const CAPTION_POLL_MS = 250;
+    /** Fastest a change is reported: the app needs every few words, not every one. */
+    const CAPTION_PUSH_MIN_MS = 500;
+    /** Report once more after this long unchanged: the app takes a still overlay as final. */
+    const CAPTION_SETTLE_MS = 1300;
+
+    let captionText = '';
+    let captionSource = '';
+    let captionAt = 0;
+    let lastPushAt = 0;
+    let soonTimer = null;
+    let settleTimer = null;
+
+    /** The overlay's text, its lines joined by spaces; '' when there is none. */
+    function readCaption() {
+        const box = document.querySelector('[data-caption-source]');
+        if (!box) return { text: '', source: '' };
+        // One span per line for stream captions: textContent would run the
+        // last word of one line into the first of the next.
+        const parts = [];
+        const walker = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
+        for (let n = walker.nextNode(); n; n = walker.nextNode()) parts.push(n.nodeValue);
+        return {
+            text: parts.join(' ').replace(/\s+/g, ' ').trim().slice(0, 400),
+            source: box.getAttribute('data-caption-source') || '',
+        };
+    }
+
+    /** Report soon, but never more often than CAPTION_PUSH_MIN_MS. */
+    function pushSoon() {
+        // While the app is not answering, the regular beat is enough.
+        if (soonTimer || consecutiveFails > 0) return;
+        const wait = Math.max(0, lastPushAt + CAPTION_PUSH_MIN_MS - Date.now());
+        soonTimer = setTimeout(() => { soonTimer = null; periodicPush(); }, wait);
+    }
+
+    function watchCaptions() {
+        setInterval(() => {
+            const { text, source } = readCaption();
+            if (text === captionText) return;
+            captionText = text;
+            if (source) captionSource = source;
+            captionAt = Date.now();
+            pushSoon();
+            clearTimeout(settleTimer);
+            settleTimer = setTimeout(pushSoon, CAPTION_SETTLE_MS);
+        }, CAPTION_POLL_MS);
+    }
+
+    /**
+     * The caption fields of a push: what the overlay says, and since when.
+     *
+     * Nothing from before this page opened: moving to another channel leaves
+     * the last one's caption on screen until Kick's player switches over, and
+     * it would go out under the new channel's name.
+     */
+    function captionFields() {
+        const current = captionAt > 0 && captionAt >= pageSince;
+        return {
+            caption: current ? captionText : '',
+            caption_source: captionSource,
+            caption_at: current ? captionAt : 0,
+            caption_age_ms: current ? Date.now() - captionAt : 0,
+        };
+    }
+
     function pushToVybecord(data) {
         if (!data) return;
+        lastPushAt = Date.now();
         try {
             GM_xmlhttpRequest({
                 method: 'POST',
@@ -617,11 +707,12 @@
     function periodicPush() {
         const data = getStreamerInfo();
         if (!data || !data.username) return;
-        pushToVybecord(data);
+        pushToVybecord(Object.assign(data, captionFields()));
     }
 
     function init() {
         reschedule(BASE_INTERVAL_MS);
+        watchCaptions();
         console.log('[VybecordTS] Kick integration initialized ✓');
 
         setTimeout(periodicPush, 500);

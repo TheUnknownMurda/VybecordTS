@@ -14,7 +14,7 @@ This extension reads the page directly and supplies:
 | **YouTube** | the video link, live-stream start time, real channel |
 | **SoundCloud** | the actual artist rather than the uploading account, track link |
 | **Bandcamp** | album and label metadata |
-| **Twitch** / **Kick** | the channel, live or offline; past broadcasts and clips with their position; stream title, category, uptime |
+| **Twitch** / **Kick** | the channel, live or offline; past broadcasts and clips with their position; stream title, category, uptime; on Kick, the player's captions while they are on, which the app shows as lyrics |
 
 It also reports position from the page's own audio element, which is exact — a browser's media session only publishes one every few seconds.
 
