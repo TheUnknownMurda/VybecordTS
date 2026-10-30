@@ -141,13 +141,13 @@ Sur **Now playing**, ouvre le menu **Source** et choisis le lecteur que tu veux 
 
 Ou affiche-les toutes. **Settings → Discord presence → Several presences** met jusqu'à cinq cartes sur ton profil : la chanson Spotify en présence 1, la vidéo du navigateur en présence 2, un stream dans un autre onglet en présence 3, par exemple. Ce qui joue avec le rang le plus élevé devient la présence 1 (une appli de musique passe avant une vidéo, une vidéo avant un onglet anonyme), ce qui suit la présence 2, et ainsi de suite. Avec plus d'une carte :
 
-- Les onglets d'un même site sont des choses distinctes : quatre streams Twitch ouverts côte à côte prennent quatre cartes. Une application Discord ne porte qu'une carte, donc les autres en empruntent une — l'application Vybecord par défaut, puis un ID de réserve si tu en as mis, puis l'application d'une plateforme que rien n'occupe — et la carte nomme sa plateforme dans l'en‑tête de toute façon.
+- Les onglets d'un même site sont des choses distinctes : quatre streams Twitch ouverts côte à côte prennent quatre cartes. Une application Discord ne porte qu'une carte, donc les autres en empruntent une — l'application Vybecord par défaut, puis l'application d'une plateforme que rien n'occupe — et la carte nomme sa plateforme dans l'en‑tête de toute façon.
 - **Lyrics on presence N** choisit quelles cartes affichent les paroles — n'importe quelle combinaison.
 - **Activity type on presence N** donne à chaque carte son propre verbe : *Listening* pour la chanson, *Watching* pour le stream. Les cartes 2 à 5 disent la même chose que la présence 1 tant que tu ne les changes pas.
 - **Now playing** montre toutes les cartes ; clique sur l'une pour voir ses paroles, son aperçu Discord et ses réglages. Son menu **Source** épingle cette présence à un lecteur, pour qu'elle ne s'échange jamais avec une autre.
 - L'historique d'écoute (et donc **Activity**) et Last.fm ne suivent que la présence 1.
 
-Chaque carte est une application Discord à part, et Spotify, YouTube, SoundCloud, Apple Music, Kick et Twitch ont chacun la leur ; avec celle par défaut, ça fait sept, et une carte dont l'application est déjà prise en emprunte une libre. Les **Spare application ID** ne servent qu'au‑delà de sept cartes — ou si tu préfères ne pas emprunter (à créer sur discord.com/developers ; jusqu'à quatre).
+Chaque carte est une application Discord à part, et Spotify, YouTube, SoundCloud, Apple Music, Kick et Twitch ont chacun la leur ; avec celle par défaut, ça fait sept, et une carte dont l'application est déjà prise en emprunte une libre. Cinq cartes au maximum pour sept applications : il n'y a rien à configurer.
 
 ---
 
@@ -157,7 +157,7 @@ Chaque carte est une application Discord à part, et Spotify, YouTube, SoundClou
 Oui. Vybecord ne parle jamais à l'API de Spotify — il lit ce que Windows sait déjà.
 
 **Faut-il installer Spicetify ou une extension de navigateur ?**
-Non. Les anciennes versions le demandaient, plus celle-ci. Ce sont deux bonus optionnels : Spicetify apporte les changements de morceau instantanés et les paroles officielles de Spotify (à configurer dans **Settings → Integrations → Spotify**), et l'extension navigateur indique à Vybecord sur quel site joue un onglet.
+Non. Les anciennes versions le demandaient, plus celle-ci. Ce sont deux bonus optionnels : Spicetify apporte les changements de morceau instantanés, les paroles officielles de Spotify et le DJ (la carte l'indique, et la voix du DJ entre les chansons n'a ni paroles ni historique) (à configurer dans **Settings → Integrations → Spotify**), et l'extension navigateur indique à Vybecord sur quel site joue un onglet.
 
 **Ça marche avec quoi ?**
 Tout ce qui apparaît dans l'encart média de Windows : Spotify, les onglets de navigateur (YouTube, SoundCloud, Deezer…), VLC, foobar2000, MusicBee, AIMP, Apple Music, Tidal, Amazon Music.

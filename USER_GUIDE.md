@@ -141,13 +141,13 @@ On **Now playing**, open the **Source** menu and pick the one you want announced
 
 Or show them all. **Settings → Discord presence → Several presences** puts up to five cards on your profile: the song in Spotify on presence 1, the video in the browser on presence 2, a stream in another tab on presence 3, say. The highest-ranked thing playing is presence 1 (a music app beats a video, a video beats an unnamed tab), the next is presence 2, and so on. With more than one:
 
-- Tabs of the same site are separate things: four Twitch streams open side by side take four cards. A Discord application carries one card, so the others borrow one — the default Vybecord application, then any spare you set, then a platform application nothing is on — and the card names its platform in the header either way.
+- Tabs of the same site are separate things: four Twitch streams open side by side take four cards. A Discord application carries one card, so the others borrow one — the default Vybecord application, then a platform application nothing is on — and the card names its platform in the header either way.
 - **Lyrics on presence N** picks which cards sing along — any combination.
 - **Activity type on presence N** gives each card its own verb: *Listening* for the song, *Watching* for the stream. Cards 2 to 5 say the same as presence 1 until you change them.
 - **Now playing** shows every card; click one to see its lyrics, its Discord preview and its controls. Its **Source** menu pins that presence to a player, so it never swaps with another.
 - The listening history (and so **Activity**) and Last.fm follow presence 1 only.
 
-Each card is a Discord application of its own, and Spotify, YouTube, SoundCloud, Apple Music, Kick and Twitch each have one; with the default that is seven, and a card whose own application is taken borrows a free one. Only past seven cards' worth — or if you would rather not borrow — do the **Spare application IDs** matter (create one at discord.com/developers; up to four).
+Each card is a Discord application of its own, and Spotify, YouTube, SoundCloud, Apple Music, Kick and Twitch each have one; with the default that is seven, and a card whose own application is taken borrows a free one. Five cards at most against seven applications means there is nothing to set up.
 
 ---
 
@@ -157,7 +157,7 @@ Each card is a Discord application of its own, and Spotify, YouTube, SoundCloud,
 No. Vybecord never talks to Spotify's API — it reads what Windows already knows.
 
 **Do I need Spicetify or a browser extension?**
-No. Older versions did; this one does not. Both are optional extras: Spicetify adds instant track changes and Spotify's own lyrics (set it up under **Settings → Integrations → Spotify**), and the browser extension tells Vybecord which site a tab is on.
+No. Older versions did; this one does not. Both are optional extras: Spicetify adds instant track changes, Spotify's own lyrics and the DJ (the card names it, and the DJ's voice between songs gets no lyrics and no history) (set it up under **Settings → Integrations → Spotify**), and the browser extension tells Vybecord which site a tab is on.
 
 **What does it work with?**
 Anything that appears in the Windows media overlay: Spotify, browser tabs (YouTube, SoundCloud, Deezer…), VLC, foobar2000, MusicBee, AIMP, Apple Music, Tidal, Amazon Music.

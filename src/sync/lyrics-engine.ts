@@ -1409,6 +1409,7 @@ export class LyricsEngine {
         btn2Url = ytSearch;
       } else {
         btn2Url = d.spotify_url || this.cachedSpotifySearch;
+        if (effectiveSource === 'spotify') btn2Url = spotifyAppLink(btn2Url);
       }
       buttons.push({ label: truncate(btn2Resolved, 32), url: btn2Url });
     }
@@ -2028,6 +2029,30 @@ const PLATFORM_SEARCH: Record<string, (q: string) => string> = {
   browser_vivaldi:q => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
   browser_zen:    q => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
 };
+
+/**
+ * The site's page that hands a Spotify link to the Spotify app.
+ *
+ * Discord only takes http(s) links on a button, so `spotify:track:…` cannot go
+ * there directly, and an open.spotify.com link opens the web player. This page
+ * turns the link back into a `spotify:` URI and opens it, which is what makes
+ * the browser offer to open the app; it links the web player for anyone
+ * without it. The page lives in website/open/spotify/ on main.
+ */
+const SPOTIFY_APP_PAGE = 'https://theunknownmurda.github.io/VybecordTS/open/spotify/';
+
+/** What open.spotify.com links the page knows how to turn into a `spotify:` URI. */
+const SPOTIFY_WEB_LINK = /^https:\/\/open\.spotify\.com\/((?:track|album|artist|playlist|show|episode)\/[A-Za-z0-9]{22}|search\/[^?#]+)/;
+
+/** A Spotify button link that opens the app, or the link unchanged if it is not one the page handles. */
+export function spotifyAppLink(url: string): string {
+  const m = SPOTIFY_WEB_LINK.exec(url);
+  if (!m) return url;
+  const out = `${SPOTIFY_APP_PAGE}?u=${m[1]}`;
+  // Discord's limit on a button URL: past it the button is dropped (see
+  // discord-ipc.ts), and the plain link is better than no button.
+  return out.length <= 512 ? out : url;
+}
 
 function platformSearchUrl(source: string, query: string): string {
   const builder = PLATFORM_SEARCH[source];

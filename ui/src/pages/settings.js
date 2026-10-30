@@ -36,7 +36,6 @@ const PRESENCE_COUNTS = [[1, 'One'], [2, 'Two'], [3, 'Three'], [4, 'Four'], [5, 
 const LYRICS_KEYS = ['show_lyrics', 'show_lyrics_2', 'show_lyrics_3', 'show_lyrics_4', 'show_lyrics_5'];
 /** The activity type per card; presence 1 keeps `rpc_activity_type`, the others may follow it (-1). */
 const ACTIVITY_KEYS = ['rpc_activity_type', 'rpc_activity_type_2', 'rpc_activity_type_3', 'rpc_activity_type_4', 'rpc_activity_type_5'];
-const APP_ID_KEYS = ['discord_app_id_2', 'discord_app_id_3', 'discord_app_id_4', 'discord_app_id_5'];
 const presenceCount = () => Math.max(1, Math.min(5, Number(cfg('presence_count', 1)) || 1));
 
 /**
@@ -332,16 +331,6 @@ function presenceCat(body, { search }) {
             i === 0 ? ACTIVITY_TYPES : [[-1, 'Same as presence 1'], ...ACTIVITY_TYPES],
             (v) => put(key, Number(v))))
         : []),
-      ...(multi
-        ? APP_ID_KEYS.slice(0, presenceCount() - 1).map((key, i) => inputRow(
-            `Spare application ID ${i + 1}`,
-            i === 0
-              ? 'Optional. A Discord application carries one card, so a card whose own application is taken '
-                + 'borrows one: the default, then these spares, then a platform application nothing is on. '
-                + 'Create an application at discord.com/developers and paste its Application ID.'
-              : 'Another spare, borrowed after the one above.',
-            cfg(key, ''), (v) => put(key, v.trim()), { placeholder: 'Optional' }))
-        : []),
     ], multi
       ? 'The highest-ranked thing playing goes on presence 1, the next on presence 2, and so on. Pin one to a player with the Source menu on Now playing. The listening history and Last.fm follow presence 1.'
       : null),
@@ -371,7 +360,9 @@ function lyricsCat(body) {
         ? null
         : toggleRow('Show lyrics', 'Off keeps the presence but stops fetching and showing lyrics.',
             cfg('show_lyrics', true) !== false, (v) => put('show_lyrics', v)),
-      toggleRow('Romanise Japanese and Korean', 'Converts kana and hangul to Latin script.',
+      toggleRow('Romanise lyrics',
+        'Writes lyrics in Latin letters: Japanese (kanji included), Korean, Chinese, Russian and other Cyrillic, '
+        + 'Greek, Thai, Arabic, Hindi and other Devanagari, Georgian and Armenian.',
         cfg('romanize_lyrics') === true, (v) => put('romanize_lyrics', v)),
       inputRow('Default timing offset (ms)', 'Negative shows lines earlier, positive later. '
         + 'A track corrected on Now playing keeps its own offset instead.',

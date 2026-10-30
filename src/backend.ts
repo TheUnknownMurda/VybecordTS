@@ -87,8 +87,6 @@ const ARTIST_SPLIT_RE = /[,]/;  // Precompiled — used in recordPlay + artist k
 const LYRICS_SWITCH_KEYS = ['show_lyrics', 'show_lyrics_2', 'show_lyrics_3', 'show_lyrics_4', 'show_lyrics_5'] as const;
 /** The per-card activity type, by position; `rpc_activity_type` is presence 1's. */
 const ACTIVITY_TYPE_KEYS = ['rpc_activity_type', 'rpc_activity_type_2', 'rpc_activity_type_3', 'rpc_activity_type_4', 'rpc_activity_type_5'] as const;
-/** Application IDs a card may fall back on when a higher card holds its own. */
-const SPARE_APP_ID_KEYS = ['discord_app_id_2', 'discord_app_id_3', 'discord_app_id_4', 'discord_app_id_5'] as const;
 
 /** How many presence cards the app can put on the profile. */
 const MAX_SLOTS = 5;
@@ -1746,7 +1744,7 @@ export class VybecordBackend extends EventEmitter {
      * happens to read like a band would come back with that band's record.
      */
     const declaredArt = trackData.album_art_url || '';
-    if (!trackData.is_live && !/^https?:\/\//.test(declaredArt)) {
+    if (!trackData.is_live && !trackData.is_dj_narration && !/^https?:\/\//.test(declaredArt)) {
       const allowUpload = declaredArt === '/api/thumbnail' && (localArtExtracted || this.thumbBelongsTo(trackData));
       this.resolveDiscordArt(slot, trackData, signal, allowUpload);
     }
@@ -1825,7 +1823,8 @@ export class VybecordBackend extends EventEmitter {
       // SoundCloud & Bandcamp report accurate audio duration — keep it for better matching
       const lyricsDuration = isVideoSource ? 0 : trackData.duration_ms;
 
-      const lyricsPromise = (!trackData.is_live)
+      // Spotify's DJ talking is not a song either; see spicetify-source.ts.
+      const lyricsPromise = (!trackData.is_live && !trackData.is_dj_narration)
         ? (async (): Promise<LyricLine[]> => {
             // Spotify's own lyrics do not come through here: the Spicetify
             // extension pushes them, and they are picked up from the cache above.
@@ -2032,6 +2031,7 @@ export class VybecordBackend extends EventEmitter {
       // that never happened, 41 times in one real session.
       const noLyricsSource = trackData.is_live
         ? 'live stream, not looked up'
+        : trackData.is_dj_narration ? 'Spotify DJ talking, not looked up'
         : isYt ? 'CC fetch failed or empty' : 'LRCLib/Netease fetch failed';
       log.info(`[LYRICS] No lyrics found for "${trackData.track_name}" — ${noLyricsSource}`);
       slot.engine.updateTrackData(trackData);
@@ -2045,7 +2045,7 @@ export class VybecordBackend extends EventEmitter {
        * scrape that cannot match anything. The synced path already knew that;
        * this one was still asking, once per stream event.
        */
-      if (!signal.aborted && !trackData.is_live) {
+      if (!signal.aborted && !trackData.is_live && !trackData.is_dj_narration) {
         fetchPlainLyrics(trackData.track_name, trackData.artist_name, trackData.album_name, trackData.duration_ms, signal)
           .then(lines => {
             if (lines && lines.length > 0 && slot.trackKey === expectedKey) {
@@ -2611,22 +2611,26 @@ export class VybecordBackend extends EventEmitter {
    * The platform's own when there is one, else the default — and never the
    * same as a higher card's: Discord keys a card by application, so two cards
    * under one application are one card showing two things in turn. That case
-   * falls back to the spare application IDs from Settings, whichever is free,
-   * and with none free the card stays off the profile for that source (the
-   * engine still runs, so the window shows it).
+   * falls back to whichever application is free, and with none free the card
+   * stays off the profile for that source (the engine still runs, so the
+   * window shows it).
+   *
+   * There used to be four "spare application ID" fields in Settings for that
+   * fallback. Six platform applications and the default make seven, against a
+   * ceiling of MAX_SLOTS cards, so a free one always exists and the fields were
+   * asking users for something they never needed.
    */
   private targetAppIdFor(slot: PresenceSlot, source: string): string {
     const def = this.defaultAppId();
     // In order of preference: the platform's own application; the default
     // one — which is what makes a second stream of the same site work with
-    // nothing configured; the spares from Settings; and last, any other
-    // platform's application that nothing is on. The card names its own
+    // nothing configured; and last, any other platform's application that
+    // nothing is on. The card names its own
     // platform whichever it lands on (see borrowed_app in getRpcConfig), so
     // four streams of one site fit out of the box.
     const options = [...new Set([
       PLATFORM_DISCORD_APP_IDS[source] || def,
       def,
-      ...SPARE_APP_ID_KEYS.map(k => String(this.config.get(k) || '').trim()).filter(Boolean),
       ...Object.values(PLATFORM_DISCORD_APP_IDS),
     ])];
     if (slot.index === 0) return options[0];
@@ -2646,7 +2650,7 @@ export class VybecordBackend extends EventEmitter {
     if (!slot.noAppIdLogged.has(source)) {
       slot.noAppIdLogged.add(source);
       log.warn(`[DISCORD] Presence ${slot.index + 1} has no application of its own for ${source || 'this player'}`
-        + ' — it shares a higher card\'s, so it stays off Discord. Set a spare application ID in Settings to show it.');
+        + ' — it shares a higher card\'s, so it stays off Discord.');
     }
     return '';
   }
@@ -2734,7 +2738,7 @@ export class VybecordBackend extends EventEmitter {
     if (previous) this.pool.release(previous, slot.id);
 
     // A card taking the application a lower card was on evicts it: the lower
-    // card re-picks, which lands it on a spare or off Discord. A card leaving
+    // card re-picks, which lands it on a free application or off Discord. A card leaving
     // one is re-picked for too — a lower card may have been waiting for
     // exactly that application to come free.
     for (let i = slot.index + 1; i < this.slots.length; i++) {
@@ -2753,6 +2757,12 @@ export class VybecordBackend extends EventEmitter {
    * history module sees the open entry and continues that listen.
    */
   private recordPlay(t: TrackData): void {
+    // The DJ talking between songs: held like an ad break below, for the same
+    // reason, without the guesswork.
+    if (t.is_dj_narration) {
+      historyTrackPause();
+      return;
+    }
     // An advertisement is not a play. The presence filter is a user preference,
     // so it cannot be relied on here: with it off, every ad break used to land
     // in the history as a track by a brand. The heuristic is the same one —
@@ -2891,8 +2901,8 @@ export class VybecordBackend extends EventEmitter {
       // position rather than per app, because "lyrics on the song, not on the
       // video" is the whole point of having more than one.
       show_lyrics: cfg[LYRICS_SWITCH_KEYS[slot.index] ?? 'show_lyrics'],
-      // On another application than its platform's — the default one, a
-      // spare, or a free platform's — the card would be headed by that
+      // On another application than its platform's — the default one or a
+      // free platform's — the card would be headed by that
       // application's name. Told so, the engine puts the platform's name in
       // the header itself.
       borrowed_app: !!slot.appId && slot.appId !== ownApp,

@@ -58,7 +58,7 @@ Vybecord is a Windows desktop app (Electron + TypeScript). It reads the Windows 
 
 - The current lyric line goes on the card, with the next line under it. The cover tooltip shows the title, artist, album and playlist.
 - **Up to five presence cards at once.** For example: Spotify on card 1, a YouTube video on card 2, a Twitch stream on card 3. Each card has its own lyrics switch and can be pinned to its own player.
-- **A Discord application per platform**, so the card header reads *Spotify*, *YouTube*, *SoundCloud*, *Apple Music*, *Twitch* or *Kick*. Seven applications are built in, and you can add up to four spare ones.
+- **A Discord application per platform**, so the card header reads *Spotify*, *YouTube*, *SoundCloud*, *Apple Music*, *Twitch* or *Kick*. Seven applications are built in, more than the five cards the app can show.
 - **Customisable card.** You choose the activity type (Listening / Playing / Watching / Competing, per presence when there are several), what the one-line status shows (including a custom template), the small-icon style (including one that matches the cover's colour), and one custom button. The title, artist and cover are clickable.
 - **Cover art.** The player's own cover (Spotify, Apple Music, or a local file's) is published to Vybecord's cover store so Discord shows exactly that one (a switch in Settings). Only when there is none, the cover is looked up on Deezer, with the iTunes Search API as fallback.
 - **Away-aware.** The presence goes down when your machine has been idle long enough for Discord to mark you Idle (10 minutes by default), and comes back on the first key press.
@@ -253,7 +253,7 @@ Windows Media Player (both the classic and the new app), Groove Music, Movies & 
 - **Now playing** shows every card. Click one to see its lyrics, its Discord preview and its controls; the **Source** menu then pins that presence to a player.
 - The listening history (and so **Activity**) and Last.fm only follow **presence 1**.
 
-Discord shows one card per application. Each card publishes under its platform's own application. When that application is already in use by a higher card, the card borrows another one: first the default Vybecord application, then your **spare application IDs** (up to four), then any built-in platform application nobody is using. The card header still names the real platform. You only need spare IDs if you want more than the seven built-in applications can cover, or if you'd rather not borrow. To get one, create an application at <https://discord.com/developers/applications> and paste its Application ID. If no application is free, the card stays off Discord (it still shows in the window) and the log says why.
+Discord shows one card per application. Each card publishes under its platform's own application. When that application is already in use by a higher card, the card borrows another one: first the default Vybecord application, then any built-in platform application nobody is using. The card header still names the real platform. Seven applications for at most five cards means one is always free, so there is nothing to set up. If no application is free anyway, the card stays off Discord (it still shows in the window) and the log says why.
 
 ### Lyrics
 
@@ -279,7 +279,7 @@ If none of these finds synced lyrics, plain lyrics (LRCLIB, then Genius) are sho
 **Translation and romanisation** are under **Settings → Lyrics & translation**:
 
 - *Translate in this window* and *Translate on Discord too*. Target languages: English, French, Spanish, German, Portuguese, Italian, Russian, Japanese, Korean, Chinese, Arabic, Hindi, Turkish, Polish, Dutch, Swedish.
-- *Romanise Japanese / Korean* also covers the other scripts listed under [Features](#features). Japanese text containing kanji uses the bundled kuromoji dictionary, which is only loaded when it is needed.
+- *Romanise lyrics* covers every script listed under [Features](#features). Japanese text containing kanji uses the bundled kuromoji dictionary, which is only loaded when it is needed.
 
 **YouTube captions** are under **Settings → Lyrics & translation → YouTube captions**. They need yt-dlp, which ships with the app. The card shows which copy is in use. To use your own copy, put `yt-dlp.exe` in `%APPDATA%\Vybecord\bin`, which is checked first. After that come the bundled copy, then `PATH`. Captions in *Automatic* follow your system language, then English. Age-restricted videos need a **Cookies file** (a `cookies.txt` exported from your browser). Without the browser extension, the video is found by searching for its title. With it, the exact video is used.
 
@@ -372,20 +372,19 @@ The current track's artwork is also written to `%TEMP%\vybecord_thumb.jpg`.
 | `rpc_status_template` | `"{title} - {artist}"` | up to 128 characters; placeholders `{title}` `{artist}` `{album}` `{playlist}` `{platform}` | Status template (used when `rpc_status_display` is `custom`) |
 | `presence_count` | `1` | 1–5 | Several presences → Presences at once |
 | `show_lyrics_2` … `show_lyrics_5` | `true` | boolean | Lyrics on presence 2–5 |
-| `discord_app_id_2` … `discord_app_id_5` | `""` | up to 32 characters | Spare application ID 1–4 |
 | `auto_icon_mode`, `dance_mode`, `radiate_mode`, `purple_rad_mode`, `blue_rad_mode`, `rouge_mode`, `bleeding_mode`, `random_icon_mode`, `lrc_off_mode`, `hide_small_icon` | `false` | boolean, at most one `true` | Small icon (`auto_icon_mode` is **Match the cover**) |
 | `rpc_button1_label` | `""` | up to 128 characters (cut to 32 on the card) | Buttons → Your button's label (empty hides the button) |
 | `rpc_button1_url` | `""` | up to 512 characters | Buttons → Your button's link |
 | `discord_app_id` | `""` | up to 32 characters | *config only*: replaces the built-in default Discord application |
 
-The second presence button is fixed. It links to what is playing and is labelled with the platform ("Listen on Spotify", "Watch on YouTube", …).
+The second presence button is fixed. It links to what is playing and is labelled with the platform ("Listen on Spotify", "Watch on YouTube", …). Discord only accepts web links on a button, so for Spotify the link goes through a page on the Vybecord website (`/open/spotify/`) that opens the Spotify app, with the web player as a fallback.
 
 **Lyrics & translation** (Settings → Lyrics & translation)
 
 | Key | Default | Accepted values | Setting |
 | --- | --- | --- | --- |
 | `show_lyrics` | `true` | boolean | Show lyrics (presence 1; with one presence it is also **Lyrics on the card** under Discord presence) |
-| `romanize_lyrics` | `false` | boolean | Romanise Japanese and Korean |
+| `romanize_lyrics` | `false` | boolean | Romanise lyrics |
 | `lyrics_offset_ms` | `0` | −60000 to 60000 | Default timing offset: for tracks without their own offset |
 | `lrclib_dump_path` | `""` | up to 1024 characters | LRCLIB dump path (**restart required**) |
 | `cc_enabled` | `true` | boolean | Use captions as lyrics |
@@ -438,7 +437,7 @@ At startup the app loads `envs\.env` from the [data folder](#data-folder), if th
 | `DISCORD_CLIENT_ID` | at runtime | Default Discord application, used when `discord_app_id` is empty. |
 | `LASTFM_API_KEY`, `LASTFM_API_SECRET` | at runtime | Last.fm credentials, used when the config keys are empty. |
 | `VYBECORD_LOG_LEVEL` | at runtime | `debug`, `info` (default), `warn` or `error`. |
-| `BUG_REPORT_WEBHOOK` | **at build time** | Discord webhook built into the main bundle for the Report page. It is read from the environment or from `envs/.env` at the repository root. If it isn't set, in-app reporting is turned off in that build. Anyone can read it from the packaged app, so it is not a secret. |
+| `BUG_REPORT_WEBHOOK` | **at build time** | Discord webhook built into the main bundle for the Report page. It is read from the environment or from `envs/.env` at the repository root (in a `git worktree`, the main checkout's `envs/.env` is used too). If it isn't set, in-app reporting is turned off in that build. Anyone can read it from the packaged app, so it is not a secret. |
 
 Example `envs\.env`:
 
@@ -608,7 +607,7 @@ This produces:
 - `release/latest.yml`: what installed copies read to detect an update.
 - `release/win-unpacked/`: the unpacked app.
 
-The `BUG_REPORT_WEBHOOK` variable is built in at this point (see [Environment variables](#environment-variables)), and the build log says whether it was found. If `latest.yml` and the installer ever disagree, regenerate it from the installer on disk:
+The `BUG_REPORT_WEBHOOK` variable is built in at this point (see [Environment variables](#environment-variables)), and the build log says whether it was found: check for `[env] bug-report webhook compiled in` before publishing. If `latest.yml` and the installer ever disagree, regenerate it from the installer on disk:
 
 ```powershell
 node scripts/make-latest-yml.mjs
@@ -689,7 +688,7 @@ Releases are made by hand from `desktop-app`. There is no release CI.
 
 **The presence doesn't show on Discord.** Discord must be the desktop app and already running. At the bottom of Vybecord's sidebar, Discord must show as connected; the line under it says why the status is hidden, if it is. In Discord, check that activity sharing is allowed under *Activity Privacy*. Also check that **Show my activity on Discord** is on, and that the presence isn't hidden on purpose (away, paused, or a Spotify ad).
 
-**A second (or third…) card never appears.** All applications are in use. Add a **Spare application ID** under **Settings → Discord presence → Several presences**. The log has a `[DISCORD] Presence N has no application of its own` line.
+**A second (or third…) card never appears.** Check **Presences at once** under **Settings → Discord presence → Several presences**. If the log has a `[DISCORD] Presence N has no application of its own` line, every application was taken, which should not happen with five cards or fewer; please report it.
 
 **Lyrics are out of sync.** Use **−250 / +250** on **Now playing**. The offset is saved for that track. Some players report their position infrequently. The 3-second resync limits the error but can't remove it completely.
 
