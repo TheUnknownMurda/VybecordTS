@@ -156,13 +156,15 @@ desktop app can show what is being said as the stream's lyrics. It is read off
 the page like everything else, sent only to the desktop app, and nothing is
 read while captions are off.
 
-On kick.com only, the content script also makes same-origin requests to
-Kick's own API (/api/v1/channels/<channel>, /api/v1/video/<id> or
-/api/v2/clips/<id>, for whatever the tab is showing), to read the channel's
-name and picture, the stream's title, category, live status and start time —
-which the page does not reliably expose. They are the same requests the Kick
-page makes for itself, to the site the user is already on, and they require no
-host permission. Those fields are all that is read from the response, and they
+On kick.com only, the content script also makes requests to Kick's own API
+(kick.com/api/v1/channels/<channel> or kick.com/api/v2/clips/<id>, and for a
+past broadcast web.kick.com/api/v1/channels/<channel number>/videos/<id>, for
+whatever the tab is showing), to read the channel's name and picture, the
+stream's title, category, live status and start time — which the page does not
+reliably expose. They are the same requests the Kick page makes for itself, to
+Kick's own domain the user is already on, and they require no host
+permission: the kick.com ones are same-origin, and web.kick.com lets kick.com
+read it through its own CORS headers, as it does for Kick's page. Those fields are all that is read from the response, and they
 go nowhere except, like everything else the extension reports, to the
 desktop app with the rest of the stream data.
 ```
@@ -225,9 +227,11 @@ extension transmits the user's data only to `127.0.0.1`, which by definition
 never leaves the machine — so a strict reading is that it collects nothing.
 
 The one request that does leave the machine sends none of it: on kick.com the
-content script asks Kick, same-origin, about the channel, video or clip open
-in the tab. It carries the id that is already in the address bar and no
-user data, and it goes to the site the user is on rather than to us. Say so if
+content script asks Kick's own API (on kick.com, or web.kick.com for a past
+broadcast) about the channel, video or clip open in the tab. It carries the
+ids that are already in the address bar -- and for a past broadcast the
+channel's number, from Kick's own answer -- and no user data, and it goes to
+the site the user is on rather than to us. Say so if
 it comes up — a reviewer reading `sites/kick.js` will see the call, and a
 disclosure that pretends it is not there is worse than the call itself.
 
@@ -261,9 +265,11 @@ application's function and is disclosed in its own documentation.
 The extension makes one request to a site: on kick.com it asks Kick's own
 API about the channel, past broadcast or clip open in the tab -- its name,
 picture, title, category, live status and start time -- because the page does
-not expose them reliably. That request is same-origin, identical to one the
-Kick page itself makes, carries only the channel name or video id already
-visible in the address bar, and only those fields are read from the response.
+not expose them reliably. That request goes to Kick's own domain (kick.com,
+or web.kick.com for a past broadcast), is identical to one the Kick page itself
+makes, carries only the channel name or video id already visible in the address
+bar (and Kick's own number for that channel), and only those fields are read
+from the response.
 
 The optional cookie switch is off by default and its permissions are not
 granted at install. When the user turns it on, and only when the desktop app

@@ -5,8 +5,9 @@
  *
  * Why it asks Kick's API from the page
  * ------------------------------------
- * The requests below to kick.com/api are the only ones this extension makes to
- * anything other than the desktop app, and they are the reason the README and
+ * The requests below to Kick's API (kick.com/api, and web.kick.com/api for a
+ * past broadcast) are the only ones this extension makes to anything other
+ * than the desktop app, and they are the reason the README and
  * the privacy policy both carry an explicit Kick exception rather than a flat
  * "contacts only 127.0.0.1". The obvious tidy-up is to move them into the
  * desktop app, the way the equivalent Twitch lookup was moved to
@@ -17,8 +18,10 @@
  * /api/v1 and /api/v2 alike, with any User-Agent, and for the plain channel
  * page HTML too. The official api.kick.com endpoint answers 401 without OAuth
  * credentials this project does not have. What makes the calls below work is
- * exactly what cannot be reproduced from Node: they are same-origin, from a
- * real browser, carrying the session of a page the user already has open.
+ * exactly what cannot be reproduced from Node: they come from a real browser,
+ * from a Kick page the user already has open — same-origin, or, for
+ * web.kick.com, let through by Kick's own CORS headers, as they are for the
+ * page itself.
  *
  * They used to ask for the stream's start time and nothing else, while the
  * name, picture, title and liveness were read off the page — the first
@@ -128,7 +131,7 @@
     /**
      * Which page this is, from the URL alone.
      *
-     *   /<channel>/videos/<uuid>   a past broadcast
+     *   /<channel>/videos/<id>     a past broadcast
      *   /<channel>/clips/<id>      a clip, as is /<channel>?clip=<id>
      *   /<channel>                 the channel, live or not
      */
@@ -142,10 +145,37 @@
         return { kind: 'channel', slug, id: '' };
     }
 
-    function apiUrl(page) {
-        if (page.kind === 'vod') return `/api/v1/video/${encodeURIComponent(page.id)}`;
-        if (page.kind === 'clip') return `/api/v2/clips/${encodeURIComponent(page.id)}`;
-        return `/api/v1/channels/${encodeURIComponent(page.slug)}`;
+    function channelUrl(slug) {
+        return `/api/v1/channels/${encodeURIComponent(slug)}`;
+    }
+
+    function videoUrl(channelNumber, id) {
+        return `https://web.kick.com/api/v1/channels/${encodeURIComponent(channelNumber)}/videos/${encodeURIComponent(id)}`;
+    }
+
+    /**
+     * Kick's answer about what the tab shows: { status: 'ok' | 'missing' |
+     * 'error', data }, or undefined while it is on its way.
+     *
+     * A past broadcast takes two. Kick's site now links them by ids that
+     * /api/v1/video/<id> answers 404 to ("No query results"), and the site
+     * itself no longer opens the ids that endpoint knows (October 2026). The
+     * API Kick's own pages now use, on web.kick.com, does know them, filed
+     * under the channel's number, which is in the channel's own answer. So
+     * the channel is asked first, as it is on its page, and then the video.
+     * The channel's answer alone is enough to show the video, without its
+     * title, if that API does not answer: it is not the page's own origin,
+     * and a browser may refuse the request.
+     */
+    function pageAnswer(page) {
+        if (page.kind === 'clip') return apiAnswer(`/api/v2/clips/${encodeURIComponent(page.id)}`, page);
+        const channel = apiAnswer(channelUrl(page.slug), page);
+        if (page.kind === 'channel' || !channel || channel.status !== 'ok') return channel;
+        const number = channel.data && channel.data.id;
+        const video = number ? apiAnswer(videoUrl(number, page.id), page) : { status: 'error', data: null };
+        if (!video || video.status === 'missing') return video;
+        const found = video.status === 'ok' && video.data ? video.data.data : null;
+        return { status: 'ok', data: { channel: channel.data, video: found || {} } };
     }
 
     /**
@@ -156,13 +186,17 @@
     const apiCache = new Map();
     const apiInFlight = new Set();
 
-    function apiAnswer(page) {
-        const url = apiUrl(page);
+    /** A page as one string, to tell one page from another. */
+    function pageId(page) {
+        return page ? `${page.kind}|${page.slug}|${page.id}` : '';
+    }
+
+    function apiAnswer(url, page) {
         const cached = apiCache.get(url);
         const age = cached ? Date.now() - cached.at : Infinity;
         const due = !cached
             || (cached.status === 'error' && age > RETRY_MS)
-            || (cached.status === 'ok' && page.kind === 'channel' && age > CHANNEL_TTL_MS);
+            || (cached.status === 'ok' && url.startsWith('/api/v1/channels/') && age > CHANNEL_TTL_MS);
         if (due && !apiInFlight.has(url)) {
             apiInFlight.add(url);
             fetch(url, { headers: { Accept: 'application/json' }, credentials: 'same-origin' })
@@ -180,8 +214,9 @@
                     else apiCache.set(url, { at: Date.now(), ...answer });
                     if (apiCache.size > 32) apiCache.delete(apiCache.keys().next().value);
                     apiInFlight.delete(url);
-                    // Report the answer now rather than at the next beat.
-                    if (apiUrl(pageFromUrl() || page) === url) periodicPush();
+                    // Report the answer now rather than at the next beat; for a
+                    // past broadcast's channel, that asks for the video now.
+                    if (pageId(pageFromUrl()) === pageId(page)) periodicPush();
                 });
         }
         return cached;
@@ -253,15 +288,18 @@
         }
         Object.assign(info, playerState());
         if (page.kind === 'vod') {
-            const ls = data.livestream || {};
-            const ch = ls.channel || {};
-            const user = ch.user || {};
-            info.username = ch.slug || page.slug;
-            info.display_name = user.username || '';
-            info.profile_picture_url = user.profilepic || user.profile_pic || '';
-            info.stream_title = ls.session_title || '';
-            info.category = firstCategory(ls.categories);
-            if (!info.duration_ms && ls.duration > 0) info.duration_ms = ls.duration;
+            // The channel's answer, and the video's from Kick's newer API: see pageAnswer.
+            const channel = data.channel || {};
+            const user = channel.user || {};
+            const video = data.video || {};
+            const ch = video.channel || {};
+            info.username = ch.slug || channel.slug || page.slug;
+            info.display_name = ch.username || user.username || '';
+            info.profile_picture_url = user.profile_pic || '';
+            info.stream_title = video.title || '';
+            info.category = (video.category && video.category.name) || '';
+            // In seconds here, where the old API gave milliseconds.
+            if (!info.duration_ms && video.duration > 0) info.duration_ms = video.duration * 1000;
         } else {
             const clip = data.clip || {};
             const ch = clip.channel || {};
@@ -684,13 +722,13 @@
     function getStreamerInfo() {
         const page = pageFromUrl();
         if (!page) return null;
-        const key = `${page.kind}|${page.slug}|${page.id}`;
+        const key = pageId(page);
         if (key !== pageKey) {
             pageKey = key;
             pageSince = Date.now();
             streamStartTime = 0;
         }
-        const answer = apiAnswer(page);
+        const answer = pageAnswer(page);
         if (answer && answer.status === 'ok') return infoFromApi(page, answer.data);
         // Kick says there is no such channel or video: not a page to report.
         if (answer && answer.status === 'missing') return null;
