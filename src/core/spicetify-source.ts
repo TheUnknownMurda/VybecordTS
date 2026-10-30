@@ -40,6 +40,10 @@ export interface SpicetifyPayload {
   is_shuffle?: boolean;
   repeat_mode?: string;
   is_local?: boolean;
+  /** Playing from Spotify's DJ. */
+  is_dj?: boolean;
+  /** The DJ is talking between songs rather than a track playing. */
+  dj_narration?: boolean;
 }
 
 /**
@@ -74,6 +78,8 @@ export function normalizeSpicetifyPayload(raw: unknown): SpicetifyPayload {
     is_shuffle: asBool(d.is_shuffle),
     repeat_mode: repeat === 'track' || repeat === 'context' ? repeat : 'off',
     is_local: asBool(d.is_local),
+    is_dj: asBool(d.is_dj),
+    dj_narration: asBool(d.dj_narration),
   };
 }
 
@@ -113,7 +119,8 @@ export class SpicetifySource {
     if (!this.latestData.is_playing) return null;
 
     const d = this.latestData;
-    if (!d.track_name) return null;
+    // A DJ voice segment may come with no title at all; it still deserves a card.
+    if (!d.track_name && !d.dj_narration) return null;
 
     // Compensate progress for time since last push
     const elapsed = performance.now() - this.receivedAt;
@@ -122,17 +129,24 @@ export class SpicetifySource {
       d.duration_ms || Infinity,
     );
 
+    /*
+     * The DJ talking between songs. Whatever Spotify calls the segment, it is
+     * not a song: announced under its own name it would be looked up for
+     * lyrics, could match some real track called that, and would be scrobbled.
+     * One fixed identity, flagged so the backend skips all three.
+     */
+    const narration = !!d.dj_narration;
     const result = {
-      track_id: d.track_id || `spicetify:${d.track_name}:${d.artist_name}`,
-      track_name: d.track_name,
-      artist_name: d.artist_name,
-      album_name: d.album_name,
+      track_id: narration ? `spicetify:dj:${d.uri}` : d.track_id || `spicetify:${d.track_name}:${d.artist_name}`,
+      track_name: narration ? 'DJ is talking' : d.track_name,
+      artist_name: narration ? 'Spotify DJ' : d.artist_name,
+      album_name: narration ? '' : d.album_name,
       duration_ms: d.duration_ms,
       progress_ms: compensatedProgress,
       is_playing: true,
       is_live: false,
       album_art_url: d.album_art_url,
-      spotify_url: d.spotify_url,
+      spotify_url: narration ? d.context_url : d.spotify_url,
       artist_url: d.artist_url,
       album_url: d.album_url || '',
       context_name: d.context_name || '',
@@ -143,6 +157,8 @@ export class SpicetifySource {
       is_shuffle: d.is_shuffle ?? false,
       repeat_mode: ((d.repeat_mode === 'track' || d.repeat_mode === 'context') ? d.repeat_mode : 'off') as 'off' | 'track' | 'context',
       is_local: d.is_local ?? false,
+      is_dj: d.is_dj ?? false,
+      is_dj_narration: narration,
       _received_at: performance.now(),
       _from_push: true,
     };

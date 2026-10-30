@@ -1736,7 +1736,7 @@ export class VybecordBackend extends EventEmitter {
      * happens to read like a band would come back with that band's record.
      */
     const declaredArt = trackData.album_art_url || '';
-    if (!trackData.is_live && !/^https?:\/\//.test(declaredArt)) {
+    if (!trackData.is_live && !trackData.is_dj_narration && !/^https?:\/\//.test(declaredArt)) {
       const allowUpload = declaredArt === '/api/thumbnail' && (localArtExtracted || this.thumbBelongsTo(trackData));
       this.resolveDiscordArt(slot, trackData, signal, allowUpload);
     }
@@ -1815,7 +1815,8 @@ export class VybecordBackend extends EventEmitter {
       // SoundCloud & Bandcamp report accurate audio duration — keep it for better matching
       const lyricsDuration = isVideoSource ? 0 : trackData.duration_ms;
 
-      const lyricsPromise = (!trackData.is_live)
+      // Spotify's DJ talking is not a song either; see spicetify-source.ts.
+      const lyricsPromise = (!trackData.is_live && !trackData.is_dj_narration)
         ? (async (): Promise<LyricLine[]> => {
             // Spotify's own lyrics do not come through here: the Spicetify
             // extension pushes them, and they are picked up from the cache above.
@@ -2022,6 +2023,7 @@ export class VybecordBackend extends EventEmitter {
       // that never happened, 41 times in one real session.
       const noLyricsSource = trackData.is_live
         ? 'live stream, not looked up'
+        : trackData.is_dj_narration ? 'Spotify DJ talking, not looked up'
         : isYt ? 'CC fetch failed or empty' : 'LRCLib/Netease fetch failed';
       log.info(`[LYRICS] No lyrics found for "${trackData.track_name}" — ${noLyricsSource}`);
       slot.engine.updateTrackData(trackData);
@@ -2035,7 +2037,7 @@ export class VybecordBackend extends EventEmitter {
        * scrape that cannot match anything. The synced path already knew that;
        * this one was still asking, once per stream event.
        */
-      if (!signal.aborted && !trackData.is_live) {
+      if (!signal.aborted && !trackData.is_live && !trackData.is_dj_narration) {
         fetchPlainLyrics(trackData.track_name, trackData.artist_name, trackData.album_name, trackData.duration_ms, signal)
           .then(lines => {
             if (lines && lines.length > 0 && slot.trackKey === expectedKey) {
@@ -2747,6 +2749,12 @@ export class VybecordBackend extends EventEmitter {
    * history module sees the open entry and continues that listen.
    */
   private recordPlay(t: TrackData): void {
+    // The DJ talking between songs: held like an ad break below, for the same
+    // reason, without the guesswork.
+    if (t.is_dj_narration) {
+      historyTrackPause();
+      return;
+    }
     // An advertisement is not a play. The presence filter is a user preference,
     // so it cannot be relied on here: with it off, every ad break used to land
     // in the history as a track by a brand. The heuristic is the same one —

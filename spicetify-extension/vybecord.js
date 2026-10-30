@@ -167,6 +167,16 @@
   // own token, so there is no auth to obtain or refresh here.
   const LYRICS_API = 'https://spclient.wg.spotify.com/color-lyrics/v2/track/';
 
+  /*
+   * Spotify's DJ plays from one fixed playlist, and between songs it plays its
+   * own voice segments, which Spotify marks by the item's provider. The skip-
+   * the-DJ-voice snippets the Spicetify community shares key on the same field.
+   * Neither is documented API: if Spotify renames them, DJ sessions simply read
+   * as an ordinary playlist again.
+   */
+  const DJ_PLAYLIST_ID = '37i9dQZF1EYkqdzj48dyYq';
+  const isDjNarration = (item) => String(item?.provider || '').startsWith('narration');
+
   let progressTimer = null;
   let lastSentUri = '';
   let lastSentPlaying = null;
@@ -184,7 +194,10 @@
     const playerCtx = Spicetify.Player.data.context;
     const ctxUri = playerCtx?.uri || '';
     const isLocalFile = uri.startsWith('spotify:local:');
-    const isLocal = isLocalFile || !trackId || ctxUri.includes(':local:') || ctxUri.includes('local-files');
+    const djNarration = isDjNarration(item);
+    const isDj = djNarration || ctxUri === `spotify:playlist:${DJ_PLAYLIST_ID}`;
+    // A DJ voice segment has no track id either, and is not a local file.
+    const isLocal = !djNarration && (isLocalFile || !trackId || ctxUri.includes(':local:') || ctxUri.includes('local-files'));
 
     // Collect all artists with their URIs
     const artists = (item.artists || []).map(a => ({
@@ -251,7 +264,13 @@
       //   spotify:user:{uid}:collection  → /collection/tracks (Liked Songs)
       //   spotify:station:{id}           → no web URL
       //   spotify:search:{query}         → no stable URL
-      if (parts[1] === 'user' && parts[3] === 'collection') {
+      if (isDj) {
+        // Named outright rather than from the context description, which
+        // Spotify fills for its own UI and nothing here has checked.
+        contextType = 'dj';
+        contextUrl = `https://open.spotify.com/playlist/${DJ_PLAYLIST_ID}`;
+        contextName = 'DJ';
+      } else if (parts[1] === 'user' && parts[3] === 'collection') {
         contextType = 'collection';
         contextUrl = 'https://open.spotify.com/collection/tracks';
         contextName = 'Liked Songs';
@@ -308,6 +327,8 @@
         ? ['off', 'context', 'track'][Spicetify.Player.getRepeat()]
         : 'off',
       is_local: isLocal,
+      is_dj: isDj,
+      dj_narration: djNarration,
     };
   }
 

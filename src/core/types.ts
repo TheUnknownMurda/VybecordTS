@@ -32,6 +32,10 @@ export interface TrackData {
   repeat_mode?: 'off' | 'context' | 'track';
   /** True if this is a local file (not on Spotify streaming service) */
   is_local?: boolean;
+  /** Playing from Spotify's DJ (Spicetify only). */
+  is_dj?: boolean;
+  /** Spotify's DJ talking between songs: no lyrics, no history, no scrobble. */
+  is_dj_narration?: boolean;
   /** High-res timestamp (performance.now()) when this data was received */
   _received_at: number;
   /**
