@@ -38,6 +38,12 @@ const DEFAULTS: VybecordConfig = {
   rpc_button1_label: '',
   rpc_button1_url: '',
   rpc_activity_type: 2, // LISTENING
+  // Presences 2 to 5: -1 follows presence 1's type, so one setting still
+  // covers everything until a card is given a verb of its own.
+  rpc_activity_type_2: -1,
+  rpc_activity_type_3: -1,
+  rpc_activity_type_4: -1,
+  rpc_activity_type_5: -1,
   rpc_status_display: 'app', // status line keeps showing the app name by default
   rpc_status_template: '{title} - {artist}',
   // The playlist has always been on the presence; the switch is for people who
@@ -50,6 +56,7 @@ const DEFAULTS: VybecordConfig = {
   bleeding_mode: false,
   blue_rad_mode: false,
   random_icon_mode: false,
+  auto_icon_mode: false,
   hide_small_icon: false,
   // Accepted by CONFIG_SCHEMA and read by getRpcConfig()/the icon-mode ladder,
   // so it belongs here too — without it the key was simply absent from a fresh
@@ -158,6 +165,10 @@ export const CONFIG_SCHEMA: Record<string, FieldSpec> = {
   rpc_button1_url: { type: 'string', maxLength: 512 },
   // Discord only accepts Playing(0) / Listening(2) / Watching(3) / Competing(5)
   rpc_activity_type: { type: 'number', min: 0, max: 5 },
+  rpc_activity_type_2: { type: 'number', min: -1, max: 5 },
+  rpc_activity_type_3: { type: 'number', min: -1, max: 5 },
+  rpc_activity_type_4: { type: 'number', min: -1, max: 5 },
+  rpc_activity_type_5: { type: 'number', min: -1, max: 5 },
   rpc_status_display: { type: 'string', values: STATUS_DISPLAY_CHOICES },
   rpc_status_template: { type: 'string', maxLength: 128 },
   rpc_show_playlist: { type: 'boolean' },
@@ -169,6 +180,7 @@ export const CONFIG_SCHEMA: Record<string, FieldSpec> = {
   blue_rad_mode: { type: 'boolean' },
   lrc_off_mode: { type: 'boolean' },
   random_icon_mode: { type: 'boolean' },
+  auto_icon_mode: { type: 'boolean' },
   hide_small_icon: { type: 'boolean' },
   cc_enabled: { type: 'boolean' },
   cc_lang: { type: 'string', maxLength: 16 },

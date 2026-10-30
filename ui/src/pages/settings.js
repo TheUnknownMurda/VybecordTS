@@ -34,6 +34,8 @@ const PRESENCE_COUNTS = [[1, 'One'], [2, 'Two'], [3, 'Three'], [4, 'Four'], [5, 
  * `show_lyrics` switch it always had, the others have their own.
  */
 const LYRICS_KEYS = ['show_lyrics', 'show_lyrics_2', 'show_lyrics_3', 'show_lyrics_4', 'show_lyrics_5'];
+/** The activity type per card; presence 1 keeps `rpc_activity_type`, the others may follow it (-1). */
+const ACTIVITY_KEYS = ['rpc_activity_type', 'rpc_activity_type_2', 'rpc_activity_type_3', 'rpc_activity_type_4', 'rpc_activity_type_5'];
 const APP_ID_KEYS = ['discord_app_id_2', 'discord_app_id_3', 'discord_app_id_4', 'discord_app_id_5'];
 const presenceCount = () => Math.max(1, Math.min(5, Number(cfg('presence_count', 1)) || 1));
 
@@ -43,7 +45,8 @@ const presenceCount = () => Math.max(1, Math.min(5, Number(cfg('presence_count',
  * and clears the rest on change.
  */
 const ICON_MODES = [
-  ['', 'Platform default'], ['dance_mode', 'Dance'], ['radiate_mode', 'Radiate'],
+  ['', 'Platform default'], ['auto_icon_mode', 'Match the cover'],
+  ['dance_mode', 'Dance'], ['radiate_mode', 'Radiate'],
   ['purple_rad_mode', 'Purple'], ['blue_rad_mode', 'Blue'], ['rouge_mode', 'Red'],
   ['bleeding_mode', 'Bleeding'], ['random_icon_mode', 'Random each track'],
   // The engine has always known this mode; the list simply never listed it, so
@@ -288,7 +291,7 @@ function presenceCat(body, { search }) {
         cfg('show_lyrics', true) !== false, (v) => put('show_lyrics', v)),
       toggleRow('Name the playlist', 'Name the playlist, radio or Liked Songs the track is playing from — on the card and in the status line. Off, that line shows the artist instead.',
         cfg('rpc_show_playlist', true) !== false, (v) => put('rpc_show_playlist', v)),
-      selectRow('Activity type', 'The verb Discord shows before the activity.',
+      multi ? null : selectRow('Activity type', 'The verb Discord shows before the activity.',
         cfg('rpc_activity_type', 2), ACTIVITY_TYPES, (v) => put('rpc_activity_type', Number(v))),
       selectRow('Status line', 'What the one-line status in the member list shows.',
         cfg('rpc_status_display', 'app'), STATUS_DISPLAY, (v) => put('rpc_status_display', v)),
@@ -296,7 +299,9 @@ function presenceCat(body, { search }) {
         ? inputRow('Status template', 'Placeholders: {title} {artist} {album} {platform}',
             cfg('rpc_status_template', ''), (v) => put('rpc_status_template', v))
         : null,
-      selectRow('Small icon', 'The little badge in the corner of the album art.', iconMode, ICON_MODES, (v) => {
+      selectRow('Small icon', 'The little badge in the corner of the album art, on Spotify. '
+        + 'Match the cover picks the red, blue, purple or green one from the cover’s main colour, and keeps the Spotify logo on a cover without one.',
+        iconMode, ICON_MODES, (v) => {
         // Exactly one mode may be set, so clear them all and set the chosen one.
         const patch = Object.fromEntries(ICON_KEYS.map((k) => [k, false]));
         if (v) patch[v] = true;
@@ -318,6 +323,14 @@ function presenceCat(body, { search }) {
             `Lyrics on presence ${i + 1}`,
             i === 0 ? 'The line being sung and the next one; the title, artist and album move to the line under them.' : 'Off shows the track without lyrics on that card.',
             cfg(key, true) !== false, (v) => put(key, v)))
+        : []),
+      ...(multi
+        ? ACTIVITY_KEYS.slice(0, presenceCount()).map((key, i) => selectRow(
+            `Activity type on presence ${i + 1}`,
+            i === 0 ? 'The verb Discord shows before the activity.' : 'Listening for the song and Watching for the stream, say.',
+            cfg(key, i === 0 ? 2 : -1),
+            i === 0 ? ACTIVITY_TYPES : [[-1, 'Same as presence 1'], ...ACTIVITY_TYPES],
+            (v) => put(key, Number(v))))
         : []),
       ...(multi
         ? APP_ID_KEYS.slice(0, presenceCount() - 1).map((key, i) => inputRow(
@@ -505,11 +518,11 @@ function integrationsCat(body) {
     cardGroup('Spotify', spicetifyCard()),
     cardGroup('Last.fm', lastfmCard()),
     group('Cover images', [
-      toggleRow('Publish artwork that exists only on this PC',
-        'Released albums are looked up in a public catalogue, which sees nothing but the track and artist. '
-        + 'Your own rips, demos and DJ sets are in no catalogue — with this on, that artwork alone is published '
-        + 'for Discord to fetch. Never the audio, and camera and location tags are stripped first. '
-        + 'Off, those tracks show the default placeholder.',
+      toggleRow('Publish the player’s cover',
+        'Discord shows the cover your player shows — Spotify’s, Apple Music’s, or a local file’s — published '
+        + 'for it to fetch. Never the audio, and camera and location tags are stripped first. '
+        + 'Off, covers are looked up in a public catalogue instead, which sees nothing but the track and artist, '
+        + 'and may answer with another edition’s artwork.',
         cfg('art_upload_enabled', true) !== false, (v) => put('art_upload_enabled', v)),
     ]),
   );

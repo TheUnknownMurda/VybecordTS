@@ -116,10 +116,16 @@ export class YouTubeSource {
     // Parse artist from title if not provided by YouTube metadata
     let trackName = d.title;
     let artistName = d.artist || d.channel || 'Unknown';
+    let artistIsChannel = false;
 
-    // Try to split "Artist - Title" format
-    if (!d.artist || d.artist === d.channel) {
+    // Try to split "Artist - Title" format. A "… - Topic" channel is YouTube's
+    // own upload of a release: its title is the song name as released, and a
+    // dash in it is part of that name ("Song - Remastered"), not a separator.
+    if ((!d.artist || d.artist === d.channel) && !RE_TOPIC_SUFFIX.test(artistName)) {
       const [parsed, parsedArtist] = parseBrowserTitle(trackName, artistName);
+      // Nothing split off: the title is a video's title and the name beside
+      // it is whoever uploaded it. YouTube Music always names a real artist.
+      artistIsChannel = parsed === trackName && d.source !== 'youtube_music' && !d.is_live;
       trackName = parsed;
       artistName = parsedArtist;
     }
@@ -152,6 +158,7 @@ export class YouTubeSource {
       _received_at: performance.now(),
       _from_push: true,
       video_url: `https://www.youtube.com/watch?v=${d.video_id}`,
+      artist_is_channel: artistIsChannel,
     };
   }
 
@@ -194,8 +201,14 @@ export class YouTubeSource {
 
 // ── Title parsing helpers ──
 
+/**
+ * Dashes only. A bar was on this list and read the wrong way round on YouTube,
+ * where "Title | Series" is the convention rather than "Artist | Title":
+ * "The Boston Marathon Bombing, minute by minute | xQc Reacts" was announced as
+ * a song called "xQc Reacts" by an artist called "The Boston Marathon Bombing".
+ */
 function parseBrowserTitle(title: string, smtcArtist: string): [track: string, artist: string] {
-  for (const sep of [' - ', ' – ', ' — ', ' | ']) {
+  for (const sep of [' - ', ' – ', ' — ']) {
     const idx = title.indexOf(sep);
     if (idx > 0) {
       const left = title.slice(0, idx).trim();
