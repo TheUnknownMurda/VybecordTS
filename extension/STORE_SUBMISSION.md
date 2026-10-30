@@ -226,6 +226,42 @@ point of the extension clear in a way the options page alone cannot.
 
 ---
 
+## Firefox Add-ons (AMO)
+
+Upload `release/vybecord-extension-<version>-firefox.zip`, not the Chromium one.
+The listing text, permission answers and privacy policy above apply unchanged.
+
+Only a copy signed by Mozilla stays installed in Firefox; anything else is a
+temporary add-on, dropped when the browser closes. Signing does not require a
+public listing: AMO can sign an **unlisted** version, which is then shipped as an
+`.xpi` from the releases page instead of the store. Either way it goes through
+an AMO account.
+
+**Data collection.** Since 2025-11-03 AMO refuses a new extension that does not
+declare `browser_specific_settings.gecko.data_collection_permissions`, and
+Mozilla's `addons-linter` flags its absence. The manifest declares
+`"required": ["websiteContent"]`, and Firefox shows that on the install prompt.
+`"none"` would have been the strict reading, as with Chrome above, since
+nothing leaves the machine. But Mozilla counts data handled outside the browser
+as transmitted, and the desktop app is outside the browser, so the same
+deliberate answer is given here as in the Chrome disclosure: the extension reads
+website content and hands it on. Nothing else is declared, for the reasons given
+there.
+
+The key is understood from Firefox 140, which is also why `strict_min_version`
+is 140 (see the extension README for the other reason). `npx addons-linter
+release/vybecord-extension-<version>-firefox.zip` must report no errors before
+an upload, and one warning only: `KEY_FIREFOX_ANDROID_UNSUPPORTED_BY_MIN_VERSION`,
+because Firefox for Android learned the key in 142. Android does not matter
+here, since there is no desktop app on a phone to send anything to: on AMO,
+leave **Firefox for Android** unticked under compatibility.
+
+## Opera add-ons
+
+addons.opera.com takes the Chromium zip as it is. It is optional: Opera can
+install from the Chrome Web Store too, so the Chrome listing reaches Opera users
+on its own, and Opera's review queue is slow.
+
 ## After it is published
 
 Replace the "load unpacked" flow with a link to the listing. The reasoning in

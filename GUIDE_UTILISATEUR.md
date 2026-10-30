@@ -123,7 +123,8 @@ Windows dit à Vybecord ce qui joue, pas sur quel site : un onglet SoundCloud et
 L'extension navigateur optionnelle corrige ça. **Settings → Integrations → Browser extension** te guide :
 
 - **Chrome, Edge, Brave, Opera, Vivaldi** — clique sur **Open the extension folder**, ouvre la page des extensions de ton navigateur (le panneau copie son adresse pour toi), active le **Mode développeur**, clique sur **Charger l'extension non empaquetée** et choisis ce dossier.
-- **Firefox 121 ou plus récent** — télécharge `vybecord-extension-<version>-firefox.zip` depuis la [page des releases](https://github.com/TheUnknownMurda/VybecordTS/releases/latest), ouvre `about:debugging#/runtime/this-firefox`, clique sur **Charger un module complémentaire temporaire** et choisis le zip. Firefox retire les modules temporaires à sa fermeture.
+- **Firefox 140 ou plus récent** (aussi Zen, LibreWolf, Waterfox, Floorp) — télécharge `vybecord-extension-<version>-firefox.zip` depuis la [page des releases](https://github.com/TheUnknownMurda/VybecordTS/releases/latest), ouvre `about:debugging#/runtime/this-firefox`, clique sur **Charger un module complémentaire temporaire** et choisis le zip. Firefox retire les modules temporaires à sa fermeture.
+- **Safari** n'est pas pris en charge : Safari n'existe pas sur Windows.
 
 Son icône ouvre une page de réglages avec un interrupteur par site — Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick — tous actifs par défaut.
 

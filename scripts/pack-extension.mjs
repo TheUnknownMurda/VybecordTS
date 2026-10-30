@@ -56,7 +56,11 @@ function walk(dir) {
  * The same extension, declared the way Firefox needs it.
  *
  * Only the background changes. Everything else — permissions, content scripts,
- * the gecko id and version floor — is already what Firefox expects.
+ * the gecko id, version floor and data collection declaration — is already what
+ * Firefox expects, and Chromium ignores `browser_specific_settings` without a
+ * warning (checked in Chromium 153's extension error panel), so those keys can
+ * live in the shared manifest. Why the floor is 140 and what the declaration
+ * says is in extension/STORE_SUBMISSION.md, under Firefox Add-ons.
  */
 function toFirefox(raw) {
   const m = JSON.parse(raw);

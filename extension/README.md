@@ -30,13 +30,35 @@ Everything above is read out of the page, with one exception noted below, and th
 
 The same answer also settles *whether* a channel is live, which the page is likewise only guessing at — it reads "live" whenever it fails to find an offline marker. So if Twitch says a channel is not streaming, the app drops the status even though the tab still insists otherwise. Only that explicit answer counts: when Twitch cannot be reached, the page's reading stands rather than the status vanishing on a failed request.
 
+## Which browsers
+
+| Browser | Package | Notes |
+| --- | --- | --- |
+| Chrome, Edge, Brave, Vivaldi, Arc | the folder, or `vybecord-extension-<version>.zip` | Load unpacked, stays installed |
+| Opera, Opera GX | same | `opera://extensions`, Developer mode, Load unpacked |
+| Firefox 140+, and its forks (Zen, LibreWolf, Waterfox, Floorp) | `vybecord-extension-<version>-firefox.zip` | Temporary add-on until it is signed by Mozilla, see below |
+| Safari | none | Not applicable: there is no Safari for Windows, and the app runs only on Windows |
+
+Every Chromium browser runs the same package unchanged, because the extension
+uses nothing outside the shared WebExtension core: `runtime` messaging,
+`storage.sync`, the `action` badge, content scripts and one `fetch` to
+127.0.0.1. The app accepts `chrome-extension://` (every Chromium browser, Edge
+and Opera included), `moz-extension://` and `safari-web-extension://` origins.
+
+Safari is the one that cannot be covered. Apple stopped making Safari for
+Windows in 2012, so a Safari user is on a Mac, where the desktop app does not
+run. Shipping a Safari extension would also take a Mac with Xcode to convert it
+and a paid Apple Developer account to distribute it. It becomes worth doing the
+day the app runs on macOS, not before.
+
 ## Install (unpacked)
 
-1. Open `chrome://extensions` (or `edge://extensions`)
+1. Open `chrome://extensions` (or `edge://extensions`, `brave://extensions`,
+   `opera://extensions`, `vivaldi://extensions`)
 2. Turn on **Developer mode**
 3. **Load unpacked** → select this `extension/` folder
 
-Firefox 121 or newer needs its own build, because one manifest cannot serve both
+Firefox 140 or newer needs its own build, because one manifest cannot serve both
 engines: Manifest V3 declares the background as a `service_worker`, and Firefox
 has no MV3 service workers — it runs the background as an event page declared
 with `scripts`. Chromium rejects that key outright and shows the user an error,
@@ -48,8 +70,14 @@ node scripts/pack-extension.mjs
 
 Then `about:debugging` → **This Firefox** → **Load Temporary Add-on** → pick
 `release/vybecord-extension-<version>-firefox.zip`. Firefox drops temporary
-add-ons when it closes. On anything older than 121 the background never starts
-and the extension is inert.
+add-ons when it closes; only a copy signed by Mozilla stays installed, and
+signing goes through addons.mozilla.org (as a public listing, or unlisted for
+a self-hosted .xpi). The floor is 140 for two reasons. Before Firefox 127 the
+host permissions of a Manifest V3 add-on were not granted at install, so its
+content scripts did not run until the user granted them by hand in
+about:addons. And 140 is the first version that understands the
+`data_collection_permissions` declaration Mozilla now requires, which is also
+the current ESR.
 
 The extension icon opens the settings, where each site has its own switch. All are on by default; a site switched off sends nothing at all.
 

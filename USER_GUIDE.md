@@ -123,7 +123,8 @@ Windows tells Vybecord what is playing, not which website it is on: a SoundCloud
 The optional browser extension fixes that. **Settings → Integrations → Browser extension** walks you through it:
 
 - **Chrome, Edge, Brave, Opera, Vivaldi** — click **Open the extension folder**, open your browser's extensions page (the card copies its address for you), turn on **Developer mode**, click **Load unpacked** and pick that folder.
-- **Firefox 121 or newer** — download `vybecord-extension-<version>-firefox.zip` from the [releases page](https://github.com/TheUnknownMurda/VybecordTS/releases/latest), open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on** and pick the zip. Firefox removes temporary add-ons when it closes.
+- **Firefox 140 or newer** (also Zen, LibreWolf, Waterfox, Floorp) — download `vybecord-extension-<version>-firefox.zip` from the [releases page](https://github.com/TheUnknownMurda/VybecordTS/releases/latest), open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on** and pick the zip. Firefox removes temporary add-ons when it closes.
+- **Safari** isn't supported: there is no Safari for Windows.
 
 Its icon opens a settings page with a switch per site — Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick — all on by default.
 

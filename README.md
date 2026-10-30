@@ -115,7 +115,7 @@ Nothing else is needed. [yt-dlp](https://github.com/yt-dlp/yt-dlp) (used for You
 The following are optional:
 
 - [Spicetify](https://spicetify.app/), for the Spotify integration.
-- A Chromium-based browser or Firefox 121+, for the browser extension.
+- A Chromium-based browser (Chrome, Edge, Brave, Opera, Vivaldi, Arc) or Firefox 140+ (or a fork such as Zen or LibreWolf), for the browser extension.
 - About 40 GB to download an LRCLIB dump, and well over 100 GB of disk space once it is unpacked.
 - A Last.fm API account, for scrobbling.
 
@@ -167,12 +167,14 @@ Windows reports *what* is playing in a browser, but not *which site* it's on: a 
 2. Open your browser's extensions page (`chrome://extensions`, `edge://extensions`, `brave://extensions`, `opera://extensions` or `vivaldi://extensions`). Browsers don't let other apps open these pages, so Settings gives you a button that copies the address.
 3. Turn on **Developer mode**, click **Load unpacked**, and select the folder.
 
-**Firefox 121+**
+**Firefox 140+** (and forks such as Zen, LibreWolf, Waterfox, Floorp)
 
 1. Download `vybecord-extension-<version>-firefox.zip` from the [latest release](https://github.com/TheUnknownMurda/VybecordTS/releases/latest).
 2. Open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on** and select the zip.
 
 Firefox removes temporary add-ons when it closes. Use the `-firefox.zip` package, not the unpacked folder: the folder's manifest declares a Manifest V3 service worker, and Firefox doesn't run those.
+
+**Safari** isn't supported: there is no Safari for Windows, and Vybecord runs only on Windows.
 
 The extension's toolbar icon opens its options, where each site has its own switch (all are on by default). The app listens for the extension only while **Settings → Integrations → Browser extension → Accept data from the extension** is on (the default).
 
