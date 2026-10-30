@@ -1326,7 +1326,9 @@ export class LyricsEngine {
       // A stream's state field carries its category, which nothing links to.
       this.cachedStateUrl = '';
     } else {
-      this.cachedDetailsUrl = d.spotify_url || this.cachedSpotifySearch;
+      // A video's own page before a search for it: the extension always names
+      // the video, and a title search can land on somebody's re-upload.
+      this.cachedDetailsUrl = d.spotify_url || d.video_url || this.cachedSpotifySearch;
     }
     this.cachedLargeUrl = d.album_url || d.spotify_url || this.cachedSpotifySearch;
   }
@@ -1510,20 +1512,29 @@ export class LyricsEngine {
             if (this.cachedDisplayArtist) parts.push(`🎤 ${this.cachedDisplayArtist}`);
             if (this.cachedHasAlbum) parts.push(`💽 ${d.album_name}`);
           }
-          largeText = truncate(parts.join(' | ') || d.track_name, 128);
+          largeText = truncate(parts.join(' | '), 128);
         }
       } else {
-        // Kick/Twitch: don't add emoji to state
-        state = this.cachedDisplayArtist ? truncate((d.media_source === 'kick' || d.media_source === 'twitch') ? this.cachedDisplayArtist : `🎤 ${this.cachedDisplayArtist}`, 128) : '  ';
+        // Kick/Twitch, and a video's channel: a name, not an artist, so no microphone.
+        state = this.cachedDisplayArtist ? truncate((d.media_source === 'kick' || d.media_source === 'twitch' || d.artist_is_channel) ? this.cachedDisplayArtist : `🎤 ${this.cachedDisplayArtist}`, 128) : '  ';
         if (status) {
           largeText = truncate(status, 128);
         } else {
           // Kick/Twitch: don't add album emoji
           largeText = this.cachedHasAlbum
             ? truncate((d.media_source === 'kick' || d.media_source === 'twitch') ? `${d.album_name}${this.cachedPlayModeSuffix}` : `💽 ${d.album_name}${this.cachedPlayModeSuffix}`, 128)
-            : truncate(d.track_name, 128);
+            : '';
         }
       }
+      /*
+       * Nothing to say under the artist is better than saying the title again.
+       *
+       * Discord prints large_text as a third line on a Listening card, under
+       * details and state. With no album to put there it used to fall back on
+       * the track name, so every YouTube video and SoundCloud upload showed its
+       * title twice — bold on top, plain at the bottom. Sent empty, the field is
+       * left out of the payload and the card ends on the artist line.
+       */
     }
 
     // RPC dedup: skip if same content AND same lyric index (repeated lines must push)
@@ -1581,7 +1592,7 @@ export class LyricsEngine {
       timestamps: endTs > startTs ? { start: startTs, end: endTs } : { start: startTs },
       assets: {
         large_image: this.cachedLargeImage,
-        large_text: largeText,
+        large_text: largeText || undefined,
       },
       buttons: this.cachedButtons.length > 0 ? this.cachedButtons : undefined,
       details_url: this.cachedDetailsUrl,

@@ -797,7 +797,13 @@ export class NativeMediaSource {
         // parsing, all of it applies everywhere — the conventions are shared
         // ("Artist - Title", producer credits, slash separators), and the rules
         // are harmless where they do not apply.
+        const rawTitle = trackName.trim();
         [trackName, artistName] = parseWebTitle(trackName, artistName);
+        // No "Artist - Title" in it: a video's title, beside the channel that
+        // uploaded it. SoundCloud's uploader is the artist far more often.
+        artistIsChannel = source !== 'soundcloud' && source !== 'bandcamp'
+          && !RE_TOPIC_SUFFIX.test(s.media.artist || '')
+          && !WEB_SEPARATORS.some(sep => rawTitle.includes(sep));
         trackName = cleanMediaTitle(trackName);
         artistName = cleanMediaTitle(artistName).replace(RE_TOPIC_SUFFIX, '').trim();
       }
@@ -1164,7 +1170,9 @@ export function detectWebService(s: SessionState): string | null {
 
 // ── Title parsing (unchanged from the PowerShell-era source) ──
 
-const WEB_SEPARATORS = [' - ', ' – ', ' — ', ' // ', ' | '];
+// No bar: on YouTube "Title | Series" is the convention, and splitting on it
+// announced the series as the song and the video's title as its artist.
+const WEB_SEPARATORS = [' - ', ' – ', ' — ', ' // '];
 const RE_PRODUCER_TAG = /\s*[\[(](?:prod\.?|produced\s+by)\s*.+[\])]\s*$/i;
 
 /**
