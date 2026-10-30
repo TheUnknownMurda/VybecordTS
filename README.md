@@ -58,7 +58,7 @@ Vybecord is a Windows desktop app (Electron + TypeScript). It reads the Windows 
 
 - The current lyric line goes on the card, with the next line under it. The cover tooltip shows the title, artist, album and playlist.
 - **Up to five presence cards at once.** For example: Spotify on card 1, a YouTube video on card 2, a Twitch stream on card 3. Each card has its own lyrics switch and can be pinned to its own player.
-- **A Discord application per platform**, so the card header reads *Spotify*, *YouTube*, *SoundCloud*, *Apple Music*, *Twitch* or *Kick*. Seven applications are built in, and you can add up to four spare ones.
+- **A Discord application per platform**, so the card header reads *Spotify*, *YouTube*, *SoundCloud*, *Apple Music*, *Twitch* or *Kick*. Seven applications are built in, more than the five cards the app can show.
 - **Customisable card.** You choose the activity type (Listening / Playing / Watching / Competing), what the one-line status shows (including a custom template), the small-icon style, and one custom button. The title, artist and cover are clickable.
 - **Cover art.** Released music gets its cover from Deezer, with the iTunes Search API as fallback. Artwork that exists only in your own files can be published to Vybecord's cover store (a switch in Settings).
 - **Away-aware.** The presence goes down when your machine has been idle long enough for Discord to mark you Idle (10 minutes by default), and comes back on the first key press.
@@ -252,7 +252,7 @@ Windows Media Player (both the classic and the new app), Groove Music, Movies & 
 - **Now playing** shows every card. Click one to see its lyrics, its Discord preview and its controls; the **Source** menu then pins that presence to a player.
 - The listening history (and so **Activity**) and Last.fm only follow **presence 1**.
 
-Discord shows one card per application. Each card publishes under its platform's own application. When that application is already in use by a higher card, the card borrows another one: first the default Vybecord application, then your **spare application IDs** (up to four), then any built-in platform application nobody is using. The card header still names the real platform. You only need spare IDs if you want more than the seven built-in applications can cover, or if you'd rather not borrow. To get one, create an application at <https://discord.com/developers/applications> and paste its Application ID. If no application is free, the card stays off Discord (it still shows in the window) and the log says why.
+Discord shows one card per application. Each card publishes under its platform's own application. When that application is already in use by a higher card, the card borrows another one: first the default Vybecord application, then any built-in platform application nobody is using. The card header still names the real platform. Seven applications for at most five cards means one is always free, so there is nothing to set up. If no application is free anyway, the card stays off Discord (it still shows in the window) and the log says why.
 
 ### Lyrics
 
@@ -368,7 +368,6 @@ The current track's artwork is also written to `%TEMP%\vybecord_thumb.jpg`.
 | `rpc_status_template` | `"{title} - {artist}"` | up to 128 characters; placeholders `{title}` `{artist}` `{album}` `{playlist}` `{platform}` | Status template (used when `rpc_status_display` is `custom`) |
 | `presence_count` | `1` | 1–5 | Several presences → Presences at once |
 | `show_lyrics_2` … `show_lyrics_5` | `true` | boolean | Lyrics on presence 2–5 |
-| `discord_app_id_2` … `discord_app_id_5` | `""` | up to 32 characters | Spare application ID 1–4 |
 | `dance_mode`, `radiate_mode`, `purple_rad_mode`, `blue_rad_mode`, `rouge_mode`, `bleeding_mode`, `random_icon_mode`, `lrc_off_mode`, `hide_small_icon` | `false` | boolean, at most one `true` | Small icon |
 | `rpc_button1_label` | `""` | up to 128 characters (cut to 32 on the card) | Buttons → Your button's label (empty hides the button) |
 | `rpc_button1_url` | `""` | up to 512 characters | Buttons → Your button's link |
@@ -685,7 +684,7 @@ Releases are made by hand from `desktop-app`. There is no release CI.
 
 **The presence doesn't show on Discord.** Discord must be the desktop app and already running. At the bottom of Vybecord's sidebar, Discord must show as connected; the line under it says why the status is hidden, if it is. In Discord, check that activity sharing is allowed under *Activity Privacy*. Also check that **Show my activity on Discord** is on, and that the presence isn't hidden on purpose (away, paused, or a Spotify ad).
 
-**A second (or third…) card never appears.** All applications are in use. Add a **Spare application ID** under **Settings → Discord presence → Several presences**. The log has a `[DISCORD] Presence N has no application of its own` line.
+**A second (or third…) card never appears.** Check **Presences at once** under **Settings → Discord presence → Several presences**. If the log has a `[DISCORD] Presence N has no application of its own` line, every application was taken, which should not happen with five cards or fewer; please report it.
 
 **Lyrics are out of sync.** Use **−250 / +250** on **Now playing**. The offset is saved for that track. Some players report their position infrequently. The 3-second resync limits the error but can't remove it completely.
 

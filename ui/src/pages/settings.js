@@ -34,7 +34,6 @@ const PRESENCE_COUNTS = [[1, 'One'], [2, 'Two'], [3, 'Three'], [4, 'Four'], [5, 
  * `show_lyrics` switch it always had, the others have their own.
  */
 const LYRICS_KEYS = ['show_lyrics', 'show_lyrics_2', 'show_lyrics_3', 'show_lyrics_4', 'show_lyrics_5'];
-const APP_ID_KEYS = ['discord_app_id_2', 'discord_app_id_3', 'discord_app_id_4', 'discord_app_id_5'];
 const presenceCount = () => Math.max(1, Math.min(5, Number(cfg('presence_count', 1)) || 1));
 
 /**
@@ -318,16 +317,6 @@ function presenceCat(body, { search }) {
             `Lyrics on presence ${i + 1}`,
             i === 0 ? 'The line being sung and the next one; the title, artist and album move to the line under them.' : 'Off shows the track without lyrics on that card.',
             cfg(key, true) !== false, (v) => put(key, v)))
-        : []),
-      ...(multi
-        ? APP_ID_KEYS.slice(0, presenceCount() - 1).map((key, i) => inputRow(
-            `Spare application ID ${i + 1}`,
-            i === 0
-              ? 'Optional. A Discord application carries one card, so a card whose own application is taken '
-                + 'borrows one: the default, then these spares, then a platform application nothing is on. '
-                + 'Create an application at discord.com/developers and paste its Application ID.'
-              : 'Another spare, borrowed after the one above.',
-            cfg(key, ''), (v) => put(key, v.trim()), { placeholder: 'Optional' }))
         : []),
     ], multi
       ? 'The highest-ranked thing playing goes on presence 1, the next on presence 2, and so on. Pin one to a player with the Source menu on Now playing. The listening history and Last.fm follow presence 1.'
