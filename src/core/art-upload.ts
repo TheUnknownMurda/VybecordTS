@@ -1,13 +1,13 @@
 /**
- * Publish a locally-extracted cover so Discord can display it.
+ * Publish the player's own cover so Discord can display it.
  *
- * This is the fallback behind cover-art.ts, not a replacement for it. Anything
- * that was ever released is found on a music CDN for the cost of one small
- * request and nothing leaves the machine. What reaches this module is the
- * remainder: rips, demos, DJ sets, bootlegs — music that exists in no
- * catalogue, whose artwork lives only inside the user's own file.
+ * Asked before cover-art.ts since 2.8 (see resolveDiscordArt in backend.ts):
+ * a catalogue finds *a* cover for anything ever released, but not always the
+ * one the player shows, and the user wants that one — Spotify's, Apple
+ * Music's, a local file's. The catalogue is now the fallback for when there
+ * is no file to publish.
  *
- * Uploading that to a free anonymous file host is what the app used to do, and
+ * Uploading to a free anonymous file host is what the app used to do, and
  * it failed twice over: Discord's image proxy would not fetch from those hosts,
  * so the profile showed a "?" while the URL opened fine in a browser, and the
  * hosts sit on malware blocklists — litterbox.catbox.moe is listed by IPFire

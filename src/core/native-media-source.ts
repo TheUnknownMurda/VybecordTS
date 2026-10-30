@@ -761,8 +761,22 @@ export class NativeMediaSource {
 
     let trackName = s.media.title;
     let artistName = s.media.artist || 'Unknown';
-    const albumName = s.media.albumTitle || '';
+    let albumName = s.media.albumTitle || '';
     let source = s.source;
+    let artistIsChannel = false;
+
+    /*
+     * Apple Music for Windows puts the album in the artist field.
+     *
+     * Its media session reports "Lil Uzi Vert — Buy It" as the artist and
+     * leaves the album empty, so the card read "🎤 Lil Uzi Vert — Buy It" with
+     * no album line, where the same song from Spotify reads artist, then album.
+     * Split it back into the two fields Spotify fills. Should a later version
+     * start filling the album itself, the artist is still cleared of the copy.
+     */
+    if (source === 'apple_music') {
+      [artistName, albumName] = splitAppleArtist(artistName, albumName);
+    }
 
     // Browsers report the page's media metadata, which is whatever the site
     // chose to publish — usually a raw video title. Work out which service it
@@ -783,7 +797,13 @@ export class NativeMediaSource {
         // parsing, all of it applies everywhere — the conventions are shared
         // ("Artist - Title", producer credits, slash separators), and the rules
         // are harmless where they do not apply.
+        const rawTitle = trackName.trim();
         [trackName, artistName] = parseWebTitle(trackName, artistName);
+        // No "Artist - Title" in it: a video's title, beside the channel that
+        // uploaded it. SoundCloud's uploader is the artist far more often.
+        artistIsChannel = source !== 'soundcloud' && source !== 'bandcamp'
+          && !RE_TOPIC_SUFFIX.test(s.media.artist || '')
+          && !WEB_SEPARATORS.some(sep => rawTitle.includes(sep));
         trackName = cleanMediaTitle(trackName);
         artistName = cleanMediaTitle(artistName).replace(RE_TOPIC_SUFFIX, '').trim();
       }
@@ -839,8 +859,18 @@ export class NativeMediaSource {
       spotify_url: '',
       artist_url: '',
       media_source: source,
-      // Apple Music plays local files too; those have no music.apple identity.
-      is_local: source === 'apple_music' && !s.appId.includes('music.apple'),
+      /*
+       * Not local, whatever plays it.
+       *
+       * This used to mark every Apple Music track local unless the session's
+       * app id contained "music.apple", which the Windows app's id
+       * (AppleInc.AppleMusicWin_…) never does. So every catalogue song was
+       * announced like a file on disk: "🎼 Local Files" where Spotify shows
+       * the artist, and no links or button. Windows does not say which songs
+       * are files, and catalogue songs are the common case.
+       */
+      is_local: false,
+      artist_is_channel: artistIsChannel || undefined,
       _received_at: 0,      // per snapshot
       _session_id: s.appId,
     };
@@ -1140,7 +1170,9 @@ export function detectWebService(s: SessionState): string | null {
 
 // ── Title parsing (unchanged from the PowerShell-era source) ──
 
-const WEB_SEPARATORS = [' - ', ' – ', ' — ', ' // ', ' | '];
+// No bar: on YouTube "Title | Series" is the convention, and splitting on it
+// announced the series as the song and the video's title as its artist.
+const WEB_SEPARATORS = [' - ', ' – ', ' — ', ' // '];
 const RE_PRODUCER_TAG = /\s*[\[(](?:prod\.?|produced\s+by)\s*.+[\])]\s*$/i;
 
 /**
@@ -1166,6 +1198,25 @@ function parseWebTitle(title: string, sessionArtist: string): [track: string, ar
     }
   }
   return [cleaned || title, sessionArtist.replace(RE_TOPIC_SUFFIX, '').trim()];
+}
+
+/**
+ * Undo Apple Music's "Artist — Album" artist field.
+ *
+ * Exported for the harness. Split on the first spaced em dash: Apple writes it
+ * with spaces on both sides, and an artist name containing one is far rarer
+ * than an album title containing one.
+ */
+export function splitAppleArtist(artist: string, album: string): [artist: string, album: string] {
+  const sep = ' — ';
+  const idx = artist.indexOf(sep);
+  if (idx <= 0) return [artist, album];
+  const left = artist.slice(0, idx).trim();
+  const right = artist.slice(idx + sep.length).trim();
+  if (!left || !right) return [artist, album];
+  if (!album) return [left, right];
+  // The album was reported properly too; only drop the copy of it.
+  return right.toLowerCase() === album.toLowerCase() ? [left, album] : [artist, album];
 }
 
 function cleanMediaTitle(title: string): string {

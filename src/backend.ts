@@ -85,6 +85,8 @@ const ARTIST_SPLIT_RE = /[,]/;  // Precompiled — used in recordPlay + artist k
 
 /** The per-card lyrics switch, by position; `show_lyrics` is presence 1's. */
 const LYRICS_SWITCH_KEYS = ['show_lyrics', 'show_lyrics_2', 'show_lyrics_3', 'show_lyrics_4', 'show_lyrics_5'] as const;
+/** The per-card activity type, by position; `rpc_activity_type` is presence 1's. */
+const ACTIVITY_TYPE_KEYS = ['rpc_activity_type', 'rpc_activity_type_2', 'rpc_activity_type_3', 'rpc_activity_type_4', 'rpc_activity_type_5'] as const;
 
 /** How many presence cards the app can put on the profile. */
 const MAX_SLOTS = 5;
@@ -205,6 +207,12 @@ function platformConfigKey(src: string): keyof import('./core/types.js').Vybecor
   if (src === 'bandcamp' || src === 'deezer' || src === 'tidal' || src === 'amazon_music') return 'detect_other_apps';
   if (src.startsWith('browser_') || src === 'unknown') return 'detect_browser';
   return null; // unknown — allow by default
+}
+
+/** The activity type a card at this position publishes under. */
+function activityTypeFor(cfg: import('./core/types.js').VybecordConfig, index: number): number {
+  const own = Number(cfg[ACTIVITY_TYPE_KEYS[index] ?? 'rpc_activity_type']);
+  return index > 0 && own >= 0 ? own : Number(cfg.rpc_activity_type);
 }
 
 /**
@@ -2901,7 +2909,9 @@ export class VybecordBackend extends EventEmitter {
       rpc_button1_label: cfg.rpc_button1_label,
       rpc_button1_url: cfg.rpc_button1_url,
       rpc_button2_label: PLATFORM_BUTTON_LABEL,
-      rpc_activity_type: cfg.rpc_activity_type,
+      // Per position too: the song can say Listening while the stream on the
+      // next card says Watching. A card left on -1 follows presence 1.
+      rpc_activity_type: activityTypeFor(cfg, slot.index),
       rpc_status_display: cfg.rpc_status_display,
       rpc_status_template: cfg.rpc_status_template,
       rpc_show_playlist: cfg.rpc_show_playlist,
@@ -2913,6 +2923,7 @@ export class VybecordBackend extends EventEmitter {
       blue_rad_mode: cfg.blue_rad_mode,
       lrc_off_mode: cfg.lrc_off_mode,
       random_icon_mode: cfg.random_icon_mode,
+      auto_icon_mode: cfg.auto_icon_mode,
       hide_small_icon: cfg.hide_small_icon,
       lyrics_offset_ms: cfg.lyrics_offset_ms,
       romanize_lyrics: cfg.romanize_lyrics,
@@ -2979,43 +2990,55 @@ export class VybecordBackend extends EventEmitter {
    * Give Discord a URL for the cover art.
    *
    * Discord needs a URL and Windows gives us a file, so something has to bridge
-   * the two, and it is tried in that order for a reason:
+   * the two, and it is tried in this order:
    *
-   * 1. Look the album up on a music CDN (cover-art.ts). Discord's proxy loads
-   *    those without argument, it costs one small request, nothing leaves the
-   *    machine, and it answers for 42 of 44 tracks measured against real
-   *    listening — everything that was ever released.
-   * 2. Only for what is left — rips, demos, DJ sets, whose artwork exists
-   *    nowhere but this machine — publish the file itself (art-upload.ts), if
-   *    the user turned that on. Uploading to a free anonymous host is what this
-   *    used to do and it failed twice over: Discord's proxy would not fetch
-   *    from those hosts, and antivirus vendors blocklist them. Our own endpoint
-   *    has neither problem.
+   * 1. The player's own cover — Spotify's, Apple Music's, or the one embedded
+   *    in a local file — published as it is (art-upload.ts), when the file on
+   *    disk is this track's and the user has not turned publishing off.
+   * 2. Only when there is no such file to publish, look the album up on a
+   *    music CDN (cover-art.ts).
+   *
+   * This was the other way round until 2.8: the catalogue first, because it
+   * costs one small request and sends nothing. But a catalogue answers with
+   * *a* cover of the song, not the one the player shows — another edition,
+   * the single instead of the album, a clean version's artwork — and the user
+   * asked for the player's cover whenever there is one. The upload is keyed
+   * on the cover's own hash, so an album already published costs one HEAD.
+   *
+   * Uploading to a free anonymous host is what this used to do and it failed
+   * twice over: Discord's proxy would not fetch from those hosts, and
+   * antivirus vendors blocklist them. Our own endpoint has neither problem.
    *
    * Anything still unresolved gets the default placeholder, which at least
    * renders. None of this affects the window, which reads the artwork straight
    * from the player and is therefore always right.
    *
-   * @param allowUpload whether step 2 is on the table. Off for a track that
+   * @param allowUpload whether step 1 is on the table. Off for a track that
    *   reported no artwork at all, and for one whose file on disk belongs to
-   *   another session: the file step 2 publishes belongs to whoever last wrote
+   *   another session: the file step 1 publishes belongs to whoever last wrote
    *   it, which for such a track is some other player.
    */
   private resolveDiscordArt(slot: PresenceSlot, trackData: TrackData, signal?: AbortSignal, allowUpload = true): void {
     const trackKey = slot.trackKey;
     // Claimed before the await, so a poll landing mid-resolve does not start a
     // second one for the same bytes.
-    slot.artThumbSig = thumbnailSignature();
+    const sig = thumbnailSignature();
+    slot.artThumbSig = sig;
 
     void (async () => {
-      const catalogue = await lookupCoverArt(trackKey, trackData.artist_name, trackData.track_name, signal);
-      const url = catalogue ?? (allowUpload ? await uploadCoverArt(signal) : null);
+      const own = allowUpload ? await uploadCoverArt(signal) : null;
+      const url = own ?? await lookupCoverArt(trackKey, trackData.artist_name, trackData.track_name, signal);
       if (!url) {
         log.debug(`[RPC] No cover for "${trackData.artist_name} - ${trackData.track_name}"`);
         return;
       }
       // The track may have moved on while the lookup was in flight.
       if (slot.trackKey !== trackKey) return;
+      // Or the file changed and a newer resolve is under way. With the
+      // player's file published first, the one this started from may be the
+      // logo a player shows before its cover loads; landing after the real
+      // cover's answer, it would put the logo back.
+      if (slot.artThumbSig !== sig) return;
       if (slot.track) slot.track.album_art_url = url;
       const rpcTrack = { ...(slot.track || trackData), album_art_url: url };
       slot.engine.updateTrackData(rpcTrack);
