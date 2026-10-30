@@ -2701,15 +2701,18 @@ export class VybecordBackend extends EventEmitter {
       onLyricChange: (current, next, prev) => {
         log.debug(`[LYRIC] ${current} → ${next}`);
         const t = slot.track;
+        const lyrics = slot.engine.getLyrics();
+        const currentIndex = slot.engine.getCurrentIndex();
         const lyricsState: LyricsState = {
           current,
           next,
           prev,
           progress_ms: Math.round(slot.engine.getElapsed()),
           duration_ms: t ? t.duration_ms : 0,
-          lyrics: slot.engine.getLyrics(),
-          currentIndex: slot.engine.getCurrentIndex(),
-          translation: this.translationFor(slot, current),
+          lyrics,
+          currentIndex,
+          // A caption line still being said is translated once it is finished.
+          translation: lyrics[currentIndex]?.open ? '' : this.translationFor(slot, current),
         };
         slot.lastLyricsState = lyricsState;
         this.emit('lyricsUpdate', lyricsState, slot.index);

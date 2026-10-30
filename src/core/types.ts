@@ -77,6 +77,11 @@ export interface LyricLine {
   text: string;
   /** Source hint: 'cc' = auto-generated CC, 'sub' = manual subtitles, undefined = LRC */
   source?: 'cc' | 'sub';
+  /**
+   * A caption line still being said (see live-captions.ts): its words can
+   * change and more can join it, so it is not worth translating yet.
+   */
+  open?: boolean;
 }
 
 // ── LRCLib API response ──

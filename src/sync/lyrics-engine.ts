@@ -171,6 +171,7 @@ export class LyricsEngine {
   // Rate limiting
   private lastUpdateTime = 0;
   private lastCurrentText = '';
+  private lastNextText = '';
   private lastEmittedIdx = -1;
 
   // Timer optimization: avoid re-scheduling if target unchanged
@@ -255,6 +256,11 @@ export class LyricsEngine {
    * may touch them.
    */
   private liveLines = false;
+  /**
+   * The time of the first caption line shown after the card last went back to
+   * the title: no line older than this goes on top of a newer one.
+   */
+  private liveFloor = 0;
   private lastRecalibTime = 0;
 
   // Auto-offset detection: compensates for systematically early/late lyrics
@@ -383,6 +389,7 @@ export class LyricsEngine {
     this.rpcConfig = rpcConfig;
     this.anchorClock(trackData.progress_ms);
     this.lastCurrentText = '';
+    this.lastNextText = '';
     this.lastUpdateTime = 0;
     this.lastEmittedIdx = -1;
     this.lastRpcDetails = '';
@@ -518,10 +525,11 @@ export class LyricsEngine {
    * lines. A song can afford that because its next line is known in advance; a
    * stream's is not. Held back for the line after it, the newest line reached
    * the card three to five seconds late, and never at all when the streamer
-   * stopped talking there (replaying a real Kick tab's pushes). Turned on each
-   * line, the card scrolls the way Kick's own two-line captions do, at one push
-   * per line — about one every three seconds while someone talks, well under
-   * what a song with fast lyrics sends.
+   * stopped talking there (replaying a real Kick tab's pushes). And the newest
+   * line is the one being said, growing as the words come (`open`), so the
+   * card scrolls the way Kick's own two-line captions do: a push each time it
+   * grows, about one every three seconds on a real broadcast's captions, well
+   * under what a song with fast lyrics sends.
    *
    * The array is replaced, never edited, so an unchanged transcript is the
    * same array and costs nothing.
@@ -539,11 +547,15 @@ export class LyricsEngine {
     const quietMs = this.lyrics.length || !lines.length ? 0 : performance.now() - lines[lines.length - 1].time;
     /*
      * The line before the newest goes on top, as the context it is — unless
-     * the card had gone back to the title. Then it was said before a quiet, a
-     * seek or a pause, and on top of the newest it read as said just now.
+     * it was said before the card went back to the title: before a quiet, a
+     * seek or a pause. On top of the newest it read as said just now. The
+     * newest line grows where it stands, so the first one after the title
+     * stays alone through every report of it, not only the first, until the
+     * line after it starts.
      */
     const showing = !this.inLyricGap;
-    const paired = lines.length > 1 && showing;
+    if (!showing && lines.length) this.liveFloor = lines[lines.length - 1].time;
+    const paired = lines.length > 1 && showing && lines[lines.length - 2].time >= this.liveFloor;
     this.lyrics = lines;
     this.liveLines = lines.length > 0;
     this.cancelTimer();
@@ -826,6 +838,7 @@ export class LyricsEngine {
     this.forceRpc = false;
     this.lyrics = [];
     this.liveLines = false;
+    this.liveFloor = 0;
     this.currentIdx = -1;
     this.lastEmittedIdx = -1;
   }
@@ -1286,7 +1299,14 @@ export class LyricsEngine {
     const minInterval = this.isCC ? CC_UPDATE_INTERVAL_MS : MIN_UPDATE_INTERVAL_MS;
     const tooSoon = now - this.lastUpdateTime < minInterval;
     const idxChanged = this.currentIdx !== this.lastEmittedIdx;
-    const textChanged = current !== this.lastCurrentText;
+    /*
+     * The next line counts too: a caption line grows where it stands (see
+     * setLiveLines), under a current line that has not changed, and every
+     * tab's report of it is news. Counting only the current line dropped
+     * those that came within the interval of the one before, the last words
+     * of a sentence among them.
+     */
+    const textChanged = current !== this.lastCurrentText || next !== this.lastNextText;
     const heartbeatDue = now - this.lastRpcPushTime >= RPC_HEARTBEAT_MS;
     if (tooSoon && !idxChanged && !textChanged && !heartbeatDue) {
       return;
@@ -1297,6 +1317,7 @@ export class LyricsEngine {
 
     this.lastEmittedIdx = this.currentIdx;
     this.lastCurrentText = current;
+    this.lastNextText = next;
     this.lastUpdateTime = now;
 
     // Beautiful lyrics log display — same columns as a real log line, so it
@@ -1588,9 +1609,12 @@ export class LyricsEngine {
 
       if (this.cfgRpcTranslate && this.cfgTranslateLang) {
         const lang = this.cfgTranslateLang;
-        const tCur = this.translateForRpc(currentText, lang);
+        // A caption line still being said is shown as said until it is
+        // finished: translated as it grows, it cost a request at each report,
+        // every answer arriving for words the line had already outgrown.
+        const tCur = this.lyrics[idx]?.open ? null : this.translateForRpc(currentText, lang);
         if (tCur) { cur = tCur; curTranslated = true; }
-        if (nextText) {
+        if (nextText && !this.lyrics[idx + 1]?.open) {
           const tNxt = this.translateForRpc(nextText, lang);
           if (tNxt) { nxt = tNxt; nxtTranslated = true; }
         }
