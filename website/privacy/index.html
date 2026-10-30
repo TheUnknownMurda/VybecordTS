@@ -33,7 +33,7 @@
 
 <main class="doc">
   <h1>Privacy Policy</h1>
-  <p class="date">Vybecord browser extension and desktop app · Last updated 15 October 2026</p>
+  <p class="date">Vybecord browser extension and desktop app · Last updated 30 October 2026</p>
 
   <div class="callout">
     <p>
@@ -42,11 +42,16 @@
       <code>127.0.0.1</code>. It has no server, no account, and no analytics.
     </p>
     <p>
-      The desktop app makes one exception, and only one. When you play a file whose
-      cover art exists nowhere on the internet &mdash; something you ripped or recorded
-      yourself &mdash; it publishes that one image so Discord has something to display.
-      Never the audio, and nothing that identifies you. It is described in full
-      below, and it has a switch.
+      The desktop app makes one exception, and only one. Discord can only show a cover
+      that has a web address, so when your player hands the app its cover as an image
+      &mdash; Apple Music, a local file, a desktop player &mdash; the app publishes that one
+      image so Discord shows exactly what your player shows. Never the audio, and
+      nothing that identifies you. It is described in full below, and it has a switch.
+    </p>
+    <p>
+      The extension can also, if you turn it on, lend the app your YouTube sign-in for
+      age-restricted captions. That switch is off unless you flip it; it is described
+      below too.
     </p>
   </div>
 
@@ -65,7 +70,44 @@
   </ul>
   <p>
     It reads this from the page you already have open. It does not sign in on your
-    behalf, and it has no access to your account on any of these services.
+    behalf, and out of the box it has no access to your account on any of these services.
+    The one exception is a switch you have to turn on yourself, described next.
+  </p>
+
+  <h2 id="youtube-sign-in">Your YouTube sign-in, only if you turn it on</h2>
+  <p>
+    YouTube gives the captions of an age-restricted video only to a signed-in,
+    age-verified account, and the app cannot sign in. The extension's options have a
+    switch, <em>Share my YouTube sign-in for captions</em>, which is <strong>off</strong>
+    unless you turn it on. Turning it on makes your browser ask you for two extra
+    permissions: reading cookies, and access to <code>youtube.com</code>. Until you grant
+    them, the extension cannot read a single cookie.
+  </p>
+  <ul>
+    <li>
+      <strong>Only when asked.</strong> The extension hands anything over only after the
+      app reports that a video you are watching came back age-restricted, and at most
+      once every 30 seconds.
+    </li>
+    <li>
+      <strong>Only YouTube's cookies,</strong> and only to the app at
+      <code>127.0.0.1</code>. Cookies of any other site are never read, and nothing goes
+      to any server of ours.
+    </li>
+    <li>
+      <strong>Kept in memory, briefly.</strong> The app keeps them for ten minutes, never
+      on disk except inside the temporary folder of the one caption request that uses
+      them, and uses them only to fetch that age-restricted video's captions from
+      YouTube. Every other video is still fetched signed out.
+    </li>
+    <li>
+      <strong>Turning the switch off</strong> gives the permissions back to the browser,
+      and nothing is sent again.
+    </li>
+  </ul>
+  <p>
+    That request to YouTube is YouTube's: it is covered by
+    <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google's privacy policy</a>.
   </p>
 
   <h2>Where that data goes</h2>
@@ -77,13 +119,21 @@
     playing is ever sent.
   </p>
   <p>
-    One request goes elsewhere, and it carries none of that. On <code>kick.com</code>, the
-    extension asks Kick for the current channel's stream start time, because the page
-    does not show it and the elapsed timer would otherwise be wrong. That request goes
-    to the site you are already looking at, is the same one the Kick page makes for
-    itself, and contains only the channel name already in your address bar. Kick is the
-    only site this happens on; everywhere else the extension reads the page and asks
-    no one anything.
+    One kind of request goes elsewhere, and it carries none of that. On
+    <code>kick.com</code>, the extension asks Kick's own API about the page you are on:
+    the channel's name, picture, stream title, category, whether it is live and when
+    the stream started, or the same details for a past broadcast or a clip. The page
+    does not show all of it in a form that can be read reliably. That request goes to
+    the site you are already looking at, is the kind the Kick page makes for itself,
+    and contains only the channel name, video or clip identifier already in your
+    address bar. Kick is the only site this happens on; everywhere else the extension
+    reads the page and asks no one anything.
+  </p>
+  <p>
+    For Twitch, the desktop app (not the extension) asks Twitch's public API for the
+    same details about the channel, past broadcast or clip in your Twitch tab. That
+    request carries only the channel name or the video or clip identifier, and no
+    sign-in.
   </p>
   <p>
     The desktop app then publishes what you are playing to your Discord profile, which
@@ -98,18 +148,22 @@
     nothing, anywhere, ever.
   </p>
   <p>
-    Discord displays artwork by address, not by file. For anything that was ever
-    released, the app finds a cover already on the internet by looking the album up on
-    a public music catalogue &mdash; Deezer, then Apple. That sends only the track and
-    artist name, and nothing of yours is uploaded.
+    Discord displays artwork by address, not by file. When the cover already has an
+    address (Spotify in the browser, YouTube, SoundCloud), that address is used and
+    nothing is uploaded.
   </p>
   <p>
-    Music you ripped or recorded yourself is in no catalogue. Its artwork exists only
-    inside your own file, so there is no address for Discord to load and your profile
-    would show a blank placeholder. For those tracks, and only those, the app publishes
-    that single image to a store we run at
-    <code>vybecord-art.vybecord.workers.dev</code>, hosted on Cloudflare, and hands
-    Discord the resulting address.
+    Some players hand the app their cover as an image instead: Apple Music, the
+    Spotify desktop app through Windows, a local file, other desktop players. There is
+    no address for Discord to load, so the app publishes that single image to a store
+    we run at <code>vybecord-art.vybecord.workers.dev</code>, hosted on Cloudflare, and
+    hands Discord the resulting address. That way your profile shows exactly the cover
+    your player shows, not another edition's.
+  </p>
+  <p>
+    Only when there is no such image, or when you turn publishing off, does the app look
+    the song up on a public music catalogue &mdash; Deezer, then Apple. That sends only
+    the track and artist name, and nothing of yours is uploaded.
   </p>
   <p>Precisely what that involves:</p>
   <ul>
@@ -141,8 +195,9 @@
     </li>
     <li>
       <strong>It is a switch, not a fact of life.</strong> Settings &rarr; Integrations
-      &rarr; Cover images &rarr; <em>Publish artwork that exists only on this PC</em>. Turned off, nothing is
-      ever uploaded and local-only tracks fall back to the default placeholder. You can
+      &rarr; Cover images &rarr; <em>Publish the player&rsquo;s cover</em>. Turned off, nothing is
+      ever uploaded: covers come from a catalogue, and tracks that are in none fall back
+      to the default placeholder. You can
       also point the app at your own store instead of ours.
     </li>
   </ul>
@@ -169,7 +224,8 @@
   <h2>What is never collected</h2>
   <ul>
     <li>No browsing history, and no awareness of any tab other than the supported sites</li>
-    <li>No passwords, cookies, form data, or payment information</li>
+    <li>No passwords, form data, or payment information</li>
+    <li>No cookies, except YouTube's, and only if you turn on the switch described above</li>
     <li>No name, email address, or account identifier</li>
     <li>No analytics, telemetry, crash reporting, or advertising identifiers</li>
     <li>
@@ -192,12 +248,19 @@
     <li>
       <strong><code>storage</code></strong> &mdash; to remember which sites you switched off.
     </li>
+    <li>
+      <strong>Optional: <code>cookies</code> and access to <code>youtube.com</code></strong>
+      &mdash; asked for only when you turn on <em>Share my YouTube sign-in for captions</em>,
+      to read YouTube's cookies for age-restricted captions. Not granted otherwise.
+      Firefox also asks your consent to share authentication information.
+    </li>
   </ul>
 
   <h2>Your control</h2>
   <p>
     Every site has its own switch in the extension's options, and turning one off stops
-    the reporting for that site immediately, without a page reload. Closing the desktop
+    the reporting for that site immediately, without a page reload. The YouTube sign-in
+    switch is in the same place. Closing the desktop
     app stops everything. Uninstalling the extension removes it and its stored settings.
   </p>
   <p>
