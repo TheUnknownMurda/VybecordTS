@@ -32,6 +32,10 @@ export interface TrackData {
   repeat_mode?: 'off' | 'context' | 'track';
   /** True if this is a local file (not on Spotify streaming service) */
   is_local?: boolean;
+  /** Playing from Spotify's DJ (Spicetify only). */
+  is_dj?: boolean;
+  /** Spotify's DJ talking between songs: no lyrics, no history, no scrobble. */
+  is_dj_narration?: boolean;
   /** High-res timestamp (performance.now()) when this data was received */
   _received_at: number;
   /**
@@ -159,17 +163,6 @@ export interface VybecordConfig {
   show_lyrics_3: boolean;
   show_lyrics_4: boolean;
   show_lyrics_5: boolean;
-  /**
-   * Discord application IDs for a presence that would otherwise share a
-   * higher card's. Every card needs its own application; the platform ones
-   * (Spotify, YouTube, …) already differ, so these are only consulted for a
-   * player the app has no dedicated application for. Any of them may serve
-   * any card that needs one.
-   */
-  discord_app_id_2: string;
-  discord_app_id_3: string;
-  discord_app_id_4: string;
-  discord_app_id_5: string;
   // RPC customization
   /** Which URL each clickable RPC field links to: 'track' | 'artist' | 'album' | 'context' | 'auto' */
   rpc_button1_label: string;

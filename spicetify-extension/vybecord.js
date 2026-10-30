@@ -167,6 +167,16 @@
   // own token, so there is no auth to obtain or refresh here.
   const LYRICS_API = 'https://spclient.wg.spotify.com/color-lyrics/v2/track/';
 
+  /*
+   * Spotify's DJ plays from one fixed playlist, and between songs it plays its
+   * own voice segments, which Spotify marks by the item's provider. The skip-
+   * the-DJ-voice snippets the Spicetify community shares key on the same field.
+   * Neither is documented API: if Spotify renames them, DJ sessions simply read
+   * as an ordinary playlist again.
+   */
+  const DJ_PLAYLIST_ID = '37i9dQZF1EYkqdzj48dyYq';
+  const isDjNarration = (item) => String(item?.provider || '').startsWith('narration');
+
   let progressTimer = null;
   let lastSentUri = '';
   let lastSentPlaying = null;
@@ -184,7 +194,10 @@
     const playerCtx = Spicetify.Player.data.context;
     const ctxUri = playerCtx?.uri || '';
     const isLocalFile = uri.startsWith('spotify:local:');
-    const isLocal = isLocalFile || !trackId || ctxUri.includes(':local:') || ctxUri.includes('local-files');
+    const djNarration = isDjNarration(item);
+    const isDj = djNarration || ctxUri === `spotify:playlist:${DJ_PLAYLIST_ID}`;
+    // A DJ voice segment has no track id either, and is not a local file.
+    const isLocal = !djNarration && (isLocalFile || !trackId || ctxUri.includes(':local:') || ctxUri.includes('local-files'));
 
     // Collect all artists with their URIs
     const artists = (item.artists || []).map(a => ({
@@ -251,7 +264,13 @@
       //   spotify:user:{uid}:collection  → /collection/tracks (Liked Songs)
       //   spotify:station:{id}           → no web URL
       //   spotify:search:{query}         → no stable URL
-      if (parts[1] === 'user' && parts[3] === 'collection') {
+      if (isDj) {
+        // Named outright rather than from the context description, which
+        // Spotify fills for its own UI and nothing here has checked.
+        contextType = 'dj';
+        contextUrl = `https://open.spotify.com/playlist/${DJ_PLAYLIST_ID}`;
+        contextName = 'DJ';
+      } else if (parts[1] === 'user' && parts[3] === 'collection') {
         contextType = 'collection';
         contextUrl = 'https://open.spotify.com/collection/tracks';
         contextName = 'Liked Songs';
@@ -308,6 +327,8 @@
         ? ['off', 'context', 'track'][Spicetify.Player.getRepeat()]
         : 'off',
       is_local: isLocal,
+      is_dj: isDj,
+      dj_narration: djNarration,
     };
   }
 
@@ -400,17 +421,60 @@
    * every reader downstream gates on it.
    */
   function startProgressSync() {
-    if (progressTimer) clearInterval(progressTimer);
-    progressTimer = setInterval(() => {
+    if (progressTimer) progressTimer();
+    progressTimer = startTicker(() => {
       const data = getTrackData();
       if (data) send(data);
     }, PROGRESS_INTERVAL_MS);
+  }
+
+  /**
+   * Call `fn` every `ms`, from a worker's clock when one can be had. Returns a
+   * function that stops it.
+   *
+   * With Spotify minimised or behind other windows, Chromium's intensive
+   * wake-up throttling holds the page's own timers to about one wake-up a
+   * minute. The heartbeat went quiet for up to sixty seconds, Vybecord called
+   * the extension gone after ten, and the card vanished until the next minute
+   * mark: Sam's log has fourteen such gaps, every reconnection at hh:mm:39.97.
+   * A dedicated worker's timers are not throttled that way, and its message
+   * runs the push on the page straight away.
+   *
+   * Plain setInterval is the fallback for a client that refuses the worker.
+   */
+  function startTicker(fn, ms) {
+    const plain = () => { const id = setInterval(fn, ms); return () => clearInterval(id); };
+    let stop;
+    try {
+      const url = URL.createObjectURL(new Blob(
+        [`setInterval(() => postMessage(0), ${Number(ms)});`], { type: 'text/javascript' }));
+      const worker = new Worker(url);
+      URL.revokeObjectURL(url);
+      worker.onmessage = () => fn();
+      // A worker blocked by the page's policy fails after construction, not in it.
+      worker.onerror = () => { worker.terminate(); stop = plain(); };
+      stop = () => worker.terminate();
+    } catch {
+      stop = plain();
+    }
+    return () => stop();
   }
 
   // ── Wire events ──
   Spicetify.Player.addEventListener('songchange', onSongChange);
   Spicetify.Player.addEventListener('onplaypause', onPlayPause);
   startProgressSync();
+
+  // Quitting Spotify: say so, rather than leave Vybecord waiting out the
+  // silence. It holds a playing song through a minute without pushes (see
+  // spicetify-source.ts), which would otherwise keep a closed Spotify on the
+  // card for that long. A beacon is the one request a closing page still sends;
+  // as text/plain it needs no preflight.
+  addEventListener('pagehide', () => {
+    try {
+      navigator.sendBeacon(ENDPOINT, new Blob([JSON.stringify({ closed: true })], { type: 'text/plain' }));
+    } catch { /* VybecordTS not running — ignore */ }
+  });
 
   // ── Initial push (extension loaded while music is already playing) ──
   const initial = getTrackData();

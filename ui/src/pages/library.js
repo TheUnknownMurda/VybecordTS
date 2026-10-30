@@ -1203,18 +1203,45 @@ function dumpRow(r) {
 
 // ── Flagged ───────────────────────────────────────────────────────────────────
 
+/**
+ * The Blocked tab's search, kept across re-renders: "Allow again" refreshes the
+ * tab, and a query that emptied itself after every click would make clearing
+ * several matches one search per track.
+ */
+let flaggedQuery = '';
+
+/** Lowercase, accents off, so "beyonce" finds "Beyoncé". */
+const fold = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
 async function renderFlagged(body, refresh, _handover, ctx) {
   const list = el('div', { class: 'list' });
+  const counter = el('div', { class: 'muted', style: 'padding:4px 12px 0' });
+  let rows = [];
+
+  // Filtered here rather than by the backend: the whole list is already in hand
+  // for the tab's count, and it is one entry per track someone flagged by hand.
+  const searchInput = el('input', {
+    type: 'search', placeholder: 'Search by title or artist', value: flaggedQuery,
+    'aria-label': 'Search blocked lyrics',
+    oninput: debounce((e) => { flaggedQuery = e.target.value; paint(); }, 150),
+  });
+  const searchBox = el('label', { class: 'search' }, [searchInput]);
+  searchBox.insertAdjacentHTML('afterbegin', '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>');
+
   body.replaceChildren(
     el('div', { class: 'muted', style: 'padding:0 4px', text: 'Lyrics you marked as wrong. The app never uses those versions for these tracks again — allow one back to let it retry.' }),
-    el('div', { class: 'card', style: 'padding:8px' }, [list]),
+    searchBox,
+    el('div', { class: 'card', style: 'padding:8px' }, [list, counter]),
   );
 
-  try {
-    const rows = (await api.listFlagged()) || [];
-    ctx?.setCount('flagged', rows.length);
-    list.replaceChildren(...(rows.length
-      ? rows.map((f) => el('div', { class: 'item' }, [
+  function paint() {
+    const terms = fold(flaggedQuery).split(/\s+/).filter(Boolean);
+    const shown = terms.length
+      ? rows.filter((f) => { const hay = fold(`${f.track} ${f.artist}`); return terms.every((t) => hay.includes(t)); })
+      : rows;
+    counter.textContent = terms.length && rows.length ? `${shown.length} of ${rows.length}` : '';
+    list.replaceChildren(...(shown.length
+      ? shown.map((f) => el('div', { class: 'item' }, [
           rowGlyph(GLYPH.flag),
           el('div', { class: 'item-body' }, [
             el('div', { class: 'item-title', text: f.track || '(unknown)' }),
@@ -1227,7 +1254,16 @@ async function renderFlagged(body, refresh, _handover, ctx) {
             }),
           ]),
         ]))
-      : [el('div', { class: 'empty', text: 'Nothing blocked. Lyrics you mark as wrong on Now playing show up here.' })]));
+      : [el('div', { class: 'empty', text: rows.length
+          ? 'No match.'
+          : 'Nothing blocked. Lyrics you mark as wrong on Now playing show up here.' })]));
+  }
+
+  try {
+    rows = (await api.listFlagged()) || [];
+    ctx?.setCount('flagged', rows.length);
+    searchBox.hidden = !rows.length;
+    paint();
   } catch (e) {
     list.replaceChildren(el('div', { class: 'empty', text: `Could not load: ${e.message}` }));
   }

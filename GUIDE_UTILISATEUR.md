@@ -79,6 +79,8 @@ Les sous-titres sont un recours : ils ne servent que si aucune parole synchronis
 
 Toutes les vidéos n'ont pas de sous-titres, et la vidéo doit être retrouvable par son titre et sa chaîne : le navigateur dit à Windows ce qui joue, mais pas sur quelle page — Vybecord la cherche donc sur YouTube.
 
+Une vidéo **à âge restreint** affiche « 🔞 CC unavailable » : YouTube ne donne ses sous-titres qu'à un compte connecté dont l'âge est vérifié. Si tu la regardes dans un navigateur avec l'extension, active **Share my YouTube sign-in for captions** dans les options de l'extension (désactivé par défaut ; ton navigateur demande la permission). L'extension passe alors tes cookies YouTube à Vybecord, seulement pour les vidéos à âge restreint, et les sous-titres remplacent la ligne 🔞 quelques secondes plus tard. Vybecord garde les cookies en mémoire seulement. Un navigateur qui n'est pas connecté à YouTube n'a rien à prêter.
+
 ### Les paroles sont décalées
 
 Sur **Now playing**, utilise les boutons **−250 / +250** sous les paroles. Le décalage est enregistré pour ce morceau uniquement : il sera juste la prochaine fois que la chanson repassera, sans décaler toutes les autres. Les morceaux que tu n'as jamais corrigés utilisent la valeur par défaut de **Settings → Lyrics & translation → Default timing offset**.
@@ -123,9 +125,10 @@ Windows dit à Vybecord ce qui joue, pas sur quel site : un onglet SoundCloud et
 L'extension navigateur optionnelle corrige ça. **Settings → Integrations → Browser extension** te guide :
 
 - **Chrome, Edge, Brave, Opera, Vivaldi** — clique sur **Open the extension folder**, ouvre la page des extensions de ton navigateur (le panneau copie son adresse pour toi), active le **Mode développeur**, clique sur **Charger l'extension non empaquetée** et choisis ce dossier.
-- **Firefox 121 ou plus récent** — télécharge `vybecord-extension-<version>-firefox.zip` depuis la [page des releases](https://github.com/TheUnknownMurda/VybecordTS/releases/latest), ouvre `about:debugging#/runtime/this-firefox`, clique sur **Charger un module complémentaire temporaire** et choisis le zip. Firefox retire les modules temporaires à sa fermeture.
+- **Firefox 140 ou plus récent** (aussi Zen, LibreWolf, Waterfox, Floorp) — télécharge `vybecord-extension-<version>-firefox.zip` depuis la [page des releases](https://github.com/TheUnknownMurda/VybecordTS/releases/latest), ouvre `about:debugging#/runtime/this-firefox`, clique sur **Charger un module complémentaire temporaire** et choisis le zip. Firefox retire les modules temporaires à sa fermeture.
+- **Safari** n'est pas pris en charge : Safari n'existe pas sur Windows.
 
-Son icône ouvre une page de réglages avec un interrupteur par site — Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick — tous actifs par défaut.
+Son icône ouvre une page de réglages avec un interrupteur par site — Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick — tous actifs par défaut, et l'interrupteur optionnel **Share my YouTube sign-in for captions** (désactivé par défaut, voir la section sur les sous-titres plus haut).
 
 Avec elle, chaque site est correctement identifié, la présence pointe directement vers le morceau, et la barre de progression lit l'élément audio de la page au lieu de la position système, plus grossière. Sans elle, tout ce qui suit reste valable.
 
@@ -135,19 +138,29 @@ Sans l'extension navigateur, Windows indique à Vybecord ce qui joue, mais pas s
 
 Même sans elle, le titre et l'artiste sont analysés avec les conventions de SoundCloud, donc un upload intitulé « Artiste - Titre (prod. Machin) » donne le bon artiste plutôt que le compte qui a mis en ligne. Les paroles, la pochette et la présence elle-même ne sont pas affectées — elles se basent sur le morceau et l'artiste, pas sur le site. Tant que le site n'est pas identifié, cet onglet dépend de l'interrupteur **Other browser tabs** dans **Settings → Detection**, et non de **SoundCloud**.
 
+### Twitch et Kick
+
+Avec l'extension, un onglet Twitch ou Kick a une carte pour ce qu'il affiche :
+
+- **Une chaîne en direct** — la chaîne, le titre du stream, la catégorie et depuis combien de temps il est en ligne.
+- **Une chaîne hors ligne** — la chaîne et **Offline**, avec le titre de son dernier stream sur la pochette. Elle ne prend qu'une carte que rien d'autre ne veut, donc la musique passe toujours avant.
+- **Une rediffusion ou un clip** — la chaîne, le titre de la vidéo et une barre de progression. Avant, ils s'affichaient comme YouTube.
+
+Le nom et la photo de la chaîne viennent de Twitch lui‑même (et du site de Kick sur Kick) : la carte ne s'ouvre plus sur le nom de quelqu'un d'autre ni sur ton propre avatar pendant que la page charge. Les streams et leurs vidéos n'ont pas de paroles. Après une mise à jour de Vybecord, clique sur la flèche de rechargement de l'extension dans la page des extensions de ton navigateur pour qu'elle prenne la nouvelle version.
+
 ### Deux choses jouent en même temps
 
 Sur **Now playing**, ouvre le menu **Source** et choisis le lecteur que tu veux afficher. Il reste épinglé jusqu'à ce que tu choisisses **Automatic**.
 
 Ou affiche-les toutes. **Settings → Discord presence → Several presences** met jusqu'à cinq cartes sur ton profil : la chanson Spotify en présence 1, la vidéo du navigateur en présence 2, un stream dans un autre onglet en présence 3, par exemple. Ce qui joue avec le rang le plus élevé devient la présence 1 (une appli de musique passe avant une vidéo, une vidéo avant un onglet anonyme), ce qui suit la présence 2, et ainsi de suite. Avec plus d'une carte :
 
-- Les onglets d'un même site sont des choses distinctes : quatre streams Twitch ouverts côte à côte prennent quatre cartes. Une application Discord ne porte qu'une carte, donc les autres en empruntent une — l'application Vybecord par défaut, puis un ID de réserve si tu en as mis, puis l'application d'une plateforme que rien n'occupe — et la carte nomme sa plateforme dans l'en‑tête de toute façon.
+- Les onglets d'un même site sont des choses distinctes : quatre streams Twitch ouverts côte à côte prennent quatre cartes. Une application Discord ne porte qu'une carte, donc les autres en empruntent une — l'application Vybecord par défaut, puis l'application d'une plateforme que rien n'occupe — et la carte nomme sa plateforme dans l'en‑tête de toute façon.
 - **Lyrics on presence N** choisit quelles cartes affichent les paroles — n'importe quelle combinaison.
 - **Activity type on presence N** donne à chaque carte son propre verbe : *Listening* pour la chanson, *Watching* pour le stream. Les cartes 2 à 5 disent la même chose que la présence 1 tant que tu ne les changes pas.
 - **Now playing** montre toutes les cartes ; clique sur l'une pour voir ses paroles, son aperçu Discord et ses réglages. Son menu **Source** épingle cette présence à un lecteur, pour qu'elle ne s'échange jamais avec une autre.
 - L'historique d'écoute (et donc **Activity**) et Last.fm ne suivent que la présence 1.
 
-Chaque carte est une application Discord à part, et Spotify, YouTube, SoundCloud, Apple Music, Kick et Twitch ont chacun la leur ; avec celle par défaut, ça fait sept, et une carte dont l'application est déjà prise en emprunte une libre. Les **Spare application ID** ne servent qu'au‑delà de sept cartes — ou si tu préfères ne pas emprunter (à créer sur discord.com/developers ; jusqu'à quatre).
+Chaque carte est une application Discord à part, et Spotify, YouTube, SoundCloud, Apple Music, Kick et Twitch ont chacun la leur ; avec celle par défaut, ça fait sept, et une carte dont l'application est déjà prise en emprunte une libre. Cinq cartes au maximum pour sept applications : il n'y a rien à configurer.
 
 ---
 
@@ -157,13 +170,13 @@ Chaque carte est une application Discord à part, et Spotify, YouTube, SoundClou
 Oui. Vybecord ne parle jamais à l'API de Spotify — il lit ce que Windows sait déjà.
 
 **Faut-il installer Spicetify ou une extension de navigateur ?**
-Non. Les anciennes versions le demandaient, plus celle-ci. Ce sont deux bonus optionnels : Spicetify apporte les changements de morceau instantanés et les paroles officielles de Spotify (à configurer dans **Settings → Integrations → Spotify**), et l'extension navigateur indique à Vybecord sur quel site joue un onglet.
+Non. Les anciennes versions le demandaient, plus celle-ci. Ce sont deux bonus optionnels : Spicetify apporte les changements de morceau instantanés, les paroles officielles de Spotify et le DJ (la carte l'indique, et la voix du DJ entre les chansons n'a ni paroles ni historique) (à configurer dans **Settings → Integrations → Spotify**), et l'extension navigateur indique à Vybecord sur quel site joue un onglet.
 
 **Ça marche avec quoi ?**
 Tout ce qui apparaît dans l'encart média de Windows : Spotify, les onglets de navigateur (YouTube, SoundCloud, Deezer…), VLC, foobar2000, MusicBee, AIMP, Apple Music, Tidal, Amazon Music.
 
 **Est-ce que mes données sortent de mon PC ?**
-Les titres et artistes sont envoyés aux services de paroles (LRCLib, Netease, Musixmatch, Genius) pour chercher les paroles, à Deezer et iTunes d'Apple pour trouver la pochette, et à Discord pour le statut. Une pochette qui n'existe que dans tes fichiers est publiée sur le stockage de pochettes de Vybecord, sans ses métadonnées — désactivable dans **Settings → Integrations → Cover images**. Si tu actives la traduction, les lignes de paroles partent au service de traduction ; si tu actives Last.fm, tes écoutes y vont aussi. L'historique, les réglages et les paroles importées restent en local. La liste complète est dans la [politique de confidentialité](https://theunknownmurda.github.io/VybecordTS/privacy/).
+Les titres et artistes sont envoyés aux services de paroles (LRCLib, Netease, Musixmatch, Genius) pour chercher les paroles, à Deezer et iTunes d'Apple pour trouver la pochette, et à Discord pour le statut. La pochette que montre ton lecteur (celle de Spotify, d'Apple Music, d'un fichier local) est publiée sur le stockage de pochettes de Vybecord, sans ses métadonnées, et un catalogue n'est consulté que s'il n'y en a pas — désactivable dans **Settings → Integrations → Cover images**. Pour une chaîne Twitch, le nom de la chaîne part chez Twitch pour obtenir son titre, son image et l'heure de début du stream. Si tu actives la traduction, les lignes de paroles partent au service de traduction ; si tu actives Last.fm, tes écoutes y vont aussi. L'historique, les réglages et les paroles importées restent en local. La liste complète est dans la [politique de confidentialité](https://theunknownmurda.github.io/VybecordTS/privacy/).
 
 **Où sont mes fichiers ?**
 Dans `%APPDATA%\Vybecord` — colle ce chemin dans l'explorateur.

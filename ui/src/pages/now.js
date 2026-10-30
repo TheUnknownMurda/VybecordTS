@@ -170,7 +170,7 @@ export function render(root) {
           el('button', { type: 'button', class: 'btn btn-ghost btn-sm', id: 'npOffsetReset', text: 'Reset', onclick: () => setOffset(0) }),
           el('span', { class: 'lyr-offset-hint', id: 'npOffsetHint' }),
         ]),
-        iconBtn('btn btn-ghost btn-sm', BTN.flag, 'Wrong lyrics?', { id: 'npReport', 'aria-expanded': 'false', onclick: () => toggleAsk() }),
+        iconBtn('btn btn-sm', BTN.flag, 'Wrong lyrics?', { id: 'npReport', 'aria-expanded': 'false', onclick: () => toggleAsk() }),
       ]),
     ]),
   );
@@ -610,7 +610,9 @@ function paintTrack(playing) {
   card.classList.toggle('is-idle', !track);
   card.classList.toggle('is-paused', !!track && !track.is_playing);
   // A stream's "artist" is its title, so it keeps a second line — see .np-artist.
-  card.classList.toggle('is-live', !!track?.is_live);
+  // A past broadcast or a clip is laid out the same way.
+  const streamCard = !!track && (track.is_live || track.media_source === 'twitch' || track.media_source === 'kick');
+  card.classList.toggle('is-live', streamCard);
 
   if (!track) {
     const [head, hint] = idleText();
@@ -644,7 +646,9 @@ function paintTrack(playing) {
     lead.push(glyph);
   }
   if (!lead.length) lead.push(el('span', { class: 'pulse' }));
-  const verb = !track.is_playing ? 'Paused on' : track.is_live ? 'Watching on' : 'Playing on';
+  // An offline channel is neither watched nor played: the tab is just open on it.
+  const offline = track.context_type === 'offline';
+  const verb = !track.is_playing ? 'Paused on' : offline ? 'Open on' : streamCard ? 'Watching on' : 'Playing on';
   $('#npState').replaceChildren(
     el('span', { class: 'eyebrow np-source' }, [...lead, `${verb} ${label}`]),
     ...badges(track).map((b) => statusChip(...b)),
@@ -751,6 +755,10 @@ function paintLyrics(l) {
   else if (!t && pausedTrack()) empty = ['Paused', 'The lyrics come back with the song.'];
   else if (!t) empty = ['No lyrics yet', 'They show here, in time with the song, as soon as something plays.'];
   else if (t.is_live) empty = ['Live streams have no lyrics', 'This presence shows the stream title and how long it has been live instead.'];
+  else if (t.context_type === 'offline') empty = ['This channel is offline', 'This presence shows the channel as offline until it goes live.'];
+  else if (t.media_source === 'twitch' || t.media_source === 'kick') {
+    empty = ['Stream videos have no lyrics', 'This presence shows the channel and the video\'s title instead.'];
+  }
   else if (state.config[state.focus === 0 ? 'show_lyrics' : `show_lyrics_${state.focus + 1}`] === false) {
     empty = ['Lyrics are switched off for this presence', 'Turn them back on with the Lyrics switch above.'];
   }

@@ -79,6 +79,8 @@ Captions are a fallback, used only when no synced lyrics exist for the track. Th
 
 Not every video has captions, and the video has to be findable by its title and channel — the browser tells Windows what is playing, but not which page it is on, so Vybecord searches YouTube for it.
 
+An **age-restricted** video shows "🔞 CC unavailable": YouTube gives its captions only to a signed-in, age-verified account. If you watch it in a browser with the extension, turn on **Share my YouTube sign-in for captions** in the extension's options (off by default; your browser asks for permission). The extension then hands your YouTube cookies to Vybecord, only for videos that come back age-restricted, and the captions replace the 🔞 line a few seconds later. Vybecord keeps the cookies in memory only. A browser that isn't signed in to YouTube has nothing to lend.
+
 ### Lyrics are out of sync
 
 On **Now playing**, use the **−250 / +250** buttons under the lyrics. The offset is saved for that track only, so it is right again the next time the song comes round without pulling every other song off. Tracks you have never corrected use the default under **Settings → Lyrics & translation → Default timing offset**.
@@ -123,9 +125,10 @@ Windows tells Vybecord what is playing, not which website it is on: a SoundCloud
 The optional browser extension fixes that. **Settings → Integrations → Browser extension** walks you through it:
 
 - **Chrome, Edge, Brave, Opera, Vivaldi** — click **Open the extension folder**, open your browser's extensions page (the card copies its address for you), turn on **Developer mode**, click **Load unpacked** and pick that folder.
-- **Firefox 121 or newer** — download `vybecord-extension-<version>-firefox.zip` from the [releases page](https://github.com/TheUnknownMurda/VybecordTS/releases/latest), open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on** and pick the zip. Firefox removes temporary add-ons when it closes.
+- **Firefox 140 or newer** (also Zen, LibreWolf, Waterfox, Floorp) — download `vybecord-extension-<version>-firefox.zip` from the [releases page](https://github.com/TheUnknownMurda/VybecordTS/releases/latest), open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on** and pick the zip. Firefox removes temporary add-ons when it closes.
+- **Safari** isn't supported: there is no Safari for Windows.
 
-Its icon opens a settings page with a switch per site — Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick — all on by default.
+Its icon opens a settings page with a switch per site — Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick — all on by default, and the optional **Share my YouTube sign-in for captions** switch (off by default, see the captions section above).
 
 With it, each site is identified properly, the presence links straight to the track, and the progress bar reads the page's own audio element instead of the coarser system position. Without it, everything below still applies.
 
@@ -135,19 +138,29 @@ Without the browser extension, Windows tells Vybecord what is playing but not wh
 
 Even without it, the track and artist are parsed with SoundCloud's conventions in mind, so an upload titled "Artist - Track (prod. Someone)" resolves to the right artist rather than the uploading account. Lyrics, cover art and the presence itself are unaffected — they key on the track and artist, not the site. Until the site is identified, that tab is governed by the **Other browser tabs** switch under **Settings → Detection** rather than the **SoundCloud** one.
 
+### Twitch and Kick
+
+With the extension, a Twitch or Kick tab gets a card for whatever it is on:
+
+- **A live channel** — the channel, the stream's title, the category, and how long it has been live.
+- **An offline channel** — the channel and **Offline**, with its last stream's title on the cover. It only takes a card nothing else wants, so music always comes first.
+- **A past broadcast or a clip** — the channel, the video's title and a progress bar. These used to show up as YouTube.
+
+The channel's name and picture come from Twitch itself (and from Kick's own site on Kick), so a card no longer opens on somebody else's name or on your own avatar while the page loads. Streams and their videos have no lyrics. After updating Vybecord, click the reload arrow on the extension in your browser's extensions page so it picks up the new version.
+
 ### Two things playing at once
 
 On **Now playing**, open the **Source** menu and pick the one you want announced. It stays pinned until you pick **Automatic**.
 
 Or show them all. **Settings → Discord presence → Several presences** puts up to five cards on your profile: the song in Spotify on presence 1, the video in the browser on presence 2, a stream in another tab on presence 3, say. The highest-ranked thing playing is presence 1 (a music app beats a video, a video beats an unnamed tab), the next is presence 2, and so on. With more than one:
 
-- Tabs of the same site are separate things: four Twitch streams open side by side take four cards. A Discord application carries one card, so the others borrow one — the default Vybecord application, then any spare you set, then a platform application nothing is on — and the card names its platform in the header either way.
+- Tabs of the same site are separate things: four Twitch streams open side by side take four cards. A Discord application carries one card, so the others borrow one — the default Vybecord application, then a platform application nothing is on — and the card names its platform in the header either way.
 - **Lyrics on presence N** picks which cards sing along — any combination.
 - **Activity type on presence N** gives each card its own verb: *Listening* for the song, *Watching* for the stream. Cards 2 to 5 say the same as presence 1 until you change them.
 - **Now playing** shows every card; click one to see its lyrics, its Discord preview and its controls. Its **Source** menu pins that presence to a player, so it never swaps with another.
 - The listening history (and so **Activity**) and Last.fm follow presence 1 only.
 
-Each card is a Discord application of its own, and Spotify, YouTube, SoundCloud, Apple Music, Kick and Twitch each have one; with the default that is seven, and a card whose own application is taken borrows a free one. Only past seven cards' worth — or if you would rather not borrow — do the **Spare application IDs** matter (create one at discord.com/developers; up to four).
+Each card is a Discord application of its own, and Spotify, YouTube, SoundCloud, Apple Music, Kick and Twitch each have one; with the default that is seven, and a card whose own application is taken borrows a free one. Five cards at most against seven applications means there is nothing to set up.
 
 ---
 
@@ -157,13 +170,13 @@ Each card is a Discord application of its own, and Spotify, YouTube, SoundCloud,
 No. Vybecord never talks to Spotify's API — it reads what Windows already knows.
 
 **Do I need Spicetify or a browser extension?**
-No. Older versions did; this one does not. Both are optional extras: Spicetify adds instant track changes and Spotify's own lyrics (set it up under **Settings → Integrations → Spotify**), and the browser extension tells Vybecord which site a tab is on.
+No. Older versions did; this one does not. Both are optional extras: Spicetify adds instant track changes, Spotify's own lyrics and the DJ (the card names it, and the DJ's voice between songs gets no lyrics and no history) (set it up under **Settings → Integrations → Spotify**), and the browser extension tells Vybecord which site a tab is on.
 
 **What does it work with?**
 Anything that appears in the Windows media overlay: Spotify, browser tabs (YouTube, SoundCloud, Deezer…), VLC, foobar2000, MusicBee, AIMP, Apple Music, Tidal, Amazon Music.
 
 **Does my data leave my PC?**
-Track and artist names go to the lyrics services (LRCLib, Netease, Musixmatch, Genius) to look lyrics up, to Deezer and Apple's iTunes to find the album cover, and to Discord for the status. Artwork that exists only in your own files is published to Vybecord's cover store, stripped of its metadata — switch that off under **Settings → Integrations → Cover images**. If you turn on translation, the lyric lines go to the translation service; if you enable Last.fm, your plays go there. Your history, settings and imported lyrics stay local. The full list is in the [privacy policy](https://theunknownmurda.github.io/VybecordTS/privacy/).
+Track and artist names go to the lyrics services (LRCLib, Netease, Musixmatch, Genius) to look lyrics up, to Deezer and Apple's iTunes to find the album cover, and to Discord for the status. The cover your player shows (Spotify's, Apple Music's, a local file's) is published to Vybecord's cover store, stripped of its metadata, and only when there is none is a catalogue asked — switch that off under **Settings → Integrations → Cover images**. For a Twitch channel, the channel name goes to Twitch to get its title, picture and stream start. If you turn on translation, the lyric lines go to the translation service; if you enable Last.fm, your plays go there. Your history, settings and imported lyrics stay local. The full list is in the [privacy policy](https://theunknownmurda.github.io/VybecordTS/privacy/).
 
 **Where are my files?**
 In `%APPDATA%\Vybecord` — paste that into Explorer.

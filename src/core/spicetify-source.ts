@@ -19,6 +19,25 @@ import { PushFreshness } from './push-freshness.js';
 
 const log = createLogger('Spicetify');
 
+/**
+ * How long a song the extension last reported as playing is held without a
+ * push.
+ *
+ * A hidden Spotify only wakes its timers about once a minute (Chromium's
+ * intensive wake-up throttling), and the heartbeat with them. The freshness
+ * window starts at ten seconds and only widens after the first long gap has
+ * ended, so that first gap used to take the card down, and the fallback could
+ * not cover it: on Sam's PC Windows has no media session for Spotify at all,
+ * so "falling back to SMTC" meant falling back to nothing. Fourteen gaps of 3
+ * to 51 seconds in five days of his log, each one ending at the minute mark.
+ *
+ * Holding is safe because the song's own clock says what should be playing:
+ * the hold ends when the extrapolated position passes the end of the track,
+ * and quitting Spotify announces itself (the extension's `closed` beacon).
+ * A pause is pushed from Spotify's own event rather than from the timer.
+ */
+const PLAYING_GRACE_MS = 70_000;
+
 /** Shape of JSON pushed by the Spicetify extension. */
 export interface SpicetifyPayload {
   track_id: string;
@@ -40,6 +59,12 @@ export interface SpicetifyPayload {
   is_shuffle?: boolean;
   repeat_mode?: string;
   is_local?: boolean;
+  /** Playing from Spotify's DJ. */
+  is_dj?: boolean;
+  /** The DJ is talking between songs rather than a track playing. */
+  dj_narration?: boolean;
+  /** Spotify is quitting: the extension's last word. */
+  closed?: boolean;
 }
 
 /**
@@ -74,6 +99,9 @@ export function normalizeSpicetifyPayload(raw: unknown): SpicetifyPayload {
     is_shuffle: asBool(d.is_shuffle),
     repeat_mode: repeat === 'track' || repeat === 'context' ? repeat : 'off',
     is_local: asBool(d.is_local),
+    is_dj: asBool(d.is_dj),
+    dj_narration: asBool(d.dj_narration),
+    closed: asBool(d.closed),
   };
 }
 
@@ -93,6 +121,12 @@ export class SpicetifySource {
    */
   update(raw: unknown): SpicetifyPayload {
     const data = normalizeSpicetifyPayload(raw);
+    if (data.closed) {
+      this.latestData = null;
+      if (this._wasActive) log.info('Spotify closed — Spicetify extension disconnected');
+      this._wasActive = false;
+      return data;
+    }
     this.latestData = data;
     this.receivedAt = performance.now();
     this.freshness.seen(this.receivedAt);
@@ -113,7 +147,8 @@ export class SpicetifySource {
     if (!this.latestData.is_playing) return null;
 
     const d = this.latestData;
-    if (!d.track_name) return null;
+    // A DJ voice segment may come with no title at all; it still deserves a card.
+    if (!d.track_name && !d.dj_narration) return null;
 
     // Compensate progress for time since last push
     const elapsed = performance.now() - this.receivedAt;
@@ -122,17 +157,24 @@ export class SpicetifySource {
       d.duration_ms || Infinity,
     );
 
+    /*
+     * The DJ talking between songs. Whatever Spotify calls the segment, it is
+     * not a song: announced under its own name it would be looked up for
+     * lyrics, could match some real track called that, and would be scrobbled.
+     * One fixed identity, flagged so the backend skips all three.
+     */
+    const narration = !!d.dj_narration;
     const result = {
-      track_id: d.track_id || `spicetify:${d.track_name}:${d.artist_name}`,
-      track_name: d.track_name,
-      artist_name: d.artist_name,
-      album_name: d.album_name,
+      track_id: narration ? `spicetify:dj:${d.uri}` : d.track_id || `spicetify:${d.track_name}:${d.artist_name}`,
+      track_name: narration ? 'DJ is talking' : d.track_name,
+      artist_name: narration ? 'Spotify DJ' : d.artist_name,
+      album_name: narration ? '' : d.album_name,
       duration_ms: d.duration_ms,
       progress_ms: compensatedProgress,
       is_playing: true,
       is_live: false,
       album_art_url: d.album_art_url,
-      spotify_url: d.spotify_url,
+      spotify_url: narration ? d.context_url : d.spotify_url,
       artist_url: d.artist_url,
       album_url: d.album_url || '',
       context_name: d.context_name || '',
@@ -143,6 +185,8 @@ export class SpicetifySource {
       is_shuffle: d.is_shuffle ?? false,
       repeat_mode: ((d.repeat_mode === 'track' || d.repeat_mode === 'context') ? d.repeat_mode : 'off') as 'off' | 'track' | 'context',
       is_local: d.is_local ?? false,
+      is_dj: d.is_dj ?? false,
+      is_dj_narration: narration,
       _received_at: performance.now(),
       _from_push: true,
     };
@@ -152,12 +196,21 @@ export class SpicetifySource {
   /** True while pushes are still arriving at the cadence this source has been keeping. */
   get isActive(): boolean {
     if (!this.latestData) return false;
-    const stale = this.freshness.isStale(performance.now());
+    const now = performance.now();
+    const stale = this.freshness.isStale(now) && !this.holdingPlayback(now);
     if (stale && this._wasActive) {
       this._wasActive = false;
       log.warn(`Spicetify extension stale (>${this.freshness.windowSeconds}s) — falling back to SMTC`);
     }
     return !stale;
+  }
+
+  /** Whether a quiet extension's last word was a song still playing — see PLAYING_GRACE_MS. */
+  private holdingPlayback(now: number): boolean {
+    const d = this.latestData;
+    if (!d?.is_playing) return false;
+    const elapsed = now - this.receivedAt;
+    return elapsed < PLAYING_GRACE_MS && (!d.duration_ms || d.progress_ms + elapsed < d.duration_ms);
   }
 
   /** Whether the extension reports playback is paused. */

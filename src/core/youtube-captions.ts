@@ -19,7 +19,7 @@
  */
 
 import { execFile } from 'node:child_process';
-import { readdir, readFile, mkdtemp, rm } from 'node:fs/promises';
+import { readdir, readFile, writeFile, mkdtemp, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -207,6 +207,127 @@ function cookieArgs(): string[] {
     return [];
   }
   return ['--cookies', ccCookiesFile];
+}
+
+/**
+ * A YouTube cookie as the browser extension hands it over.
+ *
+ * Only what a Netscape cookies.txt line holds; `expires` is in seconds, 0 for a
+ * session cookie.
+ */
+export interface BrowserCookie {
+  domain: string;
+  path: string;
+  secure: boolean;
+  expires: number;
+  name: string;
+  value: string;
+}
+
+/**
+ * The signed-in YouTube session, lent by the browser extension.
+ *
+ * This is the automatic form of `cc_cookies_file`, and it is opt-in on the
+ * extension's side: the switch there is what grants it the cookies permission
+ * at all. Three choices keep the account's exposure as small as the feature
+ * allows:
+ *
+ *   - It is asked for only after a video has come back age-restricted, and used
+ *     only to retry that video. Every other video is fetched signed out, as
+ *     before, so the account never touches the ordinary case. yt-dlp warns that
+ *     an account used with it can be banned; the fewer requests it signs, the
+ *     less there is to notice.
+ *   - It lives in memory, never in the data folder. yt-dlp needs a file, so one
+ *     is written into the temp folder of the single call that uses it, which is
+ *     deleted when the call ends. A cookies.txt left on disk would be a
+ *     ready-made session for anything that reads it, which is the opposite of
+ *     what Chrome's own cookie encryption is there to prevent.
+ *   - It expires after BROWSER_COOKIES_TTL_MS. YouTube rotates session cookies
+ *     on an open tab, so an old copy goes stale anyway; asking again costs one
+ *     local request.
+ *
+ * `cc_cookies_file` wins when it is set: somebody who pointed the app at a file
+ * meant that file.
+ */
+let browserCookies: { cookies: BrowserCookie[]; at: number } | null = null;
+const BROWSER_COOKIES_TTL_MS = 10 * 60_000;
+
+/**
+ * Until when the app is asking the extension for cookies.
+ *
+ * The app cannot call the extension, only answer it, so the request rides on
+ * the reply to the YouTube tab's next push. A window rather than a flag, so a
+ * request that nobody answers (extension switch off, no permission, tab
+ * closed) lapses instead of being repeated forever. Minutes rather than
+ * seconds, so turning the switch on while the 🔞 line is showing still gets
+ * that video retried: the extension checks at most every 30 seconds, and a
+ * request it cannot answer costs it one permission check.
+ */
+let wantCookiesUntil = 0;
+const WANT_COOKIES_WINDOW_MS = 5 * 60_000;
+
+/** Ask the extension for the session, unless there is already one to use. */
+function requestBrowserCookies(): void {
+  wantCookiesUntil = Date.now() + WANT_COOKIES_WINDOW_MS;
+  log.info('[CC] Age-restricted — asking the browser extension for the YouTube session');
+}
+
+/** Whether the next reply to the extension should ask for the YouTube session. */
+export function wantsBrowserCookies(): boolean {
+  return Date.now() < wantCookiesUntil;
+}
+
+/**
+ * Take the cookies the extension sent; an empty list means forget them.
+ *
+ * The age-restricted results in the cache are dropped: they were reached
+ * signed out, and with a session they may well succeed. Fetching the playing
+ * track again is the caller's business.
+ */
+export function setBrowserCookies(cookies: BrowserCookie[]): void {
+  wantCookiesUntil = 0;
+  if (!cookies.length) {
+    if (browserCookies) log.info('[CC] Forgot the YouTube session the browser extension lent');
+    browserCookies = null;
+    return;
+  }
+  browserCookies = { cookies, at: Date.now() };
+  for (const [key, entry] of ccCache) {
+    if (entry.result.ageRestricted) ccCache.delete(key);
+  }
+  log.info(`[CC] Received ${cookies.length} YouTube cookies from the browser extension`);
+}
+
+/** The lent session, if there is one recent enough to be worth trying. */
+function freshBrowserCookies(): BrowserCookie[] | null {
+  if (!browserCookies) return null;
+  if (Date.now() - browserCookies.at > BROWSER_COOKIES_TTL_MS) {
+    browserCookies = null;
+    return null;
+  }
+  return browserCookies.cookies;
+}
+
+/**
+ * The Netscape cookies.txt yt-dlp reads.
+ *
+ * The leading dot is what the format uses to say "and subdomains", which is
+ * how the browser reports a cookie that is not host-only.
+ */
+function toNetscapeCookies(cookies: BrowserCookie[]): string {
+  const lines = ['# Netscape HTTP Cookie File'];
+  for (const c of cookies) {
+    lines.push([
+      c.domain,
+      c.domain.startsWith('.') ? 'TRUE' : 'FALSE',
+      c.path,
+      c.secure ? 'TRUE' : 'FALSE',
+      String(Math.max(0, Math.floor(c.expires))),
+      c.name,
+      c.value,
+    ].join('\t'));
+  }
+  return lines.join('\n') + '\n';
 }
 
 /**
@@ -579,6 +700,9 @@ export async function fetchYouTubeCaptions(
   const cached = getCached(key);
   if (cached !== null) {
     log.debug(`[CC] Cache hit (${cached.lines.length} lines)`);
+    // Played again after the last request lapsed: ask again, or the cached
+    // failure would stand for the cache's whole lifetime.
+    if (cached.ageRestricted && !cookieArgs().length && !freshBrowserCookies()) requestBrowserCookies();
     return cached;
   }
 
@@ -600,77 +724,107 @@ export async function fetchYouTubeCaptions(
 
   try {
 
-    // ── Step 1: Try manual subtitles first (higher quality, no auto-CC noise) ──
-    const baseArgs = [
-      query,
-      '--sub-format', 'json3',
-      '--skip-download',
-      '--no-warnings',
-      '--no-check-certificates',
-      '--ignore-errors',
-      '--js-runtimes', 'node',
-      '-o', path.join(tmpDir, '%(id)s'),
-      ...cookieArgs(),
-    ];
+    /**
+     * Both passes, manual subtitles then auto-CC, with the given extra yt-dlp
+     * arguments. A function so the age-restricted retry below can run exactly
+     * the same thing a second time, signed in.
+     */
+    const downloadSubs = async (extraArgs: string[]) => {
+      // ── Step 1: Try manual subtitles first (higher quality, no auto-CC noise) ──
+      const baseArgs = [
+        query,
+        '--sub-format', 'json3',
+        '--skip-download',
+        '--no-warnings',
+        '--no-check-certificates',
+        '--ignore-errors',
+        '--js-runtimes', 'node',
+        '-o', path.join(tmpDir, '%(id)s'),
+        ...extraArgs,
+      ];
 
-    let isAgeRestricted = false;
-    const noteAgeRestriction = (e: unknown, what: string): void => {
-      const errStr = String(e);
-      log.warn(`[CC] ${what} fetch error: ${errStr}`);
-      if (errStr.includes('Sign in to confirm your age') || errStr.includes('age')) {
-        isAgeRestricted = true;
-        log.warn('[CC] Video is age-restricted');
-      }
-    };
+      let isAgeRestricted = false;
+      const noteAgeRestriction = (e: unknown, what: string): void => {
+        const errStr = String(e);
+        log.warn(`[CC] ${what} fetch error: ${errStr}`);
+        if (errStr.includes('Sign in to confirm your age') || errStr.includes('age')) {
+          isAgeRestricted = true;
+          log.warn('[CC] Video is age-restricted');
+        }
+      };
 
-    await execFileAsync(ytDlpCommand, [
-      ...baseArgs,
-      '--write-sub',
-      '--sub-lang', manualLangs,
-    ], { timeout: YT_DLP_TIMEOUT, signal }).catch(e => noteAgeRestriction(e, 'Manual subs'));
-
-    const manualFiles = await readdir(tmpDir);
-    // Insist on a language the user can read; an Italian track for an English
-    // talk is worse than that talk's auto-generated English.
-    let pick = manualFiles.length ? pickBestSubFile(manualFiles, sortOrder, true) : null;
-
-    if (pick) {
-      log.info(`[CC] Found manual subtitles (${pick.lang}): ${pick.file}`);
-    } else {
-      // ── Step 2: No manual subs — fall back to auto-generated CC ──
-      log.info('[CC] No manual subs — trying auto-CC...');
       await execFileAsync(ytDlpCommand, [
         ...baseArgs,
-        '--write-auto-sub',
-        '--sub-lang', autoLangs,
-      ], { timeout: YT_DLP_TIMEOUT, signal }).catch(e => noteAgeRestriction(e, 'Auto-CC'));
+        '--write-sub',
+        '--sub-lang', manualLangs,
+      ], { timeout: YT_DLP_TIMEOUT, signal }).catch(e => noteAgeRestriction(e, 'Manual subs'));
 
-      const allFiles = await readdir(tmpDir);
-      log.info(`[CC] Files in temp dir: ${allFiles.join(', ') || '(none)'}`);
-      /*
-       * Only what this second pass actually downloaded.
-       *
-       * Both passes write into the same temp directory, so re-scanning it here
-       * also returns whatever step 1 fetched — and pickBestSubFile ranks manual
-       * tracks above automatic ones. So the file step 1 had just rejected for
-       * being in an unreadable language won this pick straight back, every
-       * time, which is precisely what requireLang exists to prevent. Comparing
-       * against the step-1 listing is what keeps the two passes separate.
-       *
-       * Any language is accepted among these: auto-CC is in the video's own
-       * language, which for a song is the language its lyrics are in.
-       */
-      const manualSeen = new Set(manualFiles);
-      const autoFiles = allFiles.filter(f => !manualSeen.has(f));
-      pick = autoFiles.length ? pickBestSubFile(autoFiles, sortOrder) : null;
+      const manualFiles = await readdir(tmpDir);
+      // Insist on a language the user can read; an Italian track for an English
+      // talk is worse than that talk's auto-generated English.
+      let pick = manualFiles.length ? pickBestSubFile(manualFiles, sortOrder, true) : null;
 
-      // Still nothing: take the manual track in whatever language it came in,
-      // rather than showing none at all.
-      if (!pick && manualFiles.length) {
-        pick = pickBestSubFile(manualFiles, sortOrder);
-        if (pick) {
-          log.info(`[CC] Falling back to manual subtitles in ${pick.lang} — no track in a preferred language`);
+      if (pick) {
+        log.info(`[CC] Found manual subtitles (${pick.lang}): ${pick.file}`);
+      } else {
+        // ── Step 2: No manual subs — fall back to auto-generated CC ──
+        log.info('[CC] No manual subs — trying auto-CC...');
+        await execFileAsync(ytDlpCommand, [
+          ...baseArgs,
+          '--write-auto-sub',
+          '--sub-lang', autoLangs,
+        ], { timeout: YT_DLP_TIMEOUT, signal }).catch(e => noteAgeRestriction(e, 'Auto-CC'));
+
+        const allFiles = await readdir(tmpDir);
+        log.info(`[CC] Files in temp dir: ${allFiles.join(', ') || '(none)'}`);
+        /*
+         * Only what this second pass actually downloaded.
+         *
+         * Both passes write into the same temp directory, so re-scanning it here
+         * also returns whatever step 1 fetched — and pickBestSubFile ranks manual
+         * tracks above automatic ones. So the file step 1 had just rejected for
+         * being in an unreadable language won this pick straight back, every
+         * time, which is precisely what requireLang exists to prevent. Comparing
+         * against the step-1 listing is what keeps the two passes separate.
+         *
+         * Any language is accepted among these: auto-CC is in the video's own
+         * language, which for a song is the language its lyrics are in.
+         */
+        const manualSeen = new Set(manualFiles);
+        const autoFiles = allFiles.filter(f => !manualSeen.has(f));
+        pick = autoFiles.length ? pickBestSubFile(autoFiles, sortOrder) : null;
+
+        // Still nothing: take the manual track in whatever language it came in,
+        // rather than showing none at all.
+        if (!pick && manualFiles.length) {
+          pick = pickBestSubFile(manualFiles, sortOrder);
+          if (pick) {
+            log.info(`[CC] Falling back to manual subtitles in ${pick.lang} — no track in a preferred language`);
+          }
         }
+      }
+      return { pick, isAgeRestricted };
+    };
+
+    const fileArgs = cookieArgs();
+    let { pick, isAgeRestricted } = await downloadSubs(fileArgs);
+
+    // Age-gated while signed out, and no cookies file of the user's own: retry
+    // with the session the extension lent, or ask it for one. See the comment
+    // on `browserCookies` for why it is only ever used here.
+    if (!pick && isAgeRestricted && !fileArgs.length) {
+      const jar = freshBrowserCookies();
+      if (jar) {
+        // .txt, so the subtitle pick (which reads only .json3) never sees it.
+        const jarFile = path.join(tmpDir, 'cookies.txt');
+        await writeFile(jarFile, toNetscapeCookies(jar), { mode: 0o600 });
+        log.info('[CC] Age-restricted signed out — retrying with the browser\'s YouTube session');
+        ({ pick, isAgeRestricted } = await downloadSubs(['--cookies', jarFile]));
+        if (!pick && isAgeRestricted) {
+          log.info('[CC] Still age-restricted signed in — the account is probably not age-verified');
+        }
+      } else {
+        requestBrowserCookies();
       }
     }
 

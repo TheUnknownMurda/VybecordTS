@@ -9,6 +9,7 @@
  */
 
 import * as esbuild from 'esbuild';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -35,18 +36,42 @@ const watch = process.argv.includes('--watch');
  */
 function bugReportWebhook() {
   if (process.env.BUG_REPORT_WEBHOOK) return process.env.BUG_REPORT_WEBHOOK.trim();
-  try {
-    const env = fs.readFileSync(path.join(root, 'envs', '.env'), 'utf8');
-    for (const raw of env.split(/\r?\n/)) {
-      const line = raw.trim();
-      if (!line.startsWith('BUG_REPORT_WEBHOOK=')) continue;
-      return line.slice(line.indexOf('=') + 1).trim()
-        .replace(/^["']|["']$/g, '');
+  for (const dir of envDirs()) {
+    try {
+      const env = fs.readFileSync(path.join(dir, 'envs', '.env'), 'utf8');
+      for (const raw of env.split(/\r?\n/)) {
+        const line = raw.trim();
+        if (!line.startsWith('BUG_REPORT_WEBHOOK=')) continue;
+        return line.slice(line.indexOf('=') + 1).trim()
+          .replace(/^["']|["']$/g, '');
+      }
+    } catch {
+      /* no envs/.env here — try the next place */
     }
-  } catch {
-    /* no envs/.env — reporting stays off */
   }
   return '';
+}
+
+/**
+ * Where envs/.env may be: this checkout, then the main checkout when this is a
+ * `git worktree`.
+ *
+ * Releases are built in a fresh worktree so a dirty working copy never ships.
+ * envs/ is gitignored, so a worktree never has one, and 2.7.0 and 2.8.0 both
+ * went out with the Report page switched off. The main checkout is the parent
+ * of git's common directory, which is the same .git for every worktree.
+ */
+function envDirs() {
+  const dirs = [root];
+  try {
+    const common = execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'],
+      { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    const main = path.dirname(common);
+    if (common && path.resolve(main) !== path.resolve(root)) dirs.push(main);
+  } catch {
+    /* not a git checkout, or no git on PATH — this checkout only */
+  }
+  return dirs;
 }
 
 const WEBHOOK = bugReportWebhook();

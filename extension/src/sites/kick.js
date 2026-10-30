@@ -1,29 +1,35 @@
 /**
  * kick — playback reporter.
  *
- * Carried over from the Tampermonkey userscript with its scraping logic intact;
- * see src/gm-shim.js for why. The only changes are the removal of the userscript
- * metadata block and of the handshake with the old setup page, which the desktop
- * app no longer serves.
+ * Carried over from the Tampermonkey userscript; see src/gm-shim.js for why.
  *
- * Why the API call below stays here
- * ---------------------------------
- * fetchKickStreamStart() is the one request this extension makes to anything
- * other than the desktop app, and it is the reason the README and the privacy
- * policy both carry an explicit Kick exception rather than a flat "contacts
- * only 127.0.0.1". The obvious tidy-up is to move it into the desktop app, the
- * way the equivalent Twitch lookup was moved to src/core/twitch-source.ts.
+ * Why it asks Kick's API from the page
+ * ------------------------------------
+ * The requests below to kick.com/api are the only ones this extension makes to
+ * anything other than the desktop app, and they are the reason the README and
+ * the privacy policy both carry an explicit Kick exception rather than a flat
+ * "contacts only 127.0.0.1". The obvious tidy-up is to move them into the
+ * desktop app, the way the equivalent Twitch lookup was moved to
+ * src/core/twitch-source.ts.
  *
  * It does not work. Kick sits behind bot protection that answers HTTP 403
  * ("Request blocked by security policy") to every server-side request —
  * /api/v1 and /api/v2 alike, with any User-Agent, and for the plain channel
  * page HTML too. The official api.kick.com endpoint answers 401 without OAuth
- * credentials this project does not have. What makes the call below work is
- * exactly what cannot be reproduced from Node: it is same-origin, from a real
- * browser, carrying the session of a page the user already has open.
+ * credentials this project does not have. What makes the calls below work is
+ * exactly what cannot be reproduced from Node: they are same-origin, from a
+ * real browser, carrying the session of a page the user already has open.
  *
- * So it stays, and the docs tell the truth about it instead. Before moving it,
- * re-run those requests — if Kick ever serves them, the move is worth making.
+ * They used to ask for the stream's start time and nothing else, while the
+ * name, picture, title and liveness were read off the page — the first
+ * element whose class contained "username", "avatar" or "live". That is
+ * whatever the page renders first: a chatter, the sidebar, the viewer's own
+ * picture. The same answer already carried all of it, so it is now the
+ * source, and the page is read only if Kick stops answering.
+ *
+ * So they stay, and the docs tell the truth about them instead. Before moving
+ * them, re-run those requests — if Kick ever serves them, the move is worth
+ * making.
  */
 
 (function() {
@@ -54,10 +60,8 @@
     }
     const BASE_INTERVAL_MS = 2500;
     const MAX_INTERVAL_MS = 15000;
-    const REVERIFY_INTERVAL_MS = 5 * 60 * 1000; // periodically re-confirm the start time against Kick's API
 
     // ── State ──
-    let lastStreamerKey = '';
     let pushTimer = null;
     let currentInterval = BASE_INTERVAL_MS;
     let consecutiveFails = 0;
@@ -97,51 +101,179 @@
         } catch (e) { /* ignore */ }
     }
 
-    let fetchingStartFor = ''; // guards against duplicate concurrent fetches
-    let activeStreamer = ''; // guards a stale API response from overwriting a newer session
-    let startVerified = false; // true once Kick's API has confirmed/corrected the current start time
-    let verifyAttempts = 0;
-    let verifiedAt = 0;
+    // ── Kick's API ──
+
+    /** First path segments that are Kick's own pages, not a channel. */
+    const NOT_A_CHANNEL = new Set([
+        'browse', 'categories', 'category', 'following', 'search', 'dashboard', 'settings',
+        'subscriptions', 'messages', 'notifications', 'clips', 'videos', 'video', 'terms-of-service',
+        'privacy-policy', 'community-guidelines', 'dmca-policy', 'about', 'login', 'signup',
+        'kick-gift', 'contact', 'brand-assets', 'careers', 'help', 'drops', 'stream-key', 'vod',
+    ]);
+
+    const RE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const RE_CLIP = /^clip_[A-Za-z0-9]+$/;
+
+    /** How long a channel's answer stands: a stream starting or ending shows within this. */
+    const CHANNEL_TTL_MS = 45 * 1000;
+    /** How long a failed request waits before it is tried again. */
+    const RETRY_MS = 60 * 1000;
+    /**
+     * How long a new page waits for Kick's answer before the page itself is
+     * read instead. The answer takes a fraction of this; the page, read any
+     * sooner, is still the previous channel's.
+     */
+    const API_WAIT_MS = 3000;
 
     /**
-     * Ask Kick's own channel API for the livestream's real `created_at` so
-     * the Discord elapsed timer is accurate even if the tab was opened
-     * mid-stream — not just "time since this tab first noticed it's live".
-     * Same-origin request: uses the browser's normal fetch() and the
-     * user's existing Kick session, exactly like the page itself does,
-     * so no extra permissions are needed for it.
+     * Which page this is, from the URL alone.
+     *
+     *   /<channel>/videos/<uuid>   a past broadcast
+     *   /<channel>/clips/<id>      a clip, as is /<channel>?clip=<id>
+     *   /<channel>                 the channel, live or not
      */
-    function fetchKickStreamStart(username) {
-        if (!username || fetchingStartFor === username) return;
-        if (verifyAttempts >= 8) { startVerified = true; return; } // stop retrying forever on persistent failure
-        verifyAttempts++;
-        fetchingStartFor = username;
-        fetch(`/api/v1/channels/${encodeURIComponent(username)}`, {
-            headers: { Accept: 'application/json' },
-            credentials: 'same-origin',
-        })
-            .then((res) => (res.ok ? res.json() : null))
-            .then((data) => {
-                const createdAt = data && data.livestream && data.livestream.created_at;
-                if (!createdAt) return;
-                if (username !== activeStreamer) return; // session moved on, discard
-                // Kick returns "YYYY-MM-DD HH:MM:SS" in UTC.
-                const realStart = Date.parse(`${createdAt.replace(' ', 'T')}Z`);
-                if (!realStart || isNaN(realStart)) return;
-                const now = Date.now();
-                // Sanity check — must be in the past and not absurdly old,
-                // in case the API ever returns stale/unexpected data.
-                if (realStart > now + 60000 || realStart < now - 30 * 24 * 60 * 60 * 1000) return;
-                streamStartTime = realStart;
-                setPersistedStreamStart(username, streamStartTime);
-                startVerified = true;
-                verifiedAt = Date.now();
-                console.log('[VybecordTS Kick] Corrected stream start time from API ✓', new Date(realStart).toISOString());
-            })
-            .catch(() => { /* silently keep the estimated start time */ })
-            .finally(() => {
-                if (fetchingStartFor === username) fetchingStartFor = '';
-            });
+    function pageFromUrl() {
+        const parts = window.location.pathname.split('/').filter(Boolean);
+        if (!parts[0] || NOT_A_CHANNEL.has(parts[0].toLowerCase()) || !/^[A-Za-z0-9_-]+$/.test(parts[0])) return null;
+        const slug = parts[0];
+        if (parts[1] === 'videos' && RE_UUID.test(parts[2] || '')) return { kind: 'vod', slug, id: parts[2] };
+        const clip = parts[1] === 'clips' ? parts[2] : new URLSearchParams(window.location.search).get('clip');
+        if (clip && RE_CLIP.test(clip)) return { kind: 'clip', slug, id: clip };
+        return { kind: 'channel', slug, id: '' };
+    }
+
+    function apiUrl(page) {
+        if (page.kind === 'vod') return `/api/v1/video/${encodeURIComponent(page.id)}`;
+        if (page.kind === 'clip') return `/api/v2/clips/${encodeURIComponent(page.id)}`;
+        return `/api/v1/channels/${encodeURIComponent(page.slug)}`;
+    }
+
+    /**
+     * Answers per API URL: { at, status: 'ok' | 'missing' | 'error', data }.
+     * A channel is asked again every CHANNEL_TTL_MS for its liveness and title;
+     * a video or a clip does not change, so it is asked once.
+     */
+    const apiCache = new Map();
+    const apiInFlight = new Set();
+
+    function apiAnswer(page) {
+        const url = apiUrl(page);
+        const cached = apiCache.get(url);
+        const age = cached ? Date.now() - cached.at : Infinity;
+        const due = !cached
+            || (cached.status === 'error' && age > RETRY_MS)
+            || (cached.status === 'ok' && page.kind === 'channel' && age > CHANNEL_TTL_MS);
+        if (due && !apiInFlight.has(url)) {
+            apiInFlight.add(url);
+            fetch(url, { headers: { Accept: 'application/json' }, credentials: 'same-origin' })
+                .then((res) => {
+                    if (res.status === 404) return { status: 'missing', data: null };
+                    if (!res.ok) return { status: 'error', data: null };
+                    return res.json().then((data) => ({ status: data ? 'ok' : 'missing', data }));
+                })
+                .catch(() => ({ status: 'error', data: null }))
+                .then((answer) => {
+                    // A refresh that failed keeps the last good answer rather than
+                    // throwing it away; it is retried after RETRY_MS like any other.
+                    const prev = apiCache.get(url);
+                    if (answer.status === 'error' && prev && prev.status === 'ok') prev.at = Date.now() - CHANNEL_TTL_MS + RETRY_MS;
+                    else apiCache.set(url, { at: Date.now(), ...answer });
+                    if (apiCache.size > 32) apiCache.delete(apiCache.keys().next().value);
+                    apiInFlight.delete(url);
+                    // Report the answer now rather than at the next beat.
+                    if (apiUrl(pageFromUrl() || page) === url) periodicPush();
+                });
+        }
+        return cached;
+    }
+
+    /** Kick writes times as "YYYY-MM-DD HH:MM:SS" in UTC; 0 for anything unusable. */
+    function kickTime(s) {
+        if (!s || typeof s !== 'string') return 0;
+        const ms = Date.parse(/Z$|[+-]\d\d:?\d\d$/.test(s) ? s : `${s.replace(' ', 'T')}Z`);
+        const now = Date.now();
+        if (!ms || isNaN(ms) || ms > now + 60000 || ms < now - 30 * 24 * 60 * 60 * 1000) return 0;
+        return ms;
+    }
+
+    function firstCategory(list) {
+        return Array.isArray(list) && list[0] && list[0].name ? String(list[0].name) : '';
+    }
+
+    /** The page's video: position and length, for a past broadcast or a clip. */
+    function playerState() {
+        const v = document.querySelector('video');
+        if (!v) return { position_ms: 0, duration_ms: 0, paused: true };
+        return {
+            position_ms: isFinite(v.currentTime) ? Math.round(v.currentTime * 1000) : 0,
+            duration_ms: isFinite(v.duration) ? Math.round(v.duration * 1000) : 0,
+            paused: v.paused || v.ended,
+        };
+    }
+
+    /** What Kick's answer says this page is, in the shape the app takes. */
+    function infoFromApi(page, data) {
+        const info = {
+            page_kind: page.kind,
+            username: page.slug,
+            display_name: '',
+            followers: '',
+            category: '',
+            stream_title: '',
+            profile_url: `https://kick.com/${page.slug}`,
+            is_live: false,
+            thumbnail_url: '',
+            profile_picture_url: '',
+            stream_start_time_ms: 0,
+            last_title: '',
+            video_id: page.kind === 'vod' ? page.id : '',
+            clip_id: page.kind === 'clip' ? page.id : '',
+            position_ms: 0,
+            duration_ms: 0,
+            paused: false,
+            tab_id: TAB_ID
+        };
+        if (page.kind === 'channel') {
+            const user = data.user || {};
+            const live = data.livestream;
+            info.username = data.slug || page.slug;
+            info.profile_url = `https://kick.com/${info.username}`;
+            info.display_name = user.username || '';
+            info.profile_picture_url = user.profile_pic || '';
+            info.is_live = !!(live && live.is_live !== false);
+            if (info.is_live) {
+                info.stream_title = live.session_title || '';
+                info.category = firstCategory(live.categories);
+                info.stream_start_time_ms = kickTime(live.start_time) || kickTime(live.created_at);
+            } else {
+                const last = Array.isArray(data.previous_livestreams) ? data.previous_livestreams[0] : null;
+                info.last_title = (last && last.session_title) || '';
+            }
+            return info;
+        }
+        Object.assign(info, playerState());
+        if (page.kind === 'vod') {
+            const ls = data.livestream || {};
+            const ch = ls.channel || {};
+            const user = ch.user || {};
+            info.username = ch.slug || page.slug;
+            info.display_name = user.username || '';
+            info.profile_picture_url = user.profilepic || user.profile_pic || '';
+            info.stream_title = ls.session_title || '';
+            info.category = firstCategory(ls.categories);
+            if (!info.duration_ms && ls.duration > 0) info.duration_ms = ls.duration;
+        } else {
+            const clip = data.clip || {};
+            const ch = clip.channel || {};
+            info.username = ch.slug || page.slug;
+            info.display_name = ch.username || '';
+            info.profile_picture_url = ch.profile_picture || '';
+            info.stream_title = clip.title || '';
+            info.category = (clip.category && clip.category.name) || '';
+            if (!info.duration_ms && clip.duration > 0) info.duration_ms = clip.duration * 1000;
+        }
+        info.profile_url = `https://kick.com/${info.username}`;
+        return info;
     }
 
     function pushToVybecord(data) {
@@ -184,9 +316,13 @@
     }
 
     /**
-     * Extract streamer information from the page.
+     * Read the channel off the page, for when Kick's API does not answer.
+     *
+     * This is the old way, and it is a guess: each field is the first element
+     * whose class looks right. It is kept only so that Kick refusing the API
+     * costs a less reliable card rather than none.
      */
-    function getStreamerInfo() {
+    function scrapeChannelFromDom() {
         const info = {
             username: '',
             display_name: '',
@@ -198,6 +334,7 @@
             thumbnail_url: '',
             profile_picture_url: '',
             stream_start_time_ms: 0,
+            page_kind: 'channel',
             tab_id: TAB_ID
         };
 
@@ -317,42 +454,16 @@
         info.is_live = !!document.querySelector('[class*="live"], [class*="online"]') ||
                        !document.querySelector('[class*="offline"]');
 
-        // Set stream start time when stream goes live — recover it from
-        // persistent storage first so a reload/navigation doesn't reset
-        // Discord's "time since stream started" display back to 0. A
-        // persisted/provisional value is used immediately so the timer
-        // isn't blocked on a network round trip, but it's ALWAYS re-verified
-        // against Kick's own API (bounded retries) — a persisted value can
-        // be from a previous, already-ended stream if this tab was closed
-        // while the streamer went offline and later came back live, and we
-        // would otherwise never notice the stream actually restarted.
+        // A start time for the Discord elapsed timer: when this tab first saw
+        // the channel live, persisted so a reload or navigation keeps it.
         if (info.is_live) {
-            activeStreamer = info.username;
             if (streamStartTime === 0) {
                 streamStartTime = getPersistedStreamStart(info.username) || Date.now();
                 setPersistedStreamStart(info.username, streamStartTime);
-                startVerified = false;
-                verifyAttempts = 0;
-            }
-            if (!startVerified) {
-                fetchKickStreamStart(info.username);
-            } else if (Date.now() - verifiedAt > REVERIFY_INTERVAL_MS) {
-                // Periodic safety re-check: DOM-based is_live detection can
-                // occasionally miss a real offline→online transition (e.g. if
-                // the tab wasn't open to see it), so re-confirm against the
-                // API every few minutes even once "verified".
-                startVerified = false;
-                verifyAttempts = 0;
-                fetchKickStreamStart(info.username);
             }
         } else {
-            // Reset when stream goes offline
             streamStartTime = 0;
             clearPersistedStreamStart();
-            fetchingStartFor = '';
-            activeStreamer = '';
-            startVerified = false;
-            verifyAttempts = 0;
         }
         info.stream_start_time_ms = streamStartTime;
 
@@ -470,47 +581,62 @@
 
     // ── Core loop ──
 
-    function onStateChange() {
-        const data = getStreamerInfo();
-        if (!data || !data.username) return;
+    let pageKey = '';
+    let pageSince = 0;
 
-        const streamerKey = `${data.username}|${data.is_live}`;
-
-        if (streamerKey !== lastStreamerKey) {
-            lastStreamerKey = streamerKey;
-            pushToVybecord(data);
+    /**
+     * What this tab shows, or null when there is nothing to report (yet).
+     *
+     * Kick's answer when there is one. While it is on its way the tab reports
+     * nothing — the page is still the previous channel's — and only if Kick
+     * does not answer within API_WAIT_MS is the page read instead.
+     */
+    function getStreamerInfo() {
+        const page = pageFromUrl();
+        if (!page) return null;
+        const key = `${page.kind}|${page.slug}|${page.id}`;
+        if (key !== pageKey) {
+            pageKey = key;
+            pageSince = Date.now();
+            streamStartTime = 0;
         }
+        const answer = apiAnswer(page);
+        if (answer && answer.status === 'ok') return infoFromApi(page, answer.data);
+        // Kick says there is no such channel or video: not a page to report.
+        if (answer && answer.status === 'missing') return null;
+        if (Date.now() - pageSince < API_WAIT_MS) return null;
+        if (page.kind === 'channel') return scrapeChannelFromDom();
+        return Object.assign(infoFromApi(page, {}), { username: page.slug });
     }
 
+    /*
+     * One push per beat for whatever the tab is on — live, offline, a video.
+     * Pushing only while live is what kept an offline channel off the card:
+     * the tab said "offline" once, then went quiet and aged out.
+     */
     function periodicPush() {
-        // Detect state changes
-        onStateChange();
-        // Always push when live (for status updates)
         const data = getStreamerInfo();
-        if (data && data.is_live) {
-            pushToVybecord(data);
-        }
+        if (!data || !data.username) return;
+        pushToVybecord(data);
     }
 
     function init() {
         reschedule(BASE_INTERVAL_MS);
         console.log('[VybecordTS] Kick integration initialized ✓');
 
-        setTimeout(() => {
-            onStateChange();
-        }, 500);
+        setTimeout(periodicPush, 500);
     }
 
     // Wait for page to be ready
     function onReady() {
         init();
-        // Kick SPA: re-init on navigation
+        // Kick SPA: report a new page as soon as the URL changes.
         let lastUrl = location.href;
         new MutationObserver(() => {
             const currentUrl = location.href;
             if (currentUrl !== lastUrl) {
                 lastUrl = currentUrl;
-                setTimeout(onStateChange, 500);
+                setTimeout(periodicPush, 500);
             }
         }).observe(document, { subtree: true, childList: true });
     }

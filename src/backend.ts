@@ -44,10 +44,14 @@ import { SoundCloudSource } from './core/soundcloud-source.js';
 import { BandcampSource } from './core/bandcamp-source.js';
 import { KickSource } from './core/kick-source.js';
 import { TwitchSource } from './core/twitch-source.js';
+import { isBroadcastSource } from './core/broadcast-track.js';
 import { DiscordPool } from './core/discord-pool.js';
 import { PresenceSlot, type LyricsState } from './core/presence-slot.js';
 import { fetchLyrics, fetchPlainLyrics, findCustomLyrics } from './core/provider.js';
-import { fetchYouTubeCaptions, clearCCCache, setCcCookiesFile } from './core/youtube-captions.js';
+import {
+  fetchYouTubeCaptions, clearCCCache, setCcCookiesFile, setBrowserCookies, wantsBrowserCookies,
+  type BrowserCookie,
+} from './core/youtube-captions.js';
 import { initLocalDb, closeLocalDb, insertCustomLyrics, listCustomLyrics, getCustomLyrics, updateCustomLyrics, deleteCustomLyrics, findExistingCustomLyrics, searchLrclibDump as searchLrclibDumpDb, getLrclibTrackLyrics as getLrclibTrackLyricsDb, lrclibDumpStatus } from './core/local-lyrics-db.js';
 import { initLastFm, scrobbleTrackStart, checkAndScrobble, scrobblePause, scrobbleTrackEnd } from './core/lastfm.js';
 import { lookupCoverArt } from './core/cover-art.js';
@@ -87,8 +91,6 @@ const ARTIST_SPLIT_RE = /[,]/;  // Precompiled — used in recordPlay + artist k
 const LYRICS_SWITCH_KEYS = ['show_lyrics', 'show_lyrics_2', 'show_lyrics_3', 'show_lyrics_4', 'show_lyrics_5'] as const;
 /** The per-card activity type, by position; `rpc_activity_type` is presence 1's. */
 const ACTIVITY_TYPE_KEYS = ['rpc_activity_type', 'rpc_activity_type_2', 'rpc_activity_type_3', 'rpc_activity_type_4', 'rpc_activity_type_5'] as const;
-/** Application IDs a card may fall back on when a higher card holds its own. */
-const SPARE_APP_ID_KEYS = ['discord_app_id_2', 'discord_app_id_3', 'discord_app_id_4', 'discord_app_id_5'] as const;
 
 /** How many presence cards the app can put on the profile. */
 const MAX_SLOTS = 5;
@@ -146,6 +148,21 @@ const PLATFORM_BUTTON_LABEL = '🎵 Listen on {platform}';
 
 /** Ceiling on lyric lines accepted from one push. Longer than any real song. */
 const MAX_PUSHED_LYRIC_LINES = 2000;
+
+/**
+ * What the card shows for an age-restricted video without captions.
+ *
+ * Named so it can be recognised again: it is a status, not lyrics, and must
+ * not be cached as though it were the video's lyrics (see onNewTrack).
+ */
+const AGE_GATED_LINE = '🔞 CC unavailable — age-restricted video';
+
+/**
+ * Bounds on a cookie handover from the extension. A signed-in YouTube jar is
+ * a few dozen cookies; these are slack, not targets.
+ */
+const MAX_BROWSER_COOKIES = 200;
+const MAX_COOKIE_FIELD = 4096;
 
 /**
  * Discord App ID used when the user has not configured one.
@@ -331,6 +348,12 @@ export class VybecordBackend extends EventEmitter {
   private configDir: string;
 
   private _lastCcLang: string | undefined;
+  /**
+   * Tracks whose captions came back age-restricted, by track key, so the
+   * playing one can be retried when the extension hands over a session.
+   * Bounded by hand: one entry per age-gated video heard this run.
+   */
+  private ageGatedTracks = new Set<string>();
   /** Album of the last play accepted as real — lets recordPlay() tell an
    *  interlude from an advertisement, the same way the media source does. */
   private lastRecordedAlbum = '';
@@ -374,7 +397,8 @@ export class VybecordBackend extends EventEmitter {
     this.soundcloudSource = new SoundCloudSource();
     this.bandcampSource = new BandcampSource();
     this.kickSource = new KickSource();
-    this.twitchSource = new TwitchSource();
+    // A held tab is shown as soon as Twitch answers, not at its next push.
+    this.twitchSource = new TwitchSource(() => this.reconcile(false));
 
     // React to config toggles in real-time
     this.on('configUpdate', (cfg) => {
@@ -627,6 +651,54 @@ export class VybecordBackend extends EventEmitter {
     this.ingestPush(raw, this.youtubeSource, 'youtube-userscript');
   }
 
+  /** Whether the reply to the YouTube tab's push should ask for its session. */
+  wantsYouTubeCookies(): boolean {
+    return wantsBrowserCookies();
+  }
+
+  /**
+   * The browser's YouTube cookies, sent because a video came back
+   * age-restricted.
+   *
+   * Every field is coerced, and only cookies set for youtube.com are kept:
+   * the session is used for YouTube's captions and nothing else, so anything
+   * else in the body is somebody else's and has no business reaching yt-dlp.
+   * A tab or newline in a field would break the cookies.txt line it lands on,
+   * so such a cookie is dropped rather than repaired.
+   */
+  handleYouTubeCookies(raw: unknown): void {
+    const list = (raw as { cookies?: unknown }).cookies;
+    if (!Array.isArray(list)) return;
+    const cookies: BrowserCookie[] = [];
+    const clean = (v: unknown): string | null =>
+      typeof v === 'string' && v.length <= MAX_COOKIE_FIELD && !/[\t\r\n]/.test(v) ? v : null;
+    for (const item of list.slice(0, MAX_BROWSER_COOKIES)) {
+      if (!item || typeof item !== 'object') continue;
+      const c = item as Record<string, unknown>;
+      const domain = clean(c.domain);
+      const name = clean(c.name);
+      const value = clean(c.value);
+      if (!domain || !name || value === null) continue;
+      if (!/^\.?([\w-]+\.)*youtube\.com$/i.test(domain)) continue;
+      cookies.push({
+        domain,
+        name,
+        value,
+        path: clean(c.path) || '/',
+        secure: c.secure === true,
+        expires: typeof c.expires === 'number' && Number.isFinite(c.expires) ? c.expires : 0,
+      });
+    }
+    setBrowserCookies(cookies);
+    if (!cookies.length) return;
+
+    for (const slot of this.slots) {
+      const t = slot.track;
+      if (!t || !this.ageGatedTracks.has(this.buildTrackKey(t))) continue;
+      void this.retryAgeGatedCaptions(slot, t);
+    }
+  }
+
   isYouTubeSourceActive(): boolean { return this.youtubeSource.isActive; }
 
   handleSoundCloudPush(raw: unknown): void {
@@ -793,9 +865,10 @@ export class VybecordBackend extends EventEmitter {
       { source: this.soundcloudSource, configKey: 'detect_soundcloud', label: 'soundcloud-userscript', web: true },
       // Bandcamp has no switch of its own; it rides the "other apps" one.
       { source: this.bandcampSource,   configKey: 'detect_other_apps', label: 'bandcamp-userscript',   web: true },
-      // A stream is live or it is not; there is no pause to report.
-      { source: this.kickSource,       configKey: 'detect_kick',       label: 'kick-userscript',       web: true, live: true },
-      { source: this.twitchSource,     configKey: 'detect_twitch',     label: 'twitch-userscript',     web: true, live: true },
+      // Not `live` as a source: a tab can be on a past broadcast or a clip,
+      // which has a length and a position like any video. Each track says.
+      { source: this.kickSource,       configKey: 'detect_kick',       label: 'kick-userscript',       web: true },
+      { source: this.twitchSource,     configKey: 'detect_twitch',     label: 'twitch-userscript',     web: true },
     );
   }
 
@@ -887,11 +960,14 @@ export class VybecordBackend extends EventEmitter {
         out.push({
           track,
           service,
-          priority: PUSH_PRIORITY[service] ?? 100,
+          // An offline channel is a tab left open, not something playing: it
+          // takes a card only when nothing else wants it, a song from an OS
+          // session included. Push sources otherwise outrank every OS session.
+          priority: track.context_type === 'offline' ? 0 : PUSH_PRIORITY[service] ?? 100,
           push: true,
-          // Per track, not per source: Kick and Twitch are always a broadcast,
-          // but YouTube is one only when the video is, and a premiere sitting in
-          // the same tab as ordinary videos has to be read from the track itself.
+          // Per track, not per source: a YouTube premiere sits in the same tab
+          // as ordinary videos, and a Twitch or Kick tab can be on a past
+          // broadcast as easily as a live channel, so it is read off the track.
           live: !!spec.live || track.is_live === true,
           label: spec.label,
           web: spec.web,
@@ -1438,8 +1514,10 @@ export class VybecordBackend extends EventEmitter {
       const session = track._session_id && !track._from_push
         ? this.media?.listPlayers().find(p => p.appId === track._session_id)
         : undefined;
-      // Never a live stream: one that stops has ended.
-      slot.stopped = track.is_live ? null : { ...track, is_playing: false, progress_ms: this.stoppedAt(slot, session) };
+      // Never a live stream: one that stops has ended. Nor an offline channel,
+      // which was never playing anything to pause.
+      slot.stopped = track.is_live || track.context_type === 'offline'
+        ? null : { ...track, is_playing: false, progress_ms: this.stoppedAt(slot, session) };
       // An ad cuts a song off: its title is not the song's.
       slot.stoppedTitle = session && !session.isAd ? session.title : '';
       slot.endedAt = ended ? Date.now() : 0;
@@ -1551,6 +1629,8 @@ export class VybecordBackend extends EventEmitter {
     if (src === 'youtube' || src === 'youtube_music') return this.youtubeSource;
     if (src === 'soundcloud') return this.soundcloudSource;
     if (src === 'bandcamp') return this.bandcampSource;
+    if (src === 'twitch') return this.twitchSource;
+    if (src === 'kick') return this.kickSource;
     return null;
   }
 
@@ -1615,7 +1695,10 @@ export class VybecordBackend extends EventEmitter {
     // Every source, not a chosen few: the position reported here is how the
     // scrobbler tells listening apart from a player sitting on a paused song,
     // and a source that never reaches it can only ever scrobble at track end.
-    if (slot.primary) checkAndScrobble(track.progress_ms);
+    // Except Twitch and Kick, which never start a scrobble (see recordPlay):
+    // the one still open is the song paused before the video, and a video's
+    // position would count towards it.
+    if (slot.primary && !STREAM_SOURCES.has(track.media_source)) checkAndScrobble(track.progress_ms);
     this.emit('progressUpdate', { progress_ms: track.progress_ms, duration_ms: track.duration_ms }, slot.index);
 
     // Detect track end: engine stopped but progress is at the end (not a repeat loop)
@@ -1744,9 +1827,12 @@ export class VybecordBackend extends EventEmitter {
      * title to look up, and the catalogue would be free to answer anyway — the
      * artist check only rejects a wrong *artist*, so a channel name that
      * happens to read like a band would come back with that band's record.
+     * Twitch and Kick are excluded whatever the page shows, for the same
+     * reason: a past broadcast's title is no more an album than a stream's.
      */
     const declaredArt = trackData.album_art_url || '';
-    if (!trackData.is_live && !/^https?:\/\//.test(declaredArt)) {
+    const broadcast = trackData.is_live || isBroadcastSource(trackData.media_source);
+    if (!broadcast && !trackData.is_dj_narration && !/^https?:\/\//.test(declaredArt)) {
       const allowUpload = declaredArt === '/api/thumbnail' && (localArtExtracted || this.thumbBelongsTo(trackData));
       this.resolveDiscordArt(slot, trackData, signal, allowUpload);
     }
@@ -1814,6 +1900,13 @@ export class VybecordBackend extends EventEmitter {
       this.lyricsCache.delete(cacheKey);
       cached = undefined;
     }
+    // The age-restricted notice is a status, not lyrics, and earlier versions
+    // cached it like lyrics: the cache would hand it back for weeks, long
+    // after a session could have unlocked the captions.
+    if (cached?.length === 1 && cached[0].text === AGE_GATED_LINE) {
+      this.lyricsCache.delete(cacheKey);
+      cached = undefined;
+    }
     if (cached && cached.length > 0) {
       lyrics = cached;
       log.info(`[LYRICS] Cache hit (${lyrics.length} lines)`);
@@ -1825,7 +1918,10 @@ export class VybecordBackend extends EventEmitter {
       // SoundCloud & Bandcamp report accurate audio duration — keep it for better matching
       const lyricsDuration = isVideoSource ? 0 : trackData.duration_ms;
 
-      const lyricsPromise = (!trackData.is_live)
+      /** Set when the answer is the age-restricted notice rather than lyrics. */
+      let ageGated = false;
+      // Spotify's DJ talking is not a song either; see spicetify-source.ts.
+      const lyricsPromise = (!broadcast && !trackData.is_dj_narration)
         ? (async (): Promise<LyricLine[]> => {
             // Spotify's own lyrics do not come through here: the Spicetify
             // extension pushes them, and they are picked up from the cache above.
@@ -1916,8 +2012,9 @@ export class VybecordBackend extends EventEmitter {
               // Handle age-restricted videos
               if (ccResult.ageRestricted) {
                 log.info('[CC] Age-restricted video — showing message');
-                // Return special lyrics line for age-restricted
-                return [{ time: 0, text: '🔞 CC unavailable — age-restricted video', source: 'cc' }];
+                ageGated = true;
+                this.ageGatedTracks.add(this.buildTrackKey(trackData));
+                return [{ time: 0, text: AGE_GATED_LINE, source: 'cc' }];
               }
 
               // Captions the user has already rejected fall through to the
@@ -1981,8 +2078,10 @@ export class VybecordBackend extends EventEmitter {
         lyrics = [];
       }
 
-      // Cache lyrics (only if found, to allow retry on empty results)
-      if (!official && lyrics.length > 0) {
+      // Cache lyrics (only if found, to allow retry on empty results). The
+      // age-restricted notice is not lyrics, and caching it would hand it
+      // back even after a browser session could have unlocked the captions.
+      if (!official && !ageGated && lyrics.length > 0) {
         this.lyricsCache.set(cacheKey, lyrics);
       }
     }
@@ -2028,10 +2127,11 @@ export class VybecordBackend extends EventEmitter {
       const isYt = trackData.media_source === 'youtube' || trackData.media_source === 'youtube_music'
         || trackData.media_source.startsWith('browser_');
       // A live stream never reached a provider -- the fetch above is gated on
-      // is_live -- so reporting that the lookup failed puts a fault in the log
+      // it -- so reporting that the lookup failed puts a fault in the log
       // that never happened, 41 times in one real session.
-      const noLyricsSource = trackData.is_live
-        ? 'live stream, not looked up'
+      const noLyricsSource = broadcast
+        ? 'stream or stream video, not looked up'
+        : trackData.is_dj_narration ? 'Spotify DJ talking, not looked up'
         : isYt ? 'CC fetch failed or empty' : 'LRCLib/Netease fetch failed';
       log.info(`[LYRICS] No lyrics found for "${trackData.track_name}" — ${noLyricsSource}`);
       slot.engine.updateTrackData(trackData);
@@ -2039,13 +2139,13 @@ export class VybecordBackend extends EventEmitter {
       /*
        * Async: plain (unsynced) lyrics for the dashboard only, never the RPC.
        *
-       * Gated on is_live for the same reason the synced fetch above is: a
+       * Gated on the same test as the synced fetch above, for the same reason: a
        * stream's title is a channel banner and its artist a streamer, so the
        * lookup is an LRCLib round-trip followed by a Genius search and a page
        * scrape that cannot match anything. The synced path already knew that;
        * this one was still asking, once per stream event.
        */
-      if (!signal.aborted && !trackData.is_live) {
+      if (!signal.aborted && !broadcast && !trackData.is_dj_narration) {
         fetchPlainLyrics(trackData.track_name, trackData.artist_name, trackData.album_name, trackData.duration_ms, signal)
           .then(lines => {
             if (lines && lines.length > 0 && slot.trackKey === expectedKey) {
@@ -2234,6 +2334,34 @@ export class VybecordBackend extends EventEmitter {
     // the rest of its length.
     void this.findReplacementLyrics(slot, t);
     return true;
+  }
+
+  /**
+   * Fetch an age-restricted video's captions again, now that the extension
+   * has lent a YouTube session.
+   *
+   * Modelled on findReplacementLyrics(): the card is already showing the
+   * notice, so this only has to swap real lines in when they come, and leaves
+   * the notice where it is when they do not (the account may not be
+   * age-verified). The fetcher drops its own age-restricted results when the
+   * cookies arrive, so this reaches yt-dlp rather than the cache.
+   */
+  private async retryAgeGatedCaptions(slot: PresenceSlot, t: TrackData): Promise<void> {
+    const key = this.buildTrackKey(t);
+    const videoId = t.track_id.startsWith('yt:') ? t.track_id.slice(3) : undefined;
+    try {
+      const cc = await fetchYouTubeCaptions(
+        t.track_name, t.artist_name, slot.fetchAbort?.signal, videoId, this.config.get('cc_lang') || 'auto');
+      if (slot.trackKey !== key) return;   // the song moved on
+      if (!cc.lines.length) return;
+      this.ageGatedTracks.delete(key);
+      if (slot.cacheKey) this.lyricsCache.set(slot.cacheKey, cc.lines);
+      slot.engine.injectLyrics(cc.lines, t);
+      this.warmTranslations(cc.lines, slot.fetchAbort?.signal);
+      log.info(`[CC] Signed-in retry found ${cc.lines.length} caption lines for "${t.track_name}"`);
+    } catch (e) {
+      log.warn(`[CC] Signed-in retry failed: ${e}`);
+    }
   }
 
   /**
@@ -2611,22 +2739,26 @@ export class VybecordBackend extends EventEmitter {
    * The platform's own when there is one, else the default — and never the
    * same as a higher card's: Discord keys a card by application, so two cards
    * under one application are one card showing two things in turn. That case
-   * falls back to the spare application IDs from Settings, whichever is free,
-   * and with none free the card stays off the profile for that source (the
-   * engine still runs, so the window shows it).
+   * falls back to whichever application is free, and with none free the card
+   * stays off the profile for that source (the engine still runs, so the
+   * window shows it).
+   *
+   * There used to be four "spare application ID" fields in Settings for that
+   * fallback. Six platform applications and the default make seven, against a
+   * ceiling of MAX_SLOTS cards, so a free one always exists and the fields were
+   * asking users for something they never needed.
    */
   private targetAppIdFor(slot: PresenceSlot, source: string): string {
     const def = this.defaultAppId();
     // In order of preference: the platform's own application; the default
     // one — which is what makes a second stream of the same site work with
-    // nothing configured; the spares from Settings; and last, any other
-    // platform's application that nothing is on. The card names its own
+    // nothing configured; and last, any other platform's application that
+    // nothing is on. The card names its own
     // platform whichever it lands on (see borrowed_app in getRpcConfig), so
     // four streams of one site fit out of the box.
     const options = [...new Set([
       PLATFORM_DISCORD_APP_IDS[source] || def,
       def,
-      ...SPARE_APP_ID_KEYS.map(k => String(this.config.get(k) || '').trim()).filter(Boolean),
       ...Object.values(PLATFORM_DISCORD_APP_IDS),
     ])];
     if (slot.index === 0) return options[0];
@@ -2646,7 +2778,7 @@ export class VybecordBackend extends EventEmitter {
     if (!slot.noAppIdLogged.has(source)) {
       slot.noAppIdLogged.add(source);
       log.warn(`[DISCORD] Presence ${slot.index + 1} has no application of its own for ${source || 'this player'}`
-        + ' — it shares a higher card\'s, so it stays off Discord. Set a spare application ID in Settings to show it.');
+        + ' — it shares a higher card\'s, so it stays off Discord.');
     }
     return '';
   }
@@ -2734,7 +2866,7 @@ export class VybecordBackend extends EventEmitter {
     if (previous) this.pool.release(previous, slot.id);
 
     // A card taking the application a lower card was on evicts it: the lower
-    // card re-picks, which lands it on a spare or off Discord. A card leaving
+    // card re-picks, which lands it on a free application or off Discord. A card leaving
     // one is re-picked for too — a lower card may have been waiting for
     // exactly that application to come free.
     for (let i = slot.index + 1; i < this.slots.length; i++) {
@@ -2753,6 +2885,14 @@ export class VybecordBackend extends EventEmitter {
    * history module sees the open entry and continues that listen.
    */
   private recordPlay(t: TrackData): void {
+    // An offline channel is a tab left open, not something watched: no row in
+    // the history. The clock of whatever played before it stops, as it would
+    // for a pause. The DJ talking between songs is held the same way, like an
+    // ad break below, without the guesswork.
+    if (t.context_type === 'offline' || t.is_dj_narration) {
+      historyTrackPause();
+      return;
+    }
     // An advertisement is not a play. The presence filter is a user preference,
     // so it cannot be relied on here: with it off, every ad break used to land
     // in the history as a track by a brand. The heuristic is the same one —
@@ -2891,8 +3031,8 @@ export class VybecordBackend extends EventEmitter {
       // position rather than per app, because "lyrics on the song, not on the
       // video" is the whole point of having more than one.
       show_lyrics: cfg[LYRICS_SWITCH_KEYS[slot.index] ?? 'show_lyrics'],
-      // On another application than its platform's — the default one, a
-      // spare, or a free platform's — the card would be headed by that
+      // On another application than its platform's — the default one or a
+      // free platform's — the card would be headed by that
       // application's name. Told so, the engine puts the platform's name in
       // the header itself.
       borrowed_app: !!slot.appId && slot.appId !== ownApp,
