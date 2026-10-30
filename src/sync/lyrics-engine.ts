@@ -1397,9 +1397,10 @@ export class LyricsEngine {
   private buildActivity(currentText: string, nextText: string, idx: number = this.currentIdx): DiscordActivity | null {
     const d = this.trackData!;
     const hasLyrics = this.cfgShowLyrics && this.lyrics.length > 0;
-    // Force Twitch and Kick to always use Listening (type 2)
-    const source = d.media_source || '';
-    const activityType = (source === 'twitch' || source === 'kick') ? 2 : this.cfgActivityType;
+    // The card's own setting, for every source. Twitch and Kick used to be
+    // pinned to Listening whatever it said, which made a "Watching" card for
+    // a stream impossible to set up — the one source the verb fits best.
+    const activityType = this.cfgActivityType;
 
     /*
      * When the track started, as one number that does not move.

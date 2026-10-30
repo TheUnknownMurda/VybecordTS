@@ -143,6 +143,7 @@ Or show them all. **Settings → Discord presence → Several presences** puts u
 
 - Tabs of the same site are separate things: four Twitch streams open side by side take four cards. A Discord application carries one card, so the others borrow one — the default Vybecord application, then any spare you set, then a platform application nothing is on — and the card names its platform in the header either way.
 - **Lyrics on presence N** picks which cards sing along — any combination.
+- **Activity type on presence N** gives each card its own verb: *Listening* for the song, *Watching* for the stream. Cards 2 to 5 say the same as presence 1 until you change them.
 - **Now playing** shows every card; click one to see its lyrics, its Discord preview and its controls. Its **Source** menu pins that presence to a player, so it never swaps with another.
 - The listening history (and so **Activity**) and Last.fm follow presence 1 only.
 

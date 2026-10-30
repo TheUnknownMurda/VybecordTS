@@ -34,6 +34,8 @@ const PRESENCE_COUNTS = [[1, 'One'], [2, 'Two'], [3, 'Three'], [4, 'Four'], [5, 
  * `show_lyrics` switch it always had, the others have their own.
  */
 const LYRICS_KEYS = ['show_lyrics', 'show_lyrics_2', 'show_lyrics_3', 'show_lyrics_4', 'show_lyrics_5'];
+/** The activity type per card; presence 1 keeps `rpc_activity_type`, the others may follow it (-1). */
+const ACTIVITY_KEYS = ['rpc_activity_type', 'rpc_activity_type_2', 'rpc_activity_type_3', 'rpc_activity_type_4', 'rpc_activity_type_5'];
 const APP_ID_KEYS = ['discord_app_id_2', 'discord_app_id_3', 'discord_app_id_4', 'discord_app_id_5'];
 const presenceCount = () => Math.max(1, Math.min(5, Number(cfg('presence_count', 1)) || 1));
 
@@ -288,7 +290,7 @@ function presenceCat(body, { search }) {
         cfg('show_lyrics', true) !== false, (v) => put('show_lyrics', v)),
       toggleRow('Name the playlist', 'Name the playlist, radio or Liked Songs the track is playing from — on the card and in the status line. Off, that line shows the artist instead.',
         cfg('rpc_show_playlist', true) !== false, (v) => put('rpc_show_playlist', v)),
-      selectRow('Activity type', 'The verb Discord shows before the activity.',
+      multi ? null : selectRow('Activity type', 'The verb Discord shows before the activity.',
         cfg('rpc_activity_type', 2), ACTIVITY_TYPES, (v) => put('rpc_activity_type', Number(v))),
       selectRow('Status line', 'What the one-line status in the member list shows.',
         cfg('rpc_status_display', 'app'), STATUS_DISPLAY, (v) => put('rpc_status_display', v)),
@@ -318,6 +320,14 @@ function presenceCat(body, { search }) {
             `Lyrics on presence ${i + 1}`,
             i === 0 ? 'The line being sung and the next one; the title, artist and album move to the line under them.' : 'Off shows the track without lyrics on that card.',
             cfg(key, true) !== false, (v) => put(key, v)))
+        : []),
+      ...(multi
+        ? ACTIVITY_KEYS.slice(0, presenceCount()).map((key, i) => selectRow(
+            `Activity type on presence ${i + 1}`,
+            i === 0 ? 'The verb Discord shows before the activity.' : 'Listening for the song and Watching for the stream, say.',
+            cfg(key, i === 0 ? 2 : -1),
+            i === 0 ? ACTIVITY_TYPES : [[-1, 'Same as presence 1'], ...ACTIVITY_TYPES],
+            (v) => put(key, Number(v))))
         : []),
       ...(multi
         ? APP_ID_KEYS.slice(0, presenceCount() - 1).map((key, i) => inputRow(

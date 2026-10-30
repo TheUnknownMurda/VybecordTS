@@ -85,6 +85,8 @@ const ARTIST_SPLIT_RE = /[,]/;  // Precompiled — used in recordPlay + artist k
 
 /** The per-card lyrics switch, by position; `show_lyrics` is presence 1's. */
 const LYRICS_SWITCH_KEYS = ['show_lyrics', 'show_lyrics_2', 'show_lyrics_3', 'show_lyrics_4', 'show_lyrics_5'] as const;
+/** The per-card activity type, by position; `rpc_activity_type` is presence 1's. */
+const ACTIVITY_TYPE_KEYS = ['rpc_activity_type', 'rpc_activity_type_2', 'rpc_activity_type_3', 'rpc_activity_type_4', 'rpc_activity_type_5'] as const;
 /** Application IDs a card may fall back on when a higher card holds its own. */
 const SPARE_APP_ID_KEYS = ['discord_app_id_2', 'discord_app_id_3', 'discord_app_id_4', 'discord_app_id_5'] as const;
 
@@ -207,6 +209,12 @@ function platformConfigKey(src: string): keyof import('./core/types.js').Vybecor
   if (src === 'bandcamp' || src === 'deezer' || src === 'tidal' || src === 'amazon_music') return 'detect_other_apps';
   if (src.startsWith('browser_') || src === 'unknown') return 'detect_browser';
   return null; // unknown — allow by default
+}
+
+/** The activity type a card at this position publishes under. */
+function activityTypeFor(cfg: import('./core/types.js').VybecordConfig, index: number): number {
+  const own = Number(cfg[ACTIVITY_TYPE_KEYS[index] ?? 'rpc_activity_type']);
+  return index > 0 && own >= 0 ? own : Number(cfg.rpc_activity_type);
 }
 
 /**
@@ -2891,7 +2899,9 @@ export class VybecordBackend extends EventEmitter {
       rpc_button1_label: cfg.rpc_button1_label,
       rpc_button1_url: cfg.rpc_button1_url,
       rpc_button2_label: PLATFORM_BUTTON_LABEL,
-      rpc_activity_type: cfg.rpc_activity_type,
+      // Per position too: the song can say Listening while the stream on the
+      // next card says Watching. A card left on -1 follows presence 1.
+      rpc_activity_type: activityTypeFor(cfg, slot.index),
       rpc_status_display: cfg.rpc_status_display,
       rpc_status_template: cfg.rpc_status_template,
       rpc_show_playlist: cfg.rpc_show_playlist,

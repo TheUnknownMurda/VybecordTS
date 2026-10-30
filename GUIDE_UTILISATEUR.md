@@ -143,6 +143,7 @@ Ou affiche-les toutes. **Settings → Discord presence → Several presences** m
 
 - Les onglets d'un même site sont des choses distinctes : quatre streams Twitch ouverts côte à côte prennent quatre cartes. Une application Discord ne porte qu'une carte, donc les autres en empruntent une — l'application Vybecord par défaut, puis un ID de réserve si tu en as mis, puis l'application d'une plateforme que rien n'occupe — et la carte nomme sa plateforme dans l'en‑tête de toute façon.
 - **Lyrics on presence N** choisit quelles cartes affichent les paroles — n'importe quelle combinaison.
+- **Activity type on presence N** donne à chaque carte son propre verbe : *Listening* pour la chanson, *Watching* pour le stream. Les cartes 2 à 5 disent la même chose que la présence 1 tant que tu ne les changes pas.
 - **Now playing** montre toutes les cartes ; clique sur l'une pour voir ses paroles, son aperçu Discord et ses réglages. Son menu **Source** épingle cette présence à un lecteur, pour qu'elle ne s'échange jamais avec une autre.
 - L'historique d'écoute (et donc **Activity**) et Last.fm ne suivent que la présence 1.
 

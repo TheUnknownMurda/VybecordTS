@@ -175,6 +175,11 @@ export interface VybecordConfig {
   rpc_button1_label: string;
   rpc_button1_url: string;
   rpc_activity_type: number;
+  /** The activity type of presences 2 to 5; -1 uses rpc_activity_type. */
+  rpc_activity_type_2: number;
+  rpc_activity_type_3: number;
+  rpc_activity_type_4: number;
+  rpc_activity_type_5: number;
   /**
    * What the "Listening to …" status line shows (member list / profile), independent
    * of the presence card: 'app' = application name, 'title' = current track title,

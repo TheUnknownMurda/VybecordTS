@@ -249,6 +249,7 @@ Windows Media Player (both the classic and the new app), Groove Music, Movies & 
 **Settings → Discord presence → Several presences → Presences at once** goes from 1 to 5. The highest-ranked source goes on presence 1, the next one on presence 2, and so on. Two tabs on the same site count separately, so four Twitch streams take four cards.
 
 - **Lyrics on presence N** chooses which cards show lyrics.
+- **Activity type on presence N** gives each card its own verb: Listening for the song, Watching for the stream. Presences 2 to 5 follow presence 1 until you change them.
 - **Now playing** shows every card. Click one to see its lyrics, its Discord preview and its controls; the **Source** menu then pins that presence to a player.
 - The listening history (and so **Activity**) and Last.fm only follow **presence 1**.
 
@@ -365,7 +366,8 @@ The current track's artwork is also written to `%TEMP%\vybecord_thumb.jpg`.
 | `away_after_minutes` | `10` | 1–120 (the UI offers 5, 10, 15, 30, 60) | Away after |
 | `filter_spotify_ads` | `true` | boolean | Hide during Spotify ads |
 | `rpc_show_playlist` | `true` | boolean | Name the playlist |
-| `rpc_activity_type` | `2` | `0` Playing, `2` Listening, `3` Watching, `5` Competing | Activity type |
+| `rpc_activity_type` | `2` | `0` Playing, `2` Listening, `3` Watching, `5` Competing | Activity type (presence 1's, when there are several) |
+| `rpc_activity_type_2` … `rpc_activity_type_5` | `-1` | `-1` same as presence 1, or a type as above | Several presences → Activity type on presence 2–5 |
 | `rpc_status_display` | `"app"` | `app`, `title`, `title_artist`, `artist_title`, `artist`, `album`, `details`, `state`, `custom`, `playlist` (config only) | Status line |
 | `rpc_status_template` | `"{title} - {artist}"` | up to 128 characters; placeholders `{title}` `{artist}` `{album}` `{playlist}` `{platform}` | Status template (used when `rpc_status_display` is `custom`) |
 | `presence_count` | `1` | 1–5 | Several presences → Presences at once |
