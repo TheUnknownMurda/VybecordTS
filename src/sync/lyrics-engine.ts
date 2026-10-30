@@ -1330,7 +1330,9 @@ export class LyricsEngine {
       // the video, and a title search can land on somebody's re-upload.
       this.cachedDetailsUrl = d.spotify_url || d.video_url || this.cachedSpotifySearch;
     }
-    this.cachedLargeUrl = d.album_url || d.spotify_url || this.cachedSpotifySearch;
+    // A local file is on no service, so a cover link would only be a search
+    // for it — the same reason details and state stay plain above.
+    this.cachedLargeUrl = d.is_local ? '' : (d.album_url || d.spotify_url || d.video_url || this.cachedSpotifySearch);
   }
 
   /** Pre-compute no-lyrics display parts (avoid deduplicateArtist + toLowerCase per emit). */

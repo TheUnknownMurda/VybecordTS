@@ -109,6 +109,17 @@ export class DiscordIPC {
   // rather than sent, so a bad config value can't sink the whole payload.
   private static readonly VALID_STATUS_DISPLAY_TYPES = new Set([0, 1, 2]);
   private loggedInvalidActivityType = false;
+  /**
+   * Set once Discord's validator refuses `assets.large_url`.
+   *
+   * The field is what makes the cover clickable, and the client has accepted it
+   * since it started taking details_url and state_url. A client old enough to
+   * predate it rejects the whole payload with error 4000 rather than ignoring
+   * one key, which would take the card down with it — so on that answer the
+   * field is dropped for the rest of the connection and the card carries on
+   * with a cover that simply does not link.
+   */
+  private largeUrlRejected = false;
 
   constructor(clientId: string) {
     this.clientId = clientId;
@@ -313,6 +324,14 @@ export class DiscordIPC {
     const evt = data.evt as string | undefined;
     if (evt === 'ERROR' || (data.data as Record<string, unknown>)?.code) {
       log.warn(`Discord IPC error: ${JSON.stringify(data)}`);
+      const message = String((data.data as Record<string, unknown>)?.message ?? '');
+      if (!this.largeUrlRejected && message.includes('large_url')) {
+        this.largeUrlRejected = true;
+        // The rejected payload never reached the card; let the next push through
+        // as new rather than deduplicated against it.
+        this.lastActivityJson = '';
+        log.warn('This Discord client does not accept a link on the cover — sending the cover without one.');
+      }
     }
 
     // Resolve pending request by nonce
@@ -527,6 +546,9 @@ export class DiscordIPC {
       if (a.large_text) assets.large_text = sanitize(a.large_text);
       if (a.small_image) assets.small_image = a.small_image;
       if (a.small_text) assets.small_text = sanitize(a.small_text);
+      // Clicking the cover opens this. metadata.large_image_url below was sent
+      // alone until 2.8, and the cover was still not clickable on the profile.
+      if (!this.largeUrlRejected && urlOk(activity.large_url)) assets.large_url = activity.large_url;
       rpcActivity.assets = assets;
     }
 
