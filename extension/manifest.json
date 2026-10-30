@@ -13,7 +13,10 @@
     "gecko": {
       "id": "vybecord@theunknownmurda.github.io",
       "strict_min_version": "140.0",
-      "data_collection_permissions": { "required": ["websiteContent"] }
+      "data_collection_permissions": {
+        "required": ["websiteContent"],
+        "optional": ["authenticationInfo"]
+      }
     }
   },
   "background": { "service_worker": "src/background.js" },
@@ -29,6 +32,8 @@
   },
   "permissions": ["storage"],
   "host_permissions": ["http://127.0.0.1:8888/*"],
+  "optional_permissions": ["cookies"],
+  "optional_host_permissions": ["https://*.youtube.com/*"],
   "content_scripts": [
     {
       "matches": ["https://open.spotify.com/*"],

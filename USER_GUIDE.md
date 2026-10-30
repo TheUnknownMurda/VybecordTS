@@ -79,6 +79,8 @@ Captions are a fallback, used only when no synced lyrics exist for the track. Th
 
 Not every video has captions, and the video has to be findable by its title and channel — the browser tells Windows what is playing, but not which page it is on, so Vybecord searches YouTube for it.
 
+An **age-restricted** video shows "🔞 CC unavailable": YouTube gives its captions only to a signed-in, age-verified account. If you watch it in a browser with the extension, turn on **Share my YouTube sign-in for captions** in the extension's options (off by default; your browser asks for permission). The extension then hands your YouTube cookies to Vybecord, only for videos that come back age-restricted, and the captions replace the 🔞 line a few seconds later. Vybecord keeps the cookies in memory only. A browser that isn't signed in to YouTube has nothing to lend.
+
 ### Lyrics are out of sync
 
 On **Now playing**, use the **−250 / +250** buttons under the lyrics. The offset is saved for that track only, so it is right again the next time the song comes round without pulling every other song off. Tracks you have never corrected use the default under **Settings → Lyrics & translation → Default timing offset**.
@@ -126,7 +128,7 @@ The optional browser extension fixes that. **Settings → Integrations → Brows
 - **Firefox 140 or newer** (also Zen, LibreWolf, Waterfox, Floorp) — download `vybecord-extension-<version>-firefox.zip` from the [releases page](https://github.com/TheUnknownMurda/VybecordTS/releases/latest), open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on** and pick the zip. Firefox removes temporary add-ons when it closes.
 - **Safari** isn't supported: there is no Safari for Windows.
 
-Its icon opens a settings page with a switch per site — Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick — all on by default.
+Its icon opens a settings page with a switch per site — Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick — all on by default, and the optional **Share my YouTube sign-in for captions** switch (off by default, see the captions section above).
 
 With it, each site is identified properly, the presence links straight to the track, and the progress bar reads the page's own audio element instead of the coarser system position. Without it, everything below still applies.
 

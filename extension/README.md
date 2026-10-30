@@ -81,12 +81,36 @@ the current ESR.
 
 The extension icon opens the settings, where each site has its own switch. All are on by default; a site switched off sends nothing at all.
 
+## Age-restricted YouTube videos (optional)
+
+YouTube gives the captions of an age-restricted video only to a signed-in,
+age-verified account, and yt-dlp, which the app uses to fetch captions, cannot
+sign in. The options page has one switch for that, **Share my YouTube sign-in
+for captions**, off by default.
+
+- Turning it on is what grants `cookies` and access to `https://*.youtube.com/*`;
+  both are optional in the manifest, so without the switch the extension cannot
+  read a cookie at all. Firefox 140+ also asks for consent to share
+  authentication data. Turning it off removes the permissions and tells the app
+  to forget what it holds.
+- The app asks for the session only after a video came back age-restricted
+  signed out, by answering the YouTube tab's next push with `wantCookies`. The
+  background then reads the youtube.com cookies (nothing else) and posts them to
+  `/api/youtube-cookies` on 127.0.0.1, at most once every 30 seconds. No site
+  script can reach that path: it is not in the relay's allowlist.
+- The app keeps them in memory for ten minutes, writes them only into the temp
+  folder of the one yt-dlp call that retries that video, and deletes it after.
+  Every other video is still fetched signed out.
+- A signed-out browser has nothing to lend: its cookies unlock nothing. And
+  yt-dlp warns that an account used with it can be banned, which is why it is
+  opt-in and limited to the videos that need it.
+
 ## How it reaches the app
 
 The desktop app listens on `127.0.0.1:8888`, and only while **Settings → Integrations → Browser extension → Accept data from the extension** is on. That endpoint:
 
 - binds loopback only, so nothing off the machine can reach it
-- answers POST on seven push paths and nothing else — no settings, no reads, nothing that could leak anything about you
+- answers POST on eight push paths and nothing else — no settings, no reads, nothing that could leak anything about you (the reply to a YouTube push can carry one flag, a request for the YouTube session described below)
 - accepts only `chrome-extension://` / `moz-extension://` origins, which the browser sets and a web page cannot forge
 
 Playback never leaves your computer through this extension.

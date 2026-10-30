@@ -156,6 +156,21 @@ h1 {
   outline-offset: 2px;
 }
 
+h2 {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 22px 0 8px;
+}
+.site-note {
+  font-size: 11.5px;
+  color: #f59e0b;
+  margin-top: 6px;
+  line-height: 1.45;
+}
+
 footer {
   margin-top: 16px;
   font-size: 11.5px;

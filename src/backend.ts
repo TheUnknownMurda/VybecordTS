@@ -47,7 +47,10 @@ import { TwitchSource } from './core/twitch-source.js';
 import { DiscordPool } from './core/discord-pool.js';
 import { PresenceSlot, type LyricsState } from './core/presence-slot.js';
 import { fetchLyrics, fetchPlainLyrics, findCustomLyrics } from './core/provider.js';
-import { fetchYouTubeCaptions, clearCCCache, setCcCookiesFile } from './core/youtube-captions.js';
+import {
+  fetchYouTubeCaptions, clearCCCache, setCcCookiesFile, setBrowserCookies, wantsBrowserCookies,
+  type BrowserCookie,
+} from './core/youtube-captions.js';
 import { initLocalDb, closeLocalDb, insertCustomLyrics, listCustomLyrics, getCustomLyrics, updateCustomLyrics, deleteCustomLyrics, findExistingCustomLyrics, searchLrclibDump as searchLrclibDumpDb, getLrclibTrackLyrics as getLrclibTrackLyricsDb, lrclibDumpStatus } from './core/local-lyrics-db.js';
 import { initLastFm, scrobbleTrackStart, checkAndScrobble, scrobblePause, scrobbleTrackEnd } from './core/lastfm.js';
 import { lookupCoverArt } from './core/cover-art.js';
@@ -144,6 +147,21 @@ const PLATFORM_BUTTON_LABEL = '🎵 Listen on {platform}';
 
 /** Ceiling on lyric lines accepted from one push. Longer than any real song. */
 const MAX_PUSHED_LYRIC_LINES = 2000;
+
+/**
+ * What the card shows for an age-restricted video without captions.
+ *
+ * Named so it can be recognised again: it is a status, not lyrics, and must
+ * not be cached as though it were the video's lyrics (see onNewTrack).
+ */
+const AGE_GATED_LINE = '🔞 CC unavailable — age-restricted video';
+
+/**
+ * Bounds on a cookie handover from the extension. A signed-in YouTube jar is
+ * a few dozen cookies; these are slack, not targets.
+ */
+const MAX_BROWSER_COOKIES = 200;
+const MAX_COOKIE_FIELD = 4096;
 
 /**
  * Discord App ID used when the user has not configured one.
@@ -323,6 +341,12 @@ export class VybecordBackend extends EventEmitter {
   private configDir: string;
 
   private _lastCcLang: string | undefined;
+  /**
+   * Tracks whose captions came back age-restricted, by track key, so the
+   * playing one can be retried when the extension hands over a session.
+   * Bounded by hand: one entry per age-gated video heard this run.
+   */
+  private ageGatedTracks = new Set<string>();
   /** Album of the last play accepted as real — lets recordPlay() tell an
    *  interlude from an advertisement, the same way the media source does. */
   private lastRecordedAlbum = '';
@@ -617,6 +641,54 @@ export class VybecordBackend extends EventEmitter {
 
   handleYouTubePush(raw: unknown): void {
     this.ingestPush(raw, this.youtubeSource, 'youtube-userscript');
+  }
+
+  /** Whether the reply to the YouTube tab's push should ask for its session. */
+  wantsYouTubeCookies(): boolean {
+    return wantsBrowserCookies();
+  }
+
+  /**
+   * The browser's YouTube cookies, sent because a video came back
+   * age-restricted.
+   *
+   * Every field is coerced, and only cookies set for youtube.com are kept:
+   * the session is used for YouTube's captions and nothing else, so anything
+   * else in the body is somebody else's and has no business reaching yt-dlp.
+   * A tab or newline in a field would break the cookies.txt line it lands on,
+   * so such a cookie is dropped rather than repaired.
+   */
+  handleYouTubeCookies(raw: unknown): void {
+    const list = (raw as { cookies?: unknown }).cookies;
+    if (!Array.isArray(list)) return;
+    const cookies: BrowserCookie[] = [];
+    const clean = (v: unknown): string | null =>
+      typeof v === 'string' && v.length <= MAX_COOKIE_FIELD && !/[\t\r\n]/.test(v) ? v : null;
+    for (const item of list.slice(0, MAX_BROWSER_COOKIES)) {
+      if (!item || typeof item !== 'object') continue;
+      const c = item as Record<string, unknown>;
+      const domain = clean(c.domain);
+      const name = clean(c.name);
+      const value = clean(c.value);
+      if (!domain || !name || value === null) continue;
+      if (!/^\.?([\w-]+\.)*youtube\.com$/i.test(domain)) continue;
+      cookies.push({
+        domain,
+        name,
+        value,
+        path: clean(c.path) || '/',
+        secure: c.secure === true,
+        expires: typeof c.expires === 'number' && Number.isFinite(c.expires) ? c.expires : 0,
+      });
+    }
+    setBrowserCookies(cookies);
+    if (!cookies.length) return;
+
+    for (const slot of this.slots) {
+      const t = slot.track;
+      if (!t || !this.ageGatedTracks.has(this.buildTrackKey(t))) continue;
+      void this.retryAgeGatedCaptions(slot, t);
+    }
   }
 
   isYouTubeSourceActive(): boolean { return this.youtubeSource.isActive; }
@@ -1806,6 +1878,13 @@ export class VybecordBackend extends EventEmitter {
       this.lyricsCache.delete(cacheKey);
       cached = undefined;
     }
+    // The age-restricted notice is a status, not lyrics, and earlier versions
+    // cached it like lyrics: the cache would hand it back for weeks, long
+    // after a session could have unlocked the captions.
+    if (cached?.length === 1 && cached[0].text === AGE_GATED_LINE) {
+      this.lyricsCache.delete(cacheKey);
+      cached = undefined;
+    }
     if (cached && cached.length > 0) {
       lyrics = cached;
       log.info(`[LYRICS] Cache hit (${lyrics.length} lines)`);
@@ -1817,6 +1896,8 @@ export class VybecordBackend extends EventEmitter {
       // SoundCloud & Bandcamp report accurate audio duration — keep it for better matching
       const lyricsDuration = isVideoSource ? 0 : trackData.duration_ms;
 
+      /** Set when the answer is the age-restricted notice rather than lyrics. */
+      let ageGated = false;
       const lyricsPromise = (!trackData.is_live)
         ? (async (): Promise<LyricLine[]> => {
             // Spotify's own lyrics do not come through here: the Spicetify
@@ -1908,8 +1989,9 @@ export class VybecordBackend extends EventEmitter {
               // Handle age-restricted videos
               if (ccResult.ageRestricted) {
                 log.info('[CC] Age-restricted video — showing message');
-                // Return special lyrics line for age-restricted
-                return [{ time: 0, text: '🔞 CC unavailable — age-restricted video', source: 'cc' }];
+                ageGated = true;
+                this.ageGatedTracks.add(this.buildTrackKey(trackData));
+                return [{ time: 0, text: AGE_GATED_LINE, source: 'cc' }];
               }
 
               // Captions the user has already rejected fall through to the
@@ -1973,8 +2055,10 @@ export class VybecordBackend extends EventEmitter {
         lyrics = [];
       }
 
-      // Cache lyrics (only if found, to allow retry on empty results)
-      if (!official && lyrics.length > 0) {
+      // Cache lyrics (only if found, to allow retry on empty results). The
+      // age-restricted notice is not lyrics, and caching it would hand it
+      // back even after a browser session could have unlocked the captions.
+      if (!official && !ageGated && lyrics.length > 0) {
         this.lyricsCache.set(cacheKey, lyrics);
       }
     }
@@ -2226,6 +2310,34 @@ export class VybecordBackend extends EventEmitter {
     // the rest of its length.
     void this.findReplacementLyrics(slot, t);
     return true;
+  }
+
+  /**
+   * Fetch an age-restricted video's captions again, now that the extension
+   * has lent a YouTube session.
+   *
+   * Modelled on findReplacementLyrics(): the card is already showing the
+   * notice, so this only has to swap real lines in when they come, and leaves
+   * the notice where it is when they do not (the account may not be
+   * age-verified). The fetcher drops its own age-restricted results when the
+   * cookies arrive, so this reaches yt-dlp rather than the cache.
+   */
+  private async retryAgeGatedCaptions(slot: PresenceSlot, t: TrackData): Promise<void> {
+    const key = this.buildTrackKey(t);
+    const videoId = t.track_id.startsWith('yt:') ? t.track_id.slice(3) : undefined;
+    try {
+      const cc = await fetchYouTubeCaptions(
+        t.track_name, t.artist_name, slot.fetchAbort?.signal, videoId, this.config.get('cc_lang') || 'auto');
+      if (slot.trackKey !== key) return;   // the song moved on
+      if (!cc.lines.length) return;
+      this.ageGatedTracks.delete(key);
+      if (slot.cacheKey) this.lyricsCache.set(slot.cacheKey, cc.lines);
+      slot.engine.injectLyrics(cc.lines, t);
+      this.warmTranslations(cc.lines, slot.fetchAbort?.signal);
+      log.info(`[CC] Signed-in retry found ${cc.lines.length} caption lines for "${t.track_name}"`);
+    } catch (e) {
+      log.warn(`[CC] Signed-in retry failed: ${e}`);
+    }
   }
 
   /**
