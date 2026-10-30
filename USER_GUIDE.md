@@ -110,11 +110,11 @@ The delay lives in **Settings → Discord presence → Away after**, and the swi
 
 ### The cover does not show on Discord (but shows in the window)
 
-The window reads the artwork straight off your disk. Discord cannot — it needs a URL, so Vybecord looks the album up on a public music catalogue (Deezer, then Apple's iTunes) and hands Discord that.
+The window reads the artwork straight off your disk. Discord cannot — it needs a URL. So Vybecord publishes the cover your player shows (Spotify's, Apple Music's, or the one inside a local file) to its own cover store, and Discord loads it from there: never the audio, and with camera and location tags stripped first. That is **Settings → Integrations → Cover images → Publish the player's cover**, on by default.
 
-Music that is in no catalogue — your own rips, demos, DJ sets — has artwork nowhere but in your file. For those, Vybecord publishes that one image to its own cover store so Discord can load it: never the audio, and with camera and location tags stripped first. That is **Settings → Integrations → Cover images → Publish artwork that exists only on this PC**, on by default.
+Only when there is no such cover — that switch is off, or the player gave none — does Vybecord look the album up on a public music catalogue (Deezer, then Apple's iTunes) instead.
 
-So a placeholder on Discord means one of two things: the track is in no catalogue and that switch is off, or it is a live stream, which is never looked up.
+So a placeholder on Discord means one of two things: that switch is off and the track is in no catalogue, or it is a live stream, which is never looked up.
 
 ### Getting more detail from browser playback
 

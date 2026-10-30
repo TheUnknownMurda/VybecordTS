@@ -505,11 +505,11 @@ function integrationsCat(body) {
     cardGroup('Spotify', spicetifyCard()),
     cardGroup('Last.fm', lastfmCard()),
     group('Cover images', [
-      toggleRow('Publish artwork that exists only on this PC',
-        'Released albums are looked up in a public catalogue, which sees nothing but the track and artist. '
-        + 'Your own rips, demos and DJ sets are in no catalogue — with this on, that artwork alone is published '
-        + 'for Discord to fetch. Never the audio, and camera and location tags are stripped first. '
-        + 'Off, those tracks show the default placeholder.',
+      toggleRow('Publish the player’s cover',
+        'Discord shows the cover your player shows — Spotify’s, Apple Music’s, or a local file’s — published '
+        + 'for it to fetch. Never the audio, and camera and location tags are stripped first. '
+        + 'Off, covers are looked up in a public catalogue instead, which sees nothing but the track and artist, '
+        + 'and may answer with another edition’s artwork.',
         cfg('art_upload_enabled', true) !== false, (v) => put('art_upload_enabled', v)),
     ]),
   );

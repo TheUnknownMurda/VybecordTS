@@ -286,8 +286,10 @@ If none of these finds synced lyrics, plain lyrics (LRCLIB, then Genius) are sho
 
 Discord needs a URL for the cover, but Windows hands Vybecord a file on disk. So:
 
-1. Released music is looked up on **Deezer** first, then on the **iTunes Search API**. Only the track and artist name are sent, and the artist of the result is checked so that a wrong cover is never used. Version markers such as "- Remastered 2011" are removed before searching.
-2. Artwork that exists only in your own files (rips, demos, DJ sets) can be **published to Vybecord's cover store** so Discord can show it. Only the image is sent. EXIF, XMP and comment metadata are removed first, and the image is stored under the SHA-256 of its bytes. This is on by default. Turn it off under **Settings → Integrations → Cover images**, and those tracks fall back to the default placeholder.
+1. The cover the player itself shows (Spotify's, Apple Music's, or the one embedded in a local file) is **published to Vybecord's cover store** so Discord shows that exact image. Only the image is sent. EXIF, XMP and comment metadata are removed first, and the image is stored under the SHA-256 of its bytes, so a cover already there costs one HEAD request. This is on by default, under **Settings → Integrations → Cover images**.
+2. Only when there is no such cover to publish (the switch is off, or the player gave none), the track is looked up on **Deezer** first, then on the **iTunes Search API**. Only the track and artist name are sent, and the artist of the result is checked so that a wrong cover is never used. Version markers such as "- Remastered 2011" are removed before searching.
+
+Until 2.8 the order was the other way round. A catalogue answers with *a* cover of the song, not always the one the player shows (another edition, the single instead of the album), so the player's own cover now always wins.
 
 The window always shows the cover straight from the player.
 
@@ -404,7 +406,7 @@ The second presence button is fixed. It links to what is playing and is labelled
 | --- | --- | --- | --- |
 | `extension_enabled` | `true` | boolean | Browser extension → Accept data from the extension (opens `127.0.0.1:8888`) |
 | `lastfm_api_key`, `lastfm_api_secret` | not set | strings | Last.fm. The secret is never sent back to the window in clear text. |
-| `art_upload_enabled` | `true` | boolean | Cover images → Publish artwork that exists only on this PC |
+| `art_upload_enabled` | `true` | boolean | Cover images → Publish the player's cover |
 | `art_upload_url` | `"https://vybecord-art.vybecord.workers.dev"` | up to 256 characters | *config only*: the cover store to publish to (see [`worker/`](worker/)) |
 
 **App & window** (Settings → App & window)
@@ -699,7 +701,7 @@ Releases are made by hand from `desktop-app`. There is no release CI.
 
 **The Spicetify card shows "Update needed".** The app was updated but Spotify still runs the old extension. Run the setup again.
 
-**The cover shows on the window but not on Discord.** The album isn't in the Deezer or iTunes catalogues and cover publishing is off, or the track is a live stream (streams are never looked up).
+**The cover shows on the window but not on Discord.** Cover publishing is off and the album isn't in the Deezer or iTunes catalogues, or the track is a live stream (streams are never looked up).
 
 **The presence disappears when I step away.** That's **Hide when I'm away**. Change the delay or turn it off under **Settings → Discord presence**.
 

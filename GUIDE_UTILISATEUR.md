@@ -110,11 +110,11 @@ Le délai se change dans **Settings → Discord presence → Away after**, et l'
 
 ### La pochette s'affiche dans la fenêtre mais pas sur Discord
 
-La fenêtre lit l'image directement sur ton disque. Discord ne peut pas : il lui faut une URL. Vybecord cherche donc l'album dans un catalogue musical public (Deezer, puis iTunes d'Apple) et transmet cette URL à Discord.
+La fenêtre lit l'image directement sur ton disque. Discord ne peut pas : il lui faut une URL. Vybecord publie donc la pochette que montre ton lecteur (celle de Spotify, d'Apple Music, ou celle d'un fichier local) sur son propre stockage de pochettes, et Discord la charge de là : jamais l'audio, et les infos d'appareil photo et de localisation sont retirées avant. C'est **Settings → Integrations → Cover images → Publish the player's cover**, activé par défaut.
 
-La musique absente de tout catalogue — tes rips, démos, DJ sets — n'a de pochette que dans ton fichier. Pour celle-là, Vybecord publie cette seule image sur son propre stockage de pochettes pour que Discord puisse la charger : jamais l'audio, et les infos d'appareil photo et de localisation sont retirées avant. C'est **Settings → Integrations → Cover images → Publish artwork that exists only on this PC**, activé par défaut.
+Seulement quand il n'y a pas de telle pochette — l'option est coupée, ou le lecteur n'en donne pas — Vybecord cherche l'album dans un catalogue musical public (Deezer, puis iTunes d'Apple) à la place.
 
-Une image par défaut sur Discord veut donc dire l'une de deux choses : le morceau n'est dans aucun catalogue et cette option est coupée, ou c'est un live, qui n'est jamais recherché.
+Une image par défaut sur Discord veut donc dire l'une de deux choses : cette option est coupée et le morceau n'est dans aucun catalogue, ou c'est un live, qui n'est jamais recherché.
 
 ### Obtenir plus de détails sur la lecture navigateur
 
