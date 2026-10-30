@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Opening Spotify · Vybecord</title>
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#0b0b10">
+  <link rel="icon" href="/VybecordTS/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/VybecordTS/styles.css">
+</head>
+<body>
+
+<!--
+  Where the "Listen on Spotify" button of a Vybecord presence lands.
+
+  Discord only accepts http(s) links on an activity button, and an
+  open.spotify.com link opens the web player, not the app. This page turns the
+  link back into a spotify: URI and opens it, which is what makes the browser
+  offer to open the app. Nothing is sent anywhere: the link is in ?u=, and the
+  page only ever goes to Spotify.
+
+  It never moves on to the web player by itself. While the browser's "Open
+  Spotify?" prompt is up the page is still in front, so a timed fallback would
+  navigate away under the prompt and close it. The web player is a button.
+
+  ?u= takes what follows open.spotify.com/: track/<id>, album/<id>,
+  artist/<id>, playlist/<id>, show/<id>, episode/<id>, or search/<words>.
+  The app builds it in src/sync/lyrics-engine.ts (spotifyAppLink).
+-->
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-note" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></symbol>
+</svg>
+
+<nav class="nav" aria-label="Main">
+  <div class="wrap nav-inner">
+    <a href="/VybecordTS/" class="brand">
+      <span class="mark" aria-hidden="true"><svg><use href="#i-note"/></svg></span>
+      Vybecord
+    </a>
+  </div>
+</nav>
+
+<main class="center-page">
+  <div>
+    <span class="mark" aria-hidden="true"><svg><use href="#i-note"/></svg></span>
+    <h1 id="title">Opening Spotify…</h1>
+    <p id="lead">If your browser asks, allow it to open the Spotify app.</p>
+    <div class="dl-actions">
+      <a class="btn btn-primary" id="app" href="https://open.spotify.com/">Open the Spotify app</a>
+      <a class="btn btn-ghost" id="web" href="https://open.spotify.com/">Use the web player</a>
+    </div>
+  </div>
+</main>
+
+<script>
+(function () {
+  var u = new URLSearchParams(location.search).get('u') || '';
+  var item = /^(track|album|artist|playlist|show|episode)\/([A-Za-z0-9]{22})$/.exec(u);
+  var search = /^search\/(.{1,200})$/.exec(u);
+  var appUri, webUrl;
+  if (item) {
+    appUri = 'spotify:' + item[1] + ':' + item[2];
+    webUrl = 'https://open.spotify.com/' + item[1] + '/' + item[2];
+  } else if (search) {
+    appUri = 'spotify:search:' + encodeURIComponent(search[1]);
+    webUrl = 'https://open.spotify.com/search/' + encodeURIComponent(search[1]);
+  }
+
+  var title = document.getElementById('title');
+  var lead = document.getElementById('lead');
+  var app = document.getElementById('app');
+  var web = document.getElementById('web');
+
+  if (!appUri) {
+    // A link that was cut short or edited by hand: nothing to hand over.
+    document.title = 'Nothing to open · Vybecord';
+    title.textContent = 'Nothing to open';
+    lead.textContent = 'This link does not point at anything on Spotify.';
+    app.hidden = true;
+    web.textContent = 'Go to Spotify';
+    return;
+  }
+
+  app.href = appUri;
+  web.href = webUrl;
+
+  // Leaving the page (the app took focus, or the prompt did) is the only sign
+  // the hand-over worked; a browser with no app for spotify: says nothing.
+  var left = false;
+  addEventListener('blur', function () { left = true; });
+  document.addEventListener('visibilitychange', function () { if (document.hidden) left = true; });
+
+  location.href = appUri;
+
+  setTimeout(function () {
+    if (left) {
+      lead.textContent = 'Once Spotify is open, you can close this tab.';
+      return;
+    }
+    title.textContent = 'Spotify did not open?';
+    lead.textContent = 'The app may not be installed on this device. The web player plays the same thing.';
+    web.className = 'btn btn-primary';
+    app.className = 'btn btn-ghost';
+    app.textContent = 'Try the app again';
+  }, 2500);
+})();
+</script>
+
+</body>
+</html>
