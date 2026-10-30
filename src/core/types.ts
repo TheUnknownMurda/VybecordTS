@@ -49,6 +49,13 @@ export interface TrackData {
   /** Direct URL to the video (YouTube, etc.) */
   video_url?: string;
   /**
+   * True when artist_name is the channel that uploaded a video rather than
+   * the artist of a song: a YouTube video whose title did not read as
+   * "Artist - Title". The card then shows it as a plain name, the way it
+   * shows a Twitch or Kick channel, instead of behind the microphone.
+   */
+  artist_is_channel?: boolean;
+  /**
    * The OS media session this reading came from, when it came from one.
    *
    * Lets the backend ask whose artwork is on disk before publishing it: the
