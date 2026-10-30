@@ -16,6 +16,7 @@ import { initTranslateCache, flushTranslationCache } from '../src/core/translate
 import { initUpdater, stopUpdater, updateState, check as checkForUpdate, installNow, type UpdateState } from './updater.js';
 import { setYtDlpSearchDir, setYtDlpBundled } from '../src/core/youtube-captions.js';
 import { setKuromojiDicPath } from '../src/core/romanize.js';
+import { setCoverDecoder } from '../src/core/cover-tone.js';
 import { VybecordBackend } from '../src/backend.js';
 import { registerIpc } from './ipc.js';
 import { startAwayWatch } from './away-watch.js';
@@ -101,6 +102,16 @@ async function start(): Promise<void> {
   setKuromojiDicPath(app.isPackaged
     ? path.join(process.resourcesPath, 'kuromoji-dict')
     : path.join(process.cwd(), 'node_modules', 'kuromoji', 'dict'));
+
+  // The small icon's "Match the cover" style needs the cover's pixels, and
+  // only Electron can decode an image here. 24px is plenty to find a colour.
+  setCoverDecoder((bytes) => {
+    const img = nativeImage.createFromBuffer(bytes);
+    if (img.isEmpty()) return null;
+    const small = img.resize({ width: 24, height: 24 });
+    const { width, height } = small.getSize();
+    return { width, height, data: small.toBitmap(), order: 'bgra' };
+  });
 
   process.on('uncaughtException', (err) => log.error(`Uncaught exception: ${err.stack || err}`));
   process.on('unhandledRejection', (reason) => log.error(`Unhandled rejection: ${reason}`));

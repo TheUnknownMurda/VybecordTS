@@ -17,6 +17,7 @@ import { createLogger } from '../core/logger.js';
 import { romanize } from '../core/romanize.js';
 import { getCachedTranslation, isTranslationWorthFetching, translateText } from '../core/translate.js';
 import { evictOldest } from '../core/utils.js';
+import { coverTone, type CoverTone } from '../core/cover-tone.js';
 import type { LyricLine, DiscordActivity, TrackData } from '../core/types.js';
 
 const log = createLogger('LyricsEngine');
@@ -95,6 +96,15 @@ const RANDOM_ICON_POOL: [string, string][] = [
   ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/HrMk6Gy5NrHDuNewWnUOR.gif', '🔴 Rouge'],
   ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/BUo3vfJ4QVWlghZJYuyIB.gif', '💙 Blue Rad'],
 ];
+
+// ── Icons the 'auto' mode picks from, by the cover's colour (see cover-tone.ts) ──
+const TONE_ICONS: Record<CoverTone, [string, string]> = {
+  red: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/HrMk6Gy5NrHDuNewWnUOR.gif', '🔴 Rouge'],
+  dark_red: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/6sALSWqWzao3chNZzHCXy.gif', '🩸 Bleeding'],
+  blue: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/BUo3vfJ4QVWlghZJYuyIB.gif', '💙 Blue Rad'],
+  purple: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/I9CeTrPc17wqbDilQPN9K.gif', '💜 Purple Rad'],
+  green: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/VVjYzmfdMIF5hHA8SUnbi.gif', '✨ Radiate'],
+};
 
 // ── Platform icons (external URLs — rendered by Discord image proxy) ──
 // Note: Discord no longer supports external URLs for small_image. Using compatible host.
@@ -263,7 +273,9 @@ export class LyricsEngine {
   private cachedStatusName = '';
   private cfgShowPlaylist = true;
   private cfgHideSmallIcon = false;
-  private cfgIconMode: 'default' | 'dance' | 'radiate' | 'purple_rad' | 'rouge' | 'lrc_off' | 'bleeding' | 'blue_rad' | 'random' = 'default';
+  private cfgIconMode: 'default' | 'dance' | 'radiate' | 'purple_rad' | 'rouge' | 'lrc_off' | 'bleeding' | 'blue_rad' | 'random' | 'auto' = 'default';
+  /** The cover's colour, for the 'auto' icon mode; null until known, or when no icon matches. */
+  private cachedTone: CoverTone | null = null;
   private cfgRpcTranslate = false;
   private cfgTranslateLang = '';
   /**
@@ -1303,6 +1315,7 @@ export class LyricsEngine {
     this.cfgIconMode =
       this.cfgHideSmallIcon ? 'default' :
       !isSpotify ? 'default' :
+      (this.rpcConfig.auto_icon_mode as boolean) ? 'auto' :
       (this.rpcConfig.random_icon_mode as boolean) ? 'random' :
       (this.rpcConfig.lrc_off_mode as boolean) ? 'lrc_off' :
       (this.rpcConfig.rouge_mode as boolean) ? 'rouge' :
@@ -1311,6 +1324,16 @@ export class LyricsEngine {
       (this.rpcConfig.purple_rad_mode as boolean) ? 'purple_rad' :
       (this.rpcConfig.radiate_mode as boolean) ? 'radiate' :
       (this.rpcConfig.dance_mode as boolean) ? 'dance' : 'default';
+    // Asked again on every rebuild, which includes the one that follows the
+    // cover resolving to a URL: the tone belongs to that URL, not the track.
+    const toneUrl = this.cachedLargeImage;
+    this.cachedTone = this.cfgIconMode === 'auto'
+      ? coverTone(toneUrl, () => {
+          if (!this.running || this.cachedLargeImage !== toneUrl || this.cfgIconMode !== 'auto') return;
+          this.cachedTone = coverTone(toneUrl, () => {});
+          this.pushRpcNow();
+        })
+      : null;
 
     // Pre-resolve clickable URLs (avoids 3× config lookups + switch per emit)
     // Kick/Twitch: make only state non-clickable (details remains clickable to profile)
@@ -1326,9 +1349,13 @@ export class LyricsEngine {
       // A stream's state field carries its category, which nothing links to.
       this.cachedStateUrl = '';
     } else {
-      this.cachedDetailsUrl = d.spotify_url || this.cachedSpotifySearch;
+      // A video's own page before a search for it: the extension always names
+      // the video, and a title search can land on somebody's re-upload.
+      this.cachedDetailsUrl = d.spotify_url || d.video_url || this.cachedSpotifySearch;
     }
-    this.cachedLargeUrl = d.album_url || d.spotify_url || this.cachedSpotifySearch;
+    // A local file is on no service, so a cover link would only be a search
+    // for it — the same reason details and state stay plain above.
+    this.cachedLargeUrl = d.is_local ? '' : (d.album_url || d.spotify_url || d.video_url || this.cachedSpotifySearch);
   }
 
   /** Pre-compute no-lyrics display parts (avoid deduplicateArtist + toLowerCase per emit). */
@@ -1393,9 +1420,10 @@ export class LyricsEngine {
   private buildActivity(currentText: string, nextText: string, idx: number = this.currentIdx): DiscordActivity | null {
     const d = this.trackData!;
     const hasLyrics = this.cfgShowLyrics && this.lyrics.length > 0;
-    // Force Twitch and Kick to always use Listening (type 2)
-    const source = d.media_source || '';
-    const activityType = (source === 'twitch' || source === 'kick') ? 2 : this.cfgActivityType;
+    // The card's own setting, for every source. Twitch and Kick used to be
+    // pinned to Listening whatever it said, which made a "Watching" card for
+    // a stream impossible to set up — the one source the verb fits best.
+    const activityType = this.cfgActivityType;
 
     /*
      * When the track started, as one number that does not move.
@@ -1510,20 +1538,29 @@ export class LyricsEngine {
             if (this.cachedDisplayArtist) parts.push(`🎤 ${this.cachedDisplayArtist}`);
             if (this.cachedHasAlbum) parts.push(`💽 ${d.album_name}`);
           }
-          largeText = truncate(parts.join(' | ') || d.track_name, 128);
+          largeText = truncate(parts.join(' | '), 128);
         }
       } else {
-        // Kick/Twitch: don't add emoji to state
-        state = this.cachedDisplayArtist ? truncate((d.media_source === 'kick' || d.media_source === 'twitch') ? this.cachedDisplayArtist : `🎤 ${this.cachedDisplayArtist}`, 128) : '  ';
+        // Kick/Twitch, and a video's channel: a name, not an artist, so no microphone.
+        state = this.cachedDisplayArtist ? truncate((d.media_source === 'kick' || d.media_source === 'twitch' || d.artist_is_channel) ? this.cachedDisplayArtist : `🎤 ${this.cachedDisplayArtist}`, 128) : '  ';
         if (status) {
           largeText = truncate(status, 128);
         } else {
           // Kick/Twitch: don't add album emoji
           largeText = this.cachedHasAlbum
             ? truncate((d.media_source === 'kick' || d.media_source === 'twitch') ? `${d.album_name}${this.cachedPlayModeSuffix}` : `💽 ${d.album_name}${this.cachedPlayModeSuffix}`, 128)
-            : truncate(d.track_name, 128);
+            : '';
         }
       }
+      /*
+       * Nothing to say under the artist is better than saying the title again.
+       *
+       * Discord prints large_text as a third line on a Listening card, under
+       * details and state. With no album to put there it used to fall back on
+       * the track name, so every YouTube video and SoundCloud upload showed its
+       * title twice — bold on top, plain at the bottom. Sent empty, the field is
+       * left out of the payload and the card ends on the artist line.
+       */
     }
 
     // RPC dedup: skip if same content AND same lyric index (repeated lines must push)
@@ -1581,7 +1618,7 @@ export class LyricsEngine {
       timestamps: endTs > startTs ? { start: startTs, end: endTs } : { start: startTs },
       assets: {
         large_image: this.cachedLargeImage,
-        large_text: largeText,
+        large_text: largeText || undefined,
       },
       buttons: this.cachedButtons.length > 0 ? this.cachedButtons : undefined,
       details_url: this.cachedDetailsUrl,
@@ -1601,6 +1638,14 @@ export class LyricsEngine {
     if (this.cfgHideSmallIcon) return;
     const pt = this.cachedPlatText; // Pre-built per-track (no concat per emit)
     switch (this.cfgIconMode) {
+      case 'auto': {
+        const icon = this.cachedTone ? TONE_ICONS[this.cachedTone] : this.cachedIcon;
+        if (icon) {
+          activity.assets!.small_image = icon[0];
+          activity.assets!.small_text = pt || icon[1];
+        }
+        break;
+      }
       case 'random':
         if (this.randomIconPick) {
           activity.assets!.small_image = this.randomIconPick[0];

@@ -49,6 +49,13 @@ export interface TrackData {
   /** Direct URL to the video (YouTube, etc.) */
   video_url?: string;
   /**
+   * True when artist_name is the channel that uploaded a video rather than
+   * the artist of a song: a YouTube video whose title did not read as
+   * "Artist - Title". The card then shows it as a plain name, the way it
+   * shows a Twitch or Kick channel, instead of behind the microphone.
+   */
+  artist_is_channel?: boolean;
+  /**
    * The OS media session this reading came from, when it came from one.
    *
    * Lets the backend ask whose artwork is on disk before publishing it: the
@@ -168,6 +175,11 @@ export interface VybecordConfig {
   rpc_button1_label: string;
   rpc_button1_url: string;
   rpc_activity_type: number;
+  /** The activity type of presences 2 to 5; -1 uses rpc_activity_type. */
+  rpc_activity_type_2: number;
+  rpc_activity_type_3: number;
+  rpc_activity_type_4: number;
+  rpc_activity_type_5: number;
   /**
    * What the "Listening to …" status line shows (member list / profile), independent
    * of the presence card: 'app' = application name, 'title' = current track title,
@@ -203,6 +215,8 @@ export interface VybecordConfig {
   lrc_off_mode: boolean;
   /** Random icon mode: pick a random small icon each track */
   random_icon_mode: boolean;
+  /** Small icon picked from the cover's dominant colour (see cover-tone.ts). */
+  auto_icon_mode: boolean;
   /** Hide small icon: remove the small image entirely */
   hide_small_icon: boolean;
   /** Enable/disable YouTube CC (closed captions) as lyrics source */
