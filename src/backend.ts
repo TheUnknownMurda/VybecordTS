@@ -722,7 +722,8 @@ export class VybecordBackend extends EventEmitter {
   }
 
   /**
-   * Kick's captions onto the presence showing that stream, as its lyrics.
+   * Kick's captions onto the presence showing that stream or past broadcast,
+   * as its lyrics.
    *
    * Run after every Kick push rather than on a timer: the lines only change
    * when a tab reports, and setLiveLines does nothing when they have not. After
@@ -731,7 +732,7 @@ export class VybecordBackend extends EventEmitter {
   private showKickCaptions(): void {
     for (const slot of this.slots) {
       const t = slot.track;
-      if (t?.media_source !== 'kick' || !t.is_live) continue;
+      if (t?.media_source !== 'kick') continue;
       const lines = this.kickSource.captionLines(t.track_id);
       if (lines.length && !slot.engine.getLyrics().length) {
         log.info(`[CAPTIONS] Kick captions on "${t.track_name}" [${slot.name}]`);

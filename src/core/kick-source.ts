@@ -11,9 +11,10 @@
  * track per channel or video. See push-instances.ts and the same note in
  * twitch-source.ts.
  *
- * A live channel's tab also reports what Kick's caption overlay says, when the
- * viewer has captions on; each tab's reports are stitched into lines here (see
- * live-captions.ts) and the backend puts them on the card as lyrics.
+ * A tab on a live channel or a past broadcast also reports what Kick's caption
+ * overlay says, when the viewer has captions on; each tab's reports are
+ * stitched into lines here (see live-captions.ts) and the backend puts them on
+ * the card as lyrics.
  */
 
 import { performance } from 'node:perf_hooks';
@@ -113,6 +114,20 @@ interface KickTab extends KickPayload {
 
 const NO_LINES: LyricLine[] = [];
 
+/**
+ * How far a past broadcast may land from where its last push said it would be
+ * before it counts as a seek: the same line the lyrics engine draws (see
+ * SEEK_DRIFT_MS there). Pushes from a tab in front come 2.5 s apart at most,
+ * so a stall cannot open a gap that wide between two of them.
+ */
+const SEEK_MS = 4_000;
+
+/** Whether a video's position moved by more than playing on since the last push explains. */
+function seeked(prev: KickPayload, next: KickPayload, sinceMs: number): boolean {
+  const expected = prev.position_ms + (prev.paused ? 0 : sinceMs);
+  return Math.abs(next.position_ms - expected) > SEEK_MS;
+}
+
 /** What a tab is showing, as one key: `ch:<slug>`, `v:<uuid>` or `c:<clip id>`. */
 function pageKey(d: KickPayload): string {
   if (d.page_kind === 'vod') return d.video_id ? `v:${d.video_id}` : '';
@@ -139,7 +154,8 @@ export class KickSource {
     const now = performance.now();
     const page = pageKey(data);
     const key = data.tab_id || page || 'tab';
-    const prev = this.tabs.get(key)?.data;
+    const entry = this.tabs.get(key);
+    const prev = entry?.data;
     const samePage = !!prev && pageKey(prev) === page;
 
     if (!this._wasActive) {
@@ -153,10 +169,18 @@ export class KickSource {
       : data.stream_start_time_ms || (samePage ? prev!.startEstimateMs : 0) || Date.now();
     /*
      * A new page, or a stream that went off the air, starts a new transcript:
-     * the last channel's words do not belong under this one's name.
+     * the last channel's words do not belong under this one's name. A past
+     * broadcast has captions too, in the same overlay; a clip is too short to
+     * bother with. A past broadcast that was skipped through starts its lines
+     * over: the ones already cut were said somewhere else in the video, and on
+     * the card, beside the first line said after the jump, they read as what
+     * is being said now.
      */
-    const captions = samePage && data.is_live ? prev!.captions : new LiveCaptions();
-    if (data.is_live && data.page_kind === 'channel') {
+    const captioned = data.page_kind === 'vod' || (data.page_kind === 'channel' && data.is_live);
+    const captions = samePage && captioned ? prev!.captions : new LiveCaptions();
+    const jumped = samePage && data.page_kind === 'vod' && seeked(prev!, data, now - entry!.receivedAt);
+    if (jumped) captions.restart();
+    if (captioned) {
       captions.add(data.caption, data.caption_at, data.caption_age_ms, data.caption_from_stream, now);
     }
     this.tabs.seen(key, { ...data, startEstimateMs, pageSince: samePage ? prev!.pageSince : now, captions }, now);
@@ -164,16 +188,19 @@ export class KickSource {
   }
 
   /**
-   * The caption lines for a live card, by its track id (`kick:<channel>`) —
-   * from whichever fresh tab on that channel has the most, since a second tab
-   * with captions off reports none. An empty list when no tab has any.
+   * The caption lines for a card, by its track id: `kick:<channel>` for a live
+   * channel, `kick:v:<id>` for a past broadcast. From whichever fresh tab on
+   * that page has the most, since a second tab with captions off reports none.
+   * An empty list when no tab has any, and for any other card.
    */
   captionLines(trackId: string): LyricLine[] {
-    if (!trackId.startsWith('kick:')) return NO_LINES;
-    const page = `ch:${trackId.slice(5).toLowerCase()}`;
+    if (!trackId.startsWith('kick:') || trackId.startsWith('kick:c:')) return NO_LINES;
+    const rest = trackId.slice(5);
+    const vod = rest.startsWith('v:');
+    const page = vod ? rest : `ch:${rest.toLowerCase()}`;
     let best = NO_LINES;
     for (const t of this.tabs.fresh(performance.now())) {
-      if (!t.data.is_live || pageKey(t.data) !== page) continue;
+      if (pageKey(t.data) !== page || (!vod && !t.data.is_live)) continue;
       const lines = t.data.captions.lines;
       if (lines.length > best.length) best = lines;
     }

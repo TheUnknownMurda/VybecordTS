@@ -1,5 +1,6 @@
 /**
- * A live stream's captions, cut into lines the card can show.
+ * A Kick stream's captions, live or a past broadcast's, cut into lines the
+ * card can show.
  *
  * Kick draws its captions in one overlay on the player, and the extension
  * reports what that overlay says whenever it changes (see sites/kick.js). What
@@ -134,13 +135,21 @@ export class LiveCaptions {
     return this._lines !== before;
   }
 
-  /** Forget everything: a new page, or a stream that went off the air. */
-  reset(): void {
+  /**
+   * Start the lines over where a past broadcast now is, after a seek.
+   *
+   * The lines already cut go. The words on the overlay are kept, but only to
+   * be recognised: it can go on showing what was said before the jump for a
+   * moment (speech recognition's window certainly does), and taken afresh
+   * those words would open the new lines. So the report the overlay was last
+   * changed by still counts as seen, and what was held back from it joins the
+   * words to match against instead of the transcript.
+   */
+  restart(): void {
     this._lines = [];
     this.open = [];
-    this.taken = [];
+    this.taken = [...this.taken, ...this.pending.map(key)].slice(-MATCH_WORDS);
     this.pending = [];
-    this.lastChange = 0;
   }
 
   /**
