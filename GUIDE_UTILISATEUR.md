@@ -135,6 +135,16 @@ Sans l'extension navigateur, Windows indique à Vybecord ce qui joue, mais pas s
 
 Même sans elle, le titre et l'artiste sont analysés avec les conventions de SoundCloud, donc un upload intitulé « Artiste - Titre (prod. Machin) » donne le bon artiste plutôt que le compte qui a mis en ligne. Les paroles, la pochette et la présence elle-même ne sont pas affectées — elles se basent sur le morceau et l'artiste, pas sur le site. Tant que le site n'est pas identifié, cet onglet dépend de l'interrupteur **Other browser tabs** dans **Settings → Detection**, et non de **SoundCloud**.
 
+### Twitch et Kick
+
+Avec l'extension, un onglet Twitch ou Kick a une carte pour ce qu'il affiche :
+
+- **Une chaîne en direct** — la chaîne, le titre du stream, la catégorie et depuis combien de temps il est en ligne.
+- **Une chaîne hors ligne** — la chaîne et **Offline**, avec le titre de son dernier stream sur la pochette. Elle ne prend qu'une carte que rien d'autre ne veut, donc la musique passe toujours avant.
+- **Une rediffusion ou un clip** — la chaîne, le titre de la vidéo et une barre de progression. Avant, ils s'affichaient comme YouTube.
+
+Le nom et la photo de la chaîne viennent de Twitch lui‑même (et du site de Kick sur Kick) : la carte ne s'ouvre plus sur le nom de quelqu'un d'autre ni sur ton propre avatar pendant que la page charge. Les streams et leurs vidéos n'ont pas de paroles. Après une mise à jour de Vybecord, clique sur la flèche de rechargement de l'extension dans la page des extensions de ton navigateur pour qu'elle prenne la nouvelle version.
+
 ### Deux choses jouent en même temps
 
 Sur **Now playing**, ouvre le menu **Source** et choisis le lecteur que tu veux afficher. Il reste épinglé jusqu'à ce que tu choisisses **Automatic**.

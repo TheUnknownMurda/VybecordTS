@@ -20,6 +20,13 @@
  * gql.twitch.tv query there — at no extension permission at all — and prefers
  * its answer over the estimate below. Keep pushing the estimate regardless:
  * it is what the timer uses until that lookup lands, and if it fails.
+ *
+ * The same lookup now supplies the channel's name and picture. The page renders
+ * the channel a second or more after the URL changes, and until then it holds
+ * the sidebar, the chat and the viewer's own avatar in the top bar, which is
+ * what the old "first element that matches" reads used to find. So this script
+ * reads only what it can tie to the channel in the URL, sends nothing it
+ * cannot, and leaves the rest to the app.
  */
 
 (function() {
@@ -54,11 +61,12 @@
     /**
      * First path segments that are Twitch's own pages, not a channel.
      *
-     * The username is the first segment of the URL, and is_live below defaults
-     * to true when it finds no offline marker — which none of these pages has.
-     * Together that reported "twitch.tv/directory" as a live channel called
-     * `directory`. It also sent the desktop app off to look up a stream start
-     * for a channel that does not exist, once a minute, per page visited.
+     * The username is the first segment of the URL, and an older liveness check
+     * read "live" wherever it found no offline marker — which none of these
+     * pages has. Together that reported "twitch.tv/directory" as a live channel
+     * called `directory`. It also sent the desktop app off to look up a channel
+     * that does not exist, per page visited. `videos` is in the list as a first
+     * segment only: /videos/<id> is a past broadcast, handled before the list.
      */
     const NOT_A_CHANNEL = new Set([
         'directory', 'settings', 'videos', 'subscriptions', 'following', 'friends',
@@ -169,111 +177,161 @@
         pushTimer = setInterval(periodicPush, currentInterval);
     }
 
+    /** `//cdn/...` as `https://cdn/...`; anything else unchanged. */
+    function absolute(src) {
+        return src && src.startsWith('//') ? `https:${src}` : (src || '');
+    }
+
     /**
-     * Extract streamer information from the page.
+     * Which page this is, from the URL alone.
+     *
+     *   /videos/<id>             a past broadcast (Twitch's French UI: "rediffusion")
+     *   /<channel>/clip/<slug>   a clip — clips.twitch.tv/<slug> redirects here
+     *   /<channel>[/...]         the channel, live or not
+     *
+     * A past broadcast used to be ignored outright — `videos` is one of Twitch's
+     * own sections, so it was skipped as "not a channel" — and the browser's
+     * media session announced it instead, as YouTube.
+     */
+    function pageFromUrl() {
+        const parts = window.location.pathname.split('/').filter(Boolean);
+        if (parts[0] === 'videos' && /^\d+$/.test(parts[1] || '')) {
+            return { kind: 'vod', username: '', videoId: parts[1], clipSlug: '' };
+        }
+        if (!parts[0] || NOT_A_CHANNEL.has(parts[0].toLowerCase())) return null;
+        if (parts[1] === 'clip' && parts[2]) {
+            return { kind: 'clip', username: parts[0], videoId: '', clipSlug: parts[2] };
+        }
+        // /<channel>/v/<id> is an old spelling of a past broadcast's address.
+        if (parts[1] === 'v' && /^\d+$/.test(parts[2] || '')) {
+            return { kind: 'vod', username: parts[0], videoId: parts[2], clipSlug: '' };
+        }
+        return { kind: 'channel', username: parts[0], videoId: '', clipSlug: '' };
+    }
+
+    /**
+     * The channel's name as the page shows it, once the page shows this channel.
+     *
+     * The name is the `h1` in the channel's own block. Until Twitch has rendered
+     * the channel the URL names, that block is missing or still the previous
+     * channel's, so a name that is not the URL's login (ignoring case — that is
+     * all a Twitch display name may change) is not this channel's and is not
+     * used. A channel whose display name is written in another script never
+     * matches; the app asks Twitch for that name instead.
+     */
+    function channelHeading(login) {
+        const h1 = document.querySelector('.channel-root h1, #live-channel-stream-information h1');
+        const text = h1 ? h1.textContent.trim() : '';
+        if (!text) return '';
+        if (login && text.toLowerCase() !== login.toLowerCase()) return '';
+        return text;
+    }
+
+    /**
+     * The channel's picture, only once channelHeading() has confirmed the page.
+     *
+     * Matched on the image's alt text, which Twitch sets to the channel's name.
+     * The first avatar in the document is somebody else's — a followed channel
+     * in the sidebar, or the signed-in viewer's own in the top bar — and that is
+     * the picture the card used to open on.
+     */
+    function channelAvatar(name) {
+        if (!name) return '';
+        for (const img of document.querySelectorAll('.channel-root img.tw-image-avatar, #live-channel-stream-information img')) {
+            if ((img.getAttribute('alt') || '').trim().toLowerCase() !== name.toLowerCase()) continue;
+            if (img.closest('nav, [class*="side-nav"]')) continue;
+            const src = img.getAttribute('src');
+            if (src) return absolute(src);
+        }
+        return '';
+    }
+
+    /** The page's video: position and length, for a past broadcast or a clip. */
+    function playerState() {
+        const v = document.querySelector('.channel-root video, [data-a-target="video-player"] video, video');
+        if (!v) return { position_ms: 0, duration_ms: 0, paused: true };
+        return {
+            position_ms: isFinite(v.currentTime) ? Math.round(v.currentTime * 1000) : 0,
+            duration_ms: isFinite(v.duration) ? Math.round(v.duration * 1000) : 0,
+            paused: v.paused || v.ended,
+        };
+    }
+
+    /**
+     * What this tab shows, or null when there is nothing to report yet.
+     *
+     * The name, title and category come only from the channel's own block, and
+     * only once channelHeading() says it is this channel's — anything earlier is
+     * left empty for the app to fill from Twitch. So is the picture.
      */
     function getStreamerInfo() {
+        const page = pageFromUrl();
+        if (!page) return null;
+
         const info = {
-            username: '',
+            page_kind: page.kind,
+            username: page.username,
             display_name: '',
             followers: '',
             category: '',
             stream_title: '',
-            profile_url: '',
+            profile_url: page.username ? `https://www.twitch.tv/${page.username}` : '',
             is_live: false,
+            // Whether the page has rendered this channel yet; until it has,
+            // is_live is not a reading, and the app knows not to weigh it.
+            page_ready: false,
             thumbnail_url: '',
             profile_picture_url: '',
             stream_start_time_ms: 0,
+            video_id: page.videoId,
+            clip_slug: page.clipSlug,
+            position_ms: 0,
+            duration_ms: 0,
+            paused: false,
             tab_id: TAB_ID
         };
 
-        // Try to get username from URL, unless the page is one of Twitch's own
-        // (see NOT_A_CHANNEL) — leaving it empty makes the push a no-op rather
-        // than a stream named after the section you are browsing.
-        const urlMatch = window.location.pathname.match(/^\/([^\/]+)/);
-        if (urlMatch && urlMatch[1] && !NOT_A_CHANNEL.has(urlMatch[1].toLowerCase())) {
-            info.username = urlMatch[1];
-            info.profile_url = `https://www.twitch.tv/${info.username}`;
-        }
+        // A past broadcast's address carries no channel; the page's heading is
+        // the only place it is written, and the app looks it up by id anyway.
+        const name = channelHeading(page.username);
+        info.display_name = name;
+        info.page_ready = !!name;
+        info.profile_picture_url = channelAvatar(name);
 
-        // Try to get display name from page
-        const displayNameEl = document.querySelector('[class*="channel-header"], [class*="display-name"], h1, .streamer-name, [data-a-target="channel-header-user"]');
-        if (displayNameEl) {
-            info.display_name = displayNameEl.textContent.trim();
-        }
-
-        // Try to get follower count
-        const followerEl = document.querySelector('[class*="follower"], [class*="follow-count"], [data-a-target="channel-followers-count"]');
-        if (followerEl) {
-            info.followers = followerEl.textContent.trim();
-        }
-
-        /*
-         * The category, from the channel's own info block and nowhere else.
-         *
-         * The generic class selectors used to come first and run over the whole
-         * document, which on a signed-in page found the followed-channels
-         * sidebar before the stream: the presence then read "xQcOfflineUse the
-         * Right Arrow Key to show more information." — a sidebar card's name,
-         * status and screen-reader hint run together — under every stream. So
-         * the link Twitch itself marks as the game comes first, the search is
-         * confined to the main column, and anything inside a nav is skipped.
-         */
-        let category = '';
-        const categorySelectors = [
-            '[data-a-target="stream-game-link"]',
-            'a[href*="/directory/category/"]',
-            'a[href*="/directory/game/"]',
-            '[data-a-target="game-title"]',
-            '.game-name',
-            '.stream-tag',
-            '[class*="category"]',
-            '[class*="game"]',
-        ];
-        const channelScope = document.querySelector('main') || document;
-        for (const selector of categorySelectors) {
-            for (const el of channelScope.querySelectorAll(selector)) {
-                if (el.closest('nav, [class*="side-nav"], [data-a-target*="side-nav"]')) continue;
-                const text = el.textContent.trim();
-                // A category is one short line; boilerplate from an assistive hint is neither.
-                if (!text || text.length > 64 || text.includes('\n') || /arrow key/i.test(text)) continue;
-                category = text;
-                break;
+        if (page.kind !== 'channel') {
+            Object.assign(info, playerState());
+            if (name) {
+                const title = document.querySelector('.channel-root [data-a-target="stream-title"], .channel-root h2[title]');
+                if (title) info.stream_title = (title.getAttribute('title') || title.textContent || '').trim();
             }
-            if (category) break;
+            return info;
         }
-        info.category = category;
 
-        // Try to get stream title - more specific selectors to avoid picking up category or "For You"
-        let streamTitle = '';
-        const titleSelectors = [
-            '[data-a-target="channel-stream-title"]',
-            '[data-a-target="stream-title"]',
-            '[class*="stream-title"]',
-            '[class*="broadcast-title"]',
-            '.stream-title',
-        ];
-        for (const selector of titleSelectors) {
-            const el = document.querySelector(selector);
-            if (el && el.textContent.trim()) {
-                // Avoid picking up category text or "For You"
-                const text = el.textContent.trim();
-                if (text && text !== info.category && text !== 'For You' && text.length > 5) {
-                    streamTitle = text;
-                    break;
-                }
+        if (name) {
+            /*
+             * Live means the live player's layout, which Twitch marks on the
+             * channel's root. The old check matched any class containing "live"
+             * anywhere on the page — every live channel in the sidebar — and
+             * read an offline channel as live. The app checks with Twitch too.
+             */
+            info.is_live = !!document.querySelector('.channel-root--live, #live-channel-stream-information [data-a-target="animated-channel-viewers-count"]');
+
+            if (info.is_live) {
+                const scope = document.querySelector('#live-channel-stream-information') || document.querySelector('.channel-root');
+                const titleEl = scope && scope.querySelector('[data-a-target="stream-title"]');
+                if (titleEl) info.stream_title = (titleEl.getAttribute('title') || titleEl.textContent || '').trim();
+                /*
+                 * The category, from the link Twitch itself marks as the game,
+                 * inside the channel's own block. A search over the whole page
+                 * once found the followed-channels sidebar first and put
+                 * "xQcOfflineUse the Right Arrow Key to show more information."
+                 * under every stream.
+                 */
+                const gameEl = scope && scope.querySelector('[data-a-target="stream-game-link"], a[href*="/directory/category/"]');
+                const game = gameEl ? gameEl.textContent.trim() : '';
+                if (game && game.length <= 64 && !game.includes('\n')) info.category = game;
             }
         }
-        info.stream_title = streamTitle;
-
-        // Detect if stream is live. A page with no channel (see NOT_A_CHANNEL)
-        // can never be, and has to be excluded explicitly: the fallback below
-        // reads "live" whenever it finds no offline marker, and Twitch's own
-        // pages have none.
-        info.is_live = !!info.username && (
-            !!document.querySelector('[class*="live"], [class*="online"], [data-a-target="live-status"], [data-a-target="channel-status-text"]') ||
-            !document.querySelector('[class*="offline"], [data-a-target="offline-status"]')
-        );
 
         // Establish a start time for the Discord elapsed timer. Persisting it
         // matters because Twitch is a single-page app: navigating between pages,
@@ -286,146 +344,63 @@
                 setPersistedStreamStart(info.username, streamStartTime);
                 reportStreamStart(info.username, !!persisted);
             }
-        } else {
-            // Reset when stream goes offline
+        } else if (name) {
+            // Reset when the page shows the stream offline — not merely before
+            // the page has rendered, which would throw the estimate away on
+            // every navigation.
             streamStartTime = 0;
             clearPersistedStreamStart();
             reportedStartFor = '';
         }
         info.stream_start_time_ms = streamStartTime;
 
-        // Try to get thumbnail
-        const thumbnailEl = document.querySelector('video') ||
-                           document.querySelector('[class*="thumbnail"] img') ||
-                           document.querySelector('img[src*="twitch"]');
-        if (thumbnailEl) {
-            const src = thumbnailEl.getAttribute('src') || thumbnailEl.getAttribute('poster');
-            if (src) info.thumbnail_url = src;
-        }
-
-        // Try to get profile picture - target the main streamer's avatar specifically
-        let profilePicUrl = '';
-        
-        // First, try to find the avatar within the main streamer section (not in sidebar/lists)
-        const mainStreamerSelectors = [
-            // Avatar in the main channel header/section
-            '[class*="channel-header"] img[class*="avatar"]',
-            '[class*="streamer-header"] img[class*="avatar"]',
-            '[data-a-target="channel-header-user"] img',
-            '[data-a-target="user-avatar"] img',
-            '.channel-header__avatar img',
-            // Avatar in the main stream card
-            '[class*="stream-card"][class*="main"] img[class*="avatar"]',
-            '[class*="streamer-card"][class*="main"] img[class*="avatar"]',
-            // Avatar near the streamer name in the main content area
-            'main img[class*="avatar"]',
-            '[class*="channel-info"] img[class*="avatar"]',
-            '[class*="streamer-info"] img[class*="avatar"]',
-        ];
-        
-        for (const selector of mainStreamerSelectors) {
-            const el = document.querySelector(selector);
-            if (el && el.getAttribute('src')) {
-                const src = el.getAttribute('src');
-                // Only use if it looks like a real profile picture
-                if (src && !src.includes('thumbnail') && !src.includes('preview') && !src.includes('placeholder')) {
-                    profilePicUrl = src.startsWith('//') ? `https:${src}` : src;
-                    break;
-                }
-            }
-        }
-        
-        // Fallback: try more general selectors but avoid sidebar/lists
-        if (!profilePicUrl) {
-            const generalSelectors = [
-                'img[class*="avatar"]',
-                'img[alt*="avatar"]',
-                '[class*="user-avatar"] img',
-                '[class*="streamer-avatar"] img',
-                'img.tw-avatar',
-            ];
-            
-            for (const selector of generalSelectors) {
-                const els = document.querySelectorAll(selector);
-                for (const el of els) {
-                    const src = el.getAttribute('src');
-                    if (src && !src.includes('thumbnail') && !src.includes('preview') && !src.includes('placeholder')) {
-                        // Check if this avatar is in a main content area (not sidebar/footer)
-                        const parent = el.closest('aside, footer, [class*="sidebar"], [class*="recommended"], [class*="browse"], [class*="directory"]');
-                        if (!parent) {
-                            profilePicUrl = src.startsWith('//') ? `https:${src}` : src;
-                            break;
-                        }
-                    }
-                }
-                if (profilePicUrl) break;
-            }
-        }
-        
-        // Final fallback: any image from Twitch CDN that's not a thumbnail
-        if (!profilePicUrl) {
-            const allImages = document.querySelectorAll('img[src*="static-cdn.jtvnw.net"], img[src*="twitch"]');
-            for (const img of allImages) {
-                const src = img.getAttribute('src');
-                if (src && !src.includes('thumbnail') && !src.includes('preview')) {
-                    const parent = img.closest('aside, footer, [class*="sidebar"], [class*="recommended"], [class*="browse"], [class*="directory"]');
-                    if (!parent) {
-                        profilePicUrl = src.startsWith('//') ? `https:${src}` : src;
-                        break;
-                    }
-                }
-            }
-        }
-        
-        info.profile_picture_url = profilePicUrl;
-
         return info;
     }
 
     // ── Core loop ──
 
-    function onStateChange() {
-        const data = getStreamerInfo();
-        if (!data || !data.username) return;
-
-        const streamerKey = `${data.username}|${data.is_live}`;
-
-        if (streamerKey !== lastStreamerKey) {
-            lastStreamerKey = streamerKey;
-            pushToVybecord(data);
-        }
-    }
-
+    /*
+     * One push per beat for whatever the tab is on — live, offline, a video.
+     *
+     * Pushing only while live is what kept an offline channel off the card: the
+     * tab said "offline" once, then went quiet and aged out. And a page that
+     * has not finished rendering is still pushed, with the URL's login and
+     * nothing else: the app holds a new channel back until Twitch has told it
+     * who that is, so an empty name costs nothing, where a wrong one used to
+     * reach Discord.
+     */
     function periodicPush() {
-        // Detect state changes
-        onStateChange();
-        // Always push when live (for status updates). No username means the page
-        // is not a channel at all, so there is nothing to report.
         const data = getStreamerInfo();
-        if (data && data.is_live && data.username) {
-            pushToVybecord(data);
+        if (!data) return;
+        // A different page from the last push resets the start estimate's owner.
+        const pageKey = `${data.page_kind}|${data.username}|${data.video_id}|${data.clip_slug}`;
+        if (pageKey !== lastStreamerKey) {
+            lastStreamerKey = pageKey;
+            if (data.page_kind !== 'channel') streamStartTime = 0;
         }
+        pushToVybecord(data);
     }
 
     function init() {
         reschedule(BASE_INTERVAL_MS);
         console.log('[VybecordTS] Twitch integration initialized ✓');
 
-        setTimeout(() => {
-            onStateChange();
-        }, 500);
+        setTimeout(periodicPush, 500);
     }
 
     // Wait for page to be ready
     function onReady() {
         init();
-        // Twitch SPA: re-init on navigation
+        // Twitch SPA: report a new page as soon as the URL changes. The stream
+        // start estimate belongs to the previous channel, so it goes too.
         let lastUrl = location.href;
         new MutationObserver(() => {
             const currentUrl = location.href;
             if (currentUrl !== lastUrl) {
                 lastUrl = currentUrl;
-                setTimeout(onStateChange, 500);
+                streamStartTime = 0;
+                reportedStartFor = '';
+                setTimeout(periodicPush, 500);
             }
         }).observe(document, { subtree: true, childList: true });
     }

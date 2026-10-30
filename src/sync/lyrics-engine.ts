@@ -1578,7 +1578,10 @@ export class LyricsEngine {
         : {}),
       details,
       state,
-      timestamps: endTs > startTs ? { start: startTs, end: endTs } : { start: startTs },
+      // An offline channel has no clock worth showing: it is not playing, and
+      // "00:42" under "Offline" reads as a stream that is running.
+      timestamps: d.context_type === 'offline' ? undefined
+        : endTs > startTs ? { start: startTs, end: endTs } : { start: startTs },
       assets: {
         large_image: this.cachedLargeImage,
         large_text: largeText,

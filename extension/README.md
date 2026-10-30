@@ -14,7 +14,7 @@ This extension reads the page directly and supplies:
 | **YouTube** | the video link, live-stream start time, real channel |
 | **SoundCloud** | the actual artist rather than the uploading account, track link |
 | **Bandcamp** | album and label metadata |
-| **Twitch** / **Kick** | stream title, category, uptime (estimated — see below) |
+| **Twitch** / **Kick** | the channel, live or offline; past broadcasts and clips with their position; stream title, category, uptime |
 
 It also reports position from the page's own audio element, which is exact — a browser's media session only publishes one every few seconds.
 
@@ -22,13 +22,13 @@ It also reports position from the page's own audio element, which is exact — a
 
 Everything above is read out of the page, with one exception noted below, and that is what keeps the extension to the one host permission it asks for — and it rules two things out.
 
-**The exception is Kick.** [`sites/kick.js`](src/sites/kick.js) calls Kick's own `/api/v1/channels/…` for the stream's real `created_at`, because nothing on the page says when a stream began. It is a same-origin request on a tab you already have open, made the way the page itself makes it, so it needs no host permission and reaches no host you were not already on. It is the only request this extension makes to anything other than the desktop app. It cannot move to the app the way the Twitch one did: Kick answers only a browser with a real session and returns HTTP 403 to anything else.
+**The exception is Kick.** [`sites/kick.js`](src/sites/kick.js) calls Kick's own API — `/api/v1/channels/…`, `/api/v1/video/…` or `/api/v2/clips/…`, for whatever the tab is on — for the channel's name, picture, title, category, whether it is live and since when. The page says none of that reliably: it renders the previous channel, the sidebar and your own avatar before the one in the address bar. It is a same-origin request on a tab you already have open, made the way the page itself makes it, so it needs no host permission and reaches no host you were not already on. It is the only request this extension makes to anything other than the desktop app. It cannot move to the app the way the Twitch one did: Kick answers only a browser with a real session and returns HTTP 403 to anything else.
 
 **Lyrics.** The desktop app fetches its own, from LRCLib, Netease, Musixmatch and your local database. It does not use Spotify's official lyrics, because reaching that API means taking the OAuth token out of your Spotify session — not something this extension will do for a Premium-only source the app already covers another way.
 
-**Exact Twitch uptime.** Twitch's API knows when a stream started; the page does not. So the extension sends an estimate — the moment a tab first saw the channel live — and the desktop app corrects it, asking Twitch's public GraphQL API for the stream's real `createdAt` and caching that per streamer. The timer is then right whether you opened the tab at the start or two hours in; until the lookup lands, or if it fails, the estimate stands. Making that request from the app rather than from here is what keeps the extension to the one host permission above.
+**Exact Twitch uptime, name and picture.** Twitch's API knows when a stream started; the page does not. So the extension sends an estimate — the moment a tab first saw the channel live — and the desktop app corrects it, asking Twitch's public GraphQL API for the stream's real `createdAt` and caching that per streamer. The same query brings the channel's name and picture, which the page shows late (until it has rendered, the first avatar on it is someone else's — often yours), and for a past broadcast or a clip its title and length. The timer is then right whether you opened the tab at the start or two hours in; until the lookup lands, or if it fails, the estimate stands. Making that request from the app rather than from here is what keeps the extension to the one host permission above.
 
-The same answer also settles *whether* a channel is live, which the page is likewise only guessing at — it reads "live" whenever it fails to find an offline marker. So if Twitch says a channel is not streaming, the app drops the status even though the tab still insists otherwise. Only that explicit answer counts: when Twitch cannot be reached, the page's reading stands rather than the status vanishing on a failed request.
+The same answer also settles *whether* a channel is live. If Twitch says a channel is not streaming, the card says **Offline**, whatever the tab shows; a tab that sees the stream start or end only gets Twitch asked again sooner. Only an explicit answer counts: when Twitch cannot be reached, the page's reading stands rather than the card changing on a failed request.
 
 ## Install (unpacked)
 
