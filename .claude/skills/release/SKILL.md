@@ -20,5 +20,8 @@ in README.md → Contributing → "Release checklist". Steps:
    `git tag <x.y.z>`, `git push origin desktop-app`, `git push origin <x.y.z>`, and the
    `gh release create` command from the README with **all five assets**
    (latest.yml, setup.exe, .blockmap, both extension zips). Without latest.yml installed copies never update.
+8. Before publishing, check the `npm run dist` output says `[env] bug-report webhook compiled in`.
+   `no BUG_REPORT_WEBHOOK` means the Report page ships switched off, as it did in 2.7.0 and 2.8.0:
+   put `BUG_REPORT_WEBHOOK=` in `envs/.env` of the main checkout (a worktree finds it there) and rebuild.
 
 Never push a tag or publish a release without the user's explicit go-ahead.

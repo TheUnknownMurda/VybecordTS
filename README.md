@@ -433,7 +433,7 @@ At startup the app loads `envs\.env` from the [data folder](#data-folder), if th
 | `DISCORD_CLIENT_ID` | at runtime | Default Discord application, used when `discord_app_id` is empty. |
 | `LASTFM_API_KEY`, `LASTFM_API_SECRET` | at runtime | Last.fm credentials, used when the config keys are empty. |
 | `VYBECORD_LOG_LEVEL` | at runtime | `debug`, `info` (default), `warn` or `error`. |
-| `BUG_REPORT_WEBHOOK` | **at build time** | Discord webhook built into the main bundle for the Report page. It is read from the environment or from `envs/.env` at the repository root. If it isn't set, in-app reporting is turned off in that build. Anyone can read it from the packaged app, so it is not a secret. |
+| `BUG_REPORT_WEBHOOK` | **at build time** | Discord webhook built into the main bundle for the Report page. It is read from the environment or from `envs/.env` at the repository root (in a `git worktree`, the main checkout's `envs/.env` is used too). If it isn't set, in-app reporting is turned off in that build. Anyone can read it from the packaged app, so it is not a secret. |
 
 Example `envs\.env`:
 
@@ -603,7 +603,7 @@ This produces:
 - `release/latest.yml`: what installed copies read to detect an update.
 - `release/win-unpacked/`: the unpacked app.
 
-The `BUG_REPORT_WEBHOOK` variable is built in at this point (see [Environment variables](#environment-variables)), and the build log says whether it was found. If `latest.yml` and the installer ever disagree, regenerate it from the installer on disk:
+The `BUG_REPORT_WEBHOOK` variable is built in at this point (see [Environment variables](#environment-variables)), and the build log says whether it was found: check for `[env] bug-report webhook compiled in` before publishing. If `latest.yml` and the installer ever disagree, regenerate it from the installer on disk:
 
 ```powershell
 node scripts/make-latest-yml.mjs
