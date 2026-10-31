@@ -156,13 +156,13 @@ On **Now playing**, open the **Source** menu and pick the one you want announced
 
 Or show them all. **Settings → Discord presence → Several presences** puts up to five cards on your profile: the song in Spotify on presence 1, the video in the browser on presence 2, a stream in another tab on presence 3, say. The highest-ranked thing playing is presence 1 (a music app beats a video, a video beats an unnamed tab), the next is presence 2, and so on. With more than one:
 
-- Tabs of the same site are separate things: four Twitch streams open side by side take four cards. A Discord application carries one card, so the others borrow one — the default Vybecord application, then a platform application nothing is on — and the card names its platform in the header either way.
+- Tabs of the same site are separate things: four Twitch streams open side by side take four cards. A Discord application carries one card, so once the platform's own applications are taken the others borrow one — the default Vybecord application, then a platform application nothing is on — and the card names its platform in the header either way. Discord's **Active Now** list shows the borrowed application's logo, though, so a card goes back to its platform's application as soon as one is free.
 - **Lyrics on presence N** picks which cards sing along — any combination.
 - **Activity type on presence N** gives each card its own verb: *Listening* for the song, *Watching* for the stream. Cards 2 to 5 say the same as presence 1 until you change them.
 - **Now playing** shows every card; click one to see its lyrics, its Discord preview and its controls. Its **Source** menu pins that presence to a player, so it never swaps with another.
 - The listening history (and so **Activity**) and Last.fm follow presence 1 only.
 
-Each card is a Discord application of its own, and Spotify, YouTube, SoundCloud, Apple Music, Kick and Twitch each have one; with the default that is seven, and a card whose own application is taken borrows a free one. Five cards at most against seven applications means there is nothing to set up.
+Each card is a Discord application of its own. Spotify, SoundCloud and Apple Music have one each, YouTube three, and Kick and Twitch five each, so up to five Kick or Twitch streams all keep their logo; a card whose platform has no application left borrows a free one. With the default that makes seventeen applications for five cards at most, so there is nothing to set up.
 
 ---
 

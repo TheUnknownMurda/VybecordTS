@@ -156,13 +156,13 @@ Sur **Now playing**, ouvre le menu **Source** et choisis le lecteur que tu veux 
 
 Ou affiche-les toutes. **Settings → Discord presence → Several presences** met jusqu'à cinq cartes sur ton profil : la chanson Spotify en présence 1, la vidéo du navigateur en présence 2, un stream dans un autre onglet en présence 3, par exemple. Ce qui joue avec le rang le plus élevé devient la présence 1 (une appli de musique passe avant une vidéo, une vidéo avant un onglet anonyme), ce qui suit la présence 2, et ainsi de suite. Avec plus d'une carte :
 
-- Les onglets d'un même site sont des choses distinctes : quatre streams Twitch ouverts côte à côte prennent quatre cartes. Une application Discord ne porte qu'une carte, donc les autres en empruntent une — l'application Vybecord par défaut, puis l'application d'une plateforme que rien n'occupe — et la carte nomme sa plateforme dans l'en‑tête de toute façon.
+- Les onglets d'un même site sont des choses distinctes : quatre streams Twitch ouverts côte à côte prennent quatre cartes. Une application Discord ne porte qu'une carte, donc une fois les applications de la plateforme prises, les autres en empruntent une — l'application Vybecord par défaut, puis l'application d'une plateforme que rien n'occupe — et la carte nomme sa plateforme dans l'en‑tête de toute façon. La liste **Active Now** de Discord affiche par contre le logo de l'application empruntée, donc une carte retourne sur l'application de sa plateforme dès qu'il y en a une de libre.
 - **Lyrics on presence N** choisit quelles cartes affichent les paroles — n'importe quelle combinaison.
 - **Activity type on presence N** donne à chaque carte son propre verbe : *Listening* pour la chanson, *Watching* pour le stream. Les cartes 2 à 5 disent la même chose que la présence 1 tant que tu ne les changes pas.
 - **Now playing** montre toutes les cartes ; clique sur l'une pour voir ses paroles, son aperçu Discord et ses réglages. Son menu **Source** épingle cette présence à un lecteur, pour qu'elle ne s'échange jamais avec une autre.
 - L'historique d'écoute (et donc **Activity**) et Last.fm ne suivent que la présence 1.
 
-Chaque carte est une application Discord à part, et Spotify, YouTube, SoundCloud, Apple Music, Kick et Twitch ont chacun la leur ; avec celle par défaut, ça fait sept, et une carte dont l'application est déjà prise en emprunte une libre. Cinq cartes au maximum pour sept applications : il n'y a rien à configurer.
+Chaque carte est une application Discord à part. Spotify, SoundCloud et Apple Music en ont une chacun, YouTube trois, et Kick et Twitch cinq chacun : jusqu'à cinq streams Kick ou Twitch gardent tous leur logo. Une carte dont la plateforme n'a plus d'application libre en emprunte une autre. Avec celle par défaut, ça fait dix-sept applications pour cinq cartes au maximum : il n'y a rien à configurer.
 
 ---
 
