@@ -198,18 +198,20 @@ const APP_ID_SWITCH_DEBOUNCE_MS = 1500;
  * application are impossible, and the second one on the default application
  * showed no logo there (its icon is blank), a third on Spotify's showed
  * Spotify's. Each extra application listed here is one more card of that
- * platform with the right logo. Platforms without extras fall back as before
- * (see targetAppIdFor). Default falls back to config discord_app_id or env
- * DISCORD_CLIENT_ID.
+ * platform with the right logo: Kick and Twitch have one per card (MAX_SLOTS),
+ * the sites people open several streams of side by side. Platforms with fewer
+ * fall back as before (see targetAppIdFor). Default falls back to config
+ * discord_app_id or env DISCORD_CLIENT_ID.
  */
+const YOUTUBE_APP_IDS = ['1513868157897412759', '1566197944632352878', '1566198108516261971'];
 const PLATFORM_DISCORD_APP_IDS: Record<string, readonly string[]> = {
   spotify: ['1513867708851294299'],
-  youtube: ['1513868157897412759'],
-  youtube_music: ['1513868157897412759'],
+  youtube: YOUTUBE_APP_IDS,
+  youtube_music: YOUTUBE_APP_IDS,
   soundcloud: ['1513868059948093501'],
   apple_music: ['1530715817334018189'],
-  kick: ['1519781115144044636'],
-  twitch: ['1489626057588998164'],
+  kick: ['1519781115144044636', '1566196626815721658', '1566196816532349059', '1566196981481873408', '1566197088885411950'],
+  twitch: ['1489626057588998164', '1566197447913636033', '1566197587495747607', '1566197691481067542', '1566197821034467440'],
 };
 
 /**
@@ -2786,9 +2788,9 @@ export class VybecordBackend extends EventEmitter {
    * window shows it).
    *
    * There used to be four "spare application ID" fields in Settings for that
-   * fallback. Six platform applications and the default make seven, against a
-   * ceiling of MAX_SLOTS cards, so a free one always exists and the fields were
-   * asking users for something they never needed.
+   * fallback. The built-in applications far outnumber the MAX_SLOTS cards, so
+   * a free one always exists and the fields were asking users for something
+   * they never needed.
    */
   private targetAppIdFor(slot: PresenceSlot, source: string): string {
     const def = this.defaultAppId();
