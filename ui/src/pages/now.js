@@ -939,7 +939,7 @@ function readLines() {
      */
     const dur = state.track?.duration_ms;
     if (dur > 0 && l.duration_ms > 0 && Math.abs(dur - l.duration_ms) > 1500) return null;
-    return { lines: l.lyrics.map((x) => ({ time: x.time, text: x.text })), synced: true };
+    return { lines: l.lyrics.map((x) => ({ time: x.time, text: x.text, open: !!x.open })), synced: true };
   }
 
   // The unsynced fallback the backend fetches for display only: words, no times.
@@ -1036,6 +1036,7 @@ async function showFullLyrics(mode = 'panel') {
   let trackId = state.track?.track_id || '';
   let waitTimer = 0;
   let captions = false;                          // Kick's captions, not a song's lines
+  const asking = new Set();                      // lines whose translation is on its way
 
   paintTrack_();
   paint(data);
@@ -1145,25 +1146,30 @@ async function showFullLyrics(mode = 'panel') {
      * The count alone told one list from the next until Kick's captions: they
      * keep their last forty lines, so from the forty-first on a new line drops
      * the oldest, the count stays put, and the view froze on lines long gone.
-     * The first line's time changes when that happens.
+     * The first line's time changes when that happens. And the last line is
+     * the one being said, which grows where it stands: the count and both
+     * ends' times stay put while it does, and only its text says so, then
+     * its being finished, which is when it is worth translating.
      */
-    const sig = `${trackId}|${next.synced}|${next.lines.length}|${next.lines[0]?.time}`;
+    const last = next.lines[next.lines.length - 1];
+    const sig = `${trackId}|${next.synced}|${next.lines.length}|${next.lines[0]?.time}|${last?.time}|${last?.text}|${!!last?.open}`;
     const rebuilt = sig !== signature;
-    // Captions gaining a line, on the stream already shown: rebuilt, but the
-    // reader keeps their place and the view glides on to the new line.
+    // Captions gaining a line or a word, on the stream already shown: rebuilt,
+    // but the reader keeps their place and the view glides on with it.
     const growing = rebuilt && captions && rows.length > 0;
 
     if (rebuilt) {
       clearTimeout(waitTimer);
       // The rows still listed are kept, translation and all: a caption line
-      // never changes once cut, and its time is its own.
-      const reuse = growing ? new Map(shown.map((line, i) => [line.time, rows[i]])) : null;
+      // never changes once finished, and its time is its own. The one still
+      // being said is made again whenever its words change.
+      const reuse = growing ? new Map(shown.map((line, i) => [`${line.time}|${line.text}`, rows[i]])) : null;
       const shift = growing ? droppedHeight(next.lines) : 0;
       rows[cur]?.classList.remove('is-current');
       signature = sig;
       cur = -1;
       shown = next.lines;
-      rows = next.lines.map((line) => reuse?.get(line.time) || el('div', { class: `lyr-full-line${line.text ? '' : ' is-blank'}` }, [
+      rows = next.lines.map((line) => reuse?.get(`${line.time}|${line.text}`) || el('div', { class: `lyr-full-line${line.text ? '' : ' is-blank'}` }, [
         // A caption's time is when the app heard it, which means nothing to a reader.
         next.synced && !big && !captions ? el('span', { class: 'lyr-full-time', text: fmtTime(line.time) }) : null,
         el('span', { class: 'lyr-full-text', text: line.text || '♪' }),
@@ -1176,7 +1182,7 @@ async function showFullLyrics(mode = 'panel') {
       followBtn.hidden = !next.synced;
       list.classList.toggle('is-plain', !next.synced);
       if (!growing) setFollow(true);
-      translateAll(next.lines);
+      translateAll();
     }
 
     const idx = next.synced && Number.isInteger(state.lyrics?.currentIndex)
@@ -1252,25 +1258,37 @@ async function showFullLyrics(mode = 'panel') {
    * The backend warms the whole song's translations as soon as a track loads,
    * so this is usually a cache read that lands in one round trip.
    */
-  async function translateAll(lines) {
+  async function translateAll() {
     if (state.config.translate_lyrics !== true) return;
-    const texts = lines.map((l) => l.text).filter((t) => t && t.trim().length >= 2);
-    if (!texts.length) return;
+    /*
+     * Only for the rows still without one: a caption row kept from the list
+     * before has its translation already. And not for a caption line still
+     * being said, which is translated once it is finished: asked at each of
+     * its words, it cost a request a report.
+     */
+    const texts = new Set();
+    shown.forEach((line, i) => {
+      if (line.open || !line.text || line.text.trim().length < 2 || asking.has(line.text)) return;
+      if (!rows[i]?.querySelector('.lyr-full-tr')) texts.add(line.text);
+    });
+    if (!texts.size) return;
 
-    const sig = signature;
-    const res = await api.translateBatch(texts, state.config.translate_target_lang || 'en')
+    const id = trackId;
+    texts.forEach((t) => asking.add(t));
+    const res = await api.translateBatch([...texts], state.config.translate_target_lang || 'en')
       .catch(() => null);
+    texts.forEach((t) => asking.delete(t));
     // The song may have moved on while this was in flight.
-    if (!res?.translations || sig !== signature) return;
+    if (!res?.translations || id !== trackId) return;
 
-    lines.forEach((line, i) => {
+    // By text, not by place: captions move up the list while a request is out.
+    shown.forEach((line, i) => {
       // Own properties only: a line reading "constructor" would otherwise pick
       // up what Object.prototype answers and print it as its translation.
-      if (!Object.hasOwn(res.translations, line.text)) return;
+      if (line.open || !Object.hasOwn(res.translations, line.text)) return;
       const tr = res.translations[line.text];
       if (!tr || tr === line.text) return;
       const box = rows[i]?.querySelector('.lyr-full-text');
-      // A caption row kept from the list before has its translation already.
       if (box && !box.querySelector('.lyr-full-tr')) box.append(el('span', { class: 'lyr-full-tr', text: tr }));
     });
   }
