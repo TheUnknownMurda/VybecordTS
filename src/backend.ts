@@ -64,6 +64,7 @@ import { initLyricsOffsets, getTrackOffset, setTrackOffset } from './core/lyrics
 import { LyricsCache } from './core/lyrics-cache.js';
 import { translateBatch, translateText, getCachedTranslation, isTranslationWorthFetching } from './core/translate.js';
 import { asNonNegativeInt, asRecord, asText, evictOldest } from './core/utils.js';
+import { pickApplication, applicationOrder } from './core/app-choice.js';
 import type { TrackData, LyricLine, VybecordConfig, DiscordActivity } from './core/types.js';
 
 const log = createLogger('Backend');
@@ -187,16 +188,28 @@ const DEFAULT_DISCORD_APP_ID = '1396531182426128394';
  */
 const APP_ID_SWITCH_DEBOUNCE_MS = 1500;
 
-// Platform-specific Discord App IDs (changes the app name shown in Discord)
-const PLATFORM_DISCORD_APP_IDS: Record<string, string> = {
-  spotify: '1513867708851294299',
-  youtube: '1513868157897412759',
-  youtube_music: '1513868157897412759',
-  soundcloud: '1513868059948093501',
-  apple_music: '1530715817334018189',
-  kick: '1519781115144044636',
-  twitch: '1489626057588998164',
-  // Default falls back to config discord_app_id or env DISCORD_CLIENT_ID
+/**
+ * Platform-specific Discord applications, the first of each list being the one
+ * presence 1 uses.
+ *
+ * A platform can have more than one, all named after it and wearing its logo:
+ * Discord shows one card per application, and its "Active Now" list shows the
+ * application's own icon next to the card. Two Kick streams on one Kick
+ * application are impossible, and the second one on the default application
+ * showed no logo there (its icon is blank), a third on Spotify's showed
+ * Spotify's. Each extra application listed here is one more card of that
+ * platform with the right logo. Platforms without extras fall back as before
+ * (see targetAppIdFor). Default falls back to config discord_app_id or env
+ * DISCORD_CLIENT_ID.
+ */
+const PLATFORM_DISCORD_APP_IDS: Record<string, readonly string[]> = {
+  spotify: ['1513867708851294299'],
+  youtube: ['1513868157897412759'],
+  youtube_music: ['1513868157897412759'],
+  soundcloud: ['1513868059948093501'],
+  apple_music: ['1530715817334018189'],
+  kick: ['1519781115144044636'],
+  twitch: ['1489626057588998164'],
 };
 
 /**
@@ -2757,6 +2770,11 @@ export class VybecordBackend extends EventEmitter {
       || DEFAULT_DISCORD_APP_ID;
   }
 
+  /** The applications a source's card is at home on: its platform's, else the default. */
+  private ownAppIds(source: string): readonly string[] {
+    return PLATFORM_DISCORD_APP_IDS[source] ?? [this.defaultAppId()];
+  }
+
   /**
    * Which application a presence should publish this source under.
    *
@@ -2774,28 +2792,27 @@ export class VybecordBackend extends EventEmitter {
    */
   private targetAppIdFor(slot: PresenceSlot, source: string): string {
     const def = this.defaultAppId();
-    // In order of preference: the platform's own application; the default
-    // one — which is what makes a second stream of the same site work with
-    // nothing configured; and last, any other platform's application that
-    // nothing is on. The card names its own
-    // platform whichever it lands on (see borrowed_app in getRpcConfig), so
-    // four streams of one site fit out of the box.
-    const options = [...new Set([
-      PLATFORM_DISCORD_APP_IDS[source] || def,
-      def,
-      ...Object.values(PLATFORM_DISCORD_APP_IDS),
-    ])];
+    // In order of preference: the platform's own applications; the default
+    // one — which is what makes a second stream of the same site work when
+    // the platform has no application left; and last, any other platform's
+    // application that nothing is on. The card names its own platform
+    // in the header whichever it lands on (see borrowed_app in getRpcConfig),
+    // but not in Discord's "Active Now" list, which shows the application's
+    // icon: hence the tiers, see pickApplication.
+    const tiers = [
+      this.ownAppIds(source),
+      [def],
+      Object.values(PLATFORM_DISCORD_APP_IDS).flat(),
+    ];
+    const options = applicationOrder(tiers);
     if (slot.index === 0) return options[0];
     // Both the application a higher card is on and the one it is moving to
     // are its: joining the one it is leaving would put both cards on one
     // socket for the length of the debounce, each overwriting the other.
     const higher = this.slots.slice(0, slot.index);
     const taken = (id: string) => !!id && higher.some(s => id === s.appId || id === s.pendingAppId);
-    // Settled once, not chased: a card already on an application it may use
-    // stays there when a better-ranked one frees up. Every move is a second
-    // and a half off the profile, and the header names the platform anyway.
-    if (slot.appId && options.includes(slot.appId) && !taken(slot.appId)) return slot.appId;
-    for (const id of options) if (!taken(id)) return id;
+    const picked = pickApplication(tiers, slot.appId, taken);
+    if (picked) return picked;
     // A higher card is on its way off one of these: the re-pick its switch
     // triggers lands this card there a moment later. Nothing to warn about.
     if (options.some(id => higher.some(s => s.pendingAppId && id === s.appId && id !== s.pendingAppId))) return '';
@@ -3049,7 +3066,7 @@ export class VybecordBackend extends EventEmitter {
   private getRpcConfig(slot: PresenceSlot): Record<string, unknown> {
     const cfg = this.config.getAll();
     const source = slot.track?.media_source || '';
-    const ownApp = PLATFORM_DISCORD_APP_IDS[source] || this.defaultAppId();
+    const ownApps = this.ownAppIds(source);
     return {
       // Each card has its own lyrics switch — the one setting that is per
       // position rather than per app, because "lyrics on the song, not on the
@@ -3059,7 +3076,7 @@ export class VybecordBackend extends EventEmitter {
       // free platform's — the card would be headed by that
       // application's name. Told so, the engine puts the platform's name in
       // the header itself.
-      borrowed_app: !!slot.appId && slot.appId !== ownApp,
+      borrowed_app: !!slot.appId && !ownApps.includes(slot.appId),
       rpc_button1_label: cfg.rpc_button1_label,
       rpc_button1_url: cfg.rpc_button1_url,
       rpc_button2_label: PLATFORM_BUTTON_LABEL,
