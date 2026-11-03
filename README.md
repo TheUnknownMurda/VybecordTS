@@ -241,7 +241,7 @@ When several players are active, the highest-ranked one wins:
 | 6 | YouTube, Twitch, Kick (identified browser tab) |
 | 5 | VLC, foobar2000, MusicBee, AIMP, Winamp, MediaMonkey |
 | 1 | Any other app, or a browser tab whose site could not be identified |
-| Lowest | A Twitch or Kick channel that is offline: it only takes a card nothing else wants |
+| Lowest | A Twitch or Kick channel that is offline: it only takes a card nothing else wants, and none at all with **Offline channels** off in Settings → Detection |
 
 Windows Media Player (both the classic and the new app), Groove Music, Movies & TV and the Microsoft Store SoundCloud app are never announced. That SoundCloud app reports no position or duration, so use SoundCloud in a browser with the extension instead.
 
@@ -406,6 +406,7 @@ The second presence button is fixed. It links to what is playing and is labelled
 | --- | --- | --- | --- |
 | `detect_all_media` | `true` | boolean | Detect everything (off = dedicated music apps only) |
 | `detect_spotify`, `detect_apple_music`, `detect_youtube`, `detect_soundcloud`, `detect_browser`, `detect_twitch`, `detect_kick`, `detect_other_apps` | `true` | boolean | Per-platform switches |
+| `show_offline_channels` | `true` | boolean | Offline channels (off = a Twitch or Kick tab on an offline channel shows nothing) |
 
 **Integrations** (Settings → Integrations)
 

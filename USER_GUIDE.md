@@ -143,7 +143,7 @@ Even without it, the track and artist are parsed with SoundCloud's conventions i
 With the extension, a Twitch or Kick tab gets a card for whatever it is on:
 
 - **A live channel** — the channel, the stream's title, the category, and how long it has been live.
-- **An offline channel** — the channel and **Offline**, with its last stream's title on the cover. It only takes a card nothing else wants, so music always comes first.
+- **An offline channel** — the channel and **Offline**, with its last stream's title on the cover. It only takes a card nothing else wants, so music always comes first. To have such a tab show nothing at all, turn off **Offline channels** under **Settings → Detection**.
 - **A past broadcast or a clip** — the channel, the video's title and a progress bar. These used to show up as YouTube.
 
 The channel's name and picture come from Twitch itself (and from Kick's own site on Kick), so a card no longer opens on somebody else's name or on your own avatar while the page loads. After updating Vybecord, click the reload arrow on the extension in your browser's extensions page so it picks up the new version.

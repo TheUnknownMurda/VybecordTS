@@ -496,6 +496,8 @@ function detectionCat(body) {
       cfg('detect_twitch', true) !== false, (v) => put('detect_twitch', v)),
     toggleRow('Kick', 'Live streams, reported by the browser extension.',
       cfg('detect_kick', true) !== false, (v) => put('detect_kick', v)),
+    toggleRow('Offline channels', 'A Twitch or Kick tab left on a channel that is not streaming shows an Offline card, below anything playing. Off, that tab shows nothing.',
+      cfg('show_offline_channels', true) !== false, (v) => put('show_offline_channels', v)),
     toggleRow('Other desktop apps', 'VLC, foobar2000, MusicBee, Deezer, Tidal, Bandcamp and friends.',
       cfg('detect_other_apps', true) !== false, (v) => put('detect_other_apps', v)),
   ], 'Vybecord sees any app that publishes to the Windows media session API — the same one the volume overlay uses. These switches decide which of those it announces.'));

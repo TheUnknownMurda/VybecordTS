@@ -20,6 +20,9 @@ const DEFAULTS: VybecordConfig = {
   detect_twitch: true,
   detect_browser: true,
   detect_other_apps: true,
+  // The Offline card a Twitch or Kick tab gets on a channel that is not
+  // streaming. Off, for people who would rather such a tab showed nothing.
+  show_offline_channels: true,
   filter_spotify_ads: true,
   /** Listen for pushes from the browser extension (opens 127.0.0.1:8888). */
   extension_enabled: true,
@@ -142,6 +145,7 @@ export const CONFIG_SCHEMA: Record<string, FieldSpec> = {
   detect_twitch: { type: 'boolean' },
   detect_browser: { type: 'boolean' },
   detect_other_apps: { type: 'boolean' },
+  show_offline_channels: { type: 'boolean' },
   filter_spotify_ads: { type: 'boolean' },
   extension_enabled: { type: 'boolean' },
   discord_app_id: { type: 'string', maxLength: 32 },

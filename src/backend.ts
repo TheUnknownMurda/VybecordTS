@@ -993,6 +993,10 @@ export class VybecordBackend extends EventEmitter {
       for (const track of tracks) {
         const service = track.media_source;
         if (!this.isPinnedSource(service) && this.config.get(spec.configKey) === false) continue;
+        // Switched off, a tab on an offline channel shows nothing at all rather
+        // than an Offline card. A pin does not waive it: there is nothing
+        // playing there to pin.
+        if (track.context_type === 'offline' && this.config.get('show_offline_channels') === false) continue;
         out.push({
           track,
           service,

@@ -143,6 +143,9 @@ export interface VybecordConfig {
   detect_twitch: boolean;
   detect_browser: boolean;
   detect_other_apps: boolean;
+  /** A Twitch or Kick tab on a channel that is not streaming gets an Offline
+   *  card, ranked below everything; false, the tab shows nothing. */
+  show_offline_channels: boolean;
   /** Hide the presence while Spotify plays an advertisement. Heuristic — see
    *  looksLikeSpotifyAd() in native-media-source.ts. */
   filter_spotify_ads: boolean;
