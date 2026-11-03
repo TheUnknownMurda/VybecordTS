@@ -101,6 +101,24 @@ function isYouTubeLike(source: string): boolean {
   return source === 'youtube' || source === 'youtube_music' || source.startsWith('browser_');
 }
 
+/**
+ * Whether a custom-lyrics entry's names and a track's could be the same song.
+ *
+ * A substring test in both directions on both fields, because one side holds
+ * the player's names and the other the imported ones — a YouTube title like
+ * "Artist - Song (Official Video)" against an imported "Song" — and neither is
+ * reliably the longer. An empty side would match everything, so it matches
+ * nothing.
+ */
+function namesOverlap(track: string, artist: string, otherTrack: string, otherArtist: string): boolean {
+  const t = track.trim().toLowerCase();
+  const a = artist.trim().toLowerCase();
+  const ot = otherTrack.trim().toLowerCase();
+  const oa = otherArtist.trim().toLowerCase();
+  if (!t || !a || !ot || !oa) return false;
+  return (ot.includes(t) || t.includes(ot)) && (oa.includes(a) || a.includes(oa));
+}
+
 /** Settings that change where lyrics come from: a track already playing is looked up again. */
 const LYRICS_SOURCE_KEYS = new Set(['cc_enabled', 'cc_lang', 'cc_cookies_file', 'lrclib_dump_path']);
 /** Settings that change which translations a card needs warmed. */
@@ -2320,23 +2338,33 @@ export class VybecordBackend extends EventEmitter {
    * the very same entry did.
    */
   private evictCacheFor(track: string, artist: string): number {
-    const trackLow = track.trim().toLowerCase();
-    const artistLow = artist.trim().toLowerCase();
-    // An empty side substring-matches everything and would clear the whole cache.
-    if (!trackLow || !artistLow) return 0;
     let dropped = 0;
     for (const key of this.lyricsCache.keys()) {
       // Cache key format: "id|track_name|artist_name|duration_ms"
-      const parts = key.toLowerCase().split('|');
-      if (parts.length < 3) continue;
-      const cachedTrack = parts[1];
-      const cachedArtist = parts[2];
-      if (!cachedTrack.includes(trackLow) && !trackLow.includes(cachedTrack)) continue;
-      if (!cachedArtist.includes(artistLow) && !artistLow.includes(cachedArtist)) continue;
+      const parts = key.split('|');
+      if (parts.length < 3 || !namesOverlap(track, artist, parts[1], parts[2])) continue;
       this.lyricsCache.delete(key);
       dropped++;
     }
     return dropped;
+  }
+
+  /**
+   * Look the playing track up again on every presence an imported entry names.
+   *
+   * After import, edit and delete alike. Import used to re-fetch every presence
+   * with nothing cached — every stream and every song without lyrics, whether
+   * or not the entry was theirs — while an edit or a delete re-fetched nothing,
+   * so re-timing the song playing in My lyrics changed nothing on the card
+   * until it was played again.
+   */
+  private refetchPlayingFor(names: { track: string; artist: string }[], why: string): void {
+    for (const slot of this.slots) {
+      const t = slot.track;
+      if (!t || !names.some(n => namesOverlap(n.track, n.artist, t.track_name, t.artist_name))) continue;
+      log.info(`[${why}] The playing track's lyrics changed — looking it up again [${slot.name}]`);
+      this.onNewTrack(slot, t).catch(e => log.error(`[${why}] Lyrics lookup failed: ${e}`));
+    }
   }
 
   importCustomLyrics(data: { track: string; artist: string; album: string; duration?: number; lrc: string }): number {
@@ -2346,13 +2374,7 @@ export class VybecordBackend extends EventEmitter {
     // Evict cached results so the new lyrics are picked up immediately
     const dropped = this.evictCacheFor(data.track, data.artist);
     if (dropped > 0) log.info(`[IMPORT] Evicted ${dropped} stale cache entries`);
-    // If a track is currently playing and its cache was evicted, re-fetch lyrics
-    for (const slot of this.slots) {
-      if (slot.track && !this.lyricsCache.has(slot.cacheKey)) {
-        log.info(`[IMPORT] Current track cache evicted — triggering re-fetch [${slot.name}]`);
-        this.onNewTrack(slot, slot.track).catch(() => {});
-      }
-    }
+    this.refetchPlayingFor([{ track: data.track, artist: data.artist }], 'IMPORT');
     return trackId;
   }
 
@@ -2367,13 +2389,20 @@ export class VybecordBackend extends EventEmitter {
   }
 
   updateCustomLyricsEntry(trackId: number, data: { track_name?: string; artist_name?: string; album_name?: string; duration?: number | null; synced_lyrics?: string }): boolean {
+    // The names before the edit too: a rename moves the entry off the track
+    // it used to answer for, and that track's cache is just as stale.
+    const before = getCustomLyrics(trackId);
     const ok = updateCustomLyrics(trackId, data);
     if (!ok) return false;
     // Read the saved names once. This lookup used to sit inside the cache loop,
     // so a full cache meant fifty identical SQL round-trips to answer one
     // question that could not change between iterations.
     const entry = getCustomLyrics(trackId);
-    if (entry) this.evictCacheFor(entry.track_name, entry.artist_name);
+    const names = [before, entry]
+      .filter((e): e is NonNullable<typeof e> => !!e)
+      .map(e => ({ track: e.track_name, artist: e.artist_name }));
+    for (const n of names) this.evictCacheFor(n.track, n.artist);
+    this.refetchPlayingFor(names, 'EDIT');
     return true;
   }
 
@@ -2381,7 +2410,10 @@ export class VybecordBackend extends EventEmitter {
     // Read before deleting — afterwards there is nothing left to name.
     const entry = getCustomLyrics(trackId);
     const ok = deleteCustomLyrics(trackId);
-    if (ok && entry) this.evictCacheFor(entry.track_name, entry.artist_name);
+    if (ok && entry) {
+      this.evictCacheFor(entry.track_name, entry.artist_name);
+      this.refetchPlayingFor([{ track: entry.track_name, artist: entry.artist_name }], 'DELETE');
+    }
     return ok;
   }
 
