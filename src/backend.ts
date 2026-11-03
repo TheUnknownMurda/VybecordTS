@@ -502,14 +502,21 @@ export class VybecordBackend extends EventEmitter {
 
     // 0. Init optional enhancements
     let localDbInitialized = false;
+    // Cleared once the race is decided: left armed, it fired thirty seconds
+    // into every session and rejected a promise nothing was listening to.
+    let dbTimeout: ReturnType<typeof setTimeout> | undefined;
     try {
       localDbInitialized = await Promise.race([
         initLocalDb(this.configDir, this.config.get('lrclib_dump_path'), this.lrclibWorkerPath),
-        new Promise<boolean>((_, reject) => setTimeout(() => reject(new Error('Database initialization timeout (30s)')), 30000))
+        new Promise<boolean>((_, reject) => {
+          dbTimeout = setTimeout(() => reject(new Error('Database initialization timeout (30s)')), 30000);
+        }),
       ]);
     } catch (e) {
       log.error(`Local database initialization failed: ${e}`);
       log.error('Imported lyrics will not be available. Run: npm rebuild better-sqlite3');
+    } finally {
+      clearTimeout(dbTimeout);
     }
 
     if (localDbInitialized) {
@@ -3315,24 +3322,26 @@ export class VybecordBackend extends EventEmitter {
     // 3. Stop lyrics engines
     for (const slot of this.slots) slot.engine.stop();
 
-    // 4. Clear Discord presence and disconnect (waits for Discord ACK before closing pipes)
-    await this.pool.closeAll();
-
-    // 5. Stop the media source
-    this.media?.stop();
-
-    // 6. Stop config watcher
-    this.config.close();
-
-    // 7. Save listening history + finalize scrobble
+    // 4. Save listening history, finalize the scrobble and keep the lyrics
+    // found this session — before anything that waits on Discord. They used
+    // to come after the clear below, which waits up to two seconds for Discord
+    // to answer, and a Windows shutdown or a forced quit inside that window
+    // lost the song that was playing from the history and Last.fm.
     scrobbleTrackEnd();
     historyTrackEnd();
+    this.lyricsCache.flush();
+
+    // 5. Clear Discord presence and disconnect (waits for Discord ACK before closing pipes)
+    await this.pool.closeAll();
+
+    // 6. Stop the media source
+    this.media?.stop();
+
+    // 7. Stop config watcher
+    this.config.close();
 
     // 8. Close local lyrics database
     closeLocalDb();
-
-    // 9. Keep the lyrics found this session for the next one
-    this.lyricsCache.flush();
 
     log.info('All services stopped cleanly.');
   }
