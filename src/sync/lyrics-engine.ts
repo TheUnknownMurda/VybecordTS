@@ -791,10 +791,12 @@ export class LyricsEngine {
         log.info(`[DRIFT] ${drift.toFixed(0)}ms (engine=${currentElapsed.toFixed(0)} vs player=${progressMs}) — push recalib`);
       }
 
-      // Reschedule from new position
-      const baseMs = this.isCC ? 50 : BASE_OFFSET_MS;
-      const offset = baseMs + this.measuredLatencyMs;
-      const newIdx = findLyricIndex(this.lyrics, progressMs + offset);
+      // Reschedule from new position. The offsets count here as everywhere
+      // else: without them a recalibration — every half second of drift, for a
+      // push source — put the card a line ahead of where a user's "lyrics
+      // later" offset holds it, and the timer, which never moves backwards,
+      // could not take that line back.
+      const newIdx = findLyricIndex(this.lyrics, progressMs + this.positionOffsetMs());
       if (newIdx !== this.currentIdx) this.currentIdx = newIdx;
       this.resetCoverage();
       this.forceRpcPush();
@@ -825,10 +827,8 @@ export class LyricsEngine {
       this.lastRecalibTime = now;
       this.anchorClock(progressMs);
 
-      // Reschedule from new position
-      const baseMs = this.isCC ? 50 : BASE_OFFSET_MS;
-      const offset = baseMs + this.measuredLatencyMs;
-      const newIdx = findLyricIndex(this.lyrics, progressMs + offset);
+      // Reschedule from new position (offsets included — see the push branch above)
+      const newIdx = findLyricIndex(this.lyrics, progressMs + this.positionOffsetMs());
       if (newIdx !== this.currentIdx) this.currentIdx = newIdx;
       this.resetCoverage();
       this.forceRpcPush();
@@ -920,6 +920,11 @@ export class LyricsEngine {
   /** Get the total combined offset (auto + user). */
   private getTotalOffsetMs(): number {
     return this.getUserOffsetMs() + this.autoOffsetMs;
+  }
+
+  /** How far ahead of the clock a line is looked up: display delay, measured latency, offsets. */
+  private positionOffsetMs(): number {
+    return (this.isCC ? 50 : BASE_OFFSET_MS) + this.measuredLatencyMs + this.getTotalOffsetMs();
   }
 
   /**
