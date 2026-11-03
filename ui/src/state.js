@@ -231,7 +231,7 @@ export async function init() {
     updateSlot(slot, { lyrics: { ...prev, lines: plain?.lines ?? [] } });
   });
   api.on('activityUpdate', (activity, slot) => updateSlot(slot, { activity }));
-  api.on('configUpdate', (config) => set({ config }));
+  api.on('configUpdate', (config) => set({ config: withPending(config) }));
   api.on('statusUpdate', (status) => {
     set({ status: { ...state.status, ...status } });
     if (status && 'preferredPlayer' in status) set({ preferredPlayer: status.preferredPlayer });
@@ -270,10 +270,43 @@ export async function init() {
   });
 }
 
+/*
+ * Keys written by a save the backend has not answered yet, with the value
+ * written and the save that wrote it.
+ *
+ * Every config the backend sends — the configUpdate event and the reply to a
+ * save alike — is the whole config as of that save. Two switches flipped in
+ * quick succession therefore had the first one's answer, which does not know
+ * about the second, put the second switch back for a moment; Settings rebuilds
+ * on every change, so it visibly flicked back and could swallow a click.
+ * Whatever is still in flight is laid over what arrives, until its own answer.
+ */
+const pendingConfig = new Map();
+let saveSeq = 0;
+
+/** A config from the backend, with the saves still in flight laid over it. */
+function withPending(config) {
+  if (!pendingConfig.size) return config;
+  const out = { ...config };
+  for (const [key, p] of pendingConfig) out[key] = p.value;
+  return out;
+}
+
 /** Write config keys through to the backend, updating local state optimistically. */
 export async function saveConfig(patch) {
+  const seq = ++saveSeq;
+  for (const [key, value] of Object.entries(patch)) pendingConfig.set(key, { value, seq });
   set({ config: { ...state.config, ...patch } });
-  const fresh = await api.setConfig(patch);
-  set({ config: fresh });
+  let fresh;
+  try {
+    fresh = await api.setConfig(patch);
+  } finally {
+    // Answered, so these keys stop overriding — unless a later save has
+    // written them again since, which still stands.
+    for (const key of Object.keys(patch)) {
+      if (pendingConfig.get(key)?.seq === seq) pendingConfig.delete(key);
+    }
+  }
+  set({ config: withPending(fresh) });
   return fresh;
 }
