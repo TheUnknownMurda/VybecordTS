@@ -65,6 +65,15 @@ export interface HistoryEntry {
   kind?: 'stream';
 }
 
+/** Whether a row off disk has what the listing and the stats read: names, a date, a duration. */
+function isHistoryEntry(e: unknown): e is HistoryEntry {
+  const r = e as Partial<HistoryEntry> | null;
+  return !!r && typeof r === 'object'
+    && typeof r.track === 'string' && typeof r.artist === 'string'
+    && typeof r.startedAt === 'string' && !Number.isNaN(Date.parse(r.startedAt))
+    && typeof r.listenedMs === 'number' && Number.isFinite(r.listenedMs);
+}
+
 /** What historyTrackStart() needs to know about a play. */
 export interface TrackStart {
   track: string;
@@ -131,7 +140,12 @@ export function initHistory(configDir: string): void {
       const raw = fs.readFileSync(historyPath, 'utf-8');
       const arr = JSON.parse(raw);
       if (Array.isArray(arr)) {
-        entries = arr.slice(-MAX_ENTRIES);
+        // Only rows the stats can read. One without a track name or a date
+        // threw inside getWrappedStats, and the whole Activity page then said
+        // "Could not compute" for the sake of a single bad line.
+        const valid = arr.filter(isHistoryEntry);
+        if (valid.length < arr.length) log.warn(`Skipped ${arr.length - valid.length} unreadable history entries`);
+        entries = valid.slice(-MAX_ENTRIES);
         log.info(`Loaded ${entries.length} history entries`);
       }
     }
