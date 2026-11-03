@@ -63,6 +63,8 @@
     }
     const BASE_INTERVAL_MS = 2500;
     const MAX_INTERVAL_MS = 15000;
+    /** How often the URL is read to notice a move to another page — see onReady. */
+    const URL_CHECK_MS = 250;
 
     // ── State ──
     let pushTimer = null;
@@ -759,15 +761,17 @@
     // Wait for page to be ready
     function onReady() {
         init();
-        // Kick SPA: report a new page as soon as the URL changes.
+        // Kick SPA: report a new page as soon as the URL changes. On a timer
+        // rather than a MutationObserver over the whole document, which ran on
+        // every chat message in every open tab — see the same spot in twitch.js.
         let lastUrl = location.href;
-        new MutationObserver(() => {
+        setInterval(() => {
             const currentUrl = location.href;
             if (currentUrl !== lastUrl) {
                 lastUrl = currentUrl;
                 setTimeout(periodicPush, 500);
             }
-        }).observe(document, { subtree: true, childList: true });
+        }, URL_CHECK_MS);
     }
 
     if (document.readyState === 'complete' || document.readyState === 'interactive') {

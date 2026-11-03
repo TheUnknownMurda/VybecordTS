@@ -57,6 +57,8 @@
     }
     const BASE_INTERVAL_MS = 2500;
     const MAX_INTERVAL_MS = 15000;
+    /** How often the URL is read to notice a move to another page — see onReady. */
+    const URL_CHECK_MS = 250;
 
     /**
      * First path segments that are Twitch's own pages, not a channel.
@@ -393,8 +395,15 @@
         init();
         // Twitch SPA: report a new page as soon as the URL changes. The stream
         // start estimate belongs to the previous channel, so it goes too.
+        //
+        // Read on a short timer rather than from a MutationObserver over the
+        // whole document: a busy chat adds hundreds of nodes a second, and the
+        // observer ran on every one of them, in every open tab, to compare one
+        // string. The page's own pushState cannot be hooked from here — a
+        // content script lives in its own world — so a timer it is: four
+        // comparisons a second, whatever the chat does.
         let lastUrl = location.href;
-        new MutationObserver(() => {
+        setInterval(() => {
             const currentUrl = location.href;
             if (currentUrl !== lastUrl) {
                 lastUrl = currentUrl;
@@ -402,7 +411,7 @@
                 reportedStartFor = '';
                 setTimeout(periodicPush, 500);
             }
-        }).observe(document, { subtree: true, childList: true });
+        }, URL_CHECK_MS);
     }
 
     if (document.readyState === 'complete' || document.readyState === 'interactive') {
