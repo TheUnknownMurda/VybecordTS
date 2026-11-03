@@ -1337,7 +1337,11 @@ export class LyricsEngine {
      */
     const textChanged = current !== this.lastCurrentText || next !== this.lastNextText;
     const heartbeatDue = now - this.lastRpcPushTime >= RPC_HEARTBEAT_MS;
-    if (tooSoon && !idxChanged && !textChanged && !heartbeatDue) {
+    // A forced push is let through by name, not only by the zeroed
+    // lastUpdateTime: that reads as "long ago" only once the process has been
+    // up longer than the interval — the same performance.now() origin trap
+    // pushRpcNow describes — so in an app's first moments it was dropped here.
+    if (tooSoon && !idxChanged && !textChanged && !heartbeatDue && !this.forceRpc) {
       return;
     }
 
