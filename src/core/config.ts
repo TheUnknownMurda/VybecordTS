@@ -494,6 +494,20 @@ export class ConfigManager {
   }
 
   private reload(): void {
+    /*
+     * A file that does not parse is a hand edit caught half way — Notepad
+     * empties the file before it writes it — not a reason to forget every
+     * setting. loadOrCreate() answers such a file with the defaults, which is
+     * right at startup and wrong here: the app went on with defaults in memory,
+     * and its next save of any setting wrote them over the user's file. The
+     * watcher fires again when the edit is complete.
+     */
+    try {
+      JSON.parse(fs.readFileSync(this.configPath, 'utf-8'));
+    } catch (e) {
+      log.warn(`config.json does not parse (${(e as Error).message}) — keeping the settings in use until it does`);
+      return;
+    }
     this.config = this.loadOrCreate();
     log.info('Config reloaded from disk');
     if (this.onChange) {
