@@ -110,8 +110,12 @@ async function store(request, env, key, ext) {
   const declared = Number(request.headers.get('content-length'));
   if (declared > MAX_BYTES) return text(413, 'Too large');
 
-  const bytes = new Uint8Array(await request.arrayBuffer());
-  if (!bytes.length || bytes.length > MAX_BYTES) return text(413, 'Bad size');
+  // Read with a cap rather than arrayBuffer(), which buffers the whole body
+  // before anything can look at its size: a body sent without a length
+  // (chunked) slipped past the check above and could be made as large as the
+  // Worker's memory.
+  const bytes = await readCapped(request, MAX_BYTES);
+  if (!bytes?.length) return text(413, 'Bad size');
 
   // The type comes from the bytes. A request that says "jpg" over a ZIP is
   // rejected rather than stored and served as an image.
@@ -144,6 +148,31 @@ async function rateLimited(request, env) {
   const ip = request.headers.get('cf-connecting-ip') || 'unknown';
   const { success } = await env.UPLOAD_LIMIT.limit({ key: ip });
   return !success;
+}
+
+/** The request body, or null as soon as it passes `max` bytes. */
+async function readCapped(request, max) {
+  const reader = request.body?.getReader();
+  if (!reader) return new Uint8Array(0);
+  const chunks = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return out;
 }
 
 /** Identify an image from its leading bytes. Returns 'jpg', 'png' or null. */
