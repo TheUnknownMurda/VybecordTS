@@ -1809,6 +1809,31 @@ export class VybecordBackend extends EventEmitter {
     slot.fetchAbort = new AbortController();
     const { signal } = slot.fetchAbort;
 
+    /*
+     * The slot is this track's before anything is awaited.
+     *
+     * The engine start and the cache key used to come after the local-art
+     * search below, which can walk the Music folder. A song skipped during that
+     * walk then started its engine over the next one's when the walk returned,
+     * leaving the card on the old song for good; and Spotify's lyrics for the
+     * new song, pushed meanwhile, were cached under the old song's key — on
+     * disk, so the old song showed them the next time it played.
+     */
+    const cacheKey = `${trackData.track_id}|${trackData.track_name}|${trackData.artist_name}|${trackData.duration_ms}`;
+    slot.cacheKey = cacheKey;
+
+    // SMTC browser sources often report progress clamped to 0 or duration.
+    // Sanitize before starting the engine to avoid initializing at a bogus position.
+    const src = trackData.media_source || '';
+    if (slot.isWebSource && trackData.duration_ms > 0) {
+      if (trackData.progress_ms >= trackData.duration_ms - 1000 || trackData.progress_ms <= 0) {
+        trackData.progress_ms = 0;
+      }
+    }
+
+    // Phase 1: INSTANT — show track info with no lyrics (< 1ms)
+    slot.engine.startTrack([], trackData, rpcConfig);
+
     // Phase 0: Extract embedded album art from local files (Apple Music, Spotify local files, etc.)
     // SMTC often doesn't provide thumbnails for local music files, or provides incorrect ones.
     // Spotify local files have spotify:localfileimage: URIs that Discord can't access.
@@ -1829,19 +1854,23 @@ export class VybecordBackend extends EventEmitter {
           const encodedPath = trackData.album_art_url.replace('spotify:localfileimage:', '');
           const filePath = decodeURIComponent(encodedPath);
           log.info(`[ART] Trying direct path extraction from: ${filePath}`);
-          artFound = await extractArtFromPath(filePath);
+          artFound = await extractArtFromPath(filePath, signal);
         } catch (e) {
           log.debug(`[ART] Direct path extraction failed: ${e}`);
         }
       }
 
       // Fallback: search in Music directories (for Apple Music local files)
-      if (!artFound) {
+      if (!artFound && !signal.aborted) {
         artFound = await extractLocalArt(
           trackData.track_name, trackData.artist_name,
-          trackData.album_name, slot.trackKey,
+          trackData.album_name, slot.trackKey, signal,
         );
       }
+
+      // Skipped during the search: the next track's own onNewTrack owns the
+      // slot, the engine and the thumbnail now.
+      if (signal.aborted || slot.trackKey !== this.buildTrackKey(trackData)) return;
 
       if (artFound) {
         trackData.album_art_url = '/api/thumbnail';
@@ -1855,18 +1884,6 @@ export class VybecordBackend extends EventEmitter {
         log.debug(`[ART] No local art found, will use SMTC thumbnail if available`);
       }
     }
-
-    // SMTC browser sources often report progress clamped to 0 or duration.
-    // Sanitize before starting the engine to avoid initializing at a bogus position.
-    const src = trackData.media_source || '';
-    if (slot.isWebSource && trackData.duration_ms > 0) {
-      if (trackData.progress_ms >= trackData.duration_ms - 1000 || trackData.progress_ms <= 0) {
-        trackData.progress_ms = 0;
-      }
-    }
-
-    // Phase 1: INSTANT — show track info with no lyrics (< 1ms)
-    slot.engine.startTrack([], trackData, rpcConfig);
 
     /*
      * Resolve a cover whenever what we hold is not something Discord can fetch.
@@ -1897,9 +1914,7 @@ export class VybecordBackend extends EventEmitter {
       this.resolveDiscordArt(slot, trackData, signal, allowUpload);
     }
 
-    // Phase 2: ASYNC — fetch lyrics in background
-    const cacheKey = `${trackData.track_id}|${trackData.track_name}|${trackData.artist_name}|${trackData.duration_ms}`;
-    slot.cacheKey = cacheKey;
+    // Phase 2: ASYNC — fetch lyrics in background (cacheKey was set before Phase 0)
 
     // Preserve original album_art_url to prevent losing local art during lyrics search
     const originalAlbumArtUrl = trackData.album_art_url;

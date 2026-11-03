@@ -28,6 +28,12 @@ const ART_CACHE_MAX = 500;
 
 // File index: normalized filename → full path (built once, refreshed on miss)
 let fileIndex: Map<string, string[]> | null = null;
+/** Date.now() of the last walk of the Music folders. */
+let fileIndexAt = 0;
+/** The walk under way, shared by every track that asks for one meanwhile. */
+let indexBuild: Promise<void> | null = null;
+/** How stale the index may be before a miss is allowed to walk the folders again. */
+const INDEX_REFRESH_MS = 10 * 60_000;
 
 // Dynamic import for music-metadata (ES module compatibility with pkg)
 let parseFile: any = null;
@@ -40,25 +46,36 @@ async function getParseFile() {
 }
 
 /**
+ * Write the cover embedded in one audio file to the thumbnail files.
+ *
+ * Not once `signal` has aborted: the thumbnail is shared by every track, and a
+ * track skipped while its file was being parsed used to land its cover on the
+ * one playing after it. Throws when the file cannot be parsed, so each caller
+ * decides whether that is worth a word in the log.
+ */
+async function writeCoverFrom(filePath: string, signal?: AbortSignal): Promise<boolean> {
+  const parser = await getParseFile();
+  const metadata = await parser(filePath, { skipCovers: false });
+  // The first picture is the front cover in every tagger that writes more than one.
+  const pic = metadata.common.picture?.[0];
+  if (!pic || signal?.aborted) return false;
+  await fs.writeFile(THUMB_PATH, pic.data);
+  await fs.writeFile(SMTC_THUMB_PATH, pic.data);
+  log.info(`Extracted art from: ${path.basename(filePath)} (${pic.data.length} bytes)`);
+  return true;
+}
+
+/**
  * Extract album art directly from a specific file path.
  * Used when we already know the file path (e.g., from spotify:localfileimage: URL).
  */
-export async function extractArtFromPath(filePath: string): Promise<boolean> {
+export async function extractArtFromPath(filePath: string, signal?: AbortSignal): Promise<boolean> {
   try {
-    const parser = await getParseFile();
-    const metadata = await parser(filePath, { skipCovers: false });
-    const pictures = metadata.common.picture;
-    if (pictures && pictures.length > 0) {
-      const pic = pictures[0];
-      await fs.writeFile(THUMB_PATH, pic.data);
-      await fs.writeFile(SMTC_THUMB_PATH, pic.data);
-      log.info(`Extracted art from path: ${path.basename(filePath)} (${pic.data.length} bytes)`);
-      return true;
-    }
+    return await writeCoverFrom(filePath, signal);
   } catch (e) {
     log.debug(`Failed to extract art from ${filePath}: ${e}`);
+    return false;
   }
-  return false;
 }
 
 /**
@@ -71,6 +88,7 @@ export async function extractLocalArt(
   artistName: string,
   albumName: string,
   trackKey: string,
+  signal?: AbortSignal,
 ): Promise<boolean> {
   log.info(`[ART] Searching for art: track="${trackName}", artist="${artistName}", album="${albumName}"`);
 
@@ -93,60 +111,56 @@ export async function extractLocalArt(
     const musicDirs = getMusicDirs();
     log.debug(`[ART] Music directories: ${musicDirs.join(', ')}`);
 
-    if (!fileIndex) {
-      await buildFileIndex(musicDirs);
-    }
+    if (!fileIndex) await buildFileIndex(musicDirs);
+
+    /** The first candidate with a cover in it, written out; false with none. */
+    const tryCandidates = async (candidates: string[]): Promise<boolean> => {
+      for (const filePath of candidates) {
+        if (signal?.aborted) return false;
+        try {
+          log.debug(`[ART] Trying to extract from: ${path.basename(filePath)}`);
+          if (await writeCoverFrom(filePath, signal)) return true;
+        } catch (e) {
+          // File might be locked or corrupt — skip
+          log.debug(`[ART] Failed to extract from ${path.basename(filePath)}: ${e}`);
+        }
+      }
+      return false;
+    };
 
     // Search strategy:
     // 1. Exact match on filename containing track name
     // 2. Fuzzy match using artist + track name
     const candidates = findCandidates(trackName, artistName, albumName);
     log.info(`[ART] Found ${candidates.length} candidate files: ${candidates.map(p => path.basename(p)).join(', ')}`);
+    let found = await tryCandidates(candidates);
 
-    for (const filePath of candidates) {
-      try {
-        log.debug(`[ART] Trying to extract from: ${path.basename(filePath)}`);
-        const parser = await getParseFile();
-        const metadata = await parser(filePath, { skipCovers: false });
-        const pictures = metadata.common.picture;
-        if (pictures && pictures.length > 0) {
-          // Use the first (usually front cover) picture
-          const pic = pictures[0];
-          await fs.writeFile(THUMB_PATH, pic.data);
-          await fs.writeFile(SMTC_THUMB_PATH, pic.data);
-          artCache.set(trackKey, true);
-          log.info(`Extracted art from: ${path.basename(filePath)} (${pic.data.length} bytes)`);
-          evictOldest(artCache, ART_CACHE_MAX);
-          return true;
-        }
-      } catch (e) {
-        // File might be locked or corrupt — skip
-        log.debug(`[ART] Failed to extract from ${path.basename(filePath)}: ${e}`);
-        continue;
-      }
+    /*
+     * A miss rebuilds the index — at most once per INDEX_REFRESH_MS.
+     *
+     * It used to rebuild on every miss, and a miss is the normal answer for a
+     * song streamed from the catalogue, which has no file anywhere: every
+     * Apple Music track that was not a local file walked the whole Music
+     * folder again, and the card waited on the walk before it showed the
+     * track at all. A file added since the last walk is still found, within
+     * the refresh period.
+     */
+    if (!found && candidates.length === 0 && Date.now() - fileIndexAt > INDEX_REFRESH_MS && !signal?.aborted) {
+      log.debug('No candidates found, rebuilding file index...');
+      await buildFileIndex(musicDirs);
+      found = await tryCandidates(findCandidates(trackName, artistName, albumName));
     }
 
-    // If index miss, rebuild and retry once
-    if (candidates.length === 0 && fileIndex) {
-      log.debug('No candidates found, rebuilding file index...');
-      fileIndex = null;
-      await buildFileIndex(musicDirs);
-      const retry = findCandidates(trackName, artistName, albumName);
-      for (const filePath of retry) {
-        try {
-          const parser = await getParseFile();
-          const metadata = await parser(filePath, { skipCovers: false });
-          const pictures = metadata.common.picture;
-          if (pictures && pictures.length > 0) {
-            await fs.writeFile(THUMB_PATH, pictures[0].data);
-            await fs.writeFile(SMTC_THUMB_PATH, pictures[0].data);
-            artCache.set(trackKey, true);
-            log.info(`Extracted art (retry) from: ${path.basename(filePath)}`);
-            evictOldest(artCache, ART_CACHE_MAX);
-            return true;
-          }
-        } catch { continue; }
-      }
+    if (found) {
+      artCache.set(trackKey, true);
+      evictOldest(artCache, ART_CACHE_MAX);
+      return true;
+    }
+    // A skip is not a verdict on the track: drop the pending mark rather than
+    // remember "no art" for a lookup that never finished.
+    if (signal?.aborted) {
+      artCache.delete(trackKey);
+      return false;
     }
 
     artCache.set(trackKey, false);
@@ -178,21 +192,25 @@ function getMusicDirs(): string[] {
   return dirs;
 }
 
-/** Build a file index: normalized name → [full paths]. */
-async function buildFileIndex(dirs: string[]): Promise<void> {
-  const index = new Map<string, string[]>();
-  const visited = new Set<string>();
+/** Build a file index: normalized name → [full paths]. Two tracks asking at once share one walk. */
+function buildFileIndex(dirs: string[]): Promise<void> {
+  indexBuild ??= (async () => {
+    const index = new Map<string, string[]>();
+    const visited = new Set<string>();
 
-  for (const dir of dirs) {
-    try {
-      await indexDir(dir, index, visited, 0);
-    } catch {
-      // Directory might not exist
+    for (const dir of dirs) {
+      try {
+        await indexDir(dir, index, visited, 0);
+      } catch {
+        // Directory might not exist
+      }
     }
-  }
 
-  fileIndex = index;
-  log.info(`File index built: ${index.size} audio files`);
+    fileIndex = index;
+    fileIndexAt = Date.now();
+    log.info(`File index built: ${index.size} audio files`);
+  })().finally(() => { indexBuild = null; });
+  return indexBuild;
 }
 
 async function indexDir(
