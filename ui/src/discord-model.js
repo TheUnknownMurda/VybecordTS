@@ -72,9 +72,17 @@ export function presenceModel(activity, opts = {}) {
     time = { kind: 'elapsed', text: fmtClock(now - ts.start * 1000) };
   }
 
+  // Which field each line came from: the card editor on Now playing makes the
+  // first two one part and the cover text another, and an empty state field
+  // moves the cover text up to the second line.
+  const parts = [['details', a.details], ['state', a.state], ['large_text', assets.large_text]]
+    .map(([from, s]) => ({ from, text: field(s) }))
+    .filter((p) => p.text);
+
   return {
     header: name ? `${verb} ${name}` : verb,
-    lines: [a.details, a.state, assets.large_text].map(field).filter(Boolean),
+    lines: parts.map((p) => p.text),
+    parts,
     largeImage: https(assets.large_image),
     largeText: field(assets.large_text),
     smallImage: https(assets.small_image),

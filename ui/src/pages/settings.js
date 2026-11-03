@@ -11,18 +11,14 @@ import { el, toggleRow, selectRow, inputRow, toast } from '../util.js';
 import { state, subscribe, saveConfig } from '../state.js';
 import { goto } from '../router.js';
 import { discordPreview } from '../discord-card.js';
+// The card's choices live with the editor on Now playing, so both offer the same lists.
+import { ACTIVITY_TYPES, ACTIVITY_KEYS, STATUS_DISPLAY, ICON_MODES, ICON_KEYS } from '../card-editor.js';
 import { spicetifyCard } from './spicetify-card.js';
 import { updateCard } from './update-card.js';
 import { lastfmCard } from './lastfm-card.js';
 
 const api = window.vybecord;
 
-const ACTIVITY_TYPES = [[2, 'Listening to'], [0, 'Playing'], [3, 'Watching'], [5, 'Competing in']];
-const STATUS_DISPLAY = [
-  ['app', 'App name'], ['title', 'Track title'], ['title_artist', 'Title — Artist'],
-  ['artist_title', 'Artist — Title'], ['artist', 'Artist'], ['album', 'Album'],
-  ['details', 'Details field'], ['state', 'State field'], ['custom', 'Custom template'],
-];
 /** The row is already labelled "Away after": repeating it cut the Discord hint off in a 200px select. */
 const AWAY_DELAYS = [
   [5, '5 minutes'], [10, '10 minutes (Discord)'], [15, '15 minutes'],
@@ -34,26 +30,7 @@ const PRESENCE_COUNTS = [[1, 'One'], [2, 'Two'], [3, 'Three'], [4, 'Four'], [5, 
  * `show_lyrics` switch it always had, the others have their own.
  */
 const LYRICS_KEYS = ['show_lyrics', 'show_lyrics_2', 'show_lyrics_3', 'show_lyrics_4', 'show_lyrics_5'];
-/** The activity type per card; presence 1 keeps `rpc_activity_type`, the others may follow it (-1). */
-const ACTIVITY_KEYS = ['rpc_activity_type', 'rpc_activity_type_2', 'rpc_activity_type_3', 'rpc_activity_type_4', 'rpc_activity_type_5'];
 const presenceCount = () => Math.max(1, Math.min(5, Number(cfg('presence_count', 1)) || 1));
-
-/**
- * Small-icon styles. They are stored as separate booleans rather than one enum,
- * but only one can sensibly be on, so the UI presents them as a single choice
- * and clears the rest on change.
- */
-const ICON_MODES = [
-  ['', 'Platform default'], ['auto_icon_mode', 'Match the cover'],
-  ['dance_mode', 'Dance'], ['radiate_mode', 'Radiate'],
-  ['purple_rad_mode', 'Purple'], ['blue_rad_mode', 'Blue'], ['rouge_mode', 'Red'],
-  ['bleeding_mode', 'Bleeding'], ['random_icon_mode', 'Random each track'],
-  // The engine has always known this mode; the list simply never listed it, so
-  // it was the one icon nobody could pick.
-  ['lrc_off_mode', 'LRC off'],
-  ['hide_small_icon', 'No small icon'],
-];
-const ICON_KEYS = ICON_MODES.map(([k]) => k).filter(Boolean);
 
 const GUIDE_EN = 'https://github.com/TheUnknownMurda/VybecordTS/blob/main/USER_GUIDE.md';
 const GUIDE_FR = 'https://github.com/TheUnknownMurda/VybecordTS/blob/main/GUIDE_UTILISATEUR.md';

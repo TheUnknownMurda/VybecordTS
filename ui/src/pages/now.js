@@ -1,16 +1,27 @@
 /**
- * Now playing — the track, what Discord shows for it, and the live lyrics.
+ * Now playing — a mirror: what this window shows on the left, what Discord
+ * shows on the right, and between them the switches that decide what crosses.
  *
- * Two cards, top to bottom: the song together with its Discord card, then the
- * words. The player picker that used to be a page of its own is the Source
- * menu in the header — pinning is a decision about the presence on screen, so
- * it lives next to it.
+ * Stacked, the song, its Discord card and the lyrics read as three takes on
+ * one thing, and the switches that act on only one side — translate here or
+ * on Discord, lyrics on both — looked alike. Side by side, each control sits
+ * on the side it changes, and the seam says which way each switch reaches.
+ *
+ * The right side holds every card in play, the one on screen drawn whole and
+ * the others small; picking one is what points the left side at it. Its
+ * Source menu sits on it, since pinning is a decision about that card, and
+ * each part of it opens the settings behind that part — see card-editor.js.
+ * Why? lists what stands between the song and the card — see why.js.
  */
 
 import { el, $, fmtTime, setArt, platformInfo, toast, modal, BLANK_ART } from '../util.js';
-import { state, subscribe, setFocus, set, saveConfig } from '../state.js';
+import { state, subscribe, setFocus, set, saveConfig, MAX_SLOTS } from '../state.js';
 import { goto } from '../router.js';
-import { discordPreview } from '../discord-card.js';
+import { discordPreview, hiddenReason } from '../discord-card.js';
+import { presenceModel } from '../discord-model.js';
+import { diagnose, lyricsKey, whyPanel } from '../why.js';
+import { cardEditor } from '../card-editor.js';
+import { seam } from './seam.js';
 
 const api = window.vybecord;
 
@@ -66,118 +77,141 @@ function iconBtn(cls, glyph, label, props = {}) {
 }
 
 export function render(root) {
-  const preview = discordPreview({
-    onCustomize: () => goto('settings', { cat: 'presence' }),
-    actions: el('div', { class: 'qt-row', id: 'npQuick', role: 'group', 'aria-label': 'Quick switches' }),
+  // Customize goes in the card's own header — see cardShell() — so the
+  // preview is built without one. Its parts open their settings in place.
+  editor = cardEditor({ host: () => previewNode });
+  const preview = discordPreview({ edit: editor });
+  previewNode = preview.node;
+  pickerNode = sourcePicker();
+  cardsKey = '';
+
+  const why = whyPanel({
+    unpin: () => pin(null),
+    onToggle: (open) => {
+      const btn = $('#whyBtn');
+      btn?.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (!open && $('#whyPanel')?.contains(document.activeElement)) btn?.focus();
+    },
   });
+  const bridges = seam();
 
   const cover = el('div', { class: 'np-cover' });
   cover.innerHTML = ICONS.note;
   cover.append(el('img', { class: 'np-art', id: 'npArt', alt: '', src: BLANK_ART }));
 
-  root.replaceChildren(
-    el('div', { class: 'np-head' }, [
-      el('div', { id: 'npHeadLeft' }),
-      sourcePicker(),
-    ]),
+  root.replaceChildren(el('div', { class: 'mirror' }, [
+    el('section', { class: 'mir-side mir-you', 'aria-label': 'On your screen' }, [
+      el('div', { class: 'mir-head' }, [
+        el('h2', { class: 'eyebrow', text: 'On your screen' }),
+        // Which card this side is showing, once there are several to choose from.
+        el('span', { class: 'badge', id: 'mirWhich', hidden: true }),
+      ]),
 
-    /*
-     * The song and its Discord card are one card, split by a hairline: what
-     * is playing, then how it shows on a profile. The preview alone could not
-     * name the song — while lyrics run its big line is the lyric, and the title
-     * sits small in the header — and as two cards, the second one read as a
-     * repeat of the first. Stacked, never side by side: beside the track the
-     * preview's text got about 190px and wrapped six or seven times.
-     */
-    el('section', { class: 'card np-card', id: 'npCard', 'aria-label': 'Now playing' }, [
-      el('div', { class: 'np-track' }, [
-        cover,
-        el('div', { class: 'np-meta' }, [
-          // Polite, as the status line it replaced was: play, pause and going
-          // away are announced. Not the title, which changes with every track.
-          el('div', { class: 'np-state', id: 'npState', 'aria-live': 'polite' }),
-          el('div', { class: 'np-title', id: 'npTitle' }),
-          el('div', { class: 'np-sub' }, [
-            el('div', { class: 'np-artist', id: 'npArtist' }),
-            el('div', { class: 'np-album', id: 'npAlbum' }),
-          ]),
-          el('div', { class: 'np-progress', id: 'npProgress', hidden: true }, [
-            el('span', { class: 'np-time', id: 'npElapsed', text: '0:00' }),
-            el('div', { class: 'np-bar' }, [el('div', { class: 'np-fill', id: 'npFill' })]),
-            el('span', { class: 'np-time', id: 'npTotal', text: '0:00' }),
+      el('section', { class: 'card np-card', id: 'npCard', 'aria-label': 'Now playing' }, [
+        el('div', { class: 'np-track' }, [
+          cover,
+          el('div', { class: 'np-meta' }, [
+            // Polite, as the status line it replaced was: play, pause and going
+            // away are announced. Not the title, which changes with every track.
+            el('div', { class: 'np-state', id: 'npState', 'aria-live': 'polite' }),
+            el('div', { class: 'np-title', id: 'npTitle' }),
+            el('div', { class: 'np-sub' }, [
+              el('div', { class: 'np-artist', id: 'npArtist' }),
+              el('div', { class: 'np-album', id: 'npAlbum' }),
+            ]),
+            el('div', { class: 'np-progress', id: 'npProgress', hidden: true }, [
+              el('span', { class: 'np-time', id: 'npElapsed', text: '0:00' }),
+              el('div', { class: 'np-bar' }, [el('div', { class: 'np-fill', id: 'npFill' })]),
+              el('span', { class: 'np-time', id: 'npTotal', text: '0:00' }),
+            ]),
           ]),
         ]),
       ]),
-      preview.node,
+
+      // The card that takes the leftover height — see .lyr-card in the stylesheet.
+      el('section', { class: 'card lyr-card', id: 'lyrCard', 'aria-label': 'Lyrics' }, [
+        el('div', { class: 'lyr-bar' }, [
+          el('div', { class: 'lyr-bar-title' }, [
+            el('h2', { text: 'Lyrics' }),
+            el('span', { class: 'badge', id: 'lyrKind', hidden: true }),
+          ]),
+          el('div', { class: 'lyr-actions', id: 'lyrActions' }, [
+            iconBtn('btn btn-ghost btn-sm', BTN.expand, 'Big lyrics', { title: 'Fill the window with the lyrics, one big line at a time', onclick: openBigLyrics }),
+            iconBtn('btn btn-ghost btn-sm', BTN.lines, 'Full lyrics', { title: 'Show every line of this song', onclick: openFullLyrics }),
+            iconBtn('btn btn-ghost btn-sm', BTN.copy, 'Copy .lrc', { id: 'lyrCopy', title: 'Copy the synced lyrics to the clipboard', onclick: copyLrc }),
+          ]),
+        ]),
+        // The block itself is the affordance: a few lines is a keyhole view of
+        // the song, and clicking anywhere on them opens the rest of it.
+        el('div', {
+          class: 'lyr lyr-clickable',
+          id: 'lyrStage',
+          role: 'button',
+          tabindex: '0',
+          title: 'Show every line of this song',
+          onclick: openFullLyrics,
+          onkeydown: (e) => {
+            // A held key repeats; only the first press means anything here.
+            if (e.repeat) return;
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openFullLyrics(); }
+          },
+        }, [
+          el('div', { class: 'lyr-far', id: 'lyrPrev2' }),
+          el('div', { class: 'lyr-near', id: 'lyrPrev' }),
+          el('div', { class: 'lyr-cur', id: 'lyrCur', text: '—' }),
+          el('div', { class: 'lyr-tr', id: 'lyrTr' }),
+          el('div', { class: 'lyr-near', id: 'lyrNext' }),
+          el('div', { class: 'lyr-far', id: 'lyrNext2' }),
+          el('div', { class: 'lyr-plain', id: 'lyrPlain' }),
+        ]),
+        el('div', { class: 'lyr-empty', id: 'lyrEmpty', hidden: true }, [
+          el('div', { class: 'lyr-empty-title', id: 'lyrEmptyTitle' }),
+          el('div', { class: 'lyr-empty-desc', id: 'lyrEmptyDesc' }),
+        ]),
+        el('div', { class: 'lyr-ask', id: 'lyrAsk', hidden: true, role: 'group', 'aria-label': 'What is wrong with these lyrics?' }, [
+          el('div', { class: 'lyr-ask-title', text: 'What’s wrong with these lyrics?' }),
+          choice_('The timing is off',
+            'The words are right, they just land early or late. They go to the lyrics editor, where you re-time the lines that drift.',
+            () => reportLyrics('timing')),
+          choice_('The words are wrong',
+            'A different song, nonsense, or this track has none. This version is dropped and never fetched for it again.',
+            () => reportLyrics('wrong')),
+          el('button', { type: 'button', class: 'btn btn-ghost', text: 'Cancel', style: 'align-self:center', onclick: () => toggleAsk(false) }),
+        ]),
+        el('div', { class: 'lyr-foot', id: 'lyrFoot' }, [
+          el('div', { class: 'lyr-offset', id: 'lyrOffset' }, [
+            el('span', { class: 'lyr-offset-label', text: 'Timing' }),
+            iconBtn('btn btn-sm btn-icon', BTN.minus, '', { 'aria-label': 'Show lines 250 ms earlier', title: 'Earlier', onclick: () => nudgeOffset(-250) }),
+            el('output', { id: 'npOffset', text: '0 ms' }),
+            iconBtn('btn btn-sm btn-icon', BTN.plus, '', { 'aria-label': 'Show lines 250 ms later', title: 'Later', onclick: () => nudgeOffset(250) }),
+            el('button', { type: 'button', class: 'btn btn-ghost btn-sm', id: 'npOffsetReset', text: 'Reset', onclick: () => setOffset(0) }),
+            el('span', { class: 'lyr-offset-hint', id: 'npOffsetHint' }),
+          ]),
+          iconBtn('btn btn-sm', BTN.flag, 'Wrong lyrics?', { id: 'npReport', 'aria-expanded': 'false', onclick: () => toggleAsk() }),
+        ]),
+      ]),
     ]),
 
-    // The card that takes the leftover height — see .lyr-card in the stylesheet.
-    el('section', { class: 'card lyr-card', id: 'lyrCard', 'aria-label': 'Lyrics' }, [
-      el('div', { class: 'lyr-bar' }, [
-        el('div', { class: 'lyr-bar-title' }, [
-          el('h2', { text: 'Lyrics' }),
-          el('span', { class: 'badge', id: 'lyrKind', hidden: true }),
-        ]),
-        el('div', { class: 'lyr-actions', id: 'lyrActions' }, [
-          iconBtn('btn btn-ghost btn-sm', BTN.expand, 'Big lyrics', { title: 'Fill the window with the lyrics, one big line at a time', onclick: openBigLyrics }),
-          iconBtn('btn btn-ghost btn-sm', BTN.lines, 'Full lyrics', { title: 'Show every line of this song', onclick: openFullLyrics }),
-          iconBtn('btn btn-ghost btn-sm', BTN.copy, 'Copy .lrc', { id: 'lyrCopy', title: 'Copy the synced lyrics to the clipboard', onclick: copyLrc }),
-        ]),
+    bridges.node,
+
+    el('section', { class: 'mir-side mir-them', 'aria-label': 'On Discord' }, [
+      el('div', { class: 'mir-head' }, [
+        el('h2', { class: 'eyebrow', text: 'On Discord' }),
+        el('span', { class: 'badge', id: 'mirLive' }),
+        el('button', {
+          type: 'button', class: 'btn btn-sm why-btn', id: 'whyBtn', text: 'Why?',
+          'aria-expanded': 'false', 'aria-controls': 'whyPanel',
+          title: 'What stands between the song and your card, and how to fix it',
+          onclick: () => why.toggle(),
+        }),
       ]),
-      // The block itself is the affordance: a few lines is a keyhole view of
-      // the song, and clicking anywhere on them opens the rest of it.
-      el('div', {
-        class: 'lyr lyr-clickable',
-        id: 'lyrStage',
-        role: 'button',
-        tabindex: '0',
-        title: 'Show every line of this song',
-        onclick: openFullLyrics,
-        onkeydown: (e) => {
-          // A held key repeats; only the first press means anything here.
-          if (e.repeat) return;
-          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openFullLyrics(); }
-        },
-      }, [
-        el('div', { class: 'lyr-far', id: 'lyrPrev2' }),
-        el('div', { class: 'lyr-near', id: 'lyrPrev' }),
-        el('div', { class: 'lyr-cur', id: 'lyrCur', text: '—' }),
-        el('div', { class: 'lyr-tr', id: 'lyrTr' }),
-        el('div', { class: 'lyr-near', id: 'lyrNext' }),
-        el('div', { class: 'lyr-far', id: 'lyrNext2' }),
-        el('div', { class: 'lyr-plain', id: 'lyrPlain' }),
-      ]),
-      el('div', { class: 'lyr-empty', id: 'lyrEmpty', hidden: true }, [
-        el('div', { class: 'lyr-empty-title', id: 'lyrEmptyTitle' }),
-        el('div', { class: 'lyr-empty-desc', id: 'lyrEmptyDesc' }),
-      ]),
-      el('div', { class: 'lyr-ask', id: 'lyrAsk', hidden: true, role: 'group', 'aria-label': 'What is wrong with these lyrics?' }, [
-        el('div', { class: 'lyr-ask-title', text: 'What’s wrong with these lyrics?' }),
-        choice_('The timing is off',
-          'The words are right, they just land early or late. They go to the lyrics editor, where you re-time the lines that drift.',
-          () => reportLyrics('timing')),
-        choice_('The words are wrong',
-          'A different song, nonsense, or this track has none. This version is dropped and never fetched for it again.',
-          () => reportLyrics('wrong')),
-        el('button', { type: 'button', class: 'btn btn-ghost', text: 'Cancel', style: 'align-self:center', onclick: () => toggleAsk(false) }),
-      ]),
-      el('div', { class: 'lyr-foot', id: 'lyrFoot' }, [
-        el('div', { class: 'lyr-offset', id: 'lyrOffset' }, [
-          el('span', { class: 'lyr-offset-label', text: 'Timing' }),
-          iconBtn('btn btn-sm btn-icon', BTN.minus, '', { 'aria-label': 'Show lines 250 ms earlier', title: 'Earlier', onclick: () => nudgeOffset(-250) }),
-          el('output', { id: 'npOffset', text: '0 ms' }),
-          iconBtn('btn btn-sm btn-icon', BTN.plus, '', { 'aria-label': 'Show lines 250 ms later', title: 'Later', onclick: () => nudgeOffset(250) }),
-          el('button', { type: 'button', class: 'btn btn-ghost btn-sm', id: 'npOffsetReset', text: 'Reset', onclick: () => setOffset(0) }),
-          el('span', { class: 'lyr-offset-hint', id: 'npOffsetHint' }),
-        ]),
-        iconBtn('btn btn-sm', BTN.flag, 'Wrong lyrics?', { id: 'npReport', 'aria-expanded': 'false', onclick: () => toggleAsk() }),
-      ]),
+      why.node,
+      el('div', { class: 'mir-cards', id: 'mirCards', role: 'list', 'aria-label': 'Your Discord cards' }),
     ]),
-  );
+  ]));
 
   // Initial paint from whatever state we already hold.
-  paintQuick();
-  paintHead();
+  paintCards();
   paintTrack(state.track);
   paintLyrics(state.lyrics);
   void refreshOffset();
@@ -229,23 +263,24 @@ export function render(root) {
     subscribe('track', (t) => { paintTrack(t); onPlayState(t); paintLyrics(state.lyrics); }),
     subscribe('progress', onProgress),
     subscribe('lyrics', paintLyrics),
-    subscribe('config', () => { paintQuick(); void refreshOffset(); paintTrSlot(); paintLyrics(state.lyrics); }),
+    subscribe('config', () => { paintCards(); void refreshOffset(); paintTrSlot(); paintLyrics(state.lyrics); }),
     // A new track may carry its own correction, or none.
     subscribe('track', () => { void refreshOffset(); }),
-    // An ad produces no track, so both cards have to be redrawn to explain it
+    // An ad produces no track, so both sides have to be redrawn to explain it
     // rather than sit there reading "Waiting for a player". Being away hides
     // the presence without the song changing at all, so the chip that says so
     // cannot wait for the next trackUpdate to appear.
-    subscribe('status', () => { paintHead(); paintTrack(state.track); paintLyrics(state.lyrics); }),
-    // The other cards come and go with what is playing; the tabs read them.
-    subscribe('slots', paintHead),
-    subscribe('players', () => { paintHead(); if (menuOpen) paintSourceMenu(); }),
-    subscribe('preferredPlayers', () => { paintHead(); if (!state.track) paintTrack(null); }),
+    subscribe('status', () => { paintCards(); paintTrack(state.track); paintLyrics(state.lyrics); }),
+    // The other cards come and go with what is playing, and their lines with
+    // every lyric; paintCards() only touches what changed.
+    subscribe('slots', paintCards),
+    subscribe('players', () => { paintCards(); if (menuOpen) paintSourceMenu(); }),
+    subscribe('preferredPlayers', () => { paintCards(); if (!state.track) paintTrack(null); }),
     // The backend also drops a paused song, or brings it back, with no track
     // change to repaint for: the player closed, a detection switch or a pin.
-    subscribe('lastTrack', () => { if (state.track) return; paintTrack(null); paintProgress(position()); paintLyrics(state.lyrics); }),
-    // A different presence picked: everything below the header is its now.
-    subscribe('focus', () => { toggleAsk(false); paintQuick(); paintHead(); paintTrack(state.track); paintLyrics(state.lyrics); void refreshOffset(); }),
+    subscribe('lastTrack', () => { paintCards(); if (state.track) return; paintTrack(null); paintProgress(position()); paintLyrics(state.lyrics); }),
+    // A different card picked: the left side is its now.
+    subscribe('focus', () => { toggleAsk(false); paintCards(); paintTrack(state.track); paintLyrics(state.lyrics); void refreshOffset(); }),
   ];
 
   const ticker = setInterval(() => { if (running) paintProgress(position()); }, 250);
@@ -253,22 +288,18 @@ export function render(root) {
   // The row's room changes with the window and with the cover beside it.
   const chipsRoom = new ResizeObserver(fitChips);
   chipsRoom.observe($('#npState'));
-  // Only the width: what fitHead() changes is the height, and watching that
-  // too would run it again for its own work.
-  let headWidth = 0;
-  const headRoom = new ResizeObserver(([entry]) => {
-    const w = Math.round(entry.contentRect.width);
-    if (w !== headWidth) { headWidth = w; fitHead(); }
-  });
-  headRoom.observe($('.np-head'));
 
   return () => {
     clearInterval(ticker);
     chipsRoom.disconnect();
-    headRoom.disconnect();
     unsubs.forEach((fn) => fn());
     preview.dispose();
+    why.dispose();
+    bridges.dispose();
     closeSourceMenu();
+    // Like the big lyrics, the bubble hangs off <body>.
+    editor.dispose();
+    editor = null;
     // It hangs off <body>, so leaving the page would otherwise leave it up.
     closeBig?.();
   };
@@ -290,133 +321,151 @@ function waitingText() {
     : 'Pinned to a player that is not running';
 }
 
-/* ── Quick switches: the presence and its lyrics ─────────────────────────── */
-
-/** The lyrics switch of the presence on screen; `show_lyrics` is presence 1's. */
-const lyricsKey = () => (state.focus > 0 ? `show_lyrics_${state.focus + 1}` : 'show_lyrics');
+/* ── The Discord side: every card in play ────────────────────────────────── */
 
 /*
- * The two switches people reach for while something plays, one click away
- * beside the card they change, rather than a page and a category away in
- * Settings. They write the same keys Settings writes; nothing new is stored.
- *
- * Built once and updated in place: rebuilt, a switch that changed key with
- * the presence on screen (Lyrics goes from show_lyrics to show_lyrics_2)
- * took the keyboard focus with it.
+ * The preview and the Source menu are built once per visit and moved into
+ * whichever card is on screen: rebuilt on every pick, the preview lost its
+ * clock and the menu its place.
  */
-function paintQuick() {
-  const row = $('#npQuick');
-  if (!row) return;
-  if (!row.childElementCount) row.append(quickSwitch('Presence'), quickSwitch('Lyrics'));
-  const [presence, lyrics] = row.children;
-  const presenceOn = state.config.rpc_enabled !== false;
-  const lyricsOn = state.config[lyricsKey()] !== false;
-
-  // With several cards it is the only switch here that is not about the one
-  // on screen, so it says so: next to the per-presence tabs, "Presence" read
-  // as this presence alone.
-  setQuick(presence, 'rpc_enabled', presenceOn, multi() ? 'All presences' : 'Presence', presenceOn
-    ? `Your activity is on Discord${multi() ? ', on every presence' : ''}. Off clears your status right away.`
-    : 'Nothing is on your Discord profile. On puts your status back.');
-  const which = multi() ? ` on presence ${state.focus + 1}` : '';
-  setQuick(lyrics, lyricsKey(), lyricsOn, 'Lyrics', lyricsOn
-    ? `Lyrics follow the song${which}, here and on Discord. Off hides them in both; the card keeps the title and artist.`
-    : `No lyrics${which}, here or on Discord. On shows them again.`);
-}
-
-/** A labelled switch that flips the boolean config key it currently holds. */
-function quickSwitch(label) {
-  const b = el('button', {
-    type: 'button',
-    class: 'qt',
-    role: 'switch',
-    onclick: () => { void saveConfig({ [b.dataset.key]: b.getAttribute('aria-checked') !== 'true' }); },
-  }, [
-    el('span', { class: 'qt-label', text: label }),
-    el('span', { class: 'qt-track', 'aria-hidden': 'true' }, [el('span', { class: 'qt-thumb' })]),
-  ]);
-  return b;
-}
-
-function setQuick(b, key, on, label, tip) {
-  b.dataset.key = key;
-  b.classList.toggle('on', on);
-  b.setAttribute('aria-checked', on ? 'true' : 'false');
-  b.title = tip;
-  const text = b.querySelector('.qt-label');
-  if (text.textContent !== label) text.textContent = label;
-}
-
-/* ── Header: presence tabs and the source picker ─────────────────────────── */
+let previewNode = null;
+let pickerNode = null;
+/** The bubble the preview's parts open — see card-editor.js. */
+let editor = null;
 
 /*
- * Rebuilt from a key rather than on every call: 'slots' fires on each progress
- * tick, and replacing the tabs once a second would swallow the click that
- * happened to land on one.
+ * Rebuilt from a key rather than on every call: 'slots' fires on each
+ * progress tick, and replacing the cards once a second would swallow the
+ * click that happened to land on one. The frames change with the number of
+ * cards and the one on screen; what is inside them is updated in place.
  */
-let headKey = '';
+let cardsKey = '';
 
-function paintHead() {
-  const left = $('#npHeadLeft');
-  if (!left) return;
-  paintSourceButton();
+/** What a card is showing, in a word or two, for its header. */
+function cardSource(i) {
+  const s = state.slots[i] || {};
+  if (s.track) return platformInfo(s.track.media_source)[0];
+  return s.lastTrack ? 'Paused' : 'Idle';
+}
 
+function paintCards() {
+  const box = $('#mirCards');
+  if (!box) return;
   const count = presenceCount();
-  const tabs = count > 1 ? state.slots.slice(0, count).map((s, i) => {
-    const t = s.track;
-    return { i, sub: t ? platformInfo(t.media_source)[0] : s.lastTrack ? 'Paused' : 'Idle', playing: !!t?.is_playing };
-  }) : [];
-  const key = `${state.focus}|${tabs.map((t) => `${t.sub}:${t.playing}`).join(',')}`;
-  if (key === headKey && left.childElementCount) return;
-  headKey = key;
-
-  if (!tabs.length) {
-    left.replaceChildren(el('h1', { text: 'Now playing' }));
-    fitHead();
-    return;
+  const key = `${count}|${state.focus}`;
+  if (key !== cardsKey || !box.childElementCount) {
+    cardsKey = key;
+    // The menu hangs off the picker, which is about to move to another card;
+    // the bubble edits the card on screen, which is about to be another one.
+    closeSourceMenu();
+    editor?.close();
+    // Filtered: replaceChildren() writes a null out as the word "null", which
+    // is what five cards printed under the last one.
+    box.replaceChildren(...[
+      ...Array.from({ length: count }, (_, i) => cardShell(i, count)),
+      count < MAX_SLOTS ? el('button', {
+        type: 'button',
+        class: 'mcard-add',
+        title: 'Show one more thing at once — a stream beside your music. Each card is an activity of its own on your profile.',
+        onclick: () => { void saveConfig({ presence_count: count + 1 }); },
+      }, ['+ Add a card']) : null,
+    ].filter(Boolean));
   }
-  left.replaceChildren(el('div', { class: 'seg', role: 'tablist', 'aria-label': 'Presences on your profile' },
-    tabs.map((t) => el('button', {
-      type: 'button',
-      class: `seg-btn${t.i === state.focus ? ' active' : ''}`,
-      role: 'tab',
-      'aria-selected': t.i === state.focus ? 'true' : 'false',
-      // Its words can be cut down to the number — see fitHead() — so the
-      // name it is read out by is set whole.
-      'aria-label': `Presence ${t.i + 1}, ${t.sub}`,
-      title: `Show presence ${t.i + 1} (${t.sub})`,
-      onclick: () => setFocus(t.i),
-    }, [
-      el('span', { class: `dot${t.playing ? ' on' : ''}` }),
-      el('span', {}, [el('span', { class: 'seg-word', text: 'Presence ' }), String(t.i + 1)]),
-      el('span', { class: 'seg-sub', text: t.sub }),
-    ]))));
-  fitHead();
+  for (let i = 0; i < count; i++) {
+    const name = $(`#mcName${i}`);
+    // The one on screen has its player in the preview under it, and the
+    // room beside its name goes to Source and Customize.
+    const label = count < 2 ? 'Your card' : i === state.focus ? `Card ${i + 1}` : `Card ${i + 1} · ${cardSource(i)}`;
+    if (name && name.textContent !== label) name.textContent = label;
+    if (i !== state.focus) paintMini(i);
+  }
+  const which = $('#mirWhich');
+  if (which) {
+    which.hidden = count < 2;
+    if (count > 1) which.textContent = `Card ${state.focus + 1}`;
+  }
+  paintSourceButton();
+  paintLive();
 }
 
-/*
- * Tabs and the source picker on one row, at any number of presences. Three
- * or more tabs beside "Presence 1 source" did not fit the smallest window:
- * the picker wrapped under them, and the 50px row that added made the page
- * scroll by 43px with four. Short of room, the row sheds words in order —
- * the picker's "Presence 1" (the selected tab already says it), then the
- * tabs' "Presence", then the player under each number — and keeps them all
- * whenever they fit. Measured, like fitChips(): the room depends on the
- * window, the number of tabs and the players' names.
- */
-const TIGHT = ['tight-src', 'tight-word', 'tight-sub'];
+/** A card's frame: its name, and on the one on screen its Source menu and Customize. */
+function cardShell(i, count) {
+  const focused = i === state.focus;
+  const head = el('div', { class: 'mcard-head' }, [
+    el('span', { class: 'mcard-name', id: `mcName${i}` }),
+    focused ? pickerNode : null,
+    // The same bubble as a click on the card: a way in for whoever has not
+    // found that the card itself answers.
+    focused ? el('button', {
+      type: 'button',
+      class: 'mcard-link',
+      text: 'Customize',
+      title: 'What the card says: its lines, its cover, its button — or click any part of it',
+      dataset: { ceOpen: '' },
+      onclick: (e) => editor?.toggle('lines', e.currentTarget),
+    }) : null,
+    // Only the last one: the setting is how many cards, not which. A glyph,
+    // not a word: at the smallest window "Remove" beside Source and
+    // Customize left the card's name no room at all.
+    count > 1 && i === count - 1 ? el('button', {
+      type: 'button',
+      class: 'btn btn-ghost btn-sm btn-icon',
+      'aria-label': `Remove card ${i + 1}`,
+      title: 'Use one card fewer',
+      html: BTN.close,
+      onclick: () => { void saveConfig({ presence_count: count - 1 }); },
+    }) : null,
+  ]);
+  const body = focused ? previewNode : el('button', {
+    type: 'button',
+    class: 'mcard-mini',
+    id: `mcMini${i}`,
+    'aria-label': `Show card ${i + 1} on the left`,
+    onclick: () => setFocus(i),
+  });
+  return el('div', { class: `mcard${focused ? ' focused' : ''}`, role: 'listitem' }, [head, body]);
+}
 
-function fitHead() {
-  const head = $('.np-head');
-  const left = $('#npHeadLeft');
-  const picker = $('.src-wrap');
-  if (!head || !left || !picker) return;
-  const wrapped = () => picker.getBoundingClientRect().top >= left.getBoundingClientRect().bottom - 1;
-  head.classList.remove(...TIGHT);
-  for (const step of TIGHT) {
-    if (!wrapped()) break;
-    head.classList.add(step);
-  }
+/**
+ * A card that is not on screen, drawn small: Discord's header and the first
+ * two lines, as the engine last built them. Repainted only when those change.
+ */
+function paintMini(i) {
+  const btn = $(`#mcMini${i}`);
+  if (!btn) return;
+  const s = state.slots[i] || {};
+  const t = s.track;
+  // null, not undefined: undefined would fall back to the focused card's track.
+  const reason = hiddenReason(t ?? null);
+  const m = !reason && t
+    ? presenceModel(s.activity || { type: 2, details: t.track_name, state: t.artist_name }, { appName: platformInfo(t.media_source)[0] })
+    : null;
+  const lines = reason ? ['Not on your profile', reason]
+    : m ? m.lines.slice(0, 2)
+    : [s.lastTrack ? 'Paused' : 'Nothing on this card right now', s.lastTrack?.track_name || ''];
+  const verb = m?.header || '';
+  const key = JSON.stringify([verb, lines, t?.track_id || '', m?.largeImage || '']);
+  if (btn.dataset.key === key) return;
+  btn.dataset.key = key;
+
+  const art = el('img', { class: 'mini-art', alt: '', src: m?.largeImage || BLANK_ART });
+  if (!m?.largeImage && t) setArt(art, t.album_art_url, t.track_id).catch(() => {});
+  btn.replaceChildren(art, el('div', { class: 'mini-lines' }, [
+    verb ? el('div', { class: 'mini-verb', text: verb, title: verb }) : null,
+    ...lines.filter(Boolean).map((line, n) => el('div', { class: n === 0 ? 'mini-l1' : 'mini-l', text: line, title: line })),
+  ]));
+}
+
+/** The word beside "On Discord", and Why? drawing the eye while the card is down. */
+function paintLive() {
+  const chip = $('#mirLive');
+  if (!chip) return;
+  const d = diagnose();
+  if (chip.textContent !== d.short) chip.textContent = d.short;
+  chip.classList.toggle('accent', d.live);
+  chip.classList.toggle('warn', !d.live);
+  chip.title = d.headline;
+  $('#whyBtn')?.classList.toggle('attn', !d.live);
 }
 
 let menuOpen = false;
@@ -437,19 +486,14 @@ function paintSourceButton() {
   const pinnedId = pins()[state.focus] ?? null;
   const pinned = pinnedId ? (state.players || []).find((p) => p.appId === pinnedId) : null;
   const label = !pinnedId ? 'Automatic' : pinned ? platformInfo(pinned.source)[0] : 'Pinned player';
-  const key = `${multi() ? state.focus : '-'}|${label}`;
+  // Just "Source": it sits on the card it belongs to, which says which one.
+  const key = `${state.focus}|${label}`;
   if (btn.dataset.key === key) return;
   btn.dataset.key = key;
-  btn.replaceChildren(
-    el('span', { class: 'src-label' }, multi()
-      ? [el('span', { class: 'src-long', text: `Presence ${state.focus + 1} source` }), el('span', { class: 'src-short', text: 'Source' })]
-      : ['Source']),
-    label,
-  );
+  btn.replaceChildren(el('span', { class: 'src-label', text: 'Source' }), label);
   btn.insertAdjacentHTML('beforeend', BTN.chevron);
-  btn.title = 'Choose which player this presence follows';
+  btn.title = 'Choose which player this card follows';
   if (menuOpen) paintSourceMenu();
-  fitHead();
 }
 
 function openSourceMenu() {
@@ -512,18 +556,18 @@ function paintSourceMenu(force = false) {
 
   menu.replaceChildren(
     opt(!mine, 'Automatic', multi()
-      ? `Presence ${state.focus + 1} takes the next thing playing`
+      ? `Card ${state.focus + 1} takes the next thing playing`
       : 'Follows whatever ranks highest — a music app beats a browser tab', () => pin(null)),
     ...(players.length ? players.map((pl) => {
       const [label] = platformInfo(pl.source);
       const elsewhere = p.indexOf(pl.appId);
-      const sub = [pl.artist, label, elsewhere >= 0 && elsewhere !== state.focus ? `on presence ${elsewhere + 1}` : '', pl.isAd ? 'ad' : '']
+      const sub = [pl.artist, label, elsewhere >= 0 && elsewhere !== state.focus ? `on card ${elsewhere + 1}` : '', pl.isAd ? 'ad' : '']
         .filter(Boolean).join(' · ');
       return opt(mine === pl.appId, pl.title || label, sub,
         () => pin(mine === pl.appId ? null : pl.appId),
         [pl.playing ? el('span', { class: 'pulse', title: 'Playing' }) : null]);
     }) : [el('div', { class: 'empty', style: 'padding:16px', text: 'No media session detected. Start playing something and it appears here.' })]),
-    el('div', { class: 'src-note', text: 'A pinned presence shows that player and nothing else — not another player, and not the browser extension.' }),
+    el('div', { class: 'src-note', text: 'A pinned card shows that player and nothing else — not another player, and not the browser extension.' }),
   );
 }
 
@@ -535,7 +579,7 @@ async function pin(appId) {
     preferredPlayer: res?.preferred ?? null,
     preferredPlayers: Array.isArray(res?.preferredPlayers) ? res.preferredPlayers : [res?.preferred ?? null],
   });
-  const which = multi() ? ` (presence ${slot + 1})` : '';
+  const which = multi() ? ` (card ${slot + 1})` : '';
   toast(appId ? `Pinned to this player${which}` : `Back to automatic${which}`, 'ok');
 }
 
@@ -589,7 +633,7 @@ function idleText() {
   // is paused or closed. Saying which one, and how to undo it, avoids the app
   // looking broken when it is doing exactly what it was told.
   return [waitingText(), pins()[state.focus]
-    ? 'This presence follows that player only. Set Source to Automatic to follow anything.'
+    ? 'This card follows that player only. Set Source to Automatic to follow anything.'
     : 'Play something in Spotify, a browser tab or any media app.'];
 }
 
@@ -757,8 +801,8 @@ function paintLyrics(l) {
   kind.textContent = captions ? (t.is_live ? 'Live captions' : 'Captions') : synced ? 'Synced' : plain ? 'Words only' : '';
   kind.title = plain ? 'Found without timings, so they cannot follow the song'
     : captions ? (t.is_live ? 'Kick\'s captions, as the stream goes' : 'Kick\'s captions, as the video plays') : '';
-  const lyricsOff = state.config[state.focus === 0 ? 'show_lyrics' : `show_lyrics_${state.focus + 1}`] === false;
-  const offMsg = ['Lyrics are switched off for this presence', 'Turn them back on with the Lyrics switch above.'];
+  const lyricsOff = state.config[lyricsKey(state.focus)] === false;
+  const offMsg = ['Lyrics are switched off for this card', 'Turn them back on with Lyrics, in the middle column.'];
 
   // What to say instead of lines, when there are none to show.
   let empty = null;
@@ -771,10 +815,10 @@ function paintLyrics(l) {
     if (lyricsOff) empty = offMsg;
     else if (!synced) empty = ['No captions yet', 'Turn on captions (CC) in Kick\'s player: what is said shows here and on the card, as lyrics.'];
   }
-  else if (t.is_live) empty = ['Live streams have no lyrics', 'This presence shows the stream title and how long it has been live instead.'];
-  else if (t.context_type === 'offline') empty = ['This channel is offline', 'This presence shows the channel as offline until it goes live.'];
+  else if (t.is_live) empty = ['Live streams have no lyrics', 'The card shows the stream title and how long it has been live instead.'];
+  else if (t.context_type === 'offline') empty = ['This channel is offline', 'The card shows the channel as offline until it goes live.'];
   else if (t.media_source === 'twitch' || t.media_source === 'kick') {
-    empty = ['Stream videos have no lyrics', 'This presence shows the channel and the video\'s title instead.'];
+    empty = ['Stream videos have no lyrics', 'The card shows the channel and the video\'s title instead.'];
   }
   else if (lyricsOff) empty = offMsg;
 

@@ -56,3 +56,9 @@ Navigation went from 8 pages to 5: Now, Library, Activity, Settings, Welcome.
 preview (`ui/src/discord-card.js`) is fed by the `activityUpdate` event. The old Stats
 backend (`stats:history`, `statsUpdate`, the session top 3) is removed; Activity reads the
 listening history only. Open items: not yet tested page by page in the running app.
+
+Now playing is a mirror (`ui/src/pages/now.js`): this window on the left, every Discord card on
+the right, and between them the switches that reach across (`ui/src/pages/seam.js`). **Why?**
+(`ui/src/why.js`) lists what keeps the card off Discord, with fixes. Clicking a part of the card
+opens its settings in a bubble (`ui/src/card-editor.js`, which also holds the choice lists
+Settings uses); it only writes existing config keys.

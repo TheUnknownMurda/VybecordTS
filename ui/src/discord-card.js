@@ -15,11 +15,15 @@ import { el, platformInfo, setArt, BLANK_ART } from './util.js';
 import { state, subscribe } from './state.js';
 import { presenceModel } from './discord-model.js';
 
-/** Why nothing is on the profile right now, or '' when the card is up. */
-function hiddenReason() {
+/**
+ * Why nothing is on the profile right now, or '' when the card is up.
+ *
+ * @param t the card's track: the focused one's by default; Now playing asks
+ *   for the others too, to draw them small beside it.
+ */
+export function hiddenReason(t = state.track) {
   const s = state.status || {};
   const c = state.config || {};
-  const t = state.track;
   if (!s.discordConnected) return 'Discord is not open, so nothing is on your profile right now.';
   if (c.rpc_enabled === false) return 'Rich Presence is off — nothing is on your profile.';
   if (s.adPlaying) return 'Hidden while the ad plays. It comes back with the music.';
@@ -32,13 +36,16 @@ function hiddenReason() {
 const NOTE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
 
 /**
- * @param {{ onCustomize?: () => void, title?: string, actions?: HTMLElement }} opts
+ * @param {{ onCustomize?: () => void, title?: string, actions?: HTMLElement,
+ *   edit?: { toggle: (zone: string, from: HTMLElement) => void, painted: () => void } }} opts
  *   `actions` goes in the header, before Customize — Now playing puts its
- *   quick switches there.
+ *   quick switches there. `edit` makes each part of the card a button that
+ *   opens its settings: Now playing's card editor, see card-editor.js.
  * @returns {{ node: HTMLElement, dispose: () => void }}
  */
 export function discordPreview(opts = {}) {
-  const body = el('div', { class: 'dc' });
+  const edit = opts.edit || null;
+  const body = el('div', { class: edit ? 'dc editable' : 'dc' });
   const note = el('div', { class: 'dc-note' });
   const node = el('section', { class: 'card dc-card', 'aria-label': 'Preview of your Discord card' }, [
     el('div', { class: 'dc-head' }, [
@@ -56,6 +63,18 @@ export function discordPreview(opts = {}) {
   let appName = '';
 
   function paint() {
+    /*
+     * The parts are rebuilt with every line the engine sends, and a part
+     * holding the keyboard focus took it down with it: tabbing through the
+     * card lost your place every few seconds. The same part takes it back.
+     */
+    const focused = edit && body.contains(document.activeElement) ? document.activeElement.dataset.zone : null;
+    paintBody();
+    if (focused) body.querySelector(`.dc-zone[data-zone="${focused}"]`)?.focus({ preventScroll: true });
+    edit?.painted();
+  }
+
+  function paintBody() {
     timeSlot = null;
     activity = null;
     note.textContent = '';
@@ -89,10 +108,39 @@ export function discordPreview(opts = {}) {
 
     // The one thing about the lyric layout nobody would guess. Short enough
     // to fit whole beside the eyebrow and the quick switches on Now playing
-    // at the default window: the longer wording was cut there.
-    if (state.lyrics?.current && activity.details && activity.details.trim() !== (t.track_name || '').trim()) {
+    // at the default window: the longer wording was cut there. On a card
+    // that edits in place the lines say it themselves when clicked, and the
+    // room goes to saying that they can be.
+    if (edit) {
+      note.textContent = 'Click any part of the card to change it.';
+    } else if (state.lyrics?.current && activity.details && activity.details.trim() !== (t.track_name || '').trim()) {
       note.textContent = 'The first two lines follow the song; the third names it.';
     }
+  }
+
+  /**
+   * A part of the card that opens its settings, on a card that edits in
+   * place; on any other, the nodes as they are. A wrapper rather than a class
+   * on the part: the header and the lines clip their own overflow for the
+   * ellipsis, and would clip the pencil with it.
+   */
+  function zone(name, label, children) {
+    if (!edit) return children;
+    const open = (e) => edit.toggle(name, e.currentTarget);
+    return el('div', {
+      class: `dc-zone dc-zone-${name}`,
+      role: 'button',
+      tabindex: '0',
+      dataset: { zone: name },
+      'aria-label': label,
+      title: label,
+      onclick: open,
+      onkeydown: (e) => {
+        // A held key repeats; only the first press means anything here.
+        if (e.repeat) return;
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(e); }
+      },
+    }, children);
   }
 
   function draw(blankArt, track) {
@@ -104,25 +152,32 @@ export function discordPreview(opts = {}) {
 
     timeSlot = el('div', { class: 'dc-time-slot' });
 
+    const lines = m.lines.map((line, i) => el('div', { class: i === 0 ? 'dc-l1' : 'dc-l', text: line, title: line }));
+    // The cover text is a part of its own: other settings decide it.
+    const third = m.parts.findIndex((p) => p.from === 'large_text');
+    const top = third < 0 ? lines : lines.slice(0, third);
+    const under = third < 0 ? [] : lines.slice(third);
+
     body.replaceChildren(...[
-      el('div', { class: 'dc-verb', text: m.header, title: m.header }),
+      zone('verb', 'Change the activity', [el('div', { class: 'dc-verb', text: m.header, title: m.header })]),
       el('div', { class: 'dc-body' }, [
-        el('div', { class: 'dc-art-wrap' }, [
+        zone('art', 'Change the cover and its badge', [el('div', { class: 'dc-art-wrap' }, [
           art,
           m.smallImage ? el('img', { class: 'dc-small', alt: '', src: m.smallImage, title: m.smallText }) : null,
-        ]),
+        ])]),
         el('div', { class: 'dc-lines' }, [
-          ...m.lines.map((line, i) => el('div', { class: i === 0 ? 'dc-l1' : 'dc-l', text: line, title: line })),
+          top.length ? zone('lines', 'Change what the lines show', top) : null,
+          under.length ? zone('info', 'Change the third line', under) : null,
           timeSlot,
-        ]),
-      ]),
+        ].flat()),
+      ].flat()),
       m.buttons.length
-        ? el('div', { class: 'dc-buttons' }, [
+        ? zone('buttons', 'Change your button', [el('div', { class: 'dc-buttons' }, [
             ...m.buttons.map((label) => el('div', { class: 'dc-button', text: label })),
             el('div', { class: 'dc-buttons-note', text: 'Friends see these buttons. Discord hides them on your own profile.' }),
-          ])
+          ])])
         : null,
-    ].filter(Boolean));
+    ].flat().filter(Boolean));
     paintTime();
   }
 

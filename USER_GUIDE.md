@@ -39,7 +39,7 @@ You can change this under **Settings → App & window → Close to tray**.
 
 | Page | What it does |
 | --- | --- |
-| **Now playing** | The current track (cover, title, artist, album, player and progress; paused, it stays on the card with its bar stopped, until you close the player or switch its detection off), a preview of your Discord card as your friends see it right under it, with two switches above the preview: **Presence** (**All presences** when there are several) takes your status off Discord or puts it back, and **Lyrics** turns that presence's lyrics on or off, on Discord and in the window, and the scrolling lyrics (click them for the whole song, or **Big lyrics** to fill the window with them, Spotify style; **Esc** closes it). Lyrics found without timings show as plain text you can scroll, marked **Words only**. The **Source** menu picks which player it follows. |
+| **Now playing** | Two sides, like a mirror. **On your screen**, on the left: the current track (cover, title, artist, album, player and progress; paused, it stays on the card with its bar stopped, until you close the player or switch its detection off) and the scrolling lyrics (click them for the whole song, or **Big lyrics** to fill the window with them, Spotify style; **Esc** closes it). Lyrics found without timings show as plain text you can scroll, marked **Words only**. **On Discord**, on the right: your card as your friends see it, with its **Source** menu, which picks the player it follows. **Click any part of the card** (or **Customize**) to change it: what the lines show, the verb, the icon on the cover, your button… In the middle, switches with an arrow toward the side they change: **Visible** takes your status off Discord or puts it back, **Lyrics** turns them on or off on both sides, **Romanise** and one of the two **Translate** act on Discord, the other **Translate** on the window, and **Hide on Discord when** covers pauses, being away and Spotify ads. **Why?** says what is keeping your card off Discord, with a button to fix it. |
 | **Lyrics** | Your own lyrics library: **My lyrics**, **Blocked** (lyrics you marked as wrong) and the offline **LRCLIB dump**. **Add lyrics** imports or writes new ones. |
 | **Activity** | What you listened to over 7 days, 30 days, 12 months or all time: time listened, a chart, top artists and tracks, and your recent plays (**See all** opens the full history). It updates by itself as songs finish. |
 | **Settings** | Discord presence, Lyrics & translation, Detection, Integrations (browser extension, Spotify, Last.fm), App & window, and About. The search box finds any setting. |
@@ -61,6 +61,7 @@ On **Now playing**, open the **Source** menu. It lists every player Windows repo
 
 ### The status does not show on Discord
 
+- On **Now playing**, click **Why?**, top right: it checks everything between the song and your card and says what is in the way, with a button that fixes it.
 - Discord must be the **desktop app**, and must be running
 - Look at the bottom of Vybecord's sidebar: if it says **Discord not found**, the connection failed. Restart Discord, then Vybecord. When Discord is connected but nothing shows, the line under it says why (Rich Presence off, hidden while you are away, an ad…).
 - In Discord, check **Settings → Activity Privacy → Display current activity** is on
@@ -159,7 +160,7 @@ Or show them all. **Settings → Discord presence → Several presences** puts u
 - Tabs of the same site are separate things: four Twitch streams open side by side take four cards. A Discord application carries one card, so once the platform's own applications are taken the others borrow one — the default Vybecord application, then a platform application nothing is on — and the card names its platform in the header either way. Discord's **Active Now** list shows the borrowed application's logo, though, so a card goes back to its platform's application as soon as one is free.
 - **Lyrics on presence N** picks which cards sing along — any combination.
 - **Activity type on presence N** gives each card its own verb: *Listening* for the song, *Watching* for the stream. Cards 2 to 5 say the same as presence 1 until you change them.
-- **Now playing** shows every card; click one to see its lyrics, its Discord preview and its controls. Its **Source** menu pins that presence to a player, so it never swaps with another.
+- **Now playing** shows every card on its **On Discord** side; click a small one to see its lyrics and draw it whole. Its **Source** menu pins that presence to a player, so it never swaps with another, and clicking its parts changes them.
 - The listening history (and so **Activity**) and Last.fm follow presence 1 only.
 
 Each card is a Discord application of its own. Spotify, SoundCloud and Apple Music have one each, YouTube three, and Kick and Twitch five each, so up to five Kick or Twitch streams all keep their logo; a card whose platform has no application left borrows a free one. With the default that makes seventeen applications for five cards at most, so there is nothing to set up.

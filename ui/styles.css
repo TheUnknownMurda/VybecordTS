@@ -854,18 +854,649 @@ label.field > span {
   padding-bottom: 24px;
 }
 
-.np-head {
+/*
+ * The mirror: this window on the left, Discord on the right, the seam
+ * between. The left side sets the height — the song, then the lyrics taking
+ * what is left, as when the card was stacked with them — and the right side
+ * runs on below when it holds more than fits, rather than squeezing the
+ * lyrics: a Discord card is worth reading whole.
+ */
+.mirror {
+  flex: 1 1 0px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) auto minmax(0, 1fr);
+  column-gap: 16px;
+  container: mirror / inline-size;
+}
+.mir-side {
+  min-width: 0;
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: calc(12px + var(--np-ramp) * 0.025);
+}
+.mir-head {
+  display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 46px;
+  gap: 8px;
+  min-height: 32px;
+}
+.mir-head .badge {
+  min-height: 22px;
+  font-size: 11.5px;
+}
+.mir-head .why-btn {
+  margin-left: auto;
+}
+.badge.warn {
+  background: color-mix(in srgb, var(--amber) 14%, transparent);
+  border-color: color-mix(in srgb, var(--amber) 45%, transparent);
+  color: var(--amber);
+}
+/* While the card is down, the way to the answer is what stands out. */
+.why-btn.attn {
+  border-color: color-mix(in srgb, var(--amber) 55%, transparent);
+  color: var(--amber);
 }
 
 /*
- * The song and its Discord card, as one card. It keeps its height; the lyrics
- * take whatever is left.
+ * The seam: the switches that reach across, each with an arrow toward the
+ * side it acts on. It runs the full height between two dashed rules, the
+ * fold of the mirror, and keeps its switches in the middle.
+ */
+.seam {
+  position: relative;
+  width: 136px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px 0 8px;
+}
+.seam::before,
+.seam::after {
+  content: '';
+  position: absolute;
+  top: 40px;
+  bottom: 0;
+  border-left: 1px dashed var(--border-d);
+}
+.seam::before {
+  left: -8px;
+}
+.seam::after {
+  right: -8px;
+}
+.seam-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+.seam-cap {
+  font-size: 11.5px;
+  line-height: 1.3;
+  text-align: center;
+  color: var(--text-muted);
+}
+.br {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 100%;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--border-d);
+  border-radius: 99px;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.18s, background 0.18s, border-color 0.18s;
+}
+.br svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.br .br-arrow {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2.4;
+}
+.br-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.br:hover {
+  color: var(--text-primary);
+  border-color: var(--border-a);
+}
+.br.on {
+  background: rgba(var(--accent), 0.14);
+  border-color: var(--border-a);
+  color: var(--accent-text);
+}
+.br:focus-visible {
+  outline: 2px solid var(--accent-hex);
+  outline-offset: 2px;
+}
+.br-rule {
+  height: 28px;
+  font-size: 12px;
+}
+.br-lang {
+  min-height: 30px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+/* At the smallest windows the columns need the room more than the words:
+   glyphs and arrows only, the names in the tooltips. The language stays in
+   Settings → Lyrics & translation. */
+@container mirror (max-width: 820px) {
+  .seam {
+    width: 52px;
+  }
+  .br {
+    gap: 2px;
+    padding: 0;
+  }
+  .br-label,
+  .br-lang,
+  .seam-cap {
+    display: none;
+  }
+}
+
+/* The Discord side: one frame per card, the one on screen drawn whole. */
+.mir-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.mcard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--border-s);
+  border-radius: var(--r-lg);
+  background: var(--bg-elevated);
+}
+.mcard.focused {
+  border-color: var(--border-a);
+}
+.mcard-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  min-height: 32px;
+}
+/* Never squeezed out of its own header: Customize wraps under it first. */
+.mcard-name {
+  flex: 1 1 auto;
+  min-width: 48px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mcard-head .src-btn {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 12.5px;
+}
+.mcard-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-text);
+  cursor: pointer;
+}
+.mcard-link:hover {
+  text-decoration: underline;
+}
+.mcard-link:focus-visible {
+  outline: 2px solid var(--accent-hex);
+  outline-offset: 3px;
+}
+/* The preview's own frame and header go: the card around it is the frame,
+   and its name, Source and Customize are the row above. */
+.mcard > .dc-card {
+  padding: 0;
+  border: 0;
+  background: none;
+  gap: 8px;
+}
+.mcard > .dc-card > .dc-head {
+  display: none;
+}
+.mcard-mini {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  /* Discord's greys in both themes, as the full preview is drawn. */
+  background: #28282d;
+  color: #f2f3f5;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.mcard-mini:hover {
+  border-color: var(--border-a);
+}
+.mcard-mini:focus-visible {
+  outline: 2px solid var(--accent-hex);
+  outline-offset: 2px;
+}
+.mini-art {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: #3a3a40;
+}
+.mini-lines {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.mini-verb,
+.mini-l1,
+.mini-l {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mini-verb {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #b5bac1;
+}
+.mini-l1 {
+  font-size: 13px;
+  font-weight: 700;
+}
+.mini-l {
+  font-size: 12.5px;
+  color: #dbdee1;
+}
+.mcard-add {
+  min-height: 40px;
+  border: 1px dashed var(--border-d);
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mcard-add:hover {
+  color: var(--accent-text);
+  border-color: var(--border-a);
+}
+.mcard-add:focus-visible {
+  outline: 2px solid var(--accent-hex);
+  outline-offset: 2px;
+}
+
+/*
+ * The card on screen, edited where it stands — see card-editor.js. A dashed
+ * edge on every part while the pointer is on the card, the pencil on the one
+ * under it, a solid edge on the one being edited. Nothing fades in: the
+ * engine redraws the card with every line, and an edge that faded in each
+ * time blinked under a pointer that had not moved. The card keeps Discord's
+ * greys in both themes, so the resting edge is a light one.
+ */
+.dc.editable .dc-zone {
+  position: relative;
+  min-width: 0;
+  border-radius: 6px;
+  outline: 1.5px dashed transparent;
+  outline-offset: 3px;
+  cursor: pointer;
+}
+.dc.editable:hover .dc-zone {
+  outline-color: rgba(255, 255, 255, 0.22);
+}
+.dc.editable .dc-zone:hover {
+  outline-color: var(--accent-hex);
+}
+.dc.editable .dc-zone:focus-visible,
+.dc.editable .dc-zone.editing {
+  outline: 2px solid var(--accent-hex);
+}
+.dc.editable .dc-zone::after {
+  content: '';
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent-hex) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2304140d' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 20h4L19.5 8.5a2.1 2.1 0 00-3-3L5 17v3z'/%3E%3Cpath d='M14.5 7.5l2 2'/%3E%3C/svg%3E") center / 12px no-repeat;
+  box-shadow: 0 0 0 2px #28282d;
+  display: none;
+  pointer-events: none;
+}
+.dc.editable .dc-zone:hover::after,
+.dc.editable .dc-zone:focus-visible::after,
+.dc.editable .dc-zone.editing::after {
+  display: block;
+}
+/* Room between the edge of the lines and the edge of the third line. */
+.dc.editable .dc-lines {
+  gap: 8px;
+}
+.dc-zone-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.dc-body > .dc-zone {
+  flex: none;
+}
+.dc > .dc-zone-buttons {
+  margin-top: auto;
+}
+/* The parts the wide layout places, wrapped. */
+@container (min-width: 640px) {
+  .dc > .dc-zone-verb {
+    grid-area: verb;
+  }
+  .dc > .dc-zone-buttons {
+    grid-area: buttons;
+    margin-top: 0;
+  }
+}
+@media (max-height: 760px) {
+  .dc > .dc-zone-buttons {
+    display: none;
+  }
+}
+
+/*
+ * The bubble a part opens. It hangs off <body> and the script places it:
+ * beside the card when there is room, so the card stays in sight while it
+ * changes, with a notch toward the part; under or over the part otherwise.
+ */
+.ce-pop {
+  position: fixed;
+  z-index: 50;
+  width: min(340px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--r-lg);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-d);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+  animation: fade 0.14s var(--ease-out);
+}
+.ce-pop.side::after {
+  content: '';
+  position: absolute;
+  top: calc(var(--ce-arrow, 30px) - 7px);
+  right: -7px;
+  width: 12px;
+  height: 12px;
+  background: var(--bg-elevated);
+  border-top: 1px solid var(--border-d);
+  border-right: 1px solid var(--border-d);
+  transform: rotate(45deg);
+}
+.ce-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.ce-tab {
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--border-s);
+  border-radius: 99px;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ce-tab:hover {
+  color: var(--text-primary);
+}
+.ce-tab[aria-selected='true'] {
+  background: rgba(var(--accent), 0.14);
+  border-color: var(--border-a);
+  color: var(--accent-text);
+}
+.ce-tab:focus-visible,
+.ce-choice:focus-visible {
+  outline: 2px solid var(--accent-hex);
+  outline-offset: 2px;
+}
+.ce-body {
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ce-intro {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.ce-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ce-label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+/* "All cards" or "Card 2": with several cards, which ones a control reaches. */
+.ce-scope {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.ce-desc,
+.ce-note {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+.ce-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ce-choice {
+  min-height: 30px;
+  padding: 0 11px;
+  border: 1px solid var(--border-d);
+  border-radius: 99px;
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ce-choice:hover {
+  color: var(--text-primary);
+  border-color: var(--border-a);
+}
+.ce-choice.on {
+  background: rgba(var(--accent), 0.14);
+  border-color: var(--border-a);
+  color: var(--accent-text);
+}
+.ce-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.ce-toggle-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ce-field input,
+.ce-field select {
+  min-height: 34px;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+.ce-warn {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--amber);
+}
+.ce-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-s);
+}
+
+/* Why? — the checks for the card on screen, the first failing one the answer. */
+.why {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+}
+.why-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.why-headline {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 700;
+}
+.why-headline.ok {
+  color: var(--accent-text);
+}
+.why-headline.fail {
+  color: var(--amber);
+}
+.why-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+.why-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 7px 0;
+  border-top: 1px solid var(--border-s);
+}
+.why-row:first-child {
+  border-top: 0;
+}
+.why-ico {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+}
+.why-ico svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.why-row.ok .why-ico {
+  background: rgba(var(--accent), 0.16);
+  color: var(--accent-text);
+}
+.why-row.fail .why-ico {
+  background: color-mix(in srgb, var(--red) 18%, transparent);
+  color: var(--red);
+}
+.why-row.warn .why-ico {
+  background: color-mix(in srgb, var(--amber) 18%, transparent);
+  color: var(--amber);
+}
+.why-row.info .why-ico {
+  background: var(--bg-surface);
+  color: var(--text-muted);
+}
+.why-text {
+  flex: 1;
+  min-width: 0;
+}
+.why-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.why-row.ok .why-title {
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+.why-detail {
+  margin-top: 2px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+.why-fixes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+/*
+ * The song, on its own card. It keeps its height; the lyrics take whatever
+ * is left.
  */
 .np-card {
   flex: none;
@@ -1149,88 +1780,6 @@ html[data-theme='light'] .np-progress .np-bar {
   text-align: right;
 }
 
-/*
- * The preview, set into the bottom of the card: its own card chrome goes, and
- * a hairline and its eyebrow are what separate it from the song. Scoped to
- * this page — Settings shows the same preview as a card of its own.
- */
-.page[data-page='now'] .np-card > .dc-card {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
-  grid-template-areas: 'eyebrow note quick link' 'dc dc dc dc';
-  align-items: center;
-  gap: calc(6px + var(--np-ramp) * 0.025) 16px;
-  padding: calc(8px + var(--np-ramp) * 0.025) calc(18px + var(--np-ramp) * 0.025) calc(10px + var(--np-ramp) * 0.05);
-  border: 0;
-  border-top: 1px solid var(--border-s);
-  border-radius: 0;
-  background: none;
-}
-/*
- * The note on how the lyric lines work goes up beside the eyebrow, as its
- * caption. Under the card it was a row of its own, and that row was what
- * made the page scroll at 1180x816 — a 1536x864 screen, maximised.
- */
-.page[data-page='now'] .np-card .dc-head {
-  display: contents;
-}
-.page[data-page='now'] .np-card .dc-head .eyebrow {
-  grid-area: eyebrow;
-}
-.page[data-page='now'] .np-card .dc-head > button {
-  grid-area: link;
-}
-.page[data-page='now'] .np-card .qt-row {
-  grid-area: quick;
-}
-/*
- * One row, cut with an ellipsis, like the preview's lines below. Below about
- * 1180px wide it wrapped to two rows (36px beside a 14px eyebrow), and it
- * shows from 761px tall, at the same pixel as the title's second line: the
- * card grew 46px in one step, and the lyrics went from five lines to three
- * until 854px tall. Its opening words carry the point.
- */
-.page[data-page='now'] .np-card .dc-note {
-  grid-area: note;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-/*
- * Two clocks in one card: the song's bar right above and the preview's own,
- * in two type styles. The song's bar is the one with the local clock, so the
- * preview's goes, at every height. A stream's time since it went live is
- * kept, at every height too: nothing above counts it, and the 640px rule
- * further down would otherwise hide it with the song's.
- */
-.page[data-page='now'] .np-card .dc-time-slot:has(.dc-time) {
-  display: none;
-}
-.page[data-page='now'] .np-card .dc-time-slot:has(.dc-elapsed) {
-  display: block;
-}
-/* The song's own cover is just above, at full size; this one only has to read
-   as Discord's. 16px of art and padding given back to the lyrics. */
-.page[data-page='now'] .np-card .dc {
-  grid-area: dc;
-  gap: calc(6px + var(--np-ramp) * 0.0375);
-  padding: calc(8px + var(--np-ramp) * 0.025) calc(14px + var(--np-ramp) * 0.0125);
-}
-.page[data-page='now'] .np-card .dc-lines {
-  gap: calc(1px + var(--np-ramp) * 0.0125);
-}
-.page[data-page='now'] .np-card .dc-art-wrap,
-.page[data-page='now'] .np-card .dc-art {
-  width: calc(56px + var(--np-ramp) * 0.15);
-  height: calc(56px + var(--np-ramp) * 0.15);
-}
-.page[data-page='now'] .np-card .dc-small {
-  width: calc(22px + var(--np-ramp) * 0.05);
-  height: calc(22px + var(--np-ramp) * 0.05);
-  right: -6px;
-  bottom: -6px;
-}
-
 .badge {
   display: inline-flex;
   align-items: center;
@@ -1290,21 +1839,6 @@ html[data-theme='light'] .np-progress .np-bar {
 .src-btn .src-label {
   color: var(--text-muted);
   font-weight: 500;
-}
-/* Words the Now header sheds when its row is short of room — see fitHead(). */
-.src-short,
-.np-head.tight-src .src-long,
-.np-head.tight-word .seg-word,
-.np-head.tight-sub .seg-sub {
-  display: none;
-}
-.np-head.tight-src .src-short {
-  display: inline;
-}
-/* The number alone, or a number and a player: the gap after the dot is
-   enough, and the one before the player stays. */
-.np-head.tight-word .seg-btn {
-  padding: 0 12px;
 }
 .src-menu {
   position: absolute;
@@ -1400,73 +1934,6 @@ html[data-theme='light'] .np-progress .np-bar {
   text-decoration: underline;
 }
 
-/*
- * Quick switches in the preview's header on Now playing: the presence and the
- * lyrics on it, each a word and a small switch drawn like the Settings ones.
- * The whole of it is the button, so the word is part of the target. No pill
- * around them: at 26px tall a bordered pill made the header row 9px taller
- * than the eyebrow and the Customize link (17px), and the page scrolled again
- * at the smallest window. 16px fits inside the row as it was.
- */
-.qt-row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-.qt {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 16px;
-  padding: 0;
-  border: 0;
-  border-radius: 99px;
-  background: none;
-  color: var(--text-secondary);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 16px;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: color 0.18s;
-}
-.qt:hover {
-  color: var(--text-primary);
-}
-.qt:focus-visible {
-  outline: 2px solid var(--accent-hex);
-  outline-offset: 3px;
-}
-.qt-track {
-  position: relative;
-  flex-shrink: 0;
-  width: 28px;
-  height: 16px;
-  border-radius: 99px;
-  background: var(--bg-surface);
-  /* Same 3:1 edge as .switch: off, it still has to read as a control. */
-  box-shadow: inset 0 0 0 1px #6b6b78;
-  transition: background 0.18s, box-shadow 0.18s;
-}
-.qt-thumb {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--text-secondary);
-  transition: transform 0.18s var(--ease-out), background 0.18s;
-}
-.qt.on .qt-track {
-  background: var(--accent-hex);
-  box-shadow: none;
-}
-.qt.on .qt-thumb {
-  transform: translateX(12px);
-  background: #fff;
-}
 /*
  * Laid out as Discord's profile card lays it out — see discord-model.js for
  * which field goes where, and .dc-l below for why each line keeps to one row.
