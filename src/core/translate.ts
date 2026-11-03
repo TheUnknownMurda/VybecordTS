@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { createLogger } from './logger.js';
 import { evictOldest } from './utils.js';
@@ -92,16 +92,27 @@ export function initTranslateCache(baseDir?: string): void {
   loadDiskCache();
 }
 
+/**
+ * Write the cache out, atomically — a temp file, then a rename, the same shape
+ * the history and the lyrics cache use. It is flushed on the way out, which is
+ * exactly when a forced quit or a shutdown cuts a write short, and a truncated
+ * file loads as nothing: every line went back to the translation service.
+ */
 function flushDiskCache(): void {
   if (!cacheDirty) return;
   initCachePath();
+  const tmpFile = `${cacheFile}.${process.pid}.tmp`;
   try {
     const dir = dirname(cacheFile);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     const entries = [...cache.entries()].slice(-CACHE_MAX);
-    writeFileSync(cacheFile, JSON.stringify(entries));
+    writeFileSync(tmpFile, JSON.stringify(entries));
+    renameSync(tmpFile, cacheFile);
     cacheDirty = false;
-  } catch (e) { log.warn(`Failed to flush translation cache: ${e}`); }
+  } catch (e) {
+    log.warn(`Failed to flush translation cache: ${e}`);
+    try { rmSync(tmpFile, { force: true }); } catch { /* nothing to clean up */ }
+  }
 }
 
 function scheduleCacheFlush(): void {
