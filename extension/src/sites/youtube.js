@@ -23,6 +23,7 @@
   let currentInterval = BASE_INTERVAL_MS;
   let consecutiveFails = 0;
   let streamStartTime = 0; // Track when live stream started
+  let streamStartFor = ''; // ...and which video that start belongs to
   const STREAM_START_KEY = 'vybecord_yt_stream_start';
 
   // ── Helpers ──
@@ -162,13 +163,18 @@
     // playback position so it's accurate even if the tab was opened
     // mid-stream, falling back to Date.now() only if that's not possible.
     if (isLive) {
-      if (streamStartTime === 0) {
+      // Per video: going from one live stream straight to another used to keep
+      // the first one's start, so the second card counted from when the first
+      // stream went live.
+      if (streamStartTime === 0 || streamStartFor !== videoId) {
         streamStartTime = getPersistedStreamStart(videoId) || estimateLiveStartFromVideo(vid) || Date.now();
+        streamStartFor = videoId;
         setPersistedStreamStart(videoId, streamStartTime);
       }
-    } else {
+    } else if (streamStartTime !== 0) {
       // Reset when stream goes offline or when switching to non-live content
       streamStartTime = 0;
+      streamStartFor = '';
       clearPersistedStreamStart();
     }
 
