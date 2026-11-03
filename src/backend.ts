@@ -88,10 +88,25 @@ const WEB_SOURCES = ['browser_', 'soundcloud', 'bandcamp', 'youtube'];
 const VIDEO_SOURCES = ['browser_', 'youtube'];
 const ARTIST_SPLIT_RE = /[,]/;  // Precompiled — used in recordPlay + artist key extraction
 
+/**
+ * Whether captions are worth trying for this source.
+ *
+ * Browser tabs count as YouTube: the OS session says only "MSEdge" and
+ * publishes the video title as the track and the channel as the artist, with
+ * nothing naming the site. One test, because onNewTrack asked it twice in two
+ * spellings, and a source added to one would have fetched captions without
+ * the other ever saying why none came.
+ */
+function isYouTubeLike(source: string): boolean {
+  return source === 'youtube' || source === 'youtube_music' || source.startsWith('browser_');
+}
+
 /** Settings that change where lyrics come from: a track already playing is looked up again. */
 const LYRICS_SOURCE_KEYS = new Set(['cc_enabled', 'cc_lang', 'cc_cookies_file', 'lrclib_dump_path']);
 /** Settings that change which translations a card needs warmed. */
 const TRANSLATION_KEYS = new Set(['translate_lyrics', 'rpc_translate_lyrics', 'translate_target_lang']);
+/** Age-gated tracks remembered for a retry; a session hears a handful at most. */
+const AGE_GATED_MAX = 50;
 
 /** The per-card lyrics switch, by position; `show_lyrics` is presence 1's. */
 const LYRICS_SWITCH_KEYS = ['show_lyrics', 'show_lyrics_2', 'show_lyrics_3', 'show_lyrics_4', 'show_lyrics_5'] as const;
@@ -373,7 +388,7 @@ export class VybecordBackend extends EventEmitter {
   /**
    * Tracks whose captions came back age-restricted, by track key, so the
    * playing one can be retried when the extension hands over a session.
-   * Bounded by hand: one entry per age-gated video heard this run.
+   * Capped at AGE_GATED_MAX, oldest first out.
    */
   private ageGatedTracks = new Set<string>();
   /** Album of the last play accepted as real — lets recordPlay() tell an
@@ -2012,11 +2027,7 @@ export class VybecordBackend extends EventEmitter {
             // are only reached after the local database and every lyrics
             // provider have missed, and a search that finds nothing just returns
             // empty.
-            const isYouTubeSource = trackData.media_source === 'youtube'
-              || trackData.media_source === 'youtube_music'
-              || trackData.media_source.startsWith('browser_');
-
-            if (isYouTubeSource) {
+            if (isYouTubeLike(trackData.media_source)) {
               // Priority 0.5: Local DB FIRST for YouTube — user-imported lyrics beat auto-CC
               // YouTube titles like "Artist - Song (Official Video)" need extra matching:
               // try the full title, then strip "Artist - " prefix for better local DB hits
@@ -2089,6 +2100,9 @@ export class VybecordBackend extends EventEmitter {
                 log.info('[CC] Age-restricted video — showing message');
                 ageGated = true;
                 this.ageGatedTracks.add(this.buildTrackKey(trackData));
+                if (this.ageGatedTracks.size > AGE_GATED_MAX) {
+                  this.ageGatedTracks.delete(this.ageGatedTracks.values().next().value!);
+                }
                 return [{ time: 0, text: AGE_GATED_LINE, source: 'cc' }];
               }
 
@@ -2199,8 +2213,7 @@ export class VybecordBackend extends EventEmitter {
       }
     } else {
       // No lyrics found
-      const isYt = trackData.media_source === 'youtube' || trackData.media_source === 'youtube_music'
-        || trackData.media_source.startsWith('browser_');
+      const isYt = isYouTubeLike(trackData.media_source);
       // A live stream never reached a provider -- the fetch above is gated on
       // it -- so reporting that the lookup failed puts a fault in the log
       // that never happened, 41 times in one real session.

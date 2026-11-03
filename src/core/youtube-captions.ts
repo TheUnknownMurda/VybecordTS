@@ -75,6 +75,17 @@ export interface CCResult {
   videoId?: string;
 }
 
+/**
+ * What yt-dlp says about an age-gated video: "Sign in to confirm your age.
+ * This video may be inappropriate for some users."
+ *
+ * The test used to be `includes('age')`, which every yt-dlp error passes —
+ * "Unable to download webpage", "message", "language". A network hiccup or a
+ * 429 then showed the age-restricted notice in place of lyrics, cached it, and
+ * asked the extension for the browser's YouTube cookies.
+ */
+const AGE_GATE_RE = /confirm your age|age[- ]restricted|inappropriate for some users/i;
+
 // ── In-memory cache ──
 interface CacheEntry { result: CCResult; ts: number; }
 const ccCache = new Map<string, CacheEntry>();
@@ -747,7 +758,9 @@ export async function fetchYouTubeCaptions(
       const noteAgeRestriction = (e: unknown, what: string): void => {
         const errStr = String(e);
         log.warn(`[CC] ${what} fetch error: ${errStr}`);
-        if (errStr.includes('Sign in to confirm your age') || errStr.includes('age')) {
+        // A skip kills yt-dlp, and its error then says nothing about the video.
+        if (signal?.aborted) return;
+        if (AGE_GATE_RE.test(errStr)) {
           isAgeRestricted = true;
           log.warn('[CC] Video is age-restricted');
         }
@@ -808,6 +821,10 @@ export async function fetchYouTubeCaptions(
 
     const fileArgs = cookieArgs();
     let { pick, isAgeRestricted } = await downloadSubs(fileArgs);
+    // Skipped mid-fetch. Both passes swallow their own failure, so without
+    // this the empty temp folder was cached below as "this video has no
+    // captions" — for the cache's whole lifetime, or until a restart.
+    if (signal?.aborted) return EMPTY;
 
     // Age-gated while signed out, and no cookies file of the user's own: retry
     // with the session the extension lent, or ask it for one. See the comment
@@ -820,6 +837,7 @@ export async function fetchYouTubeCaptions(
         await writeFile(jarFile, toNetscapeCookies(jar), { mode: 0o600 });
         log.info('[CC] Age-restricted signed out — retrying with the browser\'s YouTube session');
         ({ pick, isAgeRestricted } = await downloadSubs(['--cookies', jarFile]));
+        if (signal?.aborted) return EMPTY;
         if (!pick && isAgeRestricted) {
           log.info('[CC] Still age-restricted signed in — the account is probably not age-verified');
         }
