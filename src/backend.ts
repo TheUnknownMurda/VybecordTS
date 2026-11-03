@@ -2690,11 +2690,14 @@ export class VybecordBackend extends EventEmitter {
   getCurrentLyricsLrc(slotIndex = 0): string | null {
     const lyrics = this.lyricsCache.get(this.slotAt(slotIndex).cacheKey);
     if (!lyrics || lyrics.length === 0) return null;
+    // Through whole centiseconds, as the Library's lrcStamp does: rounding the
+    // seconds instead wrote 59.996s as `[00:60.00]`, a stamp other players
+    // refuse and that the Library then re-imported as it was.
     return lyrics.map(l => {
-      const totalSecs = l.time / 1000;
-      const mins = Math.floor(totalSecs / 60);
-      const secs = totalSecs % 60;
-      return `[${String(mins).padStart(2, '0')}:${secs.toFixed(2).padStart(5, '0')}] ${l.text}`;
+      const cs = Math.max(0, Math.round(l.time / 10));
+      const mins = Math.floor(cs / 6000);
+      const secs = Math.floor((cs % 6000) / 100);
+      return `[${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}.${String(cs % 100).padStart(2, '0')}] ${l.text}`;
     }).join('\n');
   }
 
