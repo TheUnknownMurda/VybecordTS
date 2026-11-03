@@ -3188,6 +3188,92 @@ html[data-theme='light'] .lyr-clickable:hover {
   padding: 22px;
 }
 
+/* What's New — see whats-new.js. A glyph and two lines per change. */
+.wn {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.wn-head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.wn-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.wn-headline {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.wn-release {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.wn-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.wn-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.wn-ico {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: rgba(var(--accent), 0.14);
+  color: var(--accent-text);
+}
+.wn-ico svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.wn-item-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.wn-item-text {
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+/* Held at the bottom of the box while a short window scrolls the list, so
+   Got it is always in reach. The negative margins take it to the box's edges. */
+.wn-foot {
+  position: sticky;
+  bottom: -22px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 0 -22px -22px;
+  padding: 14px 22px 22px;
+  border-top: 1px solid var(--border-s);
+  background: var(--bg-elevated);
+}
+
 /* ── Numbered instructions ────────────────────────────────────────────────── */
 
 .steps {

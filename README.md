@@ -196,6 +196,8 @@ Queries against the dump run on their own worker thread, so even a 100 GB+ file 
 
 Packaged builds check GitHub Releases 5 seconds after launch and then every 6 hours. When an update is available, it is downloaded in the background and installed the next time you quit. A banner in the window, and **Settings → App & window → Updates**, let you restart into it right away. Updates are turned off when running from source.
 
+The first time the window opens on a new version, **What's new** lists its highlights, with a link to the full release notes. It shows once (closing it records the version in `whats_new_seen`), every version you skipped included, and **Settings → About → What's new** shows it again. A fresh install, with no listening history yet, skips it. The highlights are written into the app (`ui/src/whats-new.js`), so they show offline; a release with nothing worth announcing has no entry and no dialog.
+
 ### Uninstall
 
 Uninstall *Vybecord* from **Windows Settings → Apps**. Your data in `%APPDATA%\Vybecord` is not removed. Delete that folder yourself to remove it. If you installed the Spicetify extension, remove it with:
@@ -434,6 +436,7 @@ The second presence button is fixed. It links to what is playing and is labelled
 | --- | --- | --- |
 | `bug_report_webhook` | not set | *config only*: overrides the built-in report webhook. It must be a `https://discord.com/api/webhooks/…` URL. |
 | `first_run_completed` | `false` | Internal. |
+| `whats_new_seen` | `""` | Internal: the version whose **What's new** was last closed. Clear it to see that dialog again on the next launch. |
 
 ### Environment variables
 
@@ -662,7 +665,7 @@ Bug reports and pull requests are welcome.
 
 Releases are made by hand from `desktop-app`. There is no release CI.
 
-1. Bump the version: `npm version <x.y.z> --no-git-tag-version`.
+1. Bump the version: `npm version <x.y.z> --no-git-tag-version`. For a release worth announcing, add its entry at the top of `ENTRIES` in `ui/src/whats-new.js` (a headline and a few items, in English); a fix or two needs none.
 2. Commit: `Release <x.y.z>: <summary>`.
 3. Build: `npm run dist`.
 4. If `extension/` changed, bump `extension/manifest.json` and run `node scripts/pack-extension.mjs`. Otherwise, reuse the previous extension zips.

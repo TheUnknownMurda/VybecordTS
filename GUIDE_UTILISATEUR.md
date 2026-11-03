@@ -35,6 +35,10 @@ Vybecord continue dans la zone de notification (à côté de l'horloge). Clique 
 
 Tu peux changer ça dans **Settings → App & window → Close to tray**.
 
+### Après une mise à jour
+
+Les mises à jour se téléchargent toutes seules et s'installent quand tu quittes l'appli. La première fois que tu ouvres la fenêtre sur la nouvelle version, **What's new** montre ce qui a changé, avec un lien vers les notes de version complètes. Il ne s'affiche qu'une fois ; **Settings → About → What's new** le rouvre.
+
 ### Les pages
 
 | Page | À quoi ça sert |

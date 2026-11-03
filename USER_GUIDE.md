@@ -35,6 +35,10 @@ Vybecord keeps running in the notification area, next to the clock. Click the ic
 
 You can change this under **Settings → App & window → Close to tray**.
 
+### After an update
+
+Updates download on their own and install when you quit. The first time you open the window on the new version, **What's new** shows what changed, with a link to the full release notes. It shows once; **Settings → About → What's new** brings it back.
+
 ### The pages
 
 | Page | What it does |

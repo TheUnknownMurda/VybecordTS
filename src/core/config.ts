@@ -94,6 +94,9 @@ const DEFAULTS: VybecordConfig = {
   start_minimized: false,
   launch_on_startup: false,
   theme: 'dark',
+  // The version whose What's New was last closed. Empty on a fresh install and
+  // after an update from a version that did not have it — see whats-new.js.
+  whats_new_seen: '',
 };
 
 // ── Config validation schema ──
@@ -198,6 +201,7 @@ export const CONFIG_SCHEMA: Record<string, FieldSpec> = {
   start_minimized: { type: 'boolean' },
   launch_on_startup: { type: 'boolean' },
   theme: { type: 'string', values: ['dark', 'light'] as const },
+  whats_new_seen: { type: 'string', maxLength: 32 },
 };
 
 /** Keys never sent back to a client in clear text. */

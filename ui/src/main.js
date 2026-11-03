@@ -11,6 +11,7 @@ import { $, $$, el, toast, platformInfo } from './util.js';
 import { state, subscribe, init } from './state.js';
 import { setNavigator } from './router.js';
 import { mountUpdateBanner } from './update-banner.js';
+import { maybeShowWhatsNew } from './whats-new.js';
 
 import * as now from './pages/now.js';
 import * as library from './pages/library.js';
@@ -212,6 +213,9 @@ async function main() {
   const first = asked ? '' : await firstPage();
   booted = true;
   navigate(asked || first);
+  // Over the first page rather than instead of it: closed, it leaves the
+  // window where it would have opened.
+  void maybeShowWhatsNew();
 }
 
 main();

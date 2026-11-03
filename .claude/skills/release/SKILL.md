@@ -13,7 +13,10 @@ in README.md → Contributing → "Release checklist". Steps:
 4. Draft release notes from `git log <previous-tag>..HEAD`, in the style of RELEASE_NOTES.md:
    a bold lead sentence per change saying what the user saw, then why. Save them to
    `release-notes-<x.y.z>.md` for `gh release create`, and show them to the user.
-5. Commit `Release <x.y.z>: <one-line summary>` with only the version bump.
+5. For a release worth announcing, add its entry at the top of `ENTRIES` in `ui/src/whats-new.js`:
+   a headline and a few items, in English, from the user's side. It is what installed copies show on
+   their first launch of the new version. A fix or two needs none (no entry, no dialog).
+   Commit `Release <x.y.z>: <one-line summary>` with the version bump and that entry.
 6. If `extension/` changed since the last release, bump `extension/manifest.json`.
 7. The rest needs Windows — hand the user these commands, in order, without running them:
    `npm run dist`, `node scripts/pack-extension.mjs` (only if step 6 applied),

@@ -13,6 +13,7 @@ import { goto } from '../router.js';
 import { discordPreview } from '../discord-card.js';
 // The card's choices live with the editor on Now playing, so both offer the same lists.
 import { ACTIVITY_TYPES, ACTIVITY_KEYS, STATUS_DISPLAY, ICON_MODES, ICON_KEYS } from '../card-editor.js';
+import { showWhatsNew } from '../whats-new.js';
 import { spicetifyCard } from './spicetify-card.js';
 import { updateCard } from './update-card.js';
 import { lastfmCard } from './lastfm-card.js';
@@ -669,6 +670,7 @@ function aboutCat(body) {
   body.append(
     group('Vybecord', [
       actionRow(`Version ${state.version || ''}`.trim(), 'Discord Rich Presence with real-time synced lyrics.', [
+        btn('What’s new', () => { void showWhatsNew(); }),
         btn('Project page', () => api.openExternal('https://github.com/TheUnknownMurda/VybecordTS')),
       ]),
       actionRow('User guide', 'Every feature, step by step.', [

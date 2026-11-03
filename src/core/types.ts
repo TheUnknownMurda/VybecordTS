@@ -267,6 +267,8 @@ export interface VybecordConfig {
   launch_on_startup: boolean;
   /** Window colour scheme: 'dark' | 'light'. */
   theme: string;
+  /** The app version whose What's New was last closed; '' when none was. */
+  whats_new_seen: string;
   [key: string]: unknown;
 }
 
