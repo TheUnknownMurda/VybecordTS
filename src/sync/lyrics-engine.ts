@@ -461,6 +461,35 @@ export class LyricsEngine {
   }
 
   /**
+   * Take up changed settings on the track already running, without restarting it.
+   *
+   * For a change made in Settings or the tray while a card is up. startTrack()
+   * would re-anchor the clock on the track's last reading — seconds old for a
+   * Spotify push held back by a minimised window — and blank the card for a
+   * beat. This keeps the clock and the line, rebuilds what the settings feed,
+   * and republishes to the window as well as to Discord, since a romanisation
+   * or translation switch changes what both show. Unlike updateConfig() it
+   * publishes even when the card's own settings did not move: the change may be
+   * to whether the card is up at all, and an unchanged payload costs nothing,
+   * the IPC layer drops it.
+   */
+  applyConfig(rpcConfig: Record<string, unknown>): void {
+    const offsetMs = (rpcConfig.lyrics_offset_ms as number) || 0;
+    const offsetMoved = offsetMs !== this.getUserOffsetMs();
+    this.rpcConfig = rpcConfig;
+    if (!this.running || !this.trackData) return;
+    this.rebuildTrackCache();
+    this.rebuildNoLyricsCache();
+    // The offset decides which line is due: re-seat the index and the timer.
+    if (offsetMoved && this.lyrics.length && !this.liveLines) {
+      this.updateOffset(offsetMs);
+      return;
+    }
+    this.resetDedup();
+    this.emitUpdate();
+  }
+
+  /**
    * Hot-inject lyrics into the running engine without restarting timing.
    * Called when lyrics arrive asynchronously after startTrack([], ...).
    * Avoids the stop/start gap that causes a visible Discord freeze.

@@ -88,6 +88,11 @@ const WEB_SOURCES = ['browser_', 'soundcloud', 'bandcamp', 'youtube'];
 const VIDEO_SOURCES = ['browser_', 'youtube'];
 const ARTIST_SPLIT_RE = /[,]/;  // Precompiled — used in recordPlay + artist key extraction
 
+/** Settings that change where lyrics come from: a track already playing is looked up again. */
+const LYRICS_SOURCE_KEYS = new Set(['cc_enabled', 'cc_lang', 'cc_cookies_file', 'lrclib_dump_path']);
+/** Settings that change which translations a card needs warmed. */
+const TRANSLATION_KEYS = new Set(['translate_lyrics', 'rpc_translate_lyrics', 'translate_target_lang']);
+
 /** The per-card lyrics switch, by position; `show_lyrics` is presence 1's. */
 const LYRICS_SWITCH_KEYS = ['show_lyrics', 'show_lyrics_2', 'show_lyrics_3', 'show_lyrics_4', 'show_lyrics_5'] as const;
 /** The per-card activity type, by position; `rpc_activity_type` is presence 1's. */
@@ -363,6 +368,8 @@ export class VybecordBackend extends EventEmitter {
   private configDir: string;
 
   private _lastCcLang: string | undefined;
+  /** The config as of the last configUpdate, to tell which keys a change moved. */
+  private lastConfig: Record<string, unknown>;
   /**
    * Tracks whose captions came back age-restricted, by track key, so the
    * playing one can be retried when the extension hands over a session.
@@ -396,6 +403,7 @@ export class VybecordBackend extends EventEmitter {
     });
     // Seed before anything can change, so the first change is seen as one.
     this._lastCcLang = this.config.get('cc_lang') as string | undefined;
+    this.lastConfig = { ...(this.config.getAll() as unknown as Record<string, unknown>) };
 
     this.pool = new DiscordPool(
       (appId) => this.onDiscordReady(appId),
@@ -440,23 +448,35 @@ export class VybecordBackend extends EventEmitter {
       // first for nothing.
       this.reconcile(false);
 
-      // Whatever is playing restarts under the new config (show_lyrics
-      // toggles, template changes, button changes, …) — for the window as
-      // much as for Discord, so this is not gated on the socket being up.
+      /*
+       * Whatever is playing takes up the new config (show_lyrics toggles,
+       * template changes, button changes, …) — for the window as much as for
+       * Discord, so this is not gated on the socket being up.
+       *
+       * In place, not by restarting the track. Every change used to restart
+       * each engine with startTrack(), the theme and a detection switch
+       * included: that re-anchors the clock on the slot's last reading, which
+       * for a Spicetify push held back by a minimised Spotify is seconds old,
+       * so the lyrics jumped back and the card blanked for a beat on every
+       * click. And a track with nothing cached — a stream, a video without
+       * captions — went back to every provider and yt-dlp each time. Only a
+       * setting that changes where lyrics come from asks again.
+       */
+      const prev = this.lastConfig;
+      this.lastConfig = { ...(cfg as unknown as Record<string, unknown>) };
+      const changed = Object.keys(this.lastConfig).filter(k => this.lastConfig[k] !== prev[k]);
+      const refetch = changed.some(k => LYRICS_SOURCE_KEYS.has(k));
+      const rewarm = changed.some(k => TRANSLATION_KEYS.has(k));
       for (const slot of this.slots) {
         if (!slot.track) continue;
-        const rpcConfig = this.rpcConfigForTrack(slot, slot.track);
-        const cachedLyrics = this.lyricsCache.get(slot.cacheKey);
-        if (!cachedLyrics) {
-          // Lyrics never fetched for this track — trigger a full fetch
-          this.onNewTrack(slot, slot.track).catch(() => {});
-        } else {
-          slot.engine.startTrack(cachedLyrics, slot.track, rpcConfig);
-
-          // Re-warm for the language that was just picked, or for the toggle
-          // that was just switched on.
-          this.warmTranslations(cachedLyrics);
+        if (refetch) {
+          this.onNewTrack(slot, slot.track).catch(e => log.error(`[CONFIG] Lyrics lookup failed: ${e}`));
+          continue;
         }
+        slot.engine.applyConfig(this.rpcConfigForTrack(slot, slot.track));
+        // Re-warm for the language that was just picked, or for the toggle
+        // that was just switched on.
+        if (rewarm) this.warmTranslations(slot.engine.getLyrics());
       }
     });
   }
