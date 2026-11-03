@@ -132,7 +132,10 @@ export function initUpdater(getWindow: () => BrowserWindow | null, onChange?: ()
     setState({ status: 'none', version: app.getVersion() });
   });
   autoUpdater.on('download-progress', (p) => {
-    setState({ status: 'downloading', version: state.status === 'available' ? state.version : '', percent: Math.round(p.percent) });
+    // From the state before this tick, 'available' or a previous 'downloading':
+    // reading it off 'available' alone lost the version on the second tick.
+    const version = state.status === 'available' || state.status === 'downloading' ? state.version : '';
+    setState({ status: 'downloading', version, percent: Math.round(p.percent) });
   });
   autoUpdater.on('update-downloaded', (info) => {
     log.info(`Update ${info.version} ready — it will install when the app closes`);
@@ -152,6 +155,14 @@ export function initUpdater(getWindow: () => BrowserWindow | null, onChange?: ()
 /** Ask now. Safe to call from a button; failures land in the state, not a throw. */
 export async function check(): Promise<UpdateState> {
   if (!app.isPackaged) return state;
+  /*
+   * Downloaded already: nothing to learn until the restart that installs it.
+   * The six-hourly check ran on regardless, and its 'checking' — or its error,
+   * on a laptop that had since gone offline — replaced 'ready', which took the
+   * "Restart to install" item out of the tray and the banner out of the window
+   * for an update that was sitting on disk.
+   */
+  if (state.status === 'ready') return state;
   try {
     await autoUpdater.checkForUpdates();
   } catch (e) {
