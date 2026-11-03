@@ -300,23 +300,34 @@ let musixmatchToken: string | null = null;
 let musixmatchTokenExpiry = 0;
 let _mxmTokenInflight: Promise<string | null> | null = null;
 
-/** Acquire a temporary Musixmatch guest token (valid ~10 min). */
+/**
+ * Acquire a temporary Musixmatch guest token (valid ~10 min).
+ *
+ * The request is shared by everyone who asks while it is in flight, so it runs
+ * on its own timeout and nobody's signal. It used to run on the first caller's:
+ * when that lookup was abandoned — a skip, or a faster provider winning the
+ * race, which aborts the rest — the token request died with it, and every
+ * other presence waiting on the same promise got null and skipped Musixmatch.
+ * A caller's own signal now only stops that caller waiting.
+ */
 async function getMusixmatchToken(signal?: AbortSignal): Promise<string | null> {
   if (musixmatchToken && Date.now() < musixmatchTokenExpiry) return musixmatchToken;
-  if (_mxmTokenInflight) return _mxmTokenInflight;
-  _mxmTokenInflight = _fetchMusixmatchToken(signal).finally(() => { _mxmTokenInflight = null; });
-  return _mxmTokenInflight;
+  _mxmTokenInflight ??= _fetchMusixmatchToken().finally(() => { _mxmTokenInflight = null; });
+  if (!signal) return _mxmTokenInflight;
+  if (signal.aborted) return null;
+  return Promise.race([
+    _mxmTokenInflight,
+    new Promise<null>(resolve => signal.addEventListener('abort', () => resolve(null), { once: true })),
+  ]);
 }
 
-async function _fetchMusixmatchToken(signal?: AbortSignal): Promise<string | null> {
+async function _fetchMusixmatchToken(): Promise<string | null> {
   try {
-    const timeoutSignal = AbortSignal.timeout(MUSIXMATCH_TIMEOUT);
-    const combinedSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
     const resp = await fetch(
       `${MUSIXMATCH_BASE}/token.get?app_id=web-desktop-app-v1.0`,
       {
         headers: { 'User-Agent': USER_AGENT, 'Cookie': 'x-mxm-token-guid=' },
-        signal: combinedSignal,
+        signal: AbortSignal.timeout(MUSIXMATCH_TIMEOUT),
       },
     );
     if (!resp.ok) return null;
