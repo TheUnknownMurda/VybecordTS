@@ -205,6 +205,8 @@ const PARTS = {
         when: () => cfg('rpc_status_display') === 'custom',
       },
     ],
+    // The one place the card does not say what is set here (see buildActivity).
+    note: 'A YouTube Short says Watching where this says Listening to.',
   }),
 
   lines: (i) => ({

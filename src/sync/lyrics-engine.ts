@@ -760,7 +760,11 @@ export class LyricsEngine {
 
     // Detect track repeat/loop: progress jumped far backward (e.g. 240s → 0s).
     // This bypasses the cooldown — the track genuinely restarted.
-    const isRepeatJump = currentElapsed > 5000 && progressMs < currentElapsed * 0.5 && drift > 3000;
+    //
+    // A Short loops by itself, and some last three seconds: any second back is
+    // a loop there, or a seek the same branch serves as well.
+    const loopedShort = !!this.trackData?.is_short && progressMs + 1000 < currentElapsed;
+    const isRepeatJump = loopedShort || (currentElapsed > 5000 && progressMs < currentElapsed * 0.5 && drift > 3000);
 
     if (isRepeatJump) {
       log.info(`[REPEAT] Progress jumped ${currentElapsed.toFixed(0)}ms → ${progressMs}ms — track looped, force recalibrating`);
@@ -775,7 +779,10 @@ export class LyricsEngine {
       const offset = baseMs + this.measuredLatencyMs + this.getTotalOffsetMs();
       this.currentIdx = findLyricIndex(this.lyrics, progressMs + offset);
       this.resetCoverage();
-      this.resetDedup();
+      // A Short with nothing to sing has nothing new to show after a loop: its
+      // timer counts the sitting, so the card is the same card. Forcing it out
+      // anyway cost an update per loop, every few seconds.
+      if (this.lyrics.length || !this.trackData?.is_short) this.resetDedup();
       this.emitUpdate();
       this.cancelTimer();
       this.scheduleNext();
@@ -989,10 +996,16 @@ export class LyricsEngine {
           this.resetDedup();
           this.emitUpdate();
         }, 5000);
-        this.timer = setTimeout(() => {
-          log.info('[END] Track duration reached');
-          this.stop();
-        }, remaining);
+        // Not a Short's: it loops instead of ending, and a stopped engine
+        // read as a track that had ended, so the card came down at the end of
+        // every loop and went back up with the next push. Running on, the
+        // clock is brought back to the start by that push (see loopedShort).
+        if (!this.trackData?.is_short) {
+          this.timer = setTimeout(() => {
+            log.info('[END] Track duration reached');
+            this.stop();
+          }, remaining);
+        }
       }
       return;
     }
@@ -1445,7 +1458,9 @@ export class LyricsEngine {
 
     // Platform icon (reuse `source` from above)
     this.cachedIcon = PLATFORM_ICONS[source] ?? null;
-    this.cachedPlatText = this.cachedIcon ? `Playing on ${this.cachedIcon[1]}` : '';
+    this.cachedPlatText = !this.cachedIcon ? ''
+      : d.is_short ? `Watching ${SHORTS_NAME}`
+      : `Playing on ${this.cachedIcon[1]}`;
 
     // Cache config flags to avoid per-emit boolean casts
     this.cfgShowLyrics = (this.rpcConfig.show_lyrics as boolean) !== false;
@@ -1539,7 +1554,9 @@ export class LyricsEngine {
       d.repeat_mode === 'track' ? ' | 🔂' : '';
     // A Kick stream's card while its captions show: channel, title, category,
     // without the note, microphone and disc a song's fields are marked with.
-    this.cachedInfoText = d.media_source === 'kick' || d.media_source === 'twitch'
+    // A Short's, under its captions: its title and its channel, plain, since
+    // neither is a song or an artist.
+    this.cachedInfoText = d.media_source === 'kick' || d.media_source === 'twitch' || d.is_short
       ? truncate([d.track_name, this.cachedDisplayArtist, d.album_name].filter(Boolean).join(' | ') || '  ', 128)
       : buildInfoText(d, '', '', this.cfgShowPlaylist);
     // Insert play mode suffix after context/album in infoText (visible in large_text when lyrics are showing)
@@ -1585,7 +1602,11 @@ export class LyricsEngine {
     // The card's own setting, for every source. Twitch and Kick used to be
     // pinned to Listening whatever it said, which made a "Watching" card for
     // a stream impossible to set up — the one source the verb fits best.
-    const activityType = this.cfgActivityType;
+    //
+    // Except for a Short on a Listening card, which says Watching. Listening is
+    // the default because most of what plays is music; nobody listens to a
+    // Short. Any other verb was picked on purpose and is kept.
+    const activityType = d.is_short && this.cfgActivityType === 2 ? 3 : this.cfgActivityType;
 
     /*
      * When the track started, as one number that does not move.
@@ -1606,11 +1627,21 @@ export class LyricsEngine {
      * Live streams keep their own start — a stream's bar counts from when it
      * went live, not from when this app noticed it.
      */
+    /*
+     * A Short has no bar either. It loops, so a bar for it ran to the end and
+     * sat there until the next push brought it back to the start, every ten
+     * to sixty seconds, and each loop was one more update for the rate limiter
+     * to hold back. The card counts the sitting instead (shorts_since_ms),
+     * which does not move from one Short to the next: swiping changes the
+     * title and the cover, never the timer.
+     */
     const startTs = d.is_live && d.stream_start_time_ms
       ? Math.floor(d.stream_start_time_ms / 1000)
-      : this.trackStartUnix;
+      : d.is_short && d.shorts_since_ms
+        ? Math.floor(d.shorts_since_ms / 1000)
+        : this.trackStartUnix;
 
-    const endTs = d.duration_ms > 0 ? startTs + Math.floor(d.duration_ms / 1000) : 0;
+    const endTs = d.duration_ms > 0 && !d.is_short ? startTs + Math.floor(d.duration_ms / 1000) : 0;
 
     let details: string;
     let state: string;
@@ -1710,6 +1741,9 @@ export class LyricsEngine {
         state = this.cachedDisplayArtist ? truncate((d.media_source === 'kick' || d.media_source === 'twitch' || d.artist_is_channel) ? this.cachedDisplayArtist : `🎤 ${this.cachedDisplayArtist}`, 128) : '  ';
         if (status) {
           largeText = truncate(status, 128);
+        } else if (d.is_short) {
+          // The third line says what the timer counts: time on Shorts.
+          largeText = SHORTS_NAME;
         } else {
           // Kick/Twitch: don't add album emoji
           largeText = this.cachedHasAlbum
@@ -2225,6 +2259,9 @@ function platformSearchUrl(source: string, query: string): string {
   const builder = PLATFORM_SEARCH[source];
   return builder ? builder(query) : `https://www.google.com/search?q=${encodeURIComponent(query)}`;
 }
+
+/** What a Short is called on the card. */
+const SHORTS_NAME = 'YouTube Shorts';
 
 const PLATFORM_NAMES: Record<string, string> = {
   spotify: 'Spotify', apple_music: 'Apple Music', deezer: 'Deezer',

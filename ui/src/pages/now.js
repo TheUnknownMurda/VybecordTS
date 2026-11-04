@@ -673,7 +673,10 @@ function paintTrack(playing) {
     return;
   }
 
-  const [label] = platformInfo(track.media_source);
+  // A Short says so: the card it mirrors does too, and its timer counts the
+  // sitting rather than this one clip. "Shorts" alone, because "Watching on
+  // YouTube Shorts" ran past the card at the smallest window.
+  const label = track.is_short ? 'Shorts' : platformInfo(track.media_source)[0];
   /*
    * What leads the line says what the player is doing: the pulse while it
    * plays, a pause glyph when it stops, and for a stream the red LIVE tag
@@ -692,7 +695,7 @@ function paintTrack(playing) {
   if (!lead.length) lead.push(el('span', { class: 'pulse' }));
   // An offline channel is neither watched nor played: the tab is just open on it.
   const offline = track.context_type === 'offline';
-  const verb = !track.is_playing ? 'Paused on' : offline ? 'Open on' : streamCard ? 'Watching on' : 'Playing on';
+  const verb = !track.is_playing ? 'Paused on' : offline ? 'Open on' : track.is_short ? 'Watching' : streamCard ? 'Watching on' : 'Playing on';
   $('#npState').replaceChildren(
     el('span', { class: 'eyebrow np-source' }, [...lead, `${verb} ${label}`]),
     ...badges(track).map((b) => statusChip(...b)),
@@ -798,9 +801,12 @@ function paintLyrics(l) {
   // song's lines, with nothing to re-time, report or copy.
   const captions = synced && kickCaptions(t);
   kind.hidden = !(synced || plain);
-  kind.textContent = captions ? (t.is_live ? 'Live captions' : 'Captions') : synced ? 'Synced' : plain ? 'Words only' : '';
+  // A Short only ever gets its captions (see onNewTrack in the backend).
+  const shortCaptions = synced && !!t?.is_short;
+  kind.textContent = captions ? (t.is_live ? 'Live captions' : 'Captions') : shortCaptions ? 'Captions' : synced ? 'Synced' : plain ? 'Words only' : '';
   kind.title = plain ? 'Found without timings, so they cannot follow the song'
-    : captions ? (t.is_live ? 'Kick\'s captions, as the stream goes' : 'Kick\'s captions, as the video plays') : '';
+    : captions ? (t.is_live ? 'Kick\'s captions, as the stream goes' : 'Kick\'s captions, as the video plays')
+    : shortCaptions ? 'The Short\'s captions from YouTube, as it plays' : '';
   const lyricsOff = state.config[lyricsKey(state.focus)] === false;
   const offMsg = ['Lyrics are switched off for this card', 'Turn them back on with Lyrics, in the middle column.'];
 
@@ -816,6 +822,11 @@ function paintLyrics(l) {
     else if (!synced) empty = ['No captions yet', 'Turn on captions (CC) in Kick\'s player: what is said shows here and on the card, as lyrics.'];
   }
   else if (t.is_live) empty = ['Live streams have no lyrics', 'The card shows the stream title and how long it has been live instead.'];
+  else if (t.is_short && !synced) {
+    // Looking and having found nothing read the same from here (the engine
+    // sends nothing until it has lines), so the words cover both.
+    empty = lyricsOff ? offMsg : ['Shorts show their captions', 'A Short is not looked up as a song. If it has captions on YouTube, what is said shows here and on the card, a few seconds in.'];
+  }
   else if (t.context_type === 'offline') empty = ['This channel is offline', 'The card shows the channel as offline until it goes live.'];
   else if (t.media_source === 'twitch' || t.media_source === 'kick') {
     empty = ['Stream videos have no lyrics', 'The card shows the channel and the video\'s title instead.'];
