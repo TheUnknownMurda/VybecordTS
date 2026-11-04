@@ -162,7 +162,7 @@ Avec l'extension (2.2.2 ou plus récente), un Short a sa propre carte au lieu de
 - le titre du Short sans ses hashtags, et sa chaîne, qui mène à la page de la chaîne ;
 - l'image du Short, à la verticale, plutôt qu'une bande entre deux zones floues ;
 - **YouTube Shorts** en troisième ligne, et un compteur du temps passé sur les Shorts, au lieu d'une barre de progression qui repart à chaque boucle. Passer au Short suivant change le titre et l'image, jamais le compteur. Regarder une vidéo normale, ou deux minutes sans aucun Short en lecture, le remet à zéro ;
-- **Watching** plutôt que **Listening to**, quand la carte est réglée sur Listening. Tout autre verbe que tu as choisi reste ;
+- **Watching**, ou **Listening to** si tu préfères : c'est **Settings → Discord presence → Activity type for Shorts**, aussi à un clic sur le verbe de la carte dans **Now playing**. Ça vaut pour toutes les cartes, et tout ce qui n'est pas un Short garde son propre verbe ;
 - le bouton ouvre le Short.
 
 Un Short n'est jamais cherché comme une chanson : son titre n'est pas le nom d'une chanson, et une chanson qui joue dessous en est un extrait de quelques secondes, que les minutages d'une chanson ne suivraient pas. Si le Short a des sous-titres sur YouTube, ce qui se dit s'affiche sur la carte, comme pour une vidéo. Les Shorts restent hors de l'historique d'écoute, d'**Activity** et de Last.fm, comme une chaîne hors ligne. Sans l'extension, Windows ne voit qu'un onglet de navigateur et un Short s'affiche comme avant.

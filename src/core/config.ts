@@ -42,6 +42,9 @@ const DEFAULTS: VybecordConfig = {
   rpc_activity_type_3: -1,
   rpc_activity_type_4: -1,
   rpc_activity_type_5: -1,
+  // A Short on any card: Watching, because it is watched. Listening (2) for
+  // anyone who would rather it read like the music around it.
+  rpc_shorts_activity_type: 3,
   rpc_status_display: 'app', // status line keeps showing the app name by default
   rpc_status_template: '{title} - {artist}',
   // The playlist has always been on the presence; the switch is for people who
@@ -167,6 +170,8 @@ export const CONFIG_SCHEMA: Record<string, FieldSpec> = {
   rpc_activity_type_3: { type: 'number', min: -1, max: 5 },
   rpc_activity_type_4: { type: 'number', min: -1, max: 5 },
   rpc_activity_type_5: { type: 'number', min: -1, max: 5 },
+  // Listening(2) or Watching(3): the two verbs offered for a Short.
+  rpc_shorts_activity_type: { type: 'number', min: 2, max: 3 },
   rpc_status_display: { type: 'string', values: STATUS_DISPLAY_CHOICES },
   rpc_status_template: { type: 'string', maxLength: 128 },
   rpc_show_playlist: { type: 'boolean' },

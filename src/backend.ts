@@ -3200,6 +3200,7 @@ export class VybecordBackend extends EventEmitter {
       // Per position too: the song can say Listening while the stream on the
       // next card says Watching. A card left on -1 follows presence 1.
       rpc_activity_type: activityTypeFor(cfg, slot.index),
+      rpc_shorts_activity_type: cfg.rpc_shorts_activity_type,
       rpc_status_display: cfg.rpc_status_display,
       rpc_status_template: cfg.rpc_status_template,
       rpc_show_playlist: cfg.rpc_show_playlist,

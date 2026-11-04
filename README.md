@@ -61,7 +61,7 @@ Vybecord is a Windows desktop app (Electron + TypeScript). It reads the Windows 
 - **A Discord application per platform**, so the card header reads *Spotify*, *YouTube*, *SoundCloud*, *Apple Music*, *Twitch* or *Kick*. Kick and Twitch have five each and YouTube three, so several streams of one site each keep its logo. Seventeen applications are built in, far more than the five cards the app can show.
 - **Customisable card, edited where it stands.** You choose the activity type (Listening / Playing / Watching / Competing, per presence when there are several), what the one-line status shows (including a custom template), the small-icon style (including one that matches the cover's colour), and one custom button. Click a part of the card on **Now playing** to change it there, or use **Settings**. The title, artist and cover are clickable.
 - **Cover art.** The player's own cover (Spotify, Apple Music, or a local file's) is published to Vybecord's cover store so Discord shows exactly that one (a switch in Settings). Only when there is none, the cover is looked up on Deezer, with the iTunes Search API as fallback.
-- **YouTube Shorts** (with the browser extension) get a card of their own: the title without its hashtags, the channel, the upright picture, *YouTube Shorts* as the third line and the time spent on Shorts instead of a progress bar that restarts with every loop. On a Listening card a Short says *Watching*. Shorts stay out of the history, **Activity** and Last.fm.
+- **YouTube Shorts** (with the browser extension) get a card of their own: the title without its hashtags, the channel, the upright picture, *YouTube Shorts* as the third line and the time spent on Shorts instead of a progress bar that restarts with every loop. A Short says *Watching*, or *Listening to* if **Activity type for Shorts** is set so. Shorts stay out of the history, **Activity** and Last.fm.
 - **Away-aware.** The presence goes down when your machine has been idle long enough for Discord to mark you Idle (10 minutes by default), and comes back on the first key press.
 
 **Lyrics**
@@ -378,6 +378,7 @@ The current track's artwork is also written to `%TEMP%\vybecord_thumb.jpg`.
 | `rpc_show_playlist` | `true` | boolean | Name the playlist |
 | `rpc_activity_type` | `2` | `0` Playing, `2` Listening, `3` Watching, `5` Competing | Activity type (presence 1's, when there are several) |
 | `rpc_activity_type_2` … `rpc_activity_type_5` | `-1` | `-1` same as presence 1, or a type as above | Several presences → Activity type on presence 2–5 |
+| `rpc_shorts_activity_type` | `3` | `3` Watching, `2` Listening | Activity type for Shorts (every card) |
 | `rpc_status_display` | `"app"` | `app`, `title`, `title_artist`, `artist_title`, `artist`, `album`, `details`, `state`, `custom`, `playlist` (config only) | Status line |
 | `rpc_status_template` | `"{title} - {artist}"` | up to 128 characters; placeholders `{title}` `{artist}` `{album}` `{playlist}` `{platform}` | Status template (used when `rpc_status_display` is `custom`) |
 | `presence_count` | `1` | 1–5 | Several presences → Presences at once |

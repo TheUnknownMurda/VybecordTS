@@ -193,6 +193,8 @@ export interface VybecordConfig {
   rpc_activity_type_3: number;
   rpc_activity_type_4: number;
   rpc_activity_type_5: number;
+  /** The activity type of a YouTube Short on any card: 3 Watching (default) or 2 Listening. */
+  rpc_shorts_activity_type: number;
   /**
    * What the "Listening to …" status line shows (member list / profile), independent
    * of the presence card: 'app' = application name, 'title' = current track title,

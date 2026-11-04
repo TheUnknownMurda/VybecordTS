@@ -162,7 +162,7 @@ With the extension (2.2.2 or later), a Short gets a card of its own instead of p
 - the Short's title without its hashtags, and its channel, which links to the channel's page;
 - the Short's own picture, upright, rather than a strip of it between two blurred bands;
 - **YouTube Shorts** as the third line, and a timer for how long you have been watching Shorts, not a progress bar that starts over with every loop. Swiping to the next Short changes the title and the picture, never the timer. Watching a regular video, or a couple of minutes without any Short playing, starts it over;
-- **Watching** rather than **Listening to**, when the card is set to Listening. Any other verb you picked stays;
+- **Watching**, or **Listening to** if you prefer: that is **Settings → Discord presence → Activity type for Shorts**, also a click away on the card's verb in **Now playing**. It covers every card, and everything that is not a Short keeps its own verb;
 - the button opens the Short.
 
 A Short is never looked up as a song: its title is not a song's name, and a song playing under it is a few seconds from the middle, which a song's timings would not follow. If the Short has captions on YouTube, what is said shows on the card, like a video's. Shorts stay out of the listening history, **Activity** and Last.fm, the way an offline channel does. Without the extension, Windows only sees a browser tab, and a Short shows the way it used to.

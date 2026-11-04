@@ -281,6 +281,8 @@ export class LyricsEngine {
   private cfgShowLyrics = true;
   private cfgRomanize = false;
   private cfgActivityType = 2;
+  /** A Short's verb on any card: Watching (3), or Listening (2) when set so. */
+  private cfgShortsActivityType = 3;
   private cfgStatusDisplay = 'app';
   private cachedStatusName = '';
   private cfgShowPlaylist = true;
@@ -1458,8 +1460,11 @@ export class LyricsEngine {
 
     // Platform icon (reuse `source` from above)
     this.cachedIcon = PLATFORM_ICONS[source] ?? null;
+    // Read here, before the hover text, which repeats a Short's verb. Anything
+    // but Listening is Watching: those two are all a Short is offered.
+    this.cfgShortsActivityType = (this.rpcConfig.rpc_shorts_activity_type as number) === 2 ? 2 : 3;
     this.cachedPlatText = !this.cachedIcon ? ''
-      : d.is_short ? `Watching ${SHORTS_NAME}`
+      : d.is_short ? `${this.cfgShortsActivityType === 2 ? 'Listening to' : 'Watching'} ${SHORTS_NAME}`
       : `Playing on ${this.cachedIcon[1]}`;
 
     // Cache config flags to avoid per-emit boolean casts
@@ -1603,10 +1608,11 @@ export class LyricsEngine {
     // pinned to Listening whatever it said, which made a "Watching" card for
     // a stream impossible to set up — the one source the verb fits best.
     //
-    // Except for a Short on a Listening card, which says Watching. Listening is
-    // the default because most of what plays is music; nobody listens to a
-    // Short. Any other verb was picked on purpose and is kept.
-    const activityType = d.is_short && this.cfgActivityType === 2 ? 3 : this.cfgActivityType;
+    // Except for a Short, which has a verb of its own on every card
+    // (rpc_shorts_activity_type): Watching unless set to Listening. Following
+    // the card's would have Shorts "listened to" on the card left on
+    // Listening for the music, which is most of them.
+    const activityType = d.is_short ? this.cfgShortsActivityType : this.cfgActivityType;
 
     /*
      * When the track started, as one number that does not move.
