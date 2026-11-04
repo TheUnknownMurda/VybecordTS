@@ -14,6 +14,31 @@
   const RELEASES = 'https://github.com/' + REPO + '/releases';
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  // The words this script writes into the page, in the page's language: the
+  // French pages under fr/ say <html lang="fr">, every other page is English.
+  const FR = document.documentElement.lang.startsWith('fr');
+  const say = FR
+    ? {
+        locale: 'fr-CA',
+        mb: ' Mo',
+        downloadLine: (v, size) => 'Vybecord ' + (v ? v + ' ' : '') + 'pour Windows, ' + size,
+        versionLine: (v, size) => (v ? 'Version ' + v + ' · ' : '') + size,
+        pill: (v) => 'La version ' + v + ' est sortie · Voir les nouveautés',
+        released: (date) => 'Publiée le ' + date,
+        windows: 'Windows 10 et 11, 64 bits',
+        discord: "L'appli Discord pour ordinateur est requise",
+      }
+    : {
+        locale: 'en',
+        mb: ' MB',
+        downloadLine: (v, size) => 'Vybecord ' + (v ? v + ' ' : '') + 'for Windows, ' + size,
+        versionLine: (v, size) => (v ? 'Version ' + v + ' · ' : '') + size,
+        pill: (v) => 'Version ' + v + " is out · See what's new",
+        released: (date) => 'Released ' + date,
+        windows: 'Windows 10 and 11, 64-bit',
+        discord: 'Discord desktop app required',
+      };
+
   /* ── Nav gets its background once the page scrolls under it ── */
 
   const nav = document.getElementById('nav');
@@ -189,9 +214,9 @@
     return release;
   }
 
-  const prettySize = (bytes) => Math.round(bytes / 1048576) + ' MB';
+  const prettySize = (bytes) => Math.round(bytes / 1048576) + say.mb;
   const prettyDate = (iso) =>
-    new Date(iso).toLocaleDateString('en', { year: 'numeric', month: 'long', day: 'numeric' });
+    new Date(iso).toLocaleDateString(say.locale, { year: 'numeric', month: 'long', day: 'numeric' });
 
   // download/ is the one page that starts the download itself.
   const isDownloadPage = document.body.dataset.page === 'download';
@@ -224,8 +249,8 @@
     document.querySelectorAll('[data-dl]').forEach((a) => (a.href = installer.url));
     document.querySelectorAll('[data-version-line]').forEach((el) => {
       el.textContent = isDownloadPage
-        ? 'Vybecord ' + (version ? version + ' ' : '') + 'for Windows, ' + prettySize(installer.size)
-        : (version ? 'Version ' + version + ' \u00b7 ' : '') + prettySize(installer.size);
+        ? say.downloadLine(version, prettySize(installer.size))
+        : say.versionLine(version, prettySize(installer.size));
     });
 
     if (isDownloadPage) {
@@ -239,16 +264,12 @@
     const pillText = document.getElementById('releasePillText');
     if (pill && pillText && version) {
       pill.href = release.url;
-      pillText.textContent = 'Version ' + version + " is out \u00b7 See what's new";
+      pillText.textContent = say.pill(version);
     }
 
     const meta = document.getElementById('dlMeta');
     if (meta) {
-      const items = [
-        release.date && 'Released ' + prettyDate(release.date),
-        'Windows 10 and 11, 64-bit',
-        'Discord desktop app required',
-      ].filter(Boolean);
+      const items = [release.date && say.released(prettyDate(release.date)), say.windows, say.discord].filter(Boolean);
       meta.replaceChildren(
         ...items.map((text) => {
           const li = document.createElement('li');

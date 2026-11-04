@@ -356,6 +356,37 @@ kbd {
 .nav-cta {
   margin-left: auto;
 }
+/* The other language of the page, just before the Download button. It stays
+   on small screens, where the other links are gone. */
+.nav-lang {
+  margin-left: auto;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+}
+.nav-lang:hover {
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  text-decoration: none;
+}
+.nav-lang + .nav-cta {
+  margin-left: 0;
+}
+/* A phone has room for the brand, the language and the button only if they
+   sit closer; under 360px the button drops its icon ("Télécharger" is long). */
+@media (max-width: 420px) {
+  .nav-inner {
+    gap: 8px;
+  }
+}
+@media (max-width: 359px) {
+  .nav-cta .i {
+    display: none;
+  }
+}
 @media (min-width: 820px) {
   .nav-links {
     display: flex;

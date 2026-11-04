@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- The French twin of ../index.html: same sections, same order. A change to
+       one page goes to the other. The title and the description carry what
+       people type ("paroles", "lyrics", "statut Discord"); keep them there. -->
+  <title>Afficher les paroles (lyrics) sur ton statut Discord · Vybecord</title>
+  <meta name="description" content="Affiche sur ton statut Discord les paroles de la chanson qui joue, ligne par ligne. Gratuit pour Windows : Spotify, YouTube, Apple Music, Twitch et plus.">
+  <meta name="theme-color" content="#0b0b10">
+  <link rel="canonical" href="https://theunknownmurda.github.io/VybecordTS/fr/">
+  <link rel="alternate" hreflang="en" href="https://theunknownmurda.github.io/VybecordTS/">
+  <link rel="alternate" hreflang="fr" href="https://theunknownmurda.github.io/VybecordTS/fr/">
+  <link rel="alternate" hreflang="x-default" href="https://theunknownmurda.github.io/VybecordTS/">
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Vybecord">
+  <meta property="og:locale" content="fr_CA">
+  <meta property="og:locale:alternate" content="en_US">
+  <meta property="og:title" content="Vybecord : les paroles en direct sur ton statut Discord">
+  <meta property="og:description" content="Ce qui joue sur ton PC, sur ton profil Discord, avec les paroles synchronisées. Gratuit pour Windows 10 et 11.">
+  <meta property="og:url" content="https://theunknownmurda.github.io/VybecordTS/fr/">
+  <meta property="og:image" content="https://theunknownmurda.github.io/VybecordTS/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Vybecord : une carte de profil Discord qui montre la chanson en cours et la ligne des paroles chantée.">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "@id": "https://theunknownmurda.github.io/VybecordTS/#app",
+    "name": "Vybecord",
+    "alternateName": "VybecordTS",
+    "description": "Une appli gratuite pour Windows qui affiche sur ton statut Discord ce qui joue sur ton PC, avec les paroles synchronisées ligne par ligne. Fonctionne avec Spotify, YouTube, Apple Music, Twitch, Kick et la plupart des lecteurs Windows.",
+    "url": "https://theunknownmurda.github.io/VybecordTS/fr/",
+    "downloadUrl": "https://theunknownmurda.github.io/VybecordTS/fr/telecharger/",
+    "image": "https://theunknownmurda.github.io/VybecordTS/og.png",
+    "applicationCategory": "MultimediaApplication",
+    "operatingSystem": "Windows 10, Windows 11",
+    "inLanguage": "fr",
+    "isAccessibleForFree": true,
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "license": "https://github.com/TheUnknownMurda/VybecordTS/blob/main/LICENSE",
+    "author": { "@type": "Person", "name": "TheUnknownMurda", "url": "https://github.com/TheUnknownMurda" },
+    "sameAs": ["https://github.com/TheUnknownMurda/VybecordTS"],
+    "featureList": [
+      "Les paroles synchronisées sur ton statut Discord, ligne par ligne",
+      "Spotify, YouTube, Apple Music, SoundCloud, Deezer, Tidal, Twitch et Kick",
+      "Jusqu'à cinq présences Discord en même temps",
+      "Paroles traduites dans 16 langues et romanisées",
+      "Historique d'écoute et scrobbling Last.fm en option",
+      "Aucun compte et aucune télémétrie"
+    ]
+  }
+  </script>
+
+  <!-- Sections start hidden and rise in, but only while site.js is there to reveal them. -->
+  <script>document.documentElement.classList.add('js')</script>
+  <link rel="stylesheet" href="../styles.css">
+  <script src="../site.js" defer onerror="document.documentElement.classList.remove('js')"></script>
+</head>
+<body>
+<a class="skip" href="#main">Aller au contenu</a>
+
+<!-- Icons, drawn once and reused with <use>. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-note" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 2 10 5-10 5L2 7l10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></symbol>
+  <symbol id="i-expand" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="m21 3-7 7"/><path d="m3 21 7-7"/></symbol>
+  <symbol id="i-badge" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M7 9h6"/><path d="M7 13h10"/><circle cx="17" cy="9" r="1.2"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18Z"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></symbol>
+  <symbol id="i-tray" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="3"/><path d="M2 15h5l2 2h6l2-2h5"/></symbol>
+  <symbol id="i-user-off" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 13.3-6"/><path d="m17 17 4 4m0-4-4 4"/></symbol>
+  <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M9.9 4.2A10 10 0 0 1 12 4c7 0 10 8 10 8a17 17 0 0 1-3.2 4.2"/><path d="M6.6 6.6C3.6 8.6 2 12 2 12s3 8 10 8a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="m2 2 20 20"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
+  <symbol id="i-puzzle" viewBox="0 0 24 24"><path d="M19.4 14.6a2.4 2.4 0 1 0 0-4.8H18V6a2 2 0 0 0-2-2h-3.8V2.6a2.4 2.4 0 1 0-4.8 0V4H4a2 2 0 0 0-2 2v3.8h1.4a2.4 2.4 0 1 1 0 4.8H2V18a2 2 0 0 0 2 2h3.8v-1.4a2.4 2.4 0 1 1 4.8 0V20H16a2 2 0 0 0 2-2v-3.4Z"/></symbol>
+  <symbol id="i-spotify" viewBox="0 0 24 24"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></symbol>
+  <symbol id="i-youtube" viewBox="0 0 24 24"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8ZM9.6 15.6V8.4l6.3 3.6-6.3 3.6Z"/></symbol>
+  <symbol id="i-twitch" viewBox="0 0 24 24"><path d="M2.15 0 .5 4.2v17.1h5.85V24h3.3l2.75-2.7h4.65l6.45-6.3V0H2.15Zm19.2 13.8-3.6 3.6h-5.85l-3.15 3.1v-3.1H3.9V2.2h17.45v11.6ZM17.6 6.4v6.15h-2.2V6.4h2.2Zm-6.05 0v6.15h-2.2V6.4h2.2Z"/></symbol>
+  <symbol id="i-github" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></symbol>
+</svg>
+
+<!-- ================================================================ nav -->
+<nav class="nav" id="nav" aria-label="Principal">
+  <div class="wrap nav-inner">
+    <a href="#top" class="brand" aria-label="Vybecord, retour en haut">
+      <span class="mark" aria-hidden="true"><svg><use href="#i-note"/></svg></span>
+      Vybecord
+    </a>
+    <ul class="nav-links">
+      <li><a href="#features">Fonctionnalités</a></li>
+      <li><a href="#setup">Installation</a></li>
+      <li><a href="#addons">Extensions</a></li>
+      <li><a href="#faq">FAQ</a></li>
+      <li><a href="https://github.com/TheUnknownMurda/VybecordTS" target="_blank" rel="noopener">GitHub</a></li>
+    </ul>
+    <a href="../" class="nav-lang" hreflang="en" lang="en" aria-label="English version">EN</a>
+    <a href="telecharger/" class="btn btn-primary btn-sm nav-cta" data-dl>
+      <svg class="i" aria-hidden="true"><use href="#i-download"/></svg>
+      Télécharger
+    </a>
+  </div>
+</nav>
+
+<main id="main">
+
+<!-- ================================================================ hero -->
+<header class="hero" id="top">
+  <div class="wrap hero-grid">
+    <div class="hero-text">
+      <a class="pill" id="releasePill" href="https://github.com/TheUnknownMurda/VybecordTS/releases/latest" target="_blank" rel="noopener">
+        <span class="dot" aria-hidden="true"></span>
+        <span id="releasePillText">Gratuit et open source</span>
+        <span class="arrow" aria-hidden="true">&rarr;</span>
+      </a>
+
+      <h1>Les paroles sur Discord, <em>ligne&nbsp;par&nbsp;ligne.</em></h1>
+
+      <p class="hero-sub">
+        Vybecord affiche sur ton statut Discord ce qui joue sur ton PC, avec la ligne des paroles
+        (lyrics) chantée en ce moment. Spotify, YouTube, Apple Music, Twitch et la plupart des autres
+        lecteurs sur Windows. Tu l'installes, tu lances ta musique, c'est tout.
+      </p>
+
+      <div class="hero-actions">
+        <a href="telecharger/" class="btn btn-primary btn-lg btn-stack" data-dl>
+          <svg class="i" aria-hidden="true"><use href="#i-download"/></svg>
+          <span>
+            <span class="l1">Télécharger pour Windows</span>
+            <span class="l2" data-version-line>Gratuit, pour Windows 10 et 11</span>
+          </span>
+        </a>
+        <a href="#features" class="btn btn-ghost btn-lg">Voir ce que ça fait</a>
+      </div>
+
+      <ul class="hero-meta">
+        <li><svg class="i" aria-hidden="true"><use href="#i-check"/></svg>Aucun compte</li>
+        <li><svg class="i" aria-hidden="true"><use href="#i-check"/></svg>Aucune télémétrie</li>
+        <li><svg class="i" aria-hidden="true"><use href="#i-check"/></svg>Open source, MIT</li>
+      </ul>
+    </div>
+
+    <!--
+      The app's Now playing page, drawn rather than screenshotted. site.js plays
+      the song: the lyric moves in the window and on the Discord card together.
+      The app itself is in English, so the drawing stays in English.
+    -->
+    <figure class="win" aria-label="La fenêtre de Vybecord : la chanson en cours, la carte Discord que tes amis voient et les paroles synchronisées.">
+      <div class="win-bar" aria-hidden="true">
+        <span class="mark"><svg><use href="#i-note"/></svg></span>
+        Vybecord
+        <span class="win-btns">
+          <span><svg viewBox="0 0 12 12"><path d="M2 6h8"/></svg></span>
+          <span><svg viewBox="0 0 12 12"><rect x="2.5" y="2.5" width="7" height="7" rx="1"/></svg></span>
+          <span><svg viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6"/></svg></span>
+        </span>
+      </div>
+
+      <div class="win-body" aria-hidden="true" lang="en">
+        <div class="w-tabs">
+          <span class="w-tab on"><span class="d"></span>Presence 1 <small>Spotify</small></span>
+          <span class="w-tab"><span class="d"></span>Presence 2 <small>Twitch</small></span>
+        </div>
+
+        <div class="card np-card">
+          <div class="np-track">
+            <div class="cover"></div>
+            <div class="np-meta">
+              <div class="np-state"><span class="pulse"></span>Playing on Spotify</div>
+              <div class="np-title">Midnight Signal</div>
+              <div class="np-sub">Neon Harbour <span>&middot; Low Tide Radio</span></div>
+              <div class="np-progress">
+                <span data-elapsed>1:06</span>
+                <span class="bar"><i data-fill style="width:35%"></i></span>
+                <span>3:07</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="np-friends">
+            <div class="np-friends-head">
+              <span class="label">What your friends see</span>
+              <span class="qt-row">
+                <span class="qt">Presence <span class="qt-track"></span></span>
+                <span class="qt">Lyrics <span class="qt-track"></span></span>
+              </span>
+            </div>
+            <div class="dc" id="dc">
+              <div class="dc-verb">Listening to Spotify</div>
+              <div class="dc-body">
+                <div class="dc-art">
+                  <div class="cover"></div>
+                  <span class="dc-small"><svg class="i-fill"><use href="#i-spotify"/></svg></span>
+                </div>
+                <div class="dc-lines">
+                  <div class="dc-l1" data-dc-now>&#9834; Say it once more before the signal drops</div>
+                  <div class="dc-l next" data-dc-next>&rarr; The city hums the rest of it for us &#9834;</div>
+                  <div class="dc-l">Midnight Signal | Neon Harbour</div>
+                  <div class="dc-time">
+                    <span data-elapsed>1:06</span>
+                    <span class="bar"><i data-fill style="width:35%"></i></span>
+                    <span>3:07</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card lyr-card">
+          <div class="lyr-head">
+            Lyrics <span class="chip">Synced</span>
+            <span class="tools"><span>Big lyrics</span><span>Full lyrics</span><span>Copy .lrc</span></span>
+          </div>
+          <div class="lyr-view">
+            <ol class="lyr-list" id="lyrList" style="transform:translateY(24px)">
+              <li>Every street we ever walked at three</li>
+              <li class="on">Say it once more before the signal drops</li>
+              <li>The city hums the rest of it for us</li>
+              <li>And I keep the frequency open</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </figure>
+  </div>
+</header>
+
+<!-- ================================================================ works with -->
+<section class="strip" aria-label="Lecteurs compatibles">
+  <div class="wrap strip-inner">
+    <span class="strip-label">Fonctionne avec</span>
+    <ul class="strip-list">
+      <li>Spotify</li>
+      <li>YouTube</li>
+      <li>Apple Music</li>
+      <li>SoundCloud</li>
+      <li>Deezer</li>
+      <li>Tidal</li>
+      <li>Twitch</li>
+      <li>Kick</li>
+      <li>VLC</li>
+      <li>foobar2000</li>
+      <li>MusicBee</li>
+      <li class="more">et la plupart des lecteurs du panneau de volume de Windows</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ================================================================ features -->
+<section class="sec" id="features">
+  <div class="wrap">
+    <div class="sec-head center reveal">
+      <span class="eyebrow">Fonctionnalités</span>
+      <h2>Tout ce qui manquait à ton profil</h2>
+      <p>Une petite appli dans ta zone de notification. Elle trouve la chanson, trouve les paroles, et garde ta carte Discord au rythme des deux.</p>
+    </div>
+
+    <div class="bento">
+      <article class="card feat wide reveal">
+        <div class="feat-ico" aria-hidden="true"><svg class="i"><use href="#i-mic"/></svg></div>
+        <h3>Les paroles synchronisées, sur ta carte Discord</h3>
+        <p>
+          Ton statut montre la ligne chantée, avec la suivante juste en dessous, calée à la
+          milliseconde et corrigée du délai de Discord. Signale une mauvaise correspondance et elle ne
+          reviendra plus. Ajuste le minutage et il sera retenu pour cette chanson.
+        </p>
+        <div class="demo">
+          <div class="lrc" aria-hidden="true" lang="en">
+            <div><span>01:02.40</span><b>Every street we ever walked at three</b></div>
+            <div class="on"><span>01:06.90</span><b>Say it once more before the signal drops</b></div>
+            <div><span>01:11.30</span><b>The city hums the rest of it for us</b></div>
+          </div>
+          <ul class="sources" aria-label="Sources de paroles, essayées dans l'ordre">
+            <li>Tes propres paroles</li>
+            <li>Spotify</li>
+            <li>LRCLIB</li>
+            <li>Netease</li>
+            <li>Musixmatch</li>
+            <li>Sous-titres YouTube</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="card feat reveal">
+        <div class="feat-ico" aria-hidden="true"><svg class="i"><use href="#i-layers"/></svg></div>
+        <h3>Jusqu'à cinq présences</h3>
+        <p>Spotify sur une carte, une vidéo YouTube sur la suivante, un stream Twitch sur une troisième. Chacune a son propre interrupteur de paroles et peut être attachée à son propre lecteur.</p>
+        <div class="demo stack" aria-hidden="true" lang="en">
+          <div class="mini-dc">
+            <span class="ico" style="background:#1ed760;color:#000"><svg class="i-fill"><use href="#i-spotify"/></svg></span>
+            <div><b>Listening to Spotify</b><small>Midnight Signal</small></div>
+          </div>
+          <div class="mini-dc">
+            <span class="ico" style="background:#ff0033"><svg class="i-fill"><use href="#i-youtube"/></svg></span>
+            <div><b>Watching YouTube</b><small>Studio session, part 3</small></div>
+          </div>
+          <div class="mini-dc">
+            <span class="ico" style="background:#9146ff"><svg class="i-fill"><use href="#i-twitch"/></svg></span>
+            <div><b>Watching Twitch</b><small>Late-night speedruns &middot; 2:14:08</small></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="card feat reveal">
+        <div class="feat-ico" aria-hidden="true"><svg class="i"><use href="#i-expand"/></svg></div>
+        <h3>Les paroles en grand</h3>
+        <p>Un clic sur «&nbsp;Big lyrics&nbsp;» remplit la fenêtre avec les paroles, en gros, sur la couleur de la pochette. Échap pour revenir.</p>
+        <div class="demo" aria-hidden="true" lang="en">
+          <div class="big">
+            <p>The city hums the rest of it for us</p>
+            <p class="on">And I keep the frequency open</p>
+            <p>Static on the window, gold on the glass</p>
+          </div>
+        </div>
+      </article>
+
+      <article class="card feat reveal">
+        <div class="feat-ico" aria-hidden="true"><svg class="i"><use href="#i-badge"/></svg></div>
+        <h3>Le vrai nom sur la carte</h3>
+        <p>Ta carte affiche Spotify, YouTube, SoundCloud, Apple Music, Twitch ou Kick, pas le nom d'une appli quelconque. Choisis le type d'activité, ce qu'affiche la ligne de statut et un bouton à toi.</p>
+        <ul class="sources demo" aria-hidden="true" lang="en">
+          <li>Listening</li>
+          <li>Watching</li>
+          <li>Playing</li>
+          <li>Competing</li>
+        </ul>
+      </article>
+
+      <article class="card feat reveal">
+        <div class="feat-ico" aria-hidden="true"><svg class="i"><use href="#i-globe"/></svg></div>
+        <h3>Traduites et romanisées</h3>
+        <p>Traduis les paroles dans 16 langues, dans la fenêtre et sur Discord si tu veux. La romanisation couvre le japonais avec kanji, le coréen, le chinois, le cyrillique et plus encore.</p>
+        <div class="demo" aria-hidden="true">
+          <div class="trans">
+            <span class="o" lang="ja">夜明けまで走ろう</span>
+            <span class="r">yoake made hashirou</span>
+            <span class="t">Courons jusqu'à l'aube</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="card feat reveal">
+        <div class="feat-ico" aria-hidden="true"><svg class="i"><use href="#i-chart"/></svg></div>
+        <h3>Ton écoute, en graphiques</h3>
+        <p>Le temps d'écoute par jour, tes artistes et tes morceaux les plus écoutés, sur une semaine, un mois, un an ou depuis le début. Scrobbling Last.fm en option, avec ta propre clé d'API Last.fm.</p>
+        <div class="demo" aria-hidden="true">
+          <div class="chart">
+            <i style="height:38%"></i><i style="height:62%"></i><i style="height:45%"></i><i style="height:80%"></i><i style="height:54%"></i><i class="on" style="height:96%"></i><i style="height:70%"></i>
+          </div>
+        </div>
+      </article>
+
+      <article class="card feat reveal">
+        <div class="feat-ico" aria-hidden="true"><svg class="i"><use href="#i-shield"/></svg></div>
+        <h3>Aucune pub sur ton statut</h3>
+        <p>Pendant une pause publicitaire, Spotify remplace la chanson par l'annonceur. Vybecord le repère et garde ta carte vide jusqu'au retour de la musique, sans toucher aux interludes de l'album que tu écoutes.</p>
+        <div class="demo vs" aria-hidden="true">
+          <div class="no"><b>Sans</b><span>Zephyr Energy, à moitié prix</span></div>
+          <div class="yes"><b>Avec</b><span>Rien jusqu'au retour de la musique</span></div>
+        </div>
+      </article>
+
+      <article class="card feat reveal">
+        <div class="feat-ico" aria-hidden="true"><svg class="i"><use href="#i-tray"/></svg></div>
+        <h3>Se fait oublier</h3>
+        <ul class="ticks demo">
+          <li><svg class="i" aria-hidden="true"><use href="#i-check"/></svg>Vit dans la zone de notification. Fermer la fenêtre garde ton statut affiché.</li>
+          <li><svg class="i" aria-hidden="true"><use href="#i-check"/></svg>Interrupteurs Presence et Lyrics sur Now playing et dans le menu de l'icône.</li>
+          <li><svg class="i" aria-hidden="true"><use href="#i-check"/></svg>S'efface quand tu t'absentes, revient à la première touche.</li>
+          <li><svg class="i" aria-hidden="true"><use href="#i-check"/></svg>Se met à jour tout seul, installé quand tu quittes.</li>
+        </ul>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ setup -->
+<section class="sec" id="setup">
+  <div class="wrap">
+    <div class="sec-head center reveal">
+      <span class="eyebrow">Installation</span>
+      <h2>Comment afficher les paroles sur Discord</h2>
+      <p>Environ une minute, rien à configurer et aucun compte à créer. La page Help &amp; setup de l'appli se coche toute seule au fur et à mesure.</p>
+    </div>
+
+    <ol class="steps">
+      <li class="card step reveal">
+        <h3>Télécharge l'installateur</h3>
+        <p>Un seul fichier, la dernière version, directement depuis les versions publiées du projet sur GitHub.</p>
+        <a href="telecharger/" class="btn btn-ghost btn-sm" data-dl>
+          <svg class="i" aria-hidden="true"><use href="#i-download"/></svg>
+          Télécharger
+        </a>
+      </li>
+      <li class="card step reveal">
+        <h3>Lance-le</h3>
+        <p>
+          Windows peut dire qu'il a protégé ton PC, parce que l'installateur n'est pas signé.
+          Choisis <strong>Informations complémentaires</strong>, puis <strong>Exécuter quand même</strong>.
+        </p>
+      </li>
+      <li class="card step reveal">
+        <h3>Lance ta musique</h3>
+        <p>Ouvre l'appli Discord pour ordinateur et fais jouer quelque chose, n'importe où. Ta carte se met à jour toute seule.</p>
+      </li>
+    </ol>
+
+    <p class="reqs reveal">
+      <svg class="i" aria-hidden="true"><use href="#i-info"/></svg>
+      <span>
+        Nécessite Windows 10 (version 1809 ou plus récente) ou Windows 11, 64 bits, et l'appli Discord
+        pour ordinateur. Dans les paramètres utilisateur de Discord, le partage de ton activité doit être activé.
+      </span>
+    </p>
+  </div>
+</section>
+
+<!-- ================================================================ add-ons -->
+<section class="sec" id="addons">
+  <div class="wrap">
+    <div class="sec-head center reveal">
+      <span class="eyebrow">Extensions optionnelles</span>
+      <h2>Deux façons d'aller plus loin</h2>
+      <p>Vybecord fonctionne seul dès la première chanson. Ces extensions ajoutent ce que Windows ne peut pas lui dire.</p>
+    </div>
+
+    <div class="addons">
+      <article class="card addon reveal">
+        <div class="addon-top">
+          <span class="addon-ico" aria-hidden="true" style="color:#1ed760"><svg class="i-fill"><use href="#i-spotify"/></svg></span>
+          <div>
+            <h3>Extension Spicetify</h3>
+            <span class="for">Pour l'appli Spotify pour ordinateur</span>
+          </div>
+        </div>
+        <ul class="ticks">
+          <li><svg class="i" aria-hidden="true"><use href="#i-check"/></svg>Les paroles synchronisées de Spotify, quand la chanson en a.</li>
+          <li><svg class="i" aria-hidden="true"><use href="#i-check"/></svg>Les changements de chanson à l'instant où ils arrivent, avec la position exacte.</li>
+          <li><svg class="i" aria-hidden="true"><use href="#i-check"/></svg>Tous les artistes, la playlist en cours et les pochettes de Spotify.</li>
+        </ul>
+        <p class="addon-foot">
+          Installe d'abord <a href="https://spicetify.app/" target="_blank" rel="noopener">Spicetify</a>. Ensuite,
+          <strong>Set up automatically</strong>, dans Settings &rarr; Integrations &rarr; Spotify, s'occupe du reste.
+          Spotify redémarre une fois.
+        </p>
+      </article>
+
+      <article class="card addon reveal">
+        <div class="addon-top">
+          <span class="addon-ico" aria-hidden="true"><svg class="i"><use href="#i-puzzle"/></svg></span>
+          <div>
+            <h3>Extension de navigateur</h3>
+            <span class="for">Chrome, Edge, Brave, Opera, Vivaldi et Firefox</span>
+          </div>
+        </div>
+        <ul class="ticks">
+          <li><svg class="i" aria-hidden="true"><use href="#i-check"/></svg>Distingue Spotify Web, YouTube, YouTube Music, SoundCloud, Bandcamp, Twitch et Kick.</li>
+          <li><svg class="i" aria-hidden="true"><use href="#i-check"/></svg>Le vrai lien du morceau, pour que tes amis puissent l'ouvrir.</li>
+          <li><svg class="i" aria-hidden="true"><use href="#i-check"/></svg>La position exacte lue sur la page, et la durée des lives.</li>
+        </ul>
+        <div class="addon-foot">
+          Elle vient avec l'appli&nbsp;: Settings &rarr; Integrations &rarr; Browser extension ouvre son dossier
+          et copie l'adresse à coller. Tu peux aussi la télécharger ici.
+          <div class="addon-actions">
+            <a class="btn btn-ghost btn-sm" id="extChromium" href="https://github.com/TheUnknownMurda/VybecordTS/releases/latest">
+              <svg class="i" aria-hidden="true"><use href="#i-download"/></svg>
+              Chrome, Edge et autres
+            </a>
+            <a class="btn btn-ghost btn-sm" id="extFirefox" href="https://github.com/TheUnknownMurda/VybecordTS/releases/latest">
+              <svg class="i" aria-hidden="true"><use href="#i-download"/></svg>
+              Firefox
+            </a>
+          </div>
+          <details>
+            <summary>L'installer à la main</summary>
+            <ol>
+              <li>Décompresse le fichier dans un dossier où il peut rester.</li>
+              <li>Ouvre <code>chrome://extensions</code> (<code>edge://extensions</code> dans Edge) et active le <strong>Mode développeur</strong>.</li>
+              <li>Clique sur <strong>Charger l'extension non empaquetée</strong> et choisis le dossier décompressé.</li>
+              <li>Dans Firefox 140 ou plus récent, ouvre <code>about:debugging</code>, puis <strong>Ce Firefox</strong> &rarr; <strong>Charger un module complémentaire temporaire</strong>, et choisis le zip. Firefox le retire quand il se ferme.</li>
+            </ol>
+          </details>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ privacy -->
+<section class="sec" id="privacy">
+  <div class="wrap">
+    <div class="sec-head center reveal">
+      <span class="eyebrow">Confidentialité</span>
+      <h2>Ton écoute reste à toi</h2>
+      <p>Vybecord parle à Discord par l'appli Discord de ton propre PC. La seule exception&nbsp;: une pochette qui n'existe que dans
+        tes fichiers peut être publiée pour que Discord puisse l'afficher, et <a href="../privacy/#cover-art" hreflang="en">un interrupteur le contrôle</a>.</p>
+    </div>
+
+    <div class="promises">
+      <div class="card promise reveal">
+        <div class="feat-ico" aria-hidden="true"><svg class="i"><use href="#i-user-off"/></svg></div>
+        <h3>Aucun compte</h3>
+        <p>Rien à créer, et l'appli ne demande jamais tes identifiants Discord.</p>
+      </div>
+      <div class="card promise reveal">
+        <div class="feat-ico" aria-hidden="true"><svg class="i"><use href="#i-eye-off"/></svg></div>
+        <h3>Aucune télémétrie</h3>
+        <p>Aucune statistique d'utilisation ni aucun pistage. Un rapport de problème ne part que si tu l'envoies.</p>
+      </div>
+      <div class="card promise reveal">
+        <div class="feat-ico" aria-hidden="true"><svg class="i"><use href="#i-lock"/></svg></div>
+        <h3>Gardé sur ton PC</h3>
+        <p>Ton historique, tes paroles et tes réglages restent dans ton propre dossier de données.</p>
+      </div>
+      <div class="card promise reveal">
+        <div class="feat-ico" aria-hidden="true"><svg class="i"><use href="#i-search"/></svg></div>
+        <h3>Seulement le nécessaire</h3>
+        <p>Les recherches envoient le titre et l'artiste pour trouver les paroles et les pochettes. Rien sur toi.</p>
+      </div>
+    </div>
+
+    <p class="reveal" style="text-align:center">
+      <a class="more-link" href="../privacy/" hreflang="en">Lire la politique de confidentialité complète (en anglais) <svg class="i" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+    </p>
+  </div>
+</section>
+
+<!-- ================================================================ faq -->
+<section class="sec" id="faq">
+  <div class="wrap">
+    <div class="sec-head center reveal">
+      <span class="eyebrow">FAQ</span>
+      <h2>Questions</h2>
+    </div>
+
+    <div class="faq reveal">
+      <details>
+        <summary>Vybecord est-il gratuit&nbsp;?</summary>
+        <div class="a"><p>Oui. Il est gratuit et open source, sous licence MIT, sans version payante et sans pub.</p></div>
+      </details>
+      <details>
+        <summary>Est-ce que ça affiche les paroles Spotify sur mon statut Discord&nbsp;?</summary>
+        <div class="a">
+          <p>
+            Oui. Lance une chanson dans l'appli Spotify ou sur Spotify Web, et la ligne chantée s'affiche
+            sur ta carte Discord, avec la suivante en dessous. La connexion Discord de Spotify ne montre
+            que la chanson&nbsp;: Vybecord ajoute les paroles.
+          </p>
+          <p>
+            Avec l'<a href="#addons">extension Spicetify</a> optionnelle, il utilise les paroles
+            synchronisées de Spotify quand la chanson en a. Les paroles fonctionnent aussi pour YouTube,
+            YouTube Music, Apple Music et les autres lecteurs, sans extension.
+          </p>
+        </div>
+      </details>
+      <details>
+        <summary>Faut-il BetterDiscord, Vencord ou mon token Discord&nbsp;?</summary>
+        <div class="a">
+          <p>
+            Non. Vybecord est une appli à part&nbsp;: il ne modifie pas Discord, ce n'est pas un plugin et il
+            ne touche pas à ton statut personnalisé. Les paroles vont sur ta carte d'activité grâce à la
+            Rich Presence, qui fonctionne avec l'appli Discord normale.
+          </p>
+        </div>
+      </details>
+      <details>
+        <summary>Pourquoi Windows m'avertit à propos de l'installateur&nbsp;?</summary>
+        <div class="a">
+          <p>
+            L'installateur n'est pas signé avec un certificat payant, donc SmartScreen ne le reconnaît pas
+            encore. Choisis <strong>Informations complémentaires</strong>, puis <strong>Exécuter quand même</strong>.
+          </p>
+          <p>
+            Pour être sûr d'avoir le vrai fichier, compare son SHA-256 avec celui affiché sous le
+            <a href="#download">bouton de téléchargement</a> et sur la page de la version.
+          </p>
+        </div>
+      </details>
+      <details>
+        <summary>Mon statut ne s'affiche pas sur Discord</summary>
+        <div class="a">
+          <p>
+            Vybecord a besoin de l'<strong>appli Discord pour ordinateur</strong>, ouverte sur le même PC.
+            Discord dans un navigateur ne peut pas l'afficher. Vérifie ensuite que le partage de ton
+            activité est activé dans les paramètres utilisateur de Discord.
+          </p>
+          <p>Le bas de la barre latérale de Vybecord indique si Discord est connecté et, si ton statut est masqué, pourquoi.</p>
+        </div>
+      </details>
+      <details>
+        <summary>Avec quels lecteurs ça fonctionne&nbsp;?</summary>
+        <div class="a">
+          <p>
+            La plupart de ce qui apparaît dans le panneau de volume de Windows&nbsp;: Spotify, Apple Music,
+            Deezer, Tidal, Amazon Music, VLC, foobar2000, MusicBee, AIMP, Winamp, MediaMonkey, et la musique
+            ou les vidéos qui jouent dans Chrome, Edge, Firefox, Brave, Opera, Vivaldi ou Zen.
+          </p>
+          <p>
+            Pas le Lecteur Windows Media, Groove Musique, Films et TV ni l'appli SoundCloud du Microsoft Store.
+            Pour SoundCloud, écoute-le plutôt dans un navigateur avec l'extension.
+          </p>
+          <p>L'<a href="#addons">extension de navigateur</a> distingue YouTube, SoundCloud, Twitch et les autres sites.</p>
+        </div>
+      </details>
+      <details>
+        <summary>Est-ce que Discord le permet&nbsp;?</summary>
+        <div class="a">
+          <p>
+            Vybecord utilise la Rich Presence, la fonction que Discord a créée pour que les applis et les
+            jeux montrent ce que tu fais, par la connexion que l'appli Discord ouvre sur ton PC. Il ne
+            demande jamais tes identifiants ni ton token et ne modifie pas Discord.
+          </p>
+        </div>
+      </details>
+      <details>
+        <summary>Y a-t-il une version Mac, Linux ou mobile&nbsp;?</summary>
+        <div class="a"><p>Pas pour le moment. Vybecord lit la session média de Windows, qui n'existe que sur Windows 10 (version 1809) et plus récent, et il a besoin de l'appli Discord pour ordinateur sur le même PC.</p></div>
+      </details>
+      <details>
+        <summary>Comment fonctionnent les mises à jour&nbsp;?</summary>
+        <div class="a">
+          <p>
+            Vybecord vérifie tout seul s'il y a une nouvelle version et la télécharge en arrière-plan. Elle
+            s'installe quand tu quittes l'appli, ou tout de suite depuis la bannière de la fenêtre ou le
+            menu de l'icône.
+          </p>
+        </div>
+      </details>
+      <details>
+        <summary>Comment le désinstaller&nbsp;?</summary>
+        <div class="a">
+          <p>
+            Depuis Paramètres Windows &rarr; Applications, comme n'importe quelle autre appli. Tes réglages et
+            ton historique restent dans <code>%APPDATA%\Vybecord</code> jusqu'à ce que tu supprimes ce dossier.
+          </p>
+        </div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ download -->
+<section class="sec" id="download">
+  <div class="wrap">
+    <div class="card dl reveal">
+      <span class="mark" aria-hidden="true"><svg><use href="#i-note"/></svg></span>
+      <h2>Mets ta musique sur ton profil</h2>
+      <p>Un installateur, environ une minute, et aucun compte.</p>
+
+      <div class="dl-actions">
+        <a href="telecharger/" class="btn btn-primary btn-lg btn-stack" data-dl>
+          <svg class="i" aria-hidden="true"><use href="#i-download"/></svg>
+          <span>
+            <span class="l1">Télécharger pour Windows</span>
+            <span class="l2" data-version-line>Gratuit, pour Windows 10 et 11</span>
+          </span>
+        </a>
+        <a href="https://github.com/TheUnknownMurda/VybecordTS/releases" class="btn btn-ghost btn-lg" target="_blank" rel="noopener">
+          <svg class="i i-fill" aria-hidden="true"><use href="#i-github"/></svg>
+          Toutes les versions
+        </a>
+      </div>
+
+      <ul class="dl-meta" id="dlMeta">
+        <li>Windows 10 et 11, 64 bits</li>
+        <li>L'appli Discord pour ordinateur est requise</li>
+      </ul>
+
+      <details class="verify">
+        <summary>Vérifier le téléchargement (SHA-256)</summary>
+        <div class="body">
+          <p>
+            Compare-le avec le fichier téléchargé. Dans PowerShell, lance
+            <code>Get-FileHash</code> suivi du chemin de l'installateur.
+          </p>
+          <code class="hash" id="dlHash">La somme de contrôle est indiquée avec chaque version sur GitHub.</code>
+        </div>
+      </details>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ================================================================ footer -->
+<footer class="footer">
+  <div class="wrap">
+    <div class="footer-top">
+      <div>
+        <a href="#top" class="brand">
+          <span class="mark" aria-hidden="true"><svg><use href="#i-note"/></svg></span>
+          Vybecord
+        </a>
+        <p class="footer-blurb">
+          La Rich Presence Discord avec les paroles synchronisées, pour Windows. Gratuit, open source,
+          et sans lien avec Discord ni Spotify.
+        </p>
+      </div>
+      <div class="footer-col">
+        <h2>Produit</h2>
+        <a href="#features">Fonctionnalités</a>
+        <a href="#setup">Installation</a>
+        <a href="#addons">Extensions</a>
+        <a href="telecharger/">Télécharger</a>
+      </div>
+      <div class="footer-col">
+        <h2>Aide</h2>
+        <a href="#faq">FAQ</a>
+        <a href="https://github.com/TheUnknownMurda/VybecordTS/blob/desktop-app/GUIDE_UTILISATEUR.md">Guide d'utilisation</a>
+        <a href="https://github.com/TheUnknownMurda/VybecordTS/blob/desktop-app/USER_GUIDE.md" hreflang="en" lang="en">User guide</a>
+        <a href="https://github.com/TheUnknownMurda/VybecordTS/issues">Signaler un problème</a>
+      </div>
+      <div class="footer-col">
+        <h2>Projet</h2>
+        <a href="https://github.com/TheUnknownMurda/VybecordTS">GitHub</a>
+        <a href="https://github.com/TheUnknownMurda/VybecordTS/releases">Versions</a>
+        <a href="../privacy/" hreflang="en">Confidentialité</a>
+        <a href="https://github.com/TheUnknownMurda/VybecordTS/blob/main/LICENSE">Licence</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>&copy; 2026 Vybecord &middot; Licence MIT</span>
+      <span><a href="../" hreflang="en" lang="en">English version</a> &middot; Conçu pour Windows 10 et 11</span>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
