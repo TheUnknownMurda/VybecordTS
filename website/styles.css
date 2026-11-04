@@ -1745,6 +1745,35 @@ h2 {
 .doc li::marker {
   color: var(--accent-text);
 }
+/* The guide pages: numbered steps, sub-headings, and the download card at the
+   end, which keeps its own heading size rather than the section rule above. */
+.doc ol {
+  padding-left: 22px;
+}
+.doc h3 {
+  margin: 28px 0 8px;
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.doc .lead {
+  font-size: 18px;
+  color: var(--text-tertiary);
+}
+.doc .dl {
+  margin-top: 64px;
+}
+.doc .btn {
+  text-decoration: none;
+}
+.doc .dl h2 {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: clamp(26px, 4vw, 34px);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
 .doc .date {
   margin-bottom: 36px;
   font-size: 14px;

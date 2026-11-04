@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
   The pages worth finding in a search engine, submitted in Google Search Console
-  and Bing Webmaster Tools. GitHub Pages serves this site under /VybecordTS/,
-  so there is no robots.txt of our own to point here: the host's root belongs
-  to github.io.
+  and Bing Webmaster Tools. GitHub Pages serves this site under /VybecordTS/, so
+  there is no robots.txt of our own to point here: the host's root belongs to
+  github.io. The deploy workflow also sends every <loc> below to IndexNow after
+  each deploy, so a page added here is announced with nothing else to change.
 
   Left out on purpose: download/ and fr/telecharger/ (they start a download and
   move on), open/spotify/ and 404.html (noindex).
@@ -21,6 +22,18 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://theunknownmurda.github.io/VybecordTS/"/>
     <xhtml:link rel="alternate" hreflang="fr" href="https://theunknownmurda.github.io/VybecordTS/fr/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://theunknownmurda.github.io/VybecordTS/"/>
+  </url>
+  <url>
+    <loc>https://theunknownmurda.github.io/VybecordTS/how-to-show-lyrics-on-discord/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://theunknownmurda.github.io/VybecordTS/how-to-show-lyrics-on-discord/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://theunknownmurda.github.io/VybecordTS/fr/afficher-paroles-discord/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://theunknownmurda.github.io/VybecordTS/how-to-show-lyrics-on-discord/"/>
+  </url>
+  <url>
+    <loc>https://theunknownmurda.github.io/VybecordTS/fr/afficher-paroles-discord/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://theunknownmurda.github.io/VybecordTS/how-to-show-lyrics-on-discord/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://theunknownmurda.github.io/VybecordTS/fr/afficher-paroles-discord/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://theunknownmurda.github.io/VybecordTS/how-to-show-lyrics-on-discord/"/>
   </url>
   <url>
     <loc>https://theunknownmurda.github.io/VybecordTS/privacy/</loc>
