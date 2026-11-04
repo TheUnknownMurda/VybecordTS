@@ -58,9 +58,9 @@ Vybecord is a Windows desktop app (Electron + TypeScript). It reads the Windows 
 
 - The current lyric line goes on the card, with the next line under it. The cover tooltip shows the title, artist, album and playlist.
 - **Up to five presence cards at once.** For example: Spotify on card 1, a YouTube video on card 2, a Twitch stream on card 3. Each card has its own lyrics switch and can be pinned to its own player.
-- **A Discord application per platform**, so the card header reads *Spotify*, *YouTube*, *SoundCloud*, *Apple Music*, *Twitch* or *Kick*. Seven applications are built in, and you can add up to four spare ones.
-- **Customisable card.** You choose the activity type (Listening / Playing / Watching / Competing), what the one-line status shows (including a custom template), the small-icon style, and one custom button. The title, artist and cover are clickable.
-- **Cover art.** Released music gets its cover from Deezer, with the iTunes Search API as fallback. Artwork that exists only in your own files can be published to Vybecord's cover store (a switch in Settings).
+- **A Discord application per platform**, so the card header reads *Spotify*, *YouTube*, *SoundCloud*, *Apple Music*, *Twitch* or *Kick*. Kick and Twitch have five each and YouTube three, so several streams of one site each keep its logo. Seventeen applications are built in, far more than the five cards the app can show.
+- **Customisable card, edited where it stands.** You choose the activity type (Listening / Playing / Watching / Competing, per presence when there are several), what the one-line status shows (including a custom template), the small-icon style (including one that matches the cover's colour), and one custom button. Click a part of the card on **Now playing** to change it there, or use **Settings**. The title, artist and cover are clickable.
+- **Cover art.** The player's own cover (Spotify, Apple Music, or a local file's) is published to Vybecord's cover store so Discord shows exactly that one (a switch in Settings). Only when there is none, the cover is looked up on Deezer, with the iTunes Search API as fallback.
 - **Away-aware.** The presence goes down when your machine has been idle long enough for Discord to mark you Idle (10 minutes by default), and comes back on the first key press.
 
 **Lyrics**
@@ -68,12 +68,13 @@ Vybecord is a Windows desktop app (Electron + TypeScript). It reads the Windows 
 - **Several sources, tried in order:** your own library, then Spotify's lyrics (with Spicetify), then an offline LRCLIB dump, then LRCLIB, Netease and Musixmatch in parallel, then an LRCLIB fuzzy search, then YouTube captions. When there are no synced lyrics, a plain-text version (from LRCLIB or Genius) is shown in the window.
 - **Lyrics library.** Paste timed `.lrc` lyrics or untimed text, then time it with the built-in *Sync while playing* tool. You can edit and delete entries and search an offline LRCLIB dump.
 - **Corrections.** Mark a wrong match so it is never used for that track again. Timing offsets are saved per track.
+- **Kick captions.** On a live Kick channel or a past broadcast, with captions on in Kick's player, what is said shows on the card as lyrics (needs the browser extension).
 - **Translation** into 16 languages, in the window and optionally on Discord. **Romanisation** of Japanese (kanji included), Korean, Chinese, Cyrillic, Greek, Thai, Arabic, Devanagari, Georgian and Armenian.
 
 **App**
 
 - Frameless window with dark and light themes. The app runs in the system tray, so closing the window doesn't stop the presence.
-- Listening history (up to 10,000 plays) with a *Wrapped* summary over 7 days, 30 days, 1 year or all time, plus per-session top tracks and artists.
+- Listening history (up to 10,000 plays) shown on the **Activity** page over 7 days, 30 days, 12 months or all time: time listened per day, top artists and tracks, and the full log.
 - Optional Last.fm scrobbling, with a queue for scrobbles made while offline.
 - Automatic updates from GitHub Releases. They install when you quit the app.
 
@@ -115,7 +116,7 @@ Nothing else is needed. [yt-dlp](https://github.com/yt-dlp/yt-dlp) (used for You
 The following are optional:
 
 - [Spicetify](https://spicetify.app/), for the Spotify integration.
-- A Chromium-based browser or Firefox 121+, for the browser extension.
+- A Chromium-based browser (Chrome, Edge, Brave, Opera, Vivaldi, Arc) or Firefox 140+ (or a fork such as Zen or LibreWolf), for the browser extension.
 - About 40 GB to download an LRCLIB dump, and well over 100 GB of disk space once it is unpacked.
 - A Last.fm API account, for scrobbling.
 
@@ -141,7 +142,7 @@ Windows reports little about Spotify beyond the title and artist. [Spicetify](ht
    iwr -useb https://raw.githubusercontent.com/spicetify/cli/main/install.ps1 | iex
    ```
 
-2. In Vybecord, open **Settings → Detection → Spotify via Spicetify** and click **Set up automatically**. It copies `vybecord.js` into `%APPDATA%\spicetify\Extensions`, runs `spicetify config extensions vybecord.js`, then runs `spicetify apply`. **Spotify closes and reopens.**
+2. In Vybecord, open **Settings → Integrations → Spotify** and click **Set up automatically**. It copies `vybecord.js` into `%APPDATA%\spicetify\Extensions`, runs `spicetify config extensions vybecord.js`, then runs `spicetify apply`. **Spotify closes and reopens.**
 3. Once Spotify is running, the card shows **Connected**.
 
 After an app update, the card may show **Update needed**. Spotify keeps running the old copy of the extension until you click **Run setup again**.
@@ -157,24 +158,26 @@ The extension also adds a Vybecord entry to the Spicetify Marketplace's *Install
 
 ### 3. Optional: browser extension
 
-Windows reports *what* is playing in a browser, but not *which site* it's on: a SoundCloud tab and a YouTube tab both show up as just "the browser". The extension in [`extension/`](extension/) reads the page instead. It supports Spotify Web, YouTube and YouTube Music, SoundCloud, Bandcamp, Twitch and Kick, and adds the site, the canonical link, the exact position (read from the page's own media element) and the live-stream start time. The extension isn't published on any browser store, so you load it manually.
+Windows reports *what* is playing in a browser, but not *which site* it's on: a SoundCloud tab and a YouTube tab both show up as just "the browser". The extension in [`extension/`](extension/) reads the page instead. It supports Spotify Web, YouTube and YouTube Music, SoundCloud, Bandcamp, Twitch and Kick, and adds the site, the canonical link, the exact position (read from the page's own media element), the live-stream start time and, on Kick, the player's captions. The extension isn't published on any browser store, so you load it manually.
 
 **Chrome, Edge, Brave, Opera, Vivaldi**
 
 1. Get the extension folder in one of these ways:
-   - in Vybecord: **Settings → Detection → Browser extension → Open the extension folder** (this is the copy that ships with the app), or
+   - in Vybecord: **Settings → Integrations → Browser extension → Open the extension folder** (this is the copy that ships with the app), or
    - download `vybecord-extension-<version>.zip` from the [latest release](https://github.com/TheUnknownMurda/VybecordTS/releases/latest) and unzip it.
 2. Open your browser's extensions page (`chrome://extensions`, `edge://extensions`, `brave://extensions`, `opera://extensions` or `vivaldi://extensions`). Browsers don't let other apps open these pages, so Settings gives you a button that copies the address.
 3. Turn on **Developer mode**, click **Load unpacked**, and select the folder.
 
-**Firefox 121+**
+**Firefox 140+** (and forks such as Zen, LibreWolf, Waterfox, Floorp)
 
 1. Download `vybecord-extension-<version>-firefox.zip` from the [latest release](https://github.com/TheUnknownMurda/VybecordTS/releases/latest).
 2. Open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on** and select the zip.
 
 Firefox removes temporary add-ons when it closes. Use the `-firefox.zip` package, not the unpacked folder: the folder's manifest declares a Manifest V3 service worker, and Firefox doesn't run those.
 
-The extension's toolbar icon opens its options, where each site has its own switch (all are on by default). The app listens for the extension only while **Settings → Detection → Accept data from the extension** is on (the default).
+**Safari** isn't supported: there is no Safari for Windows, and Vybecord runs only on Windows.
+
+The extension's toolbar icon opens its options, where each site has its own switch (all are on by default). The app listens for the extension only while **Settings → Integrations → Browser extension → Accept data from the extension** is on (the default).
 
 ### 4. Optional: offline LRCLIB lyrics dump
 
@@ -184,14 +187,16 @@ The extension's toolbar icon opens its options, where each site has its own swit
 2. Unpack it with 7-Zip or any gzip tool. You get a single `.sqlite3` file, well over 100 GB.
 3. Then either:
    - move it to `%APPDATA%\Vybecord\LRCLIB Dump\`. Any file name works, because the largest SQLite file in that folder is used (`lrclib-dump.sqlite3` is the expected name). **Lyrics → LRCLIB dump → Open the dump folder** opens the folder for you. Or:
-   - leave it where it is and paste its full path into **Settings → Lyrics → LRCLIB dump path**. Paths copied from Explorer with surrounding quotes are accepted.
+   - leave it where it is and paste its full path into **Settings → Lyrics & translation → LRCLIB dump path**. Paths copied from Explorer with surrounding quotes are accepted.
 4. **Restart Vybecord.** The dump is only opened at startup.
 
 Queries against the dump run on their own worker thread, so even a 100 GB+ file never freezes the window or the presence.
 
 ### Updates
 
-Packaged builds check GitHub Releases 5 seconds after launch and then every 6 hours. When an update is available, it is downloaded in the background and installed the next time you quit. A banner in the window, and **Settings → App → Updates**, let you restart into it right away. Updates are turned off when running from source.
+Packaged builds check GitHub Releases 5 seconds after launch and then every 6 hours. When an update is available, it is downloaded in the background and installed the next time you quit. A banner in the window, and **Settings → App & window → Updates**, let you restart into it right away. Updates are turned off when running from source.
+
+The first time the window opens on a new version, **What's new** lists its highlights, with a link to the full release notes. It shows once (closing it records the version in `whats_new_seen`), every version you skipped included, and **Settings → About → What's new** shows it again. A fresh install, with no listening history yet, skips it. The highlights are written into the app (`ui/src/whats-new.js`), so they show offline; a release with nothing worth announcing has no entry and no dialog.
 
 ### Uninstall
 
@@ -206,24 +211,23 @@ spicetify apply
 
 ### First launch and the tray
 
-Vybecord opens on **Now playing** and connects to Discord in the background. The title bar has two status dots: **Media** (media detection is working) and **Discord** (the IPC pipe is connected).
+The first time, Vybecord opens on **Help & setup**: a checklist that ticks itself off once the Discord app is open and something is playing, followed by the optional add-ons. After that it opens on **Now playing**. People upgrading with listening history already recorded skip the checklist; it stays at the bottom of the sidebar.
 
-Closing the window hides it to the notification area, and the presence keeps running. Click the tray icon to bring the window back. Right-click it and choose **Quit**, or press **Ctrl+Q** in the window, to exit for good.
+Vybecord connects to Discord in the background. The bottom of the sidebar shows two status lines: whether **Discord** is connected (and, when it is, whether your status is live or why it is hidden), and whether media is being **detected** (and from which source).
+
+Closing the window hides it to the notification area, and the presence keeps running. Click the tray icon to bring the window back. Right-click it and choose **Quit**, or press **Ctrl+Q** in the window, to exit for good. The same menu shows presence 1's song while it plays, opens any page of the sidebar (**Go to**), and switches `rpc_enabled` (**Show on Discord**), `show_lyrics` (**Show lyrics**, a submenu with one item per presence in play when there are several), `rpc_translate_lyrics`, `presence_count` (**Presences**), the `detect_*` switches of Settings → Detection (**Detection**), `rpc_only_when_playing`, `rpc_hide_when_away`, `filter_spotify_ads` and `launch_on_startup`; the item above **Quit** checks for an update, or restarts to install one that is ready.
 
 ### The window
 
 | Key | Page | What it does |
 | --- | --- | --- |
-| `1` | **Now playing** | Shows every presence card, the cover, progress, and the scrolling lyrics. Here you can open the full lyrics, copy them as `.lrc`, adjust the timing offset, and report wrong lyrics. |
-| `2` | **Players** | Lists every media session Windows reports. Click one to pin it, or choose **Automatic**. |
-| `3` | **Stats** | Top tracks and artists for this session, plus recent past sessions. |
-| `4` | **History** | Has two tabs: **Log** (every play, with time actually listened) and **Wrapped** (7 days / 30 days / 1 year / all time). |
-| `5` | **Lyrics** | Has four tabs: **Import**, **My lyrics**, **LRCLIB dump** and **Flagged**. |
-| `6` | **Settings** | Has four tabs: **Presence**, **Lyrics**, **Detection** and **App**. Changes apply immediately. |
-| `7` | **Last.fm** | API credentials and scrobbling. |
-| `8` | **Report** | Sends a bug report to the maintainer. |
+| `1` | **Now playing** | A mirror: **On your screen** on the left, **On Discord** on the right, and between them the switches that decide what crosses over. **On your screen** is the track: its cover, title, artist and album, the player it comes from, whether it is paused (a paused song stays on the card, its bar stopped where it paused, for as long as its player holds it paused and that presence would show it again on Play: closing the player takes it off, and so does switching its platform's detection off or pinning the presence to another player, until that is undone) or live, chips for shuffle, repeat, a local file or being away, and the progress bar. Under it, the scrolling lyrics, or, for lyrics found without timings, the words as plain text to scroll, marked **Words only** (the timing row and **Copy .lrc** step aside for them). Above the lyrics, **Big lyrics** fills the window with them, Spotify style (large lines on the cover's colour, following the song; **Esc** closes it), **Full lyrics** lists every line with its timestamp, and **Copy .lrc** copies them. Under them you can adjust the timing offset and report wrong lyrics. In the middle, each switch has an arrow toward the side it changes: **Visible** (`rpc_enabled`), **Lyrics** (the shown card's `show_lyrics` key, both sides), **Romanise** (Discord only), **Translate** toward the window and **Translate** toward Discord, with the language, then **Hide on Discord when** **Paused**, **Away** or a **Spotify ad** plays. **On Discord** draws every card in play as Discord does: the shown one whole, the others small (click one to show it on the left), **+ Add a card**, and × on the last one to use one fewer. The shown card carries the **Source** menu, which lists every media session Windows reports and pins the card to one, or puts it back on **Automatic**. Click any part of that card, or **Customize**, and a bubble beside it holds the settings behind that part: the activity type and the status line, lyrics or the title on the two lines, romanisation and translation on Discord, naming the playlist, the small icon, publishing the cover, and your button. **Why?** lists what stands between the song and the card (Discord closed, the presence off, an ad, a pause, a pin, being away, lyrics switched off or not found), each with a button that fixes it. |
+| `2` | **Lyrics** | Your lyrics library, with three tabs: **My lyrics**, **Blocked** (lyrics you marked as wrong) and **LRCLIB dump**. **Add lyrics** opens the import form. |
+| `3` | **Activity** | Your listening over **7 days**, **30 days**, **12 months** or **All time**: time listened, tracks played, different artists, a chart of listening time, top artists, top tracks and recently played. **See all** opens the full log, with the time actually listened for each play. The page refreshes itself when a track changes. Dates are in English, on the 12- or 24-hour clock of the system's language. |
+| `4` | **Settings** | Six categories: **Discord presence**, **Lyrics & translation**, **Detection**, **Integrations** (browser extension, Spotify through Spicetify, Last.fm, cover images), **App & window**, and **About**. A search box filters every setting. Changes apply immediately. |
+| | **Help & setup** | The setup checklist, at the bottom of the sidebar. |
 
-The number keys don't change pages while a text field has focus.
+The number keys don't change pages while a text field has focus. **Report a problem** and **Quit** are under **Settings → About**.
 
 ### Choosing what is announced
 
@@ -239,92 +243,97 @@ When several players are active, the highest-ranked one wins:
 | 6 | YouTube, Twitch, Kick (identified browser tab) |
 | 5 | VLC, foobar2000, MusicBee, AIMP, Winamp, MediaMonkey |
 | 1 | Any other app, or a browser tab whose site could not be identified |
+| Lowest | A Twitch or Kick channel that is offline: it only takes a card nothing else wants, and none at all with **Offline channels** off in Settings → Detection |
 
 Windows Media Player (both the classic and the new app), Groove Music, Movies & TV and the Microsoft Store SoundCloud app are never announced. That SoundCloud app reports no position or duration, so use SoundCloud in a browser with the extension instead.
 
-- **Pinning.** Click a player on **Players** to pin it. While a pin is active, only that player is announced, even over the extensions. Click **Automatic** to go back to ranking. A pinned player is announced even if its platform's switch is off.
-- **Detection switches** are under **Settings → Detection → What to detect**. If you turn off **Detect everything**, only dedicated music apps are announced: Spotify, Apple Music, Deezer, Tidal and Amazon Music.
+- **Pinning.** On **Now playing**, pick a player in the **Source** menu to pin it. While a pin is active, only that player is announced, even over the extensions. Pick **Automatic** to go back to ranking. A pinned player is announced even if its platform's switch is off.
+- **Detection switches** are under **Settings → Detection → Players**. If you turn off **Detect everything**, only dedicated music apps are announced: Spotify, Apple Music, Deezer, Tidal and Amazon Music.
 
 ### Several presences
 
-**Settings → Presence → Several presences → Presences** goes from 1 to 5. The highest-ranked source goes on presence 1, the next one on presence 2, and so on. Two tabs on the same site count separately, so four Twitch streams take four cards.
+**Settings → Discord presence → Several presences → Presences at once** goes from 1 to 5. The highest-ranked source goes on presence 1, the next one on presence 2, and so on. Two tabs on the same site count separately, so four Twitch streams take four cards.
 
 - **Lyrics on presence N** chooses which cards show lyrics.
-- **Players** lets you pin a player to a specific presence.
-- **Now playing** shows every card. Click one to see its lyrics and controls.
-- Stats, history and Last.fm only follow **presence 1**.
+- **Activity type on presence N** gives each card its own verb: Listening for the song, Watching for the stream. Presences 2 to 5 follow presence 1 until you change them.
+- **Now playing** shows every card on its **On Discord** side. Click a small one to show its lyrics on the left and draw it whole; its **Source** menu then pins that presence to a player, and its parts open its settings.
+- The listening history (and so **Activity**) and Last.fm only follow **presence 1**.
 
-Discord shows one card per application. Each card publishes under its platform's own application. When that application is already in use by a higher card, the card borrows another one: first the default Vybecord application, then your **spare application IDs** (up to four), then any built-in platform application nobody is using. The card header still names the real platform. You only need spare IDs if you want more than the seven built-in applications can cover, or if you'd rather not borrow. To get one, create an application at <https://discord.com/developers/applications> and paste its Application ID. If no application is free, the card stays off Discord (it still shows in the window) and the log says why.
+Discord shows one card per application. Each card publishes under its platform's own application (a platform can have several, see `PLATFORM_DISCORD_APP_IDS` in `src/backend.ts`). When they are all in use by higher cards, the card borrows another one: first the default Vybecord application, then any built-in platform application nobody is using. The card header still names the real platform, but Discord's **Active Now** list shows the borrowed application's own icon next to the card, so a Kick card on Spotify's application wears the Spotify logo there. That is why a card moves back up as soon as a better application is free: its platform's own, or else the default one. It never moves between two applications of the same rank, since each move takes it off Discord for a moment. Kick and Twitch have five applications each (one per card) and YouTube three, so five Kick streams all show the Kick logo. Seventeen applications for at most five cards means one is always free, so there is nothing to set up. If no application is free anyway, the card stays off Discord (it still shows in the window) and the log says why.
 
 ### Lyrics
 
 **Sources, first match wins:**
 
-1. **Your library**: lyrics you imported under **Lyrics → Import**. These always win.
+1. **Your library**: lyrics you added under **Lyrics → Add lyrics** or fixed. These always win.
 2. **Spotify's own lyrics**, only with the Spicetify extension and only when Spotify has line-synced lyrics for the track. Many tracks have none and go on to the next source.
 3. **Local LRCLIB dump**, if one is loaded.
 4. **Online race**: LRCLIB, Netease Cloud Music and Musixmatch are queried in parallel, and the first valid answer wins.
 5. **LRCLIB fuzzy search**, with scoring.
 6. **YouTube captions**, only for YouTube and unidentified browser tabs, and only when everything above found nothing.
 
-If none of these finds synced lyrics, plain lyrics (LRCLIB, then Genius) are shown in the window only, never on Discord. Live streams are never looked up.
+If none of these finds synced lyrics, plain lyrics (LRCLIB, then Genius) are shown in the window only, marked **Words only**, never on Discord. Live streams are never looked up.
+
+**Kick captions.** A Kick stream has no lyrics to look up, but with captions (**CC**) on in Kick's player the extension reports what the caption overlay says, live or on a past broadcast, and the app turns that into lines (`src/core/live-captions.ts`) and shows them as the lyrics, marked **Live captions** (**Captions** on a past broadcast): the line before on top and, under it, the line being said, which grows as the player shows each word (usually within a second) and is put right in place when Kick corrects a word. The overlay is a window of the last words heard, rewritten as the recognition changes its mind, so the reports are stitched back into one transcript and the last few words stay open to correction until a later report confirms them. A line ends when it is full, at a pause, or when the captions clear; with translation on, a line is translated once it has ended. Both of Kick's kinds work, captions carried by the stream and Chrome's on-device recognition. After 25 seconds with nothing said, the card goes back to the stream's title, and the next line comes back on its own rather than under one said before the quiet. A past broadcast's captions are read off the player too, not looked up by position: skipping through the video starts the lines over from where it lands, and playing on after a pause does not put back lines said more than 25 seconds before. When people talk fast, Kick's own two-line display skips lines it has no room for (about a tenth of the words, on a real broadcast's captions), and those never reach the app either.
 
 **Fixing lyrics**
 
-- **Wrong words.** On **Now playing**, click *These lyrics aren't matching?* and choose **The words are wrong**. That version is never used for this track again, and the next source gets a chance. You can undo flags under **Lyrics → Flagged**.
-- **Wrong timing.** Choose **The timing is off** in the same dialog. The lines are copied into the import form, where you can re-time them and save your own copy.
-- **Offsets.** The **−250 / +250 / Reset** buttons on **Now playing** set an offset for the track that is playing, and it is remembered for that track (up to 1,000 tracks). **Settings → Lyrics → Timing offset** is the default for tracks you haven't corrected. Negative values show lines earlier.
+- **Wrong words.** On **Now playing**, click **Wrong lyrics?** under the lyrics and choose **The words are wrong**. That version is never used for this track again, and the next source gets a chance. You can undo it under **Lyrics → Blocked** with **Allow again**.
+- **Wrong timing.** Choose **The timing is off** in the same place. The lines are copied into the lyrics editor, where you can re-time them and save your own copy.
+- **Offsets.** The **−250 / +250 / Reset** buttons on **Now playing** set an offset for the track that is playing, and it is remembered for that track (up to 1,000 tracks). **Settings → Lyrics & translation → Default timing offset** is the default for tracks you haven't corrected. Negative values show lines earlier.
 
-**Importing.** Under **Lyrics → Import**, **Fill from current track** copies the playing track's details and its lyrics, if any. Paste lyrics that already have `[mm:ss.xx]` timestamps and save. Or paste plain text, start the song, and use **Sync while playing** to time each line as it's sung, with undo, skip and adjustable tap compensation.
+**Importing.** Under **Lyrics → Add lyrics**, **Fill from current track** copies the playing track's details and its lyrics, if any. Paste lyrics that already have `[mm:ss.xx]` timestamps and save. Or paste plain text, start the song, and use **Sync while playing** to time each line as it's sung, with undo, skip and adjustable tap compensation.
 
-**Translation and romanisation** are under **Settings → Lyrics**:
+**Translation and romanisation** are under **Settings → Lyrics & translation**:
 
-- *Translate in the window* and *Translate on Discord*. Target languages: English, French, Spanish, German, Portuguese, Italian, Russian, Japanese, Korean, Chinese, Arabic, Hindi, Turkish, Polish, Dutch, Swedish.
-- *Romanise Japanese / Korean* also covers the other scripts listed under [Features](#features). Japanese text containing kanji uses the bundled kuromoji dictionary, which is only loaded when it is needed.
+- *Translate in this window* and *Translate on Discord too*. Target languages: English, French, Spanish, German, Portuguese, Italian, Russian, Japanese, Korean, Chinese, Arabic, Hindi, Turkish, Polish, Dutch, Swedish.
+- *Romanise lyrics* covers every script listed under [Features](#features). Japanese text containing kanji uses the bundled kuromoji dictionary, which is only loaded when it is needed.
 
-**YouTube captions** are under **Settings → Lyrics → YouTube captions**. They need yt-dlp, which ships with the app. The card shows which copy is in use. To use your own copy, put `yt-dlp.exe` in `%APPDATA%\Vybecord\bin`, which is checked first. After that come the bundled copy, then `PATH`. Captions in *Automatic* follow your system language, then English. Age-restricted videos need a **Cookies file** (a `cookies.txt` exported from your browser). Without the browser extension, the video is found by searching for its title. With it, the exact video is used.
+**YouTube captions** are under **Settings → Lyrics & translation → YouTube captions**. They need yt-dlp, which ships with the app. The card shows which copy is in use. To use your own copy, put `yt-dlp.exe` in `%APPDATA%\Vybecord\bin`, which is checked first. After that come the bundled copy, then `PATH`. Captions in *Automatic* follow your system language, then English. Age-restricted videos need a signed-in, age-verified YouTube account. The simplest way is the browser extension's **Share my YouTube sign-in for captions** switch (off by default): when a video comes back age-restricted, the extension hands the app your youtube.com cookies, which it keeps in memory and uses only to retry that video. The other way is a **Cookies file** (a `cookies.txt` exported from your browser), which is used for every video and wins when both are set. Without the browser extension, the video is found by searching for its title. With it, the exact video is used.
 
 ### Cover art on Discord
 
 Discord needs a URL for the cover, but Windows hands Vybecord a file on disk. So:
 
-1. Released music is looked up on **Deezer** first, then on the **iTunes Search API**. Only the track and artist name are sent, and the artist of the result is checked so that a wrong cover is never used. Version markers such as "- Remastered 2011" are removed before searching.
-2. Artwork that exists only in your own files (rips, demos, DJ sets) can be **published to Vybecord's cover store** so Discord can show it. Only the image is sent. EXIF, XMP and comment metadata are removed first, and the image is stored under the SHA-256 of its bytes. This is on by default. Turn it off under **Settings → Presence → Cover images**, and those tracks fall back to the default placeholder.
+1. The cover the player itself shows (Spotify's, Apple Music's, or the one embedded in a local file) is **published to Vybecord's cover store** so Discord shows that exact image. Only the image is sent. EXIF, XMP and comment metadata are removed first, and the image is stored under the SHA-256 of its bytes, so a cover already there costs one HEAD request. This is on by default, under **Settings → Integrations → Cover images**.
+2. Only when there is no such cover to publish (the switch is off, or the player gave none), the track is looked up on **Deezer** first, then on the **iTunes Search API**. Only the track and artist name are sent, and the artist of the result is checked so that a wrong cover is never used. Version markers such as "- Remastered 2011" are removed before searching.
+
+Until 2.8 the order was the other way round. A catalogue answers with *a* cover of the song, not always the one the player shows (another edition, the single instead of the album), so the player's own cover now always wins.
 
 The window always shows the cover straight from the player.
 
 ### Spotify advertisements
 
-Spotify doesn't mark its ads in any way: it simply replaces the track details with the advertiser's. The filter (**Settings → Detection → Spotify advertisements**, on by default) works mostly from duration:
+Spotify doesn't mark its ads in any way: it simply replaces the track details with the advertiser's. The filter (**Settings → Discord presence → Hide during Spotify ads**, on by default) works mostly from duration:
 
 - Any Spotify "track" of 60 seconds or less counts as an ad, **unless** it belongs to the album that was already playing. That exception protects interludes and skits.
 - A track whose title equals its artist (for example "Monster Energy" / "Monster Energy") and that is 55 seconds or shorter also counts as an ad.
 - So do titles or artists that Spotify itself labels as an advertisement.
 
-These thresholds come from observation: every ad seen ran 30 s, and the shortest of 44 real tracks sampled ran 83 s. The filter prefers to hide a very short track rather than show an advertiser. While an ad plays, the window says so, and ads are never counted in history, stats or Last.fm.
+These thresholds come from observation: every ad seen ran 30 s, and the shortest of 44 real tracks sampled ran 83 s. The filter prefers to hide a very short track rather than show an advertiser. While an ad plays, the window says so, and ads are never counted in the history or on Last.fm.
 
 ### Away and paused
 
-- **Hide when away** (on by default) takes the presence down after **Away after** minutes without keyboard or mouse input (10 by default, which matches Discord's own idle delay), and puts it back on the first input. The music isn't affected.
+- **Hide when I'm away** (on by default) takes the presence down after **Away after** minutes without keyboard or mouse input (10 by default, which matches Discord's own idle delay), and puts it back on the first input. The music isn't affected.
 - **Hide when paused** (off by default) clears the presence as soon as playback stops.
 
-Both are under **Settings → Presence → Discord presence**.
+Both are under **Settings → Discord presence → Visibility**.
 
 ### Last.fm scrobbling
 
 1. Create an API account at <https://www.last.fm/api/account/create>.
-2. On the **Last.fm** page, paste the **API key** and **Shared secret**, then click **Save credentials**.
+2. Under **Settings → Integrations → Last.fm**, paste the **API key** and **Shared secret**, then click **Save credentials**.
 3. Click **1. Authorise in browser**, approve the request on Last.fm, then click **I approved it — finish**.
 
 A track is scrobbled when it is longer than 30 seconds and has played for half its length or 4 minutes, whichever comes first. Paused time doesn't count. Scrobbles that fail to send are queued in `lastfm-queue.json` (up to 500) and sent again later. Only presence 1 is scrobbled, and live streams never are.
 
 ### Reporting a problem
 
-The **Report** page sends a summary, a category, optional details and, if you allow it, the current track to the maintainer through a Discord webhook built into official builds. Reports are limited to one every 30 seconds and 20 a day, and duplicates are blocked. Builds made without a webhook show a link to [GitHub issues](https://github.com/TheUnknownMurda/VybecordTS/issues) instead.
+**Settings → About → Report a problem** (also linked from **Help & setup**) sends a summary, a category, optional details and, if you allow it, the current track to the maintainer through a Discord webhook built into official builds. Reports are limited to one every 30 seconds and 20 a day, and duplicates are blocked. Builds made without a webhook show a link to [GitHub issues](https://github.com/TheUnknownMurda/VybecordTS/issues) instead.
 
 ## Configuration
 
-Everything has a control in **Settings** or on the **Last.fm** page, except the few keys marked *config only* below.
+Everything has a control in **Settings**, except the few keys marked *config only* below.
 
 ### Data folder
 
@@ -339,9 +348,9 @@ Everything has a control in **Settings** or on the **Last.fm** page, except the 
 | `custom-lyrics.sqlite3` | Your imported lyrics. Created on first run. |
 | `LRCLIB Dump\` | Drop folder for an LRCLIB dump. |
 | `listening-history.json` | Listening log, up to 10,000 entries. |
-| `stats-history.json` | Top tracks and artists of the last 10 sessions. |
 | `flagged-lyrics.json` | Lyrics you marked as wrong. |
 | `lyrics-offsets.json` | Timing offsets per track, up to 1,000 tracks. |
+| `lyrics-cache.json` | Lyrics already found, up to 500 tracks for 30 days, so a song heard again shows its lyrics at once. The **Clear lyrics cache** button in **Settings** empties it. |
 | `translate-cache.json` | Translation cache, up to 5,000 lines. |
 | `lastfm-session.txt`, `lastfm-queue.json` | Last.fm session and scrobbles waiting to be sent. |
 | `window-state.json` | Last window position and size. Delete it to reset. |
@@ -355,44 +364,43 @@ The current track's artwork is also written to `%TEMP%\vybecord_thumb.jpg`.
 
 `config.json` is created with the defaults on first run and saved atomically whenever a setting changes. The app watches it and reloads it, so you can edit it by hand while the app is running. Unknown keys are dropped. An invalid value (wrong type, out of range) is ignored and the default is kept, with a warning in the log.
 
-**Presence** (Settings → Presence)
+**Discord presence** (Settings → Discord presence)
 
 | Key | Default | Accepted values | Setting |
 | --- | --- | --- | --- |
-| `rpc_enabled` | `true` | boolean | Show Rich Presence (master switch) |
+| `rpc_enabled` | `true` | boolean | Show my activity on Discord (master switch) |
 | `rpc_only_when_playing` | `false` | boolean | Hide when paused |
-| `rpc_hide_when_away` | `true` | boolean | Hide when away |
+| `rpc_hide_when_away` | `true` | boolean | Hide when I'm away |
 | `away_after_minutes` | `10` | 1–120 (the UI offers 5, 10, 15, 30, 60) | Away after |
-| `rpc_show_playlist` | `true` | boolean | Show playlist |
-| `rpc_activity_type` | `2` | `0` Playing, `2` Listening, `3` Watching, `5` Competing | Activity type |
+| `filter_spotify_ads` | `true` | boolean | Hide during Spotify ads |
+| `rpc_show_playlist` | `true` | boolean | Name the playlist |
+| `rpc_activity_type` | `2` | `0` Playing, `2` Listening, `3` Watching, `5` Competing | Activity type (presence 1's, when there are several) |
+| `rpc_activity_type_2` … `rpc_activity_type_5` | `-1` | `-1` same as presence 1, or a type as above | Several presences → Activity type on presence 2–5 |
 | `rpc_status_display` | `"app"` | `app`, `title`, `title_artist`, `artist_title`, `artist`, `album`, `details`, `state`, `custom`, `playlist` (config only) | Status line |
 | `rpc_status_template` | `"{title} - {artist}"` | up to 128 characters; placeholders `{title}` `{artist}` `{album}` `{playlist}` `{platform}` | Status template (used when `rpc_status_display` is `custom`) |
-| `presence_count` | `1` | 1–5 | Several presences → Presences |
+| `presence_count` | `1` | 1–5 | Several presences → Presences at once |
 | `show_lyrics_2` … `show_lyrics_5` | `true` | boolean | Lyrics on presence 2–5 |
-| `discord_app_id_2` … `discord_app_id_5` | `""` | up to 32 characters | Spare application ID 1–4 |
-| `dance_mode`, `radiate_mode`, `purple_rad_mode`, `blue_rad_mode`, `rouge_mode`, `bleeding_mode`, `random_icon_mode`, `lrc_off_mode`, `hide_small_icon` | `false` | boolean, at most one `true` | Small icon → Icon style |
-| `rpc_button1_label` | `""` | up to 128 characters (cut to 32 on the card) | Button 1 label (empty hides the button) |
-| `rpc_button1_url` | `""` | up to 512 characters | Button 1 URL |
-| `art_upload_enabled` | `true` | boolean | Cover images → Publish artwork that exists only on this PC |
-| `art_upload_url` | `"https://vybecord-art.vybecord.workers.dev"` | up to 256 characters | *config only*: the cover store to publish to (see [`worker/`](worker/)) |
+| `auto_icon_mode`, `dance_mode`, `radiate_mode`, `purple_rad_mode`, `blue_rad_mode`, `rouge_mode`, `bleeding_mode`, `random_icon_mode`, `lrc_off_mode`, `hide_small_icon` | `false` | boolean, at most one `true` | Small icon (`auto_icon_mode` is **Match the cover**) |
+| `rpc_button1_label` | `""` | up to 128 characters (cut to 32 on the card) | Buttons → Your button's label (empty hides the button) |
+| `rpc_button1_url` | `""` | up to 512 characters | Buttons → Your button's link |
 | `discord_app_id` | `""` | up to 32 characters | *config only*: replaces the built-in default Discord application |
 
-The second presence button is fixed. It links to what is playing and is labelled with the platform ("Listen on Spotify", "Watch on YouTube", …).
+The second presence button is fixed. It links to what is playing and is labelled with the platform ("Listen on Spotify", "Watch on YouTube", …). Discord only accepts web links on a button, so for Spotify the link goes through a page on the Vybecord website (`/open/spotify/`) that opens the Spotify app, with the web player as a fallback.
 
-**Lyrics** (Settings → Lyrics)
+**Lyrics & translation** (Settings → Lyrics & translation)
 
 | Key | Default | Accepted values | Setting |
 | --- | --- | --- | --- |
-| `show_lyrics` | `true` | boolean | Show lyrics (presence 1) |
-| `romanize_lyrics` | `false` | boolean | Romanise Japanese / Korean |
-| `lyrics_offset_ms` | `0` | −60000 to 60000 | Timing offset: the default for tracks without their own offset |
+| `show_lyrics` | `true` | boolean | Show lyrics (presence 1; with one presence it is also **Lyrics on the card** under Discord presence) |
+| `romanize_lyrics` | `false` | boolean | Romanise lyrics |
+| `lyrics_offset_ms` | `0` | −60000 to 60000 | Default timing offset: for tracks without their own offset |
 | `lrclib_dump_path` | `""` | up to 1024 characters | LRCLIB dump path (**restart required**) |
 | `cc_enabled` | `true` | boolean | Use captions as lyrics |
 | `cc_lang` | `"auto"` | `auto` or a language code | Caption language |
 | `cc_cookies_file` | `""` | up to 512 characters | Cookies file |
-| `translate_lyrics` | `false` | boolean | Translate in the window |
-| `rpc_translate_lyrics` | `false` | boolean | Translate on Discord |
-| `translate_target_lang` | `"en"` | `en` `fr` `es` `de` `pt` `it` `ru` `ja` `ko` `zh` `ar` `hi` `tr` `pl` `nl` `sv` | Target language |
+| `translate_lyrics` | `false` | boolean | Translate in this window |
+| `rpc_translate_lyrics` | `false` | boolean | Translate on Discord too |
+| `translate_target_lang` | `"en"` | `en` `fr` `es` `de` `pt` `it` `ru` `ja` `ko` `zh` `ar` `hi` `tr` `pl` `nl` `sv` | Translate to |
 
 **Detection** (Settings → Detection)
 
@@ -400,10 +408,18 @@ The second presence button is fixed. It links to what is playing and is labelled
 | --- | --- | --- | --- |
 | `detect_all_media` | `true` | boolean | Detect everything (off = dedicated music apps only) |
 | `detect_spotify`, `detect_apple_music`, `detect_youtube`, `detect_soundcloud`, `detect_browser`, `detect_twitch`, `detect_kick`, `detect_other_apps` | `true` | boolean | Per-platform switches |
-| `filter_spotify_ads` | `true` | boolean | Hide the presence during ads |
-| `extension_enabled` | `true` | boolean | Accept data from the extension (opens `127.0.0.1:8888`) |
+| `show_offline_channels` | `true` | boolean | Offline channels (off = a Twitch or Kick tab on an offline channel shows nothing) |
 
-**App** (Settings → App)
+**Integrations** (Settings → Integrations)
+
+| Key | Default | Accepted values | Setting |
+| --- | --- | --- | --- |
+| `extension_enabled` | `true` | boolean | Browser extension → Accept data from the extension (opens `127.0.0.1:8888`) |
+| `lastfm_api_key`, `lastfm_api_secret` | not set | strings | Last.fm. The secret is never sent back to the window in clear text. |
+| `art_upload_enabled` | `true` | boolean | Cover images → Publish the player's cover |
+| `art_upload_url` | `"https://vybecord-art.vybecord.workers.dev"` | up to 256 characters | *config only*: the cover store to publish to (see [`worker/`](worker/)) |
+
+**App & window** (Settings → App & window)
 
 | Key | Default | Accepted values | Setting |
 | --- | --- | --- | --- |
@@ -418,9 +434,9 @@ The second presence button is fixed. It links to what is playing and is labelled
 
 | Key | Default | Notes |
 | --- | --- | --- |
-| `lastfm_api_key`, `lastfm_api_secret` | not set | Set on the **Last.fm** page. The secret is never sent back to the window in clear text. |
 | `bug_report_webhook` | not set | *config only*: overrides the built-in report webhook. It must be a `https://discord.com/api/webhooks/…` URL. |
 | `first_run_completed` | `false` | Internal. |
+| `whats_new_seen` | `""` | Internal: the version whose **What's new** was last closed. Clear it to see that dialog again on the next launch. |
 
 ### Environment variables
 
@@ -431,7 +447,7 @@ At startup the app loads `envs\.env` from the [data folder](#data-folder), if th
 | `DISCORD_CLIENT_ID` | at runtime | Default Discord application, used when `discord_app_id` is empty. |
 | `LASTFM_API_KEY`, `LASTFM_API_SECRET` | at runtime | Last.fm credentials, used when the config keys are empty. |
 | `VYBECORD_LOG_LEVEL` | at runtime | `debug`, `info` (default), `warn` or `error`. |
-| `BUG_REPORT_WEBHOOK` | **at build time** | Discord webhook built into the main bundle for the Report page. It is read from the environment or from `envs/.env` at the repository root. If it isn't set, in-app reporting is turned off in that build. Anyone can read it from the packaged app, so it is not a secret. |
+| `BUG_REPORT_WEBHOOK` | **at build time** | Discord webhook built into the main bundle for the Report page. It is read from the environment or from `envs/.env` at the repository root (in a `git worktree`, the main checkout's `envs/.env` is used too). If it isn't set, in-app reporting is turned off in that build. Anyone can read it from the packaged app, so it is not a secret. |
 
 Example `envs\.env`:
 
@@ -451,13 +467,13 @@ Your history, imported lyrics, settings and Last.fm session stay on your machine
 | `api.deezer.com`, `itunes.apple.com` | Cover lookup | Track and artist. |
 | `vybecord-art.vybecord.workers.dev` | Cover publishing (`art_upload_enabled`) | The cover image only, with its metadata removed. |
 | YouTube (through yt-dlp) | YouTube captions | Video title and channel, or the video ID. |
-| `gql.twitch.tv` | Twitch stream through the extension | Channel name, to get the real stream start time. |
+| `gql.twitch.tv` | Twitch tab through the extension | The channel name, or the past broadcast's id or the clip's slug, to get the channel's name, picture, live status and stream start time, or the video's title and length. |
 | Google Translate, Lingva mirrors, MyMemory | Translation turned on | The lyric lines. |
 | `ws.audioscrobbler.com` (Last.fm) | Scrobbling turned on | Plays. |
 | GitHub Releases | Update checks (installed builds) | Nothing beyond the request itself. |
 | The maintainer's Discord webhook | Only when you send a report | The report's contents. |
 
-The browser extension sends data to `127.0.0.1:8888` and nowhere else. The one exception: on kick.com it asks Kick's own API for the stream start time. The full policy is on the [website](https://theunknownmurda.github.io/VybecordTS/privacy/).
+The browser extension sends data to `127.0.0.1:8888` and nowhere else. The one exception: on kick.com it asks Kick's own API about the channel, past broadcast or clip open in the tab (its name, picture, title, category and whether it is live). The full policy is on the [website](https://theunknownmurda.github.io/VybecordTS/privacy/).
 
 ## Interfaces
 
@@ -481,7 +497,7 @@ curl.exe -i -X POST http://127.0.0.1:8888/api/youtube -H "Content-Type: applicat
 
 ### Renderer bridge
 
-The window has no Node access and no network access (its CSP sets `connect-src 'none'`). Its whole API is the `window.vybecord` object exposed by [`electron/preload.ts`](electron/preload.ts). Every method maps to one `ipcMain.handle` channel in [`electron/ipc.ts`](electron/ipc.ts). Backend events (`trackUpdate`, `progressUpdate`, `lyricsUpdate`, `plainLyricsUpdate`, `statusUpdate`, `configUpdate`, `statsUpdate`, `updateStatus`, `fatal`) arrive through `vybecord.on(event, cb)`, which returns an unsubscribe function. Track, progress and lyrics events include the index of the presence they belong to.
+The window has no Node access and no network access (its CSP sets `connect-src 'none'`). Its whole API is the `window.vybecord` object exposed by [`electron/preload.ts`](electron/preload.ts). Every method maps to one `ipcMain.handle` channel in [`electron/ipc.ts`](electron/ipc.ts). Backend events (`trackUpdate`, `pausedUpdate`, `progressUpdate`, `lyricsUpdate`, `plainLyricsUpdate`, `activityUpdate`, `statusUpdate`, `configUpdate`, `updateStatus`, `fatal`) arrive through `vybecord.on(event, cb)`, which returns an unsubscribe function. So does `navigate`, which the tray menu's **Go to** sends to open a page; like `updateStatus`, it comes from `main.ts` rather than the backend, so it is not in `FORWARDED_EVENTS`. Track, paused song, progress, lyrics and activity events include the index of the presence they belong to; `pausedUpdate` carries the song a presence holds paused (or null). The backend sends it just before the `trackUpdate` that takes a track down, and on its own whenever that changes with no track change: the player closed or played on, or a detection switch, a pin or the number of presences keeps the song off that card or lets it back.
 
 ### Cover store
 
@@ -510,7 +526,7 @@ npm run dev
 
 Releases are built from the `desktop-app` branch. `main` is the default branch and is what the website deploys from.
 
-`npm install` runs `postinstall` → [`scripts/fetch-native.mjs`](scripts/fetch-native.mjs), which runs `prebuild-install` for the Electron version in `package.json`. If it fails, the script tells you to either choose an Electron version that has a prebuild or install the Build Tools and run `npx @electron/rebuild -f -w better-sqlite3`.
+`npm install` runs `postinstall` → [`scripts/fetch-native.mjs`](scripts/fetch-native.mjs), which runs `prebuild-install` for the Electron version in `package.json`. If no prebuild exists for that version, the script tells you to either choose an Electron version that has one or install the Build Tools and run `npx @electron/rebuild -f -w better-sqlite3`. If `prebuild-install` could not run at all, it prints why instead.
 
 For YouTube captions in development, download yt-dlp once into `vendor/`:
 
@@ -601,7 +617,7 @@ This produces:
 - `release/latest.yml`: what installed copies read to detect an update.
 - `release/win-unpacked/`: the unpacked app.
 
-The `BUG_REPORT_WEBHOOK` variable is built in at this point (see [Environment variables](#environment-variables)), and the build log says whether it was found. If `latest.yml` and the installer ever disagree, regenerate it from the installer on disk:
+The `BUG_REPORT_WEBHOOK` variable is built in at this point (see [Environment variables](#environment-variables)), and the build log says whether it was found: check for `[env] bug-report webhook compiled in` before publishing. If `latest.yml` and the installer ever disagree, regenerate it from the installer on disk:
 
 ```powershell
 node scripts/make-latest-yml.mjs
@@ -636,7 +652,7 @@ There is **no automated test suite** in the repository, and no CI for the app. T
 
 Bug reports and pull requests are welcome.
 
-- **Issues:** include your Vybecord version (**Settings → App → About**), the player and site involved, and the relevant part of `%APPDATA%\Vybecord\logs\vybecord.log`.
+- **Issues:** include your Vybecord version (**Settings → About**), the player and site involved, and the relevant part of `%APPDATA%\Vybecord\logs\vybecord.log`.
 - **Branches:** work from `desktop-app` and open pull requests against it.
 - **Before opening a PR:** run `npm run typecheck` and `npm run build`, and test the change in the running app (see [Testing](#testing)).
 - **Commit messages** are in English, and describe in one sentence what was wrong from the user's point of view (for example *"Two Twitch tabs were one card flipping between two streams"*). Release commits read `Release <x.y.z>: <summary>`.
@@ -649,7 +665,7 @@ Bug reports and pull requests are welcome.
 
 Releases are made by hand from `desktop-app`. There is no release CI.
 
-1. Bump the version: `npm version <x.y.z> --no-git-tag-version`.
+1. Bump the version: `npm version <x.y.z> --no-git-tag-version`. For a release worth announcing, add its entry at the top of `ENTRIES` in `ui/src/whats-new.js` (a headline and a few items, in English); a fix or two needs none.
 2. Commit: `Release <x.y.z>: <summary>`.
 3. Build: `npm run dist`.
 4. If `extension/` changed, bump `extension/manifest.json` and run `node scripts/pack-extension.mjs`. Otherwise, reuse the previous extension zips.
@@ -678,27 +694,27 @@ Releases are made by hand from `desktop-app`. There is no release CI.
 
 ## Troubleshooting
 
-**Nothing is detected.** Open **Players**. If it's empty, your player doesn't publish to the Windows media session. To check, press a media key: if the Windows volume overlay doesn't show the track, Vybecord can't see it either. If the title bar shows **No media**, check that you are on Windows 10 1809 or later.
+**Nothing is detected.** Open the **Source** menu on **Now playing**. If it lists no player, your player doesn't publish to the Windows media session. To check, press a media key: if the Windows volume overlay doesn't show the track, Vybecord can't see it either. If the bottom of the sidebar says detection is unavailable, check that you are on Windows 10 1809 or later.
 
-**The presence doesn't show on Discord.** Discord must be the desktop app and already running. In Vybecord's title bar, the **Discord** dot must be on. In Discord, check that activity sharing is allowed under *Activity Privacy*. Also check that **Show Rich Presence** is on, and that the presence isn't hidden on purpose (away, paused, or a Spotify ad).
+**The presence doesn't show on Discord.** Discord must be the desktop app and already running. At the bottom of Vybecord's sidebar, Discord must show as connected; the line under it says why the status is hidden, if it is. In Discord, check that activity sharing is allowed under *Activity Privacy*. Also check that **Show my activity on Discord** is on, and that the presence isn't hidden on purpose (away, paused, or a Spotify ad).
 
-**A second (or third…) card never appears.** All applications are in use. Add a **Spare application ID** under **Settings → Presence → Several presences**. The log has a `[DISCORD] Presence N has no application of its own` line.
+**A second (or third…) card never appears.** Check **Presences at once** under **Settings → Discord presence → Several presences**. If the log has a `[DISCORD] Presence N has no application of its own` line, every application was taken, which should not happen with five cards or fewer; please report it.
 
 **Lyrics are out of sync.** Use **−250 / +250** on **Now playing**. The offset is saved for that track. Some players report their position infrequently. The 3-second resync limits the error but can't remove it completely.
 
-**Wrong lyrics.** Use *These lyrics aren't matching?* on **Now playing**, or import the correct lyrics under **Lyrics → Import**.
+**Wrong lyrics.** Use **Wrong lyrics?** on **Now playing**, or add the correct lyrics under **Lyrics → Add lyrics**.
 
 **No lyrics.** Check that **Show lyrics** is on. Live streams are never looked up. Browser tabs often publish a video title ("Artist - Title (Official Video)") rather than a clean track name, which makes matching less reliable. The browser extension improves this.
 
-**No YouTube captions.** **Settings → Lyrics → YouTube captions** shows whether yt-dlp was found. Age-restricted videos need a cookies file. Many videos simply have no captions.
+**No YouTube captions.** **Settings → Lyrics & translation → YouTube captions** shows whether yt-dlp was found. Age-restricted videos need your YouTube sign-in: turn on **Share my YouTube sign-in for captions** in the extension's options, or set a cookies file. If the 🔞 line stays with either, the account is probably not age-verified. Many videos simply have no captions.
 
 **The browser extension shows "Not detected".** Check that **Accept data from the extension** is on and that something is playing in a supported site. If it shows **Port 8888 unavailable**, another program (usually a second copy of Vybecord) holds the port. Close it and reopen Vybecord.
 
 **The Spicetify card shows "Update needed".** The app was updated but Spotify still runs the old extension. Run the setup again.
 
-**The cover shows on the window but not on Discord.** The album isn't in the Deezer or iTunes catalogues and cover publishing is off, or the track is a live stream (streams are never looked up).
+**The cover shows on the window but not on Discord.** Cover publishing is off and the album isn't in the Deezer or iTunes catalogues, or the track is a live stream (streams are never looked up).
 
-**The presence disappears when I step away.** That's **Hide when away**. Change the delay or turn it off under **Settings → Presence**.
+**The presence disappears when I step away.** That's **Hide when I'm away**. Change the delay or turn it off under **Settings → Discord presence**.
 
 **`npm run dev` exits immediately with no output.** The installed Vybecord is running. Quit it from the tray first.
 
@@ -738,7 +754,7 @@ Vybecord is not affiliated with Discord, Spotify, or any of the services above.
 
 ## Support
 
-- **In the app:** the **Report** page.
+- **In the app:** **Settings → About → Report a problem**.
 - **Issues:** <https://github.com/TheUnknownMurda/VybecordTS/issues>
 - **Website:** <https://theunknownmurda.github.io/VybecordTS/>
 - **User guides:** [English](USER_GUIDE.md) · [Français](GUIDE_UTILISATEUR.md)

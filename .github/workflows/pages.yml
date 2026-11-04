@@ -37,3 +37,27 @@ jobs:
           path: website
       - id: deployment
         uses: actions/deploy-pages@v4
+
+      # Tells the IndexNow search engines (Bing, and through it Yahoo and
+      # DuckDuckGo, plus Yandex, Seznam and Naver) that the pages in
+      # sitemap.xml changed, so they come back for them without waiting for a
+      # crawl. Google is not part of IndexNow: it reads the sitemap through
+      # Search Console. The key is public by design; it only proves the request
+      # comes from whoever controls the site, by sitting in website/<key>.txt.
+      # A failure here never fails the deploy: the site is already live.
+      - name: Announce the pages to IndexNow
+        continue-on-error: true
+        env:
+          KEY: 1aeb1fbb88d4cc3670a60dab3d8b2eab
+          SITE: https://theunknownmurda.github.io/VybecordTS
+        run: |
+          urls=$(grep -o '<loc>[^<]*</loc>' website/sitemap.xml | sed -e 's/<loc>//' -e 's#</loc>##' | jq -R . | jq -sc .)
+          jq -n --arg key "$KEY" --arg loc "$SITE/$KEY.txt" --argjson urls "$urls" \
+            '{host: "theunknownmurda.github.io", key: $key, keyLocation: $loc, urlList: $urls}' > indexnow.json
+          cat indexnow.json
+          status=$(curl -sS -m 30 -o response.txt -w '%{http_code}' \
+            -H 'Content-Type: application/json; charset=utf-8' \
+            --data @indexnow.json https://api.indexnow.org/indexnow)
+          echo "IndexNow answered HTTP $status"; cat response.txt; echo
+          # 200: received. 202: received, the key is still being checked.
+          case "$status" in 200|202) ;; *) exit 1 ;; esac

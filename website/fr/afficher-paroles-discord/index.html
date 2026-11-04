@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- The French twin of ../../how-to-show-lyrics-on-discord/: same sections,
+       same order. A change to one page goes to the other. The app's interface
+       is in English, so its labels stay in English here, in bold. -->
+  <title>Comment afficher les paroles sur ton statut Discord · Vybecord</title>
+  <meta name="description" content="Mets les paroles (lyrics) de la chanson qui joue sur ton statut Discord, ligne par ligne, en une minute. Spotify, YouTube, Apple Music et plus, gratuit.">
+  <meta name="theme-color" content="#0b0b10">
+  <link rel="canonical" href="https://theunknownmurda.github.io/VybecordTS/fr/afficher-paroles-discord/">
+  <link rel="alternate" hreflang="en" href="https://theunknownmurda.github.io/VybecordTS/how-to-show-lyrics-on-discord/">
+  <link rel="alternate" hreflang="fr" href="https://theunknownmurda.github.io/VybecordTS/fr/afficher-paroles-discord/">
+  <link rel="alternate" hreflang="x-default" href="https://theunknownmurda.github.io/VybecordTS/how-to-show-lyrics-on-discord/">
+  <link rel="icon" href="../../favicon.svg" type="image/svg+xml">
+
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Vybecord">
+  <meta property="og:locale" content="fr_CA">
+  <meta property="og:locale:alternate" content="en_US">
+  <meta property="og:title" content="Comment afficher les paroles sur ton statut Discord">
+  <meta property="og:description" content="La ligne chantée, sur ton profil Discord, pour Spotify, YouTube, Apple Music et la plupart des lecteurs sur Windows. Une minute, gratuit.">
+  <meta property="og:url" content="https://theunknownmurda.github.io/VybecordTS/fr/afficher-paroles-discord/">
+  <meta property="og:image" content="https://theunknownmurda.github.io/VybecordTS/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Vybecord : une carte de profil Discord qui montre la chanson en cours et la ligne des paroles chantée.">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <link rel="stylesheet" href="../../styles.css">
+  <script src="../../site.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Aller au contenu</a>
+
+<!-- Icons, drawn once and reused with <use>. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-note" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+</svg>
+
+<nav class="nav" id="nav" aria-label="Principal">
+  <div class="wrap nav-inner">
+    <a href="../" class="brand">
+      <span class="mark" aria-hidden="true"><svg><use href="#i-note"/></svg></span>
+      Vybecord
+    </a>
+    <a href="../../how-to-show-lyrics-on-discord/" class="nav-lang" hreflang="en" lang="en" aria-label="English version">EN</a>
+    <a href="../telecharger/" class="btn btn-primary btn-sm nav-cta" data-dl>
+      <svg class="i" aria-hidden="true"><use href="#i-download"/></svg>
+      Télécharger
+    </a>
+  </div>
+</nav>
+
+<main class="doc" id="main">
+  <h1>Comment afficher les paroles sur ton statut Discord</h1>
+  <p class="lead">
+    Discord ne sait pas afficher les paroles tout seul&nbsp;: sa connexion Spotify montre la chanson,
+    jamais les mots. Voici comment mettre la ligne chantée (les lyrics) sur ton profil Discord, avec
+    la suivante en dessous, pour Spotify, YouTube, Apple Music et la plupart des lecteurs sur Windows.
+    Ça prend environ une minute et c'est gratuit.
+  </p>
+
+  <div class="callout">
+    <p>
+      <strong>En bref.</strong> Installe <a href="../">Vybecord</a>, une appli gratuite pour Windows, ouvre
+      l'appli Discord pour ordinateur et lance une chanson. Ton statut suit les paroles tout seul.
+    </p>
+  </div>
+
+  <h2>Ce qu'il te faut</h2>
+  <ul>
+    <li>Un PC sous Windows 10 (version 1809 ou plus récente) ou Windows 11, 64 bits.</li>
+    <li>L'appli Discord pour ordinateur, ouverte sur le même PC. Discord dans un navigateur ne peut pas l'afficher.</li>
+    <li>De quoi écouter&nbsp;: Spotify, YouTube dans un navigateur, Apple Music, Deezer, Tidal, VLC et plus.
+      Pas besoin de Spotify Premium ni de compte.</li>
+  </ul>
+
+  <h2>Afficher tes paroles en quatre étapes</h2>
+  <ol>
+    <li><strong>Télécharge Vybecord.</strong> C'est gratuit et open source&nbsp;: <a href="../telecharger/" data-dl>télécharge l'installateur</a>,
+      un seul fichier, depuis les versions publiées du projet sur GitHub.</li>
+    <li><strong>Lance l'installateur.</strong> Windows peut dire qu'il a protégé ton PC, parce que l'installateur
+      n'est pas signé. Choisis <strong>Informations complémentaires</strong>, puis <strong>Exécuter quand même</strong>.</li>
+    <li><strong>Ouvre l'appli Discord pour ordinateur.</strong> Dans les paramètres utilisateur de Discord, section sur
+      la confidentialité de l'activité, vérifie que l'option qui affiche ton activité en cours est activée.</li>
+    <li><strong>Lance une chanson.</strong> Ton statut Discord se met à jour tout seul&nbsp;: la ligne chantée s'affiche
+      sur ton profil avec la suivante en dessous, et avance avec la chanson. La page <strong>Now playing</strong> de
+      Vybecord montre ta carte comme tes amis la voient.</li>
+  </ol>
+
+  <h2>Spotify&nbsp;: utiliser les paroles synchronisées de Spotify</h2>
+  <p>
+    Spotify fonctionne dès que Vybecord tourne, avec des paroles trouvées sur LRCLIB, Netease et Musixmatch.
+    Pour avoir les paroles synchronisées de Spotify quand une chanson en a, ajoute l'extension Spicetify, en
+    option&nbsp;: installe <a href="https://spicetify.app/" target="_blank" rel="noopener">Spicetify</a>, puis dans
+    Vybecord choisis <strong>Settings &rarr; Integrations &rarr; Spotify &rarr; Set up automatically</strong>. Spotify
+    redémarre une fois. Tu as aussi les changements de chanson instantanés, tous les artistes et la playlist en cours.
+  </p>
+
+  <h2>YouTube, YouTube Music et les autres sites</h2>
+  <p>
+    La musique et les vidéos qui jouent dans Chrome, Edge, Firefox, Brave, Opera, Vivaldi ou Zen fonctionnent
+    sans rien ajouter. Quand une chanson n'a de paroles synchronisées nulle part, Vybecord peut utiliser les
+    sous-titres YouTube de la vidéo à la place.
+  </p>
+  <p>
+    L'extension de navigateur, en option, distingue YouTube, YouTube Music, SoundCloud, Bandcamp, Twitch et Kick,
+    met le lien du morceau sur ta carte et lit la position exacte sur la page. Elle vient avec l'appli&nbsp;:
+    <strong>Settings &rarr; Integrations &rarr; Browser extension</strong>.
+  </p>
+
+  <h2>Apple Music, Deezer, Tidal, VLC et les autres lecteurs</h2>
+  <p>
+    Si un lecteur affiche sa chanson dans le panneau de volume de Windows quand tu appuies sur une touche média,
+    Vybecord la voit aussi&nbsp;: Apple Music, Deezer, Tidal, Amazon Music, VLC, foobar2000, MusicBee, AIMP, Winamp
+    et MediaMonkey fonctionnent tous. Le Lecteur Windows Media, Groove Musique, Films et TV et l'appli SoundCloud
+    du Microsoft Store, non.
+  </p>
+
+  <h2>Si quelque chose cloche</h2>
+  <h3>Ton statut ne s'affiche pas sur Discord</h3>
+  <p>
+    Sur <strong>Now playing</strong>, clique sur <strong>Why?</strong>, en haut à droite. Il vérifie tout ce qu'il y a
+    entre la chanson et ta carte, dit ce qui bloque et propose un bouton pour corriger. L'appli Discord pour
+    ordinateur doit être ouverte&nbsp;; le bas de la barre latérale de Vybecord indique si elle est connectée.
+  </p>
+  <h3>Une chanson n'a pas de paroles</h3>
+  <p>
+    Certaines chansons n'ont de paroles synchronisées publiées nulle part, et un titre de navigateur comme
+    «&nbsp;Artiste - Titre (Official Video)&nbsp;» se retrouve moins bien. Tu peux ajouter les tiennes&nbsp;:
+    <strong>Lyrics &rarr; Add lyrics</strong> accepte un fichier <code>.lrc</code> minuté ou du texte simple, que
+    <strong>Sync while playing</strong> te permet de caler sur la chanson.
+  </p>
+  <h3>Les paroles sont décalées</h3>
+  <p>
+    Utilise les boutons <strong>&minus;250 / +250</strong> sous les paroles, sur <strong>Now playing</strong>. Le décalage
+    est enregistré pour cette chanson seulement&nbsp;: il sera juste la prochaine fois qu'elle jouera.
+  </p>
+  <h3>Les paroles sont fausses</h3>
+  <p>
+    Clique sur <strong>Wrong lyrics?</strong> sous les paroles. <strong>The words are wrong</strong> n'utilise plus jamais
+    ce résultat pour la chanson et essaie la source suivante. <strong>The timing is off</strong> ouvre les lignes dans
+    l'éditeur pour que tu les recales et gardes ta propre version.
+  </p>
+
+  <h2>Est-ce sans risque pour mon compte Discord&nbsp;?</h2>
+  <p>
+    Vybecord utilise la Rich Presence, la fonction que Discord a créée pour que les applis et les jeux montrent ce
+    que tu fais, par l'appli Discord de ton propre PC. Il ne demande jamais tes identifiants ni ton token, ce n'est
+    ni un mod ni un plugin (pas de BetterDiscord, pas de Vencord), et il ne touche pas à ton statut personnalisé.
+    Aucun compte, aucune télémétrie&nbsp;; la <a href="../../privacy/" hreflang="en">politique de confidentialité</a>
+    (en anglais) liste tout ce qu'il envoie.
+  </p>
+
+  <h2>Personnaliser ta carte</h2>
+  <p>
+    Sur <strong>Now playing</strong>, clique sur n'importe quelle partie de ta carte Discord pour la changer&nbsp;: ce
+    qu'affichent ses lignes, le verbe (Listening, Watching, Playing ou Competing), la petite icône sur la pochette et
+    un bouton à toi. <strong>Settings &rarr; Discord presence &rarr; Several presences</strong> affiche jusqu'à cinq cartes
+    en même temps, par exemple Spotify sur l'une et un stream Twitch sur une autre.
+  </p>
+
+  <div class="card dl">
+    <span class="mark" aria-hidden="true"><svg><use href="#i-note"/></svg></span>
+    <h2>Mets tes paroles sur ton profil</h2>
+    <p>Gratuit, pour Windows 10 et 11, et aucun compte à créer.</p>
+    <div class="dl-actions">
+      <a href="../telecharger/" class="btn btn-primary btn-lg btn-stack" data-dl>
+        <svg class="i" aria-hidden="true"><use href="#i-download"/></svg>
+        <span>
+          <span class="l1">Télécharger pour Windows</span>
+          <span class="l2" data-version-line>Gratuit, pour Windows 10 et 11</span>
+        </span>
+      </a>
+      <a href="../#features" class="btn btn-ghost btn-lg">Voir tout ce que ça fait</a>
+    </div>
+  </div>
+</main>
+
+<footer class="footer">
+  <div class="wrap footer-bottom" style="margin-top:0;padding-top:0;border-top:0">
+    <span>&copy; 2026 Vybecord &middot; Licence MIT</span>
+    <span><a href="../../how-to-show-lyrics-on-discord/" hreflang="en" lang="en">English version</a> &middot; <a href="../">Retour à Vybecord</a></span>
+  </div>
+</footer>
+
+</body>
+</html>
