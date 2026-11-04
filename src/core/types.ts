@@ -60,6 +60,18 @@ export interface TrackData {
    */
   artist_is_channel?: boolean;
   /**
+   * A YouTube Short (youtube.com/shorts/…), reported by the extension. The
+   * card shows it as a Short: no progress bar for a clip that loops, the
+   * sitting's time instead (shorts_since_ms), no lyrics lookup, nothing in
+   * the history or on Last.fm.
+   */
+  is_short?: boolean;
+  /**
+   * When the run of Shorts this one belongs to began, epoch ms: the card's
+   * timer counts the sitting, not the Short. See YouTubeSource.
+   */
+  shorts_since_ms?: number;
+  /**
    * The OS media session this reading came from, when it came from one.
    *
    * Lets the backend ask whose artwork is on disk before publishing it: the
@@ -181,6 +193,8 @@ export interface VybecordConfig {
   rpc_activity_type_3: number;
   rpc_activity_type_4: number;
   rpc_activity_type_5: number;
+  /** The activity type of a YouTube Short on any card: 3 Watching (default) or 2 Listening. */
+  rpc_shorts_activity_type: number;
   /**
    * What the "Listening to …" status line shows (member list / profile), independent
    * of the presence card: 'app' = application name, 'title' = current track title,

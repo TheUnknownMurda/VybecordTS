@@ -39,7 +39,27 @@ export interface YouTubePayload {
   /** 'youtube' or 'youtube_music' */
   source: string;
   stream_start_time_ms?: number;
+  /** The uploader's channel page, when the page links it (extension 2.2.2+). */
+  channel_url: string;
+  /** A Short (youtube.com/shorts/…) rather than a video (extension 2.2.2+). */
+  is_short: boolean;
 }
+
+/**
+ * A channel page on youtube.com, or ''. The link becomes the target of the
+ * card's second line, so nothing else is let through.
+ */
+function asChannelUrl(value: unknown): string {
+  const s = asUrl(value);
+  return /^https:\/\/www\.youtube\.com\/(@[^/?#\s]+|channel\/[\w-]+|c\/[^/?#\s]+|user\/[^/?#\s]+)$/.test(s) ? s : '';
+}
+
+/**
+ * How long a Shorts tab may go without playing one before the next Short
+ * starts a new session. A pause to answer a message is still the same
+ * sitting; leaving for longer than this is not.
+ */
+const SHORTS_SESSION_GAP_MS = 2 * 60_000;
 
 /** Coerce a push into the shape above, whatever actually arrived. */
 export function normalizeYouTubePayload(raw: unknown): YouTubePayload {
@@ -62,6 +82,8 @@ export function normalizeYouTubePayload(raw: unknown): YouTubePayload {
     // rather than passed through.
     source: asText(d.source, 32) === 'youtube_music' ? 'youtube_music' : 'youtube',
     stream_start_time_ms: asNonNegativeInt(d.stream_start_time_ms),
+    channel_url: asChannelUrl(d.channel_url),
+    is_short: asBool(d.is_short),
   };
 }
 
@@ -72,6 +94,10 @@ export class YouTubeSource {
   private _wasActive = false;
   private _staleAt = 0;  // timestamp when userscript went stale
   private streamStartTime = 0; // Store stream start time once
+  /** When this run of Shorts began (epoch ms), 0 outside one. */
+  private shortsSince = 0;
+  /** performance.now() of the last push of a Short playing. */
+  private lastShortAt = 0;
 
   /**
    * Ingest a push from the YouTube userscript.
@@ -99,6 +125,26 @@ export class YouTubeSource {
     if (!data.is_live) {
       this.streamStartTime = 0;
     }
+
+    /*
+     * Shorts are a feed, watched one after another in a single sitting, so the
+     * card counts the sitting rather than the Short: a timer starting over
+     * every twenty seconds, or a bar going round with each loop, says nothing
+     * a friend can read. It begins with the first Short played and carries
+     * over every swipe; a video played in between, or a few minutes without
+     * any Short playing, ends it.
+     */
+    if (data.is_playing) {
+      if (data.is_short) {
+        const now = this.receivedAt;
+        if (!this.shortsSince || now - this.lastShortAt > SHORTS_SESSION_GAP_MS) {
+          this.shortsSince = Date.now() - data.progress_ms;
+        }
+        this.lastShortAt = now;
+      } else {
+        this.shortsSince = 0;
+      }
+    }
     return data;
   }
 
@@ -112,6 +158,7 @@ export class YouTubeSource {
 
     const d = this.latestData;
     if (!d.title) return null;
+    if (d.is_short) return this.shortTrack(d);
 
     // Parse artist from title if not provided by YouTube metadata
     let trackName = d.title;
@@ -153,12 +200,48 @@ export class YouTubeSource {
       stream_start_time_ms: d.is_live ? this.streamStartTime : undefined,
       album_art_url: d.thumbnail_url || `https://i.ytimg.com/vi/${d.video_id}/hqdefault.jpg`,
       spotify_url: '',
-      artist_url: '',
+      // The channel's page, where the line shows the channel. Where it shows
+      // an artist read out of the title, the channel is often a label's or a
+      // fan's, and a search for the artist is the better link.
+      artist_url: artistIsChannel ? d.channel_url : '',
       media_source: d.source || 'youtube',
       _received_at: performance.now(),
       _from_push: true,
       video_url: `https://www.youtube.com/watch?v=${d.video_id}`,
       artist_is_channel: artistIsChannel,
+    };
+  }
+
+  /**
+   * A Short, as the card shows it: its title without the hashtags, its
+   * channel as a plain name, its own link and its vertical frame.
+   *
+   * The title is never split into "Artist - Title". A Short's title is a
+   * caption written for the feed, and the song under it, when there is one, is
+   * not what it names. The position is the loop's, which the captions follow;
+   * the card leaves it out (see shorts_since_ms).
+   */
+  private shortTrack(d: YouTubePayload): TrackData {
+    const elapsed = performance.now() - this.receivedAt;
+    return {
+      track_id: `yt:${d.video_id}`,
+      track_name: shortTitle(d.title),
+      artist_name: d.channel || 'Unknown',
+      album_name: '',
+      duration_ms: d.duration_ms,
+      progress_ms: Math.min(Math.round(d.progress_ms + elapsed), d.duration_ms || Infinity),
+      is_playing: true,
+      is_live: false,
+      album_art_url: d.thumbnail_url || `https://i.ytimg.com/vi/${d.video_id}/hqdefault.jpg`,
+      spotify_url: '',
+      artist_url: d.channel_url,
+      media_source: 'youtube',
+      _received_at: performance.now(),
+      _from_push: true,
+      video_url: `https://www.youtube.com/shorts/${d.video_id}`,
+      artist_is_channel: true,
+      is_short: true,
+      shorts_since_ms: this.shortsSince || Date.now() - d.progress_ms,
     };
   }
 
@@ -200,6 +283,43 @@ export class YouTubeSource {
 }
 
 // ── Title parsing helpers ──
+
+/** A hashtag: # and a word, in any script, with a letter in it ("We're #1" has none). */
+const HASHTAG = String.raw`#[\p{N}_]*\p{L}[\p{L}\p{N}_]*`;
+/**
+ * Hashtags at the start or the end of a title, with what separates them. A
+ * full stop or a comma before a closing run is the sentence's own and stays
+ * ("Wait for it... #fyp" keeps its dots); a bar or a dash before it is only
+ * there to set the tags off.
+ */
+const RE_EDGE_HASHTAGS = new RegExp(String.raw`^(?:\s*${HASHTAG})+[\s.,|·-]*|[\s|·-]*(?:${HASHTAG}[\s.,|·]*)+$`, 'gu');
+/** Format characters (zero-width joiners and spaces, word joiners) at either end. */
+const RE_EDGE_INVISIBLE = /^[\p{Cf}\s]+|[\p{Cf}\s]+$/gu;
+/** #shorts and #short anywhere: the feed's own label, not part of anything said. */
+const RE_SHORTS_TAG = /(^|\s)#shorts?(?=$|[\s.,!?])/giu;
+
+/**
+ * A Short's title without its hashtags.
+ *
+ * Short titles end in a run of tags for the feed ("…on a horror game? 💀🥀
+ * #caseoh#gaming#funny"), which is the bulk of the bold line on a card and
+ * none of its meaning. Only the runs at either end go, plus #shorts wherever
+ * it is: a tag inside a sentence ("my first #Minecraft build") is a word of
+ * it. A title that is nothing but tags is kept whole, tags and all, rather
+ * than leaving the card without one.
+ */
+export function shortTitle(title: string): string {
+  const cleaned = title
+    // Invisible marks some uploaders lead with (a word joiner, U+2060, on the
+    // first Short this was written for): they hide a leading tag run from the
+    // edge test below, and are nothing on a card.
+    .replace(RE_EDGE_INVISIBLE, '')
+    .replace(RE_SHORTS_TAG, '$1')
+    .replace(RE_EDGE_HASHTAGS, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return cleaned || title.trim();
+}
 
 /**
  * Dashes only. A bar was on this list and read the wrong way round on YouTube,

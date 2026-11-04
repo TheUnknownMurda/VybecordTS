@@ -11,7 +11,7 @@ This extension reads the page directly and supplies:
 | | What it adds |
 | --- | --- |
 | **Spotify** (web player) | album, playlist context, shuffle and repeat |
-| **YouTube** | the video link, live-stream start time, real channel |
+| **YouTube** | the video link, live-stream start time, real channel and its page; on a Short, that it is one, with its upright thumbnail |
 | **SoundCloud** | the actual artist rather than the uploading account, track link |
 | **Bandcamp** | album and label metadata |
 | **Twitch** / **Kick** | the channel, live or offline; past broadcasts and clips with their position; stream title, category, uptime; on Kick, the player's captions while they are on, which the app shows as lyrics |

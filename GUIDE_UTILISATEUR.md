@@ -155,6 +155,18 @@ Le nom et la photo de la chaîne viennent de Twitch lui‑même (et du site de K
 
 **Les sous-titres de Kick comme paroles.** Active les sous-titres (**CC**) dans le lecteur de Kick et, sur une chaîne en direct ou une rediffusion, ce qui se dit s'affiche sur la carte comme les paroles d'une chanson : la ligne d'avant en haut et, en dessous, la ligne en train d'être dite, qui s'allonge mot à mot à mesure que le lecteur les affiche. La fenêtre **Now playing** les marque **Live captions** (simplement **Captions** sur une rediffusion). Ça marche avec les deux sortes que Kick propose : les sous-titres fournis avec le stream, et ceux que Chrome tire du son du stream. L'extension les lit sur le lecteur, donc elle ne les voit que s'ils sont activés, et la carte revient au titre du stream quand personne n'a parlé depuis 25 secondes. Si tu avances ou recules dans une rediffusion, les lignes repartent de là où tu arrives. Avec la traduction activée, chaque ligne est traduite une fois complète. Quand ça parle vite, le lecteur de Kick saute lui-même des lignes faute de place, et celles-là ne peuvent pas arriver sur la carte non plus. L'interrupteur **Lyrics** les coupe comme n'importe quelles paroles. Les streams et rediffusions Twitch, et les clips des deux sites, n'ont pas de paroles.
 
+### Shorts YouTube
+
+Avec l'extension (2.2.2 ou plus récente), un Short a sa propre carte au lieu de passer pour un onglet de navigateur :
+
+- le titre du Short sans ses hashtags, et sa chaîne, qui mène à la page de la chaîne ;
+- l'image du Short, à la verticale, plutôt qu'une bande entre deux zones floues ;
+- **YouTube Shorts** en troisième ligne, et un compteur du temps passé sur les Shorts, au lieu d'une barre de progression qui repart à chaque boucle. Passer au Short suivant change le titre et l'image, jamais le compteur. Regarder une vidéo normale, ou deux minutes sans aucun Short en lecture, le remet à zéro ;
+- **Watching**, ou **Listening to** si tu préfères : c'est **Settings → Discord presence → Activity type for Shorts**, aussi à un clic sur le verbe de la carte dans **Now playing**. Ça vaut pour toutes les cartes, et tout ce qui n'est pas un Short garde son propre verbe ;
+- le bouton ouvre le Short.
+
+Un Short n'est jamais cherché comme une chanson : son titre n'est pas le nom d'une chanson, et une chanson qui joue dessous en est un extrait de quelques secondes, que les minutages d'une chanson ne suivraient pas. Si le Short a des sous-titres sur YouTube, ce qui se dit s'affiche sur la carte, comme pour une vidéo. Les Shorts restent hors de l'historique d'écoute, d'**Activity** et de Last.fm, comme une chaîne hors ligne. Sans l'extension, Windows ne voit qu'un onglet de navigateur et un Short s'affiche comme avant.
+
 ### Deux choses jouent en même temps
 
 Sur **Now playing**, ouvre le menu **Source** et choisis le lecteur que tu veux afficher. Il reste épinglé jusqu'à ce que tu choisisses **Automatic**.

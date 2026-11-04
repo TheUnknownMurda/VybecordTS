@@ -149,6 +149,12 @@ function lyricsCheck() {
   if (t.is_live || t.media_source === 'twitch' || t.media_source === 'kick') {
     return { kind: 'info', title: 'Streams show their title, not lyrics' };
   }
+  // A Short is never looked up as a song (see onNewTrack): only its captions.
+  if (t.is_short) {
+    return synced
+      ? { kind: 'ok', title: 'The Short’s captions are on the card' }
+      : { kind: 'info', title: 'Shorts show their captions, not lyrics', detail: 'When the Short has captions on YouTube, what is said shows on the card. Without them, the card shows its title.' };
+  }
   if (synced) return { kind: 'ok', title: 'Synced lyrics are on the card' };
   if (plain) {
     return {

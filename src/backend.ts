@@ -1798,7 +1798,8 @@ export class VybecordBackend extends EventEmitter {
     // Except Twitch and Kick, which never start a scrobble (see recordPlay):
     // the one still open is the song paused before the video, and a video's
     // position would count towards it.
-    if (slot.primary && !STREAM_SOURCES.has(track.media_source)) checkAndScrobble(track.progress_ms);
+    // A Short neither: it never starts one either.
+    if (slot.primary && !STREAM_SOURCES.has(track.media_source) && !track.is_short) checkAndScrobble(track.progress_ms);
     this.emit('progressUpdate', { progress_ms: track.progress_ms, duration_ms: track.duration_ms }, slot.index);
 
     // Detect track end: engine stopped but progress is at the end (not a repeat loop)
@@ -2056,7 +2057,14 @@ export class VybecordBackend extends EventEmitter {
               // Priority 0.5: Local DB FIRST for YouTube — user-imported lyrics beat auto-CC
               // YouTube titles like "Artist - Song (Official Video)" need extra matching:
               // try the full title, then strip "Artist - " prefix for better local DB hits
-              const localLyrics = await (async () => {
+              //
+              // Not for a Short. Its title is a caption for the feed, not a
+              // song's name, so a match would be somebody else's song; and when
+              // a song does play under it, it is a few seconds cut from the
+              // middle, which a song's timings would not follow. What the
+              // Short itself says, its captions, is the one thing that fits.
+              // An import made for it was already taken (findImportedLyrics).
+              const localLyrics = trackData.is_short ? [] : await (async () => {
                 const local = await fetchLyrics(trackData.track_name, trackData.artist_name, trackData.album_name, lyricsDuration, signal);
                 if (local.length > 0) return local;
                 // Try stripping "Artist - " prefix from YouTube title (very common format)
@@ -2109,13 +2117,15 @@ export class VybecordBackend extends EventEmitter {
               // not name. Turning that into a direct link restores the "watch
               // this exact video" button the userscript used to provide; without
               // it the button falls back to a YouTube search.
-              if (ccResult.videoId) {
+              // A Short already has both: its /shorts/ link, and its vertical
+              // frame, which yt-dlp's landscape thumbnail would replace.
+              if (ccResult.videoId && !trackData.is_short) {
                 trackData.video_url = `https://www.youtube.com/watch?v=${ccResult.videoId}`;
               }
 
               // YouTube thumbnail takes priority — more relevant than generic album art
               // But preserve local album art if it was already extracted
-              if (ccResult.thumbnailUrl && trackData.album_art_url !== '/api/thumbnail') {
+              if (ccResult.thumbnailUrl && trackData.album_art_url !== '/api/thumbnail' && !trackData.is_short) {
                 trackData.album_art_url = ccResult.thumbnailUrl;
                 log.info(`[CC] Using YouTube thumbnail as album art`);
               }
@@ -2142,6 +2152,12 @@ export class VybecordBackend extends EventEmitter {
               } else if (ccResult.lines.length > 0) {
                 log.info(`[CC] Using ${ccResult.lines.length} caption lines`);
                 return ccResult.lines;
+              }
+
+              // Nothing behind the captions for a Short (see above).
+              if (trackData.is_short) {
+                log.info('[CC] No captions for this Short — it shows its title');
+                return [];
               }
 
               // Stale guard: skip fallback if track changed during CC fetch
@@ -3026,7 +3042,12 @@ export class VybecordBackend extends EventEmitter {
     // the history. The clock of whatever played before it stops, as it would
     // for a pause. The DJ talking between songs is held the same way, like an
     // ad break below, without the guesswork.
-    if (t.context_type === 'offline' || t.is_dj_narration) {
+    //
+    // A Short is held off the same way. A sitting is dozens of them, a few
+    // seconds each, and none is a song: in the history they would bury the
+    // music in Recently played and own the top channels, and on Last.fm every
+    // one would be a public scrobble of a clip's caption.
+    if (t.context_type === 'offline' || t.is_dj_narration || t.is_short) {
       historyTrackPause();
       return;
     }
@@ -3179,6 +3200,7 @@ export class VybecordBackend extends EventEmitter {
       // Per position too: the song can say Listening while the stream on the
       // next card says Watching. A card left on -1 follows presence 1.
       rpc_activity_type: activityTypeFor(cfg, slot.index),
+      rpc_shorts_activity_type: cfg.rpc_shorts_activity_type,
       rpc_status_display: cfg.rpc_status_display,
       rpc_status_template: cfg.rpc_status_template,
       rpc_show_playlist: cfg.rpc_show_playlist,

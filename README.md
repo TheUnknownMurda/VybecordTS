@@ -61,6 +61,7 @@ Vybecord is a Windows desktop app (Electron + TypeScript). It reads the Windows 
 - **A Discord application per platform**, so the card header reads *Spotify*, *YouTube*, *SoundCloud*, *Apple Music*, *Twitch* or *Kick*. Kick and Twitch have five each and YouTube three, so several streams of one site each keep its logo. Seventeen applications are built in, far more than the five cards the app can show.
 - **Customisable card, edited where it stands.** You choose the activity type (Listening / Playing / Watching / Competing, per presence when there are several), what the one-line status shows (including a custom template), the small-icon style (including one that matches the cover's colour), and one custom button. Click a part of the card on **Now playing** to change it there, or use **Settings**. The title, artist and cover are clickable.
 - **Cover art.** The player's own cover (Spotify, Apple Music, or a local file's) is published to Vybecord's cover store so Discord shows exactly that one (a switch in Settings). Only when there is none, the cover is looked up on Deezer, with the iTunes Search API as fallback.
+- **YouTube Shorts** (with the browser extension) get a card of their own: the title without its hashtags, the channel, the upright picture, *YouTube Shorts* as the third line and the time spent on Shorts instead of a progress bar that restarts with every loop. A Short says *Watching*, or *Listening to* if **Activity type for Shorts** is set so. Shorts stay out of the history, **Activity** and Last.fm.
 - **Away-aware.** The presence goes down when your machine has been idle long enough for Discord to mark you Idle (10 minutes by default), and comes back on the first key press.
 
 **Lyrics**
@@ -69,6 +70,7 @@ Vybecord is a Windows desktop app (Electron + TypeScript). It reads the Windows 
 - **Lyrics library.** Paste timed `.lrc` lyrics or untimed text, then time it with the built-in *Sync while playing* tool. You can edit and delete entries and search an offline LRCLIB dump.
 - **Corrections.** Mark a wrong match so it is never used for that track again. Timing offsets are saved per track.
 - **Kick captions.** On a live Kick channel or a past broadcast, with captions on in Kick's player, what is said shows on the card as lyrics (needs the browser extension).
+- **YouTube Shorts** are never looked up as songs, only given their own captions (needs the browser extension).
 - **Translation** into 16 languages, in the window and optionally on Discord. **Romanisation** of Japanese (kanji included), Korean, Chinese, Cyrillic, Greek, Thai, Arabic, Devanagari, Georgian and Armenian.
 
 **App**
@@ -158,7 +160,7 @@ The extension also adds a Vybecord entry to the Spicetify Marketplace's *Install
 
 ### 3. Optional: browser extension
 
-Windows reports *what* is playing in a browser, but not *which site* it's on: a SoundCloud tab and a YouTube tab both show up as just "the browser". The extension in [`extension/`](extension/) reads the page instead. It supports Spotify Web, YouTube and YouTube Music, SoundCloud, Bandcamp, Twitch and Kick, and adds the site, the canonical link, the exact position (read from the page's own media element), the live-stream start time and, on Kick, the player's captions. The extension isn't published on any browser store, so you load it manually.
+Windows reports *what* is playing in a browser, but not *which site* it's on: a SoundCloud tab and a YouTube tab both show up as just "the browser". The extension in [`extension/`](extension/) reads the page instead. It supports Spotify Web, YouTube (Shorts included) and YouTube Music, SoundCloud, Bandcamp, Twitch and Kick, and adds the site, the canonical link, the exact position (read from the page's own media element), the live-stream start time and, on Kick, the player's captions. The extension isn't published on any browser store, so you load it manually.
 
 **Chrome, Edge, Brave, Opera, Vivaldi**
 
@@ -272,7 +274,7 @@ Discord shows one card per application. Each card publishes under its platform's
 5. **LRCLIB fuzzy search**, with scoring.
 6. **YouTube captions**, only for YouTube and unidentified browser tabs, and only when everything above found nothing.
 
-If none of these finds synced lyrics, plain lyrics (LRCLIB, then Genius) are shown in the window only, marked **Words only**, never on Discord. Live streams are never looked up.
+If none of these finds synced lyrics, plain lyrics (LRCLIB, then Genius) are shown in the window only, marked **Words only**, never on Discord. Live streams are never looked up. A YouTube Short (with the browser extension) only gets steps 1 and 6: its title is not a song's name, and a song under it is a few seconds from the middle, which a song's timings would not follow.
 
 **Kick captions.** A Kick stream has no lyrics to look up, but with captions (**CC**) on in Kick's player the extension reports what the caption overlay says, live or on a past broadcast, and the app turns that into lines (`src/core/live-captions.ts`) and shows them as the lyrics, marked **Live captions** (**Captions** on a past broadcast): the line before on top and, under it, the line being said, which grows as the player shows each word (usually within a second) and is put right in place when Kick corrects a word. The overlay is a window of the last words heard, rewritten as the recognition changes its mind, so the reports are stitched back into one transcript and the last few words stay open to correction until a later report confirms them. A line ends when it is full, at a pause, or when the captions clear; with translation on, a line is translated once it has ended. Both of Kick's kinds work, captions carried by the stream and Chrome's on-device recognition. After 25 seconds with nothing said, the card goes back to the stream's title, and the next line comes back on its own rather than under one said before the quiet. A past broadcast's captions are read off the player too, not looked up by position: skipping through the video starts the lines over from where it lands, and playing on after a pause does not put back lines said more than 25 seconds before. When people talk fast, Kick's own two-line display skips lines it has no room for (about a tenth of the words, on a real broadcast's captions), and those never reach the app either.
 
@@ -325,7 +327,7 @@ Both are under **Settings → Discord presence → Visibility**.
 2. Under **Settings → Integrations → Last.fm**, paste the **API key** and **Shared secret**, then click **Save credentials**.
 3. Click **1. Authorise in browser**, approve the request on Last.fm, then click **I approved it — finish**.
 
-A track is scrobbled when it is longer than 30 seconds and has played for half its length or 4 minutes, whichever comes first. Paused time doesn't count. Scrobbles that fail to send are queued in `lastfm-queue.json` (up to 500) and sent again later. Only presence 1 is scrobbled, and live streams never are.
+A track is scrobbled when it is longer than 30 seconds and has played for half its length or 4 minutes, whichever comes first. Paused time doesn't count. Scrobbles that fail to send are queued in `lastfm-queue.json` (up to 500) and sent again later. Only presence 1 is scrobbled, and live streams and YouTube Shorts never are.
 
 ### Reporting a problem
 
@@ -376,6 +378,7 @@ The current track's artwork is also written to `%TEMP%\vybecord_thumb.jpg`.
 | `rpc_show_playlist` | `true` | boolean | Name the playlist |
 | `rpc_activity_type` | `2` | `0` Playing, `2` Listening, `3` Watching, `5` Competing | Activity type (presence 1's, when there are several) |
 | `rpc_activity_type_2` … `rpc_activity_type_5` | `-1` | `-1` same as presence 1, or a type as above | Several presences → Activity type on presence 2–5 |
+| `rpc_shorts_activity_type` | `3` | `3` Watching, `2` Listening | Activity type for Shorts (every card) |
 | `rpc_status_display` | `"app"` | `app`, `title`, `title_artist`, `artist_title`, `artist`, `album`, `details`, `state`, `custom`, `playlist` (config only) | Status line |
 | `rpc_status_template` | `"{title} - {artist}"` | up to 128 characters; placeholders `{title}` `{artist}` `{album}` `{playlist}` `{platform}` | Status template (used when `rpc_status_display` is `custom`) |
 | `presence_count` | `1` | 1–5 | Several presences → Presences at once |

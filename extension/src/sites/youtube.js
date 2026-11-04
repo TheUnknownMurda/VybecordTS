@@ -85,9 +85,25 @@
     }
   }
 
+  /**
+   * The id of the video this page plays: `?v=` on a watch page, the path on a
+   * Short. A Short's page has no `v` parameter at all, so before this every
+   * Short pushed nothing and reached the app only through the browser's media
+   * session, as a nameless tab: no link, a letterboxed cover, the hashtags in
+   * the title.
+   */
   function getVideoId() {
     const params = new URLSearchParams(window.location.search);
-    return params.get('v') || '';
+    const v = params.get('v');
+    if (v) return v;
+    const m = SHORTS_PATH.exec(window.location.pathname);
+    return m ? m[1] : '';
+  }
+
+  const SHORTS_PATH = /^\/shorts\/([\w-]{6,64})/;
+
+  function isShortsPage() {
+    return !isYouTubeMusic() && SHORTS_PATH.test(window.location.pathname);
   }
 
   function isYouTubeMusic() {
@@ -95,12 +111,182 @@
   }
 
   let cachedVideoEl = null;
+  /**
+   * The player of the page in view. YouTube keeps the Shorts player and the
+   * watch page's player both in the document once either has been opened, the
+   * one not in view hidden and paused, and the Shorts one comes first: the
+   * first video on a watch page reached after a Short is the paused Short, and
+   * on a Short it can be the paused video from before. Each page's own player
+   * is asked for by its container.
+   */
   function getVideoElement() {
-    // Reuse cached element if still in DOM
-    if (cachedVideoEl && cachedVideoEl.isConnected) return cachedVideoEl;
-    cachedVideoEl = document.querySelector('video.html5-main-video') ||
+    const scope = isShortsPage() ? '#shorts-player' : isYouTubeMusic() ? '' : '#movie_player';
+    if (cachedVideoEl && cachedVideoEl.isConnected && (!scope || cachedVideoEl.closest(scope))) return cachedVideoEl;
+    cachedVideoEl = (scope && document.querySelector(`${scope} video`)) ||
+                    document.querySelector('video.html5-main-video') ||
                     document.querySelector('video');
     return cachedVideoEl;
+  }
+
+  // ── Shorts ──
+
+  /** How long a Short's first reading waits for the player to name it. */
+  const SHORT_NAME_WAIT_MS = 1500;
+  /** How long it waits for the panel to stop showing the previous Short's title. */
+  const SHORT_STALE_WAIT_MS = 4000;
+  /** What was settled for the Short on screen; see shortDetails(). */
+  let shortInfo = { id: '', title: '', channel: '', channelUrl: '', firstSeen: 0, thumb: '' };
+  /** The title settled for the Short before this one. */
+  let previousShortTitle = '';
+  let shortRetry = null;
+
+  /**
+   * The Short's own panel: the one around the player, else the one YouTube
+   * marks active, else the one across the middle of the window. YouTube keeps
+   * its neighbours rendered, above and below, for the swipe.
+   */
+  function activeReel(vid) {
+    const own = (vid && vid.closest('ytd-reel-video-renderer')) ||
+                document.querySelector('ytd-reel-video-renderer[is-active]');
+    if (own) return own;
+    const mid = window.innerHeight / 2;
+    for (const reel of document.querySelectorAll('ytd-reel-video-renderer')) {
+      const r = reel.getBoundingClientRect();
+      if (r.height > 0 && r.top <= mid && r.bottom >= mid) return reel;
+    }
+    return null;
+  }
+
+  /** Title, channel handle and channel link as the panel shows them. */
+  function reelDetails(vid) {
+    const reel = activeReel(vid);
+    if (!reel) return { title: '', handle: '', channelUrl: '' };
+    const titleEl = reel.querySelector('yt-shorts-video-title-view-model') ||
+                    reel.querySelector('h2.title, .title yt-formatted-string');
+    const channelEl = reel.querySelector('.ytReelChannelBarViewModelChannelName a') ||
+                      reel.querySelector('#channel-name a') ||
+                      reel.querySelector('a[href^="/@"]');
+    return {
+      title: (titleEl?.textContent || '').trim(),
+      handle: (channelEl?.textContent || '').trim(),
+      channelUrl: channelPage(channelEl?.getAttribute('href')),
+    };
+  }
+
+  /**
+   * The player's own announcement of what it plays (what Windows shows in its
+   * media flyout), when its picture names this video: right after a swipe it
+   * can still be the previous Short's.
+   */
+  function mediaSessionFor(videoId) {
+    try {
+      const md = navigator.mediaSession && navigator.mediaSession.metadata;
+      if (!md || !md.title) return null;
+      const ours = Array.from(md.artwork || []).some((a) => {
+        const src = String(a.src || '');
+        return src.includes(`/vi/${videoId}/`) || src.includes(`/vi_webp/${videoId}/`);
+      });
+      return ours ? { title: md.title.trim(), artist: (md.artist || '').trim() } : null;
+    } catch (e) { /* ignore */ }
+    return null;
+  }
+
+  /**
+   * The vertical thumbnail, when the video has one.
+   *
+   * hqdefault.jpg is 4:3 for every video, and a Short's is its frame in a
+   * blurred band on each side: Discord crops the cover to a square, so the
+   * card showed a narrow strip of the Short between two smears. oar2.jpg is
+   * the frame at its own 9:16, which the crop fills edge to edge. It answered
+   * for each of 25 Shorts tried (oardefault.jpg, its sibling, missed 4), but
+   * nothing documents it, so it is loaded once here, and hqdefault takes its
+   * place if it fails or comes back the wrong way round.
+   */
+  function shortThumb(videoId) {
+    if (shortInfo.thumb) return shortInfo.thumb;
+    const vertical = `https://i.ytimg.com/vi/${videoId}/oar2.jpg`;
+    shortInfo.thumb = vertical;
+    try {
+      const img = new Image();
+      img.onload = () => {
+        if (img.naturalHeight > img.naturalWidth) return;
+        fallBackThumb(videoId);
+      };
+      img.onerror = () => fallBackThumb(videoId);
+      img.src = vertical;
+    } catch (e) { /* the optimistic answer stands */ }
+    return vertical;
+  }
+
+  function fallBackThumb(videoId) {
+    if (shortInfo.id !== videoId) return;
+    shortInfo.thumb = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+    const data = getMetadata();
+    if (data) pushToVybecord(data);
+  }
+
+  function retryShortSoon() {
+    if (!shortRetry) shortRetry = setTimeout(() => { shortRetry = null; onStateChange(); }, 400);
+  }
+
+  /**
+   * Title, channel and channel link of the Short on screen, settled once per
+   * Short.
+   *
+   * Swiping changes the address first and the rest a beat later: for a moment
+   * the panel and the player can both still describe the previous Short. A
+   * reading taken then put the last Short's title on the new one's card, and
+   * kept it there. So a Short is named by the player's announcement once its
+   * picture is this video's; failing that, after SHORT_NAME_WAIT_MS, by the
+   * panel, provided it no longer shows the previous Short's title (two Shorts
+   * in a row can share one, hence SHORT_STALE_WAIT_MS). The player's name
+   * ("ClishiOh Clipz") also reads better than the panel's handle
+   * ("@ClishiOhClipz"), which is used without its @.
+   *
+   * Settled once because the app tells tracks apart by title and artist as
+   * well as id: a reading that changed under the same Short would start its
+   * card over.
+   */
+  function shortDetails(videoId, vid) {
+    if (shortInfo.id === videoId && shortInfo.title) return shortInfo;
+    if (shortInfo.id !== videoId) {
+      if (shortInfo.title) previousShortTitle = shortInfo.title;
+      shortInfo = { id: videoId, title: '', channel: '', channelUrl: '', firstSeen: Date.now(), thumb: '' };
+    }
+    const waited = Date.now() - shortInfo.firstSeen;
+    const panel = reelDetails(vid);
+    const ms = mediaSessionFor(videoId);
+    let title = '';
+    let channel = '';
+    let channelUrl = '';
+    if (ms) {
+      title = ms.title;
+      channel = ms.artist;
+      // The panel's link is this Short's only when the panel is.
+      if (panel.title === ms.title) {
+        channelUrl = panel.channelUrl;
+        if (!channel) channel = panel.handle.replace(/^@/, '');
+      }
+    } else if (panel.title && waited >= SHORT_NAME_WAIT_MS &&
+               (panel.title !== previousShortTitle || waited >= SHORT_STALE_WAIT_MS)) {
+      title = panel.title;
+      channel = panel.handle.replace(/^@/, '');
+      channelUrl = panel.channelUrl;
+    }
+    if (!title) {
+      if (waited < SHORT_STALE_WAIT_MS * 2) retryShortSoon();
+      return null;
+    }
+    shortInfo.title = title;
+    shortInfo.channel = channel;
+    shortInfo.channelUrl = channelUrl;
+    return shortInfo;
+  }
+
+  /** A channel link from the page, as an absolute link to the channel itself. */
+  function channelPage(href) {
+    const m = /^\/(@[^/?#]+|channel\/[\w-]+|c\/[^/?#]+|user\/[^/?#]+)/.exec(href || '');
+    return m ? `https://www.youtube.com/${m[1]}` : '';
   }
 
   /**
@@ -114,9 +300,12 @@
     const vid = getVideoElement();
     if (!vid) return null;
 
+    if (isShortsPage()) return shortMetadata(videoId, vid);
+
     let title = '';
     let artist = '';
     let channel = '';
+    let channelUrl = '';
 
     // YouTube Music: richer metadata via player API
     if (isYouTubeMusic()) {
@@ -142,6 +331,7 @@
                           document.querySelector('ytd-video-owner-renderer #channel-name a') ||
                           document.querySelector('.ytmusic-player-bar .byline a');
         channel = channelEl?.textContent?.trim() || '';
+        if (!isYouTubeMusic()) channelUrl = channelPage(channelEl?.getAttribute('href'));
       } catch { /* ignore */ }
     }
 
@@ -183,6 +373,7 @@
       title: title,
       artist: artist,
       channel: channel || artist,
+      channel_url: channelUrl,
       duration_ms: isLive ? 0 : Math.round((vid.duration || 0) * 1000),
       progress_ms: Math.round((vid.currentTime || 0) * 1000),
       is_playing: !vid.paused && !vid.ended,
@@ -190,6 +381,34 @@
       stream_start_time_ms: isLive ? streamStartTime : undefined,
       thumbnail_url: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
       source: isYouTubeMusic() ? 'youtube_music' : 'youtube',
+    };
+  }
+
+  /**
+   * A Short's push. Same shape as a video's, plus `is_short`.
+   *
+   * A Short loops by itself, and the position reported is the loop's, which
+   * is what the captions follow; the app keeps the bar off the card. A Short
+   * is never treated as live, whatever badge some other part of the page
+   * carries: the live badges looked for below are the watch page's, and that
+   * page sits hidden in the document behind the Shorts player.
+   */
+  function shortMetadata(videoId, vid) {
+    const info = shortDetails(videoId, vid);
+    if (!info) return null;
+    return {
+      video_id: videoId,
+      title: info.title,
+      artist: '',
+      channel: info.channel,
+      channel_url: info.channelUrl,
+      duration_ms: isFinite(vid.duration) ? Math.round((vid.duration || 0) * 1000) : 0,
+      progress_ms: Math.round((vid.currentTime || 0) * 1000),
+      is_playing: !vid.paused && !vid.ended,
+      is_live: false,
+      is_short: true,
+      thumbnail_url: shortThumb(videoId),
+      source: 'youtube',
     };
   }
 
