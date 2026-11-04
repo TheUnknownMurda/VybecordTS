@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The pages worth finding in a search engine, submitted in Google Search Console
+  and Bing Webmaster Tools. GitHub Pages serves this site under /VybecordTS/,
+  so there is no robots.txt of our own to point here: the host's root belongs
+  to github.io.
+
+  Left out on purpose: download/ and fr/telecharger/ (they start a download and
+  move on), open/spotify/ and 404.html (noindex).
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://theunknownmurda.github.io/VybecordTS/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://theunknownmurda.github.io/VybecordTS/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://theunknownmurda.github.io/VybecordTS/fr/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://theunknownmurda.github.io/VybecordTS/"/>
+  </url>
+  <url>
+    <loc>https://theunknownmurda.github.io/VybecordTS/fr/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://theunknownmurda.github.io/VybecordTS/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://theunknownmurda.github.io/VybecordTS/fr/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://theunknownmurda.github.io/VybecordTS/"/>
+  </url>
+  <url>
+    <loc>https://theunknownmurda.github.io/VybecordTS/privacy/</loc>
+  </url>
+</urlset>
