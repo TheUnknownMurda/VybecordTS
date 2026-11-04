@@ -4,15 +4,18 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <title>Vybecord: your music on Discord, line by line</title>
-  <meta name="description" content="Vybecord puts whatever is playing on your Windows PC on your Discord profile, with the lyric being sung right now. Spotify, YouTube, Apple Music, Twitch and more. Free and open source.">
+  <!-- The title and the description are what a search result shows. They carry
+       the words people type ("lyrics", "Discord status", "Spotify"); keep them
+       there when rewording. -->
+  <title>Show Spotify and YouTube lyrics on your Discord status · Vybecord</title>
+  <meta name="description" content="Show the lyric you're hearing on your Discord status, synced line by line. Free Windows app for Spotify, YouTube, Apple Music, Twitch and more. No account.">
   <meta name="theme-color" content="#0b0b10">
   <link rel="canonical" href="https://theunknownmurda.github.io/VybecordTS/">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
 
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Vybecord">
-  <meta property="og:title" content="Vybecord: your music on Discord, line by line">
+  <meta property="og:title" content="Vybecord: live lyrics on your Discord status">
   <meta property="og:description" content="Whatever is playing on your PC, on your Discord profile, with synced lyrics. Free for Windows 10 and 11.">
   <meta property="og:url" content="https://theunknownmurda.github.io/VybecordTS/">
   <meta property="og:image" content="https://theunknownmurda.github.io/VybecordTS/og.png">
@@ -20,6 +23,39 @@
   <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="Vybecord: a Discord profile card showing the song playing and its current lyric line.">
   <meta name="twitter:card" content="summary_large_image">
+
+  <!-- What search engines read to know this page is about an app: free, for
+       Windows, where to get it. No rating: there is none to show, and a made-up
+       one is against Google's rules. -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "@id": "https://theunknownmurda.github.io/VybecordTS/#app",
+    "name": "Vybecord",
+    "alternateName": "VybecordTS",
+    "description": "A free Windows app that shows whatever is playing on your PC on your Discord status, with the lyrics synced line by line. Works with Spotify, YouTube, Apple Music, Twitch, Kick and most Windows players.",
+    "url": "https://theunknownmurda.github.io/VybecordTS/",
+    "downloadUrl": "https://theunknownmurda.github.io/VybecordTS/download/",
+    "image": "https://theunknownmurda.github.io/VybecordTS/og.png",
+    "applicationCategory": "MultimediaApplication",
+    "operatingSystem": "Windows 10, Windows 11",
+    "inLanguage": "en",
+    "isAccessibleForFree": true,
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "license": "https://github.com/TheUnknownMurda/VybecordTS/blob/main/LICENSE",
+    "author": { "@type": "Person", "name": "TheUnknownMurda", "url": "https://github.com/TheUnknownMurda" },
+    "sameAs": ["https://github.com/TheUnknownMurda/VybecordTS"],
+    "featureList": [
+      "Synced lyrics on your Discord status, line by line",
+      "Spotify, YouTube, Apple Music, SoundCloud, Deezer, Tidal, Twitch and Kick",
+      "Up to five Discord presences at once",
+      "Lyrics translated into 16 languages and romanised",
+      "Listening history and optional Last.fm scrobbling",
+      "No account and no telemetry"
+    ]
+  }
+  </script>
 
   <!-- Sections start hidden and rise in, but only while site.js is there to reveal them. -->
   <script>document.documentElement.classList.add('js')</script>
@@ -88,10 +124,10 @@
         <span class="arrow" aria-hidden="true">&rarr;</span>
       </a>
 
-      <h1>Your music on Discord, <em>line by line.</em></h1>
+      <h1>Lyrics on your Discord status, <em>line by line.</em></h1>
 
       <p class="hero-sub">
-        Vybecord puts whatever is playing on your PC on your Discord profile, with the lyric
+        Vybecord puts whatever is playing on your PC on your Discord status, with the lyric
         being sung right now. Spotify, YouTube, Apple Music, Twitch and most other players
         on Windows. Install it, press play, and that's it.
       </p>
@@ -232,7 +268,7 @@
     <div class="bento">
       <article class="card feat wide reveal">
         <div class="feat-ico" aria-hidden="true"><svg class="i"><use href="#i-mic"/></svg></div>
-        <h3>The line being sung, on your card</h3>
+        <h3>Synced lyrics, on your Discord card</h3>
         <p>
           Your status shows the current lyric with the next one under it, timed to the millisecond
           and corrected for Discord's own delay. Mark a wrong match and it never comes back; nudge
@@ -353,8 +389,8 @@
   <div class="wrap">
     <div class="sec-head center reveal">
       <span class="eyebrow">Setup</span>
-      <h2>Ready in about a minute</h2>
-      <p>Nothing to configure and nothing to sign in to. The app's Help &amp; setup page ticks itself off as you go.</p>
+      <h2>How to show lyrics on Discord</h2>
+      <p>About a minute, with nothing to configure and nothing to sign in to. The app's Help &amp; setup page ticks itself off as you go.</p>
     </div>
 
     <ol class="steps">
@@ -451,7 +487,7 @@
               <li>Unzip the file somewhere it can stay.</li>
               <li>Open <code>chrome://extensions</code> (<code>edge://extensions</code> in Edge) and turn on <strong>Developer mode</strong>.</li>
               <li>Click <strong>Load unpacked</strong> and pick the unzipped folder.</li>
-              <li>In Firefox 121 or later, open <code>about:debugging</code>, then <strong>This Firefox</strong> &rarr; <strong>Load Temporary Add-on</strong>, and pick the zip. Firefox removes it when it closes.</li>
+              <li>In Firefox 140 or later, open <code>about:debugging</code>, then <strong>This Firefox</strong> &rarr; <strong>Load Temporary Add-on</strong>, and pick the zip. Firefox removes it when it closes.</li>
             </ol>
           </details>
         </div>
@@ -513,6 +549,31 @@
         <div class="a"><p>Yes. It's free and open source under the MIT licence, with no paid tier and no ads.</p></div>
       </details>
       <details>
+        <summary>Can it show Spotify lyrics on my Discord status?</summary>
+        <div class="a">
+          <p>
+            Yes. Play a song in the Spotify app or on Spotify Web, and the line being sung shows on
+            your Discord card with the next one under it. Spotify's own Discord connection shows the
+            song only; Vybecord adds the lyrics.
+          </p>
+          <p>
+            With the optional <a href="#addons">Spicetify extension</a>, it uses Spotify's own synced
+            lyrics when the song has them. Lyrics also work for YouTube, YouTube Music, Apple Music
+            and the other players, with no add-on.
+          </p>
+        </div>
+      </details>
+      <details>
+        <summary>Do I need BetterDiscord, Vencord or my Discord token?</summary>
+        <div class="a">
+          <p>
+            No. Vybecord is its own app: it doesn't modify Discord, isn't a plugin and doesn't touch
+            your custom status. The lyrics go on your activity card through Rich Presence, which works
+            with the regular Discord app.
+          </p>
+        </div>
+      </details>
+      <details>
         <summary>Why does Windows warn me about the installer?</summary>
         <div class="a">
           <p>
@@ -562,8 +623,8 @@
         </div>
       </details>
       <details>
-        <summary>Is there a Mac or Linux version?</summary>
-        <div class="a"><p>Not at the moment. Vybecord reads the Windows media session, which only exists on Windows 10 (version 1809) and later.</p></div>
+        <summary>Is there a Mac, Linux or phone version?</summary>
+        <div class="a"><p>Not at the moment. Vybecord reads the Windows media session, which only exists on Windows 10 (version 1809) and later, and it needs the Discord desktop app on the same PC.</p></div>
       </details>
       <details>
         <summary>How do updates work?</summary>
