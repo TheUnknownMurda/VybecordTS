@@ -46,7 +46,7 @@ Updates download on their own and install when you quit. The first time you open
 | **Now playing** | Two sides, like a mirror. **On your screen**, on the left: the current track (cover, title, artist, album, player and progress; paused, it stays on the card with its bar stopped, until you close the player or switch its detection off) and the scrolling lyrics (click them for the whole song, or **Big lyrics** to fill the window with them, Spotify style; **Esc** closes it). Lyrics found without timings show as plain text you can scroll, marked **Words only**. **On Discord**, on the right: your card as your friends see it, with its **Source** menu, which picks the player it follows. **Click any part of the card** (or **Customize**) to change it: what the lines show, the verb, the icon on the cover, your button… In the middle, switches with an arrow toward the side they change: **Visible** takes your status off Discord or puts it back, **Lyrics** turns them on or off on both sides, **Romanise** and one of the two **Translate** act on Discord, the other **Translate** on the window, and **Hide on Discord when** covers pauses, being away and Spotify ads. **Why?** says what is keeping your card off Discord, with a button to fix it. |
 | **Lyrics** | Your own lyrics library: **My lyrics**, **Blocked** (lyrics you marked as wrong) and the offline **LRCLIB dump**. **Add lyrics** imports or writes new ones. |
 | **Activity** | What you listened to over 7 days, 30 days, 12 months or all time: time listened, a chart, top artists and tracks, and your recent plays (**See all** opens the full history). It updates by itself as songs finish. |
-| **Settings** | Discord presence, Lyrics & translation, Detection, Integrations (browser extension, Spotify, Last.fm), App & window, and About. The search box finds any setting. |
+| **Settings** | Discord presence, Lyrics & translation, Detection, Integrations (browser extension, Spotify through Spicetify or your own Spotify app, Last.fm), App & window, and About. The search box finds any setting. |
 | **Help & setup** | The setup checklist, at the bottom of the sidebar. |
 
 The bottom of the sidebar also says whether Discord is connected and what is being detected.
@@ -137,6 +137,19 @@ Its icon opens a settings page with a switch per site — Spotify, YouTube, Soun
 
 With it, each site is identified properly, the presence links straight to the track, and the progress bar reads the page's own audio element instead of the coarser system position. Without it, everything below still applies.
 
+### Spotify details without Spicetify
+
+Spicetify is the fullest way to read Spotify, but it patches the Spotify app. If you have **Spotify Premium** and would rather not, Vybecord can ask Spotify's own API instead, with a Spotify app of your own. **Settings → Integrations → Spotify → Spotify without Spicetify** walks you through it:
+
+1. On the [Spotify developer dashboard](https://developer.spotify.com/dashboard), create an app (any name and description). Where it asks which APIs you plan to use, tick **Web API**.
+2. In the app's settings, add this Redirect URI, exactly: `http://127.0.0.1:8889/callback`. The card has a **Copy** button for it.
+3. Paste the app's **Client ID** into the card and click **Save**. There is no secret to copy.
+4. Click **Sign in with Spotify** and approve the page that opens in your browser. It only lets the app see what you are playing.
+
+You then get the real cover, every artist, the playlist, shuffle and repeat and the exact position, on whatever device you play (the PC, the web player, your phone). Spotify's own lyrics are the one thing it cannot give: lyrics come from the usual sources. A track change shows within a few seconds rather than instantly. While Spicetify is reporting, this stands by.
+
+Spotify only runs such an app while its owner (you) has Premium. If the card says Spotify refused, add your Spotify e-mail under **User Management** in the app's settings. Spotify ends the sign-in six months after you signed in, so the card warns you two weeks ahead; sign in again then. If Spotify's page says **INVALID_CLIENT: Invalid redirect URI**, the Redirect URI in your app isn't exactly the one above.
+
 ### SoundCloud shows as a browser, not as SoundCloud
 
 Without the browser extension, Windows tells Vybecord what is playing but not which website it is on: a SoundCloud tab and a YouTube tab look identical. Install the extension (above) and SoundCloud is announced as SoundCloud, with a link to the track.
@@ -174,16 +187,16 @@ Each card is a Discord application of its own. Spotify, SoundCloud and Apple Mus
 ## FAQ
 
 **Does this need Spotify Premium?**
-No. Vybecord never talks to Spotify's API — it reads what Windows already knows.
+No. Vybecord reads what Windows already knows, and Spicetify works with a free account too. Premium only matters if you choose to read Spotify through its API instead of Spicetify (see *Spotify details without Spicetify*).
 
 **Do I need Spicetify or a browser extension?**
-No. Older versions did; this one does not. Both are optional extras: Spicetify adds instant track changes, Spotify's own lyrics and the DJ (the card names it, and the DJ's voice between songs gets no lyrics and no history) (set it up under **Settings → Integrations → Spotify**), and the browser extension tells Vybecord which site a tab is on.
+No. Older versions did; this one does not. Both are optional extras: Spicetify adds instant track changes, Spotify's own lyrics and the DJ (the card names it, and the DJ's voice between songs gets no lyrics and no history) (set it up under **Settings → Integrations → Spotify**), and the browser extension tells Vybecord which site a tab is on. With Premium, your own Spotify app gives most of what Spicetify gives without touching Spotify.
 
 **What does it work with?**
 Anything that appears in the Windows media overlay: Spotify, browser tabs (YouTube, SoundCloud, Deezer…), VLC, foobar2000, MusicBee, AIMP, Apple Music, Tidal, Amazon Music.
 
 **Does my data leave my PC?**
-Track and artist names go to the lyrics services (LRCLib, Netease, Musixmatch, Genius) to look lyrics up, to Deezer and Apple's iTunes to find the album cover, and to Discord for the status. The cover your player shows (Spotify's, Apple Music's, a local file's) is published to Vybecord's cover store, stripped of its metadata, and only when there is none is a catalogue asked — switch that off under **Settings → Integrations → Cover images**. For a Twitch channel, the channel name goes to Twitch to get its title, picture and stream start. If you turn on translation, the lyric lines go to the translation service; if you enable Last.fm, your plays go there. Your history, settings and imported lyrics stay local. The full list is in the [privacy policy](https://theunknownmurda.github.io/VybecordTS/privacy/).
+Track and artist names go to the lyrics services (LRCLib, Netease, Musixmatch, Genius) to look lyrics up, to Deezer and Apple's iTunes to find the album cover, and to Discord for the status. The cover your player shows (Spotify's, Apple Music's, a local file's) is published to Vybecord's cover store, stripped of its metadata, and only when there is none is a catalogue asked — switch that off under **Settings → Integrations → Cover images**. For a Twitch channel, the channel name goes to Twitch to get its title, picture and stream start. If you turn on translation, the lyric lines go to the translation service; if you enable Last.fm, your plays go there; if you sign in with your own Spotify app, Vybecord asks Spotify what you are playing. Your history, settings and imported lyrics stay local. The full list is in the [privacy policy](https://theunknownmurda.github.io/VybecordTS/privacy/).
 
 **Where are my files?**
 In `%APPDATA%\Vybecord` — paste that into Explorer.

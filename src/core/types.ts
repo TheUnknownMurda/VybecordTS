@@ -154,6 +154,12 @@ export interface VybecordConfig {
   extension_enabled: boolean;
   discord_app_id: string;
   /**
+   * The Client ID of the user's own Spotify app, for reading Spotify through
+   * the Web API instead of Spicetify. Empty means not set up. The sign-in it
+   * leads to is kept in spotify-session.json, not here — see spotify-auth.ts.
+   */
+  spotify_client_id: string;
+  /**
    * How many things to announce at once — the song in Spotify, the video in
    * the browser and the stream in another tab, say — as separate presence
    * cards on the profile. 1 to 5.

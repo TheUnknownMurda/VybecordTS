@@ -27,6 +27,9 @@ const DEFAULTS: VybecordConfig = {
   /** Listen for pushes from the browser extension (opens 127.0.0.1:8888). */
   extension_enabled: true,
   discord_app_id: '',
+  // Spotify through the Web API, for people without Spicetify: the Client ID
+  // of their own Spotify app. Nothing happens until they also sign in.
+  spotify_client_id: '',
   // One presence unless asked for more: most people have never wanted it.
   presence_count: 1,
   show_lyrics_2: true,
@@ -152,6 +155,9 @@ export const CONFIG_SCHEMA: Record<string, FieldSpec> = {
   filter_spotify_ads: { type: 'boolean' },
   extension_enabled: { type: 'boolean' },
   discord_app_id: { type: 'string', maxLength: 32 },
+  // 32 hex digits; the slack is for a paste with spaces around it, which
+  // spotify-auth.ts trims before judging the shape.
+  spotify_client_id: { type: 'string', maxLength: 64 },
   presence_count: { type: 'number', min: 1, max: 5 },
   show_lyrics_2: { type: 'boolean' },
   show_lyrics_3: { type: 'boolean' },

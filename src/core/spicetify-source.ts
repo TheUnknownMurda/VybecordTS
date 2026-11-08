@@ -105,6 +105,68 @@ export function normalizeSpicetifyPayload(raw: unknown): SpicetifyPayload {
   };
 }
 
+/**
+ * The track a Spotify payload describes, its position carried forward to now.
+ * Null while paused, or when there is nothing worth a card.
+ *
+ * Shared with the Web API source (spotify-web-source.ts), which turns Spotify's
+ * answer into this same payload: one conversion means the two cannot drift
+ * apart, and the ids they make agree. That matters when one hands over to the
+ * other mid-song — a minimised Spotify's throttled extension, say — because a
+ * different id would read as a new track and restart the lyrics.
+ *
+ * @param receivedAt  performance.now() when the payload arrived
+ */
+export function spotifyPayloadTrack(d: SpicetifyPayload, receivedAt: number): TrackData | null {
+  if (!d.is_playing) return null;
+  // A DJ voice segment may come with no title at all; it still deserves a card.
+  if (!d.track_name && !d.dj_narration) return null;
+
+  // Compensate progress for time since last push
+  const elapsed = performance.now() - receivedAt;
+  const compensatedProgress = Math.min(
+    Math.round(d.progress_ms + elapsed),
+    d.duration_ms || Infinity,
+  );
+
+  /*
+   * The DJ talking between songs. Whatever Spotify calls the segment, it is
+   * not a song: announced under its own name it would be looked up for
+   * lyrics, could match some real track called that, and would be scrobbled.
+   * One fixed identity, flagged so the backend skips all three.
+   *
+   * The `spicetify:` prefix on made-up ids stays whichever source made them,
+   * for the handoff reason above.
+   */
+  const narration = !!d.dj_narration;
+  return {
+    track_id: narration ? `spicetify:dj:${d.uri}` : d.track_id || `spicetify:${d.track_name}:${d.artist_name}`,
+    track_name: narration ? 'DJ is talking' : d.track_name,
+    artist_name: narration ? 'Spotify DJ' : d.artist_name,
+    album_name: narration ? '' : d.album_name,
+    duration_ms: d.duration_ms,
+    progress_ms: compensatedProgress,
+    is_playing: true,
+    is_live: false,
+    album_art_url: d.album_art_url,
+    spotify_url: narration ? d.context_url : d.spotify_url,
+    artist_url: d.artist_url,
+    album_url: d.album_url || '',
+    context_name: d.context_name || '',
+    context_url: d.context_url || '',
+    context_type: d.context_type || '',
+    artist_art_url: d.artist_art_url || '',
+    media_source: 'spotify',
+    is_shuffle: d.is_shuffle ?? false,
+    repeat_mode: ((d.repeat_mode === 'track' || d.repeat_mode === 'context') ? d.repeat_mode : 'off') as 'off' | 'track' | 'context',
+    is_local: d.is_local ?? false,
+    is_dj: d.is_dj ?? false,
+    is_dj_narration: narration,
+    _received_at: performance.now(),
+    _from_push: true,
+  };
+}
+
 export class SpicetifySource {
   private latestData: SpicetifyPayload | null = null;
   private receivedAt = 0;
@@ -144,53 +206,7 @@ export class SpicetifySource {
    */
   getCurrentTrack(): TrackData | null {
     if (!this.latestData || !this.isActive) return null;
-    if (!this.latestData.is_playing) return null;
-
-    const d = this.latestData;
-    // A DJ voice segment may come with no title at all; it still deserves a card.
-    if (!d.track_name && !d.dj_narration) return null;
-
-    // Compensate progress for time since last push
-    const elapsed = performance.now() - this.receivedAt;
-    const compensatedProgress = Math.min(
-      Math.round(d.progress_ms + elapsed),
-      d.duration_ms || Infinity,
-    );
-
-    /*
-     * The DJ talking between songs. Whatever Spotify calls the segment, it is
-     * not a song: announced under its own name it would be looked up for
-     * lyrics, could match some real track called that, and would be scrobbled.
-     * One fixed identity, flagged so the backend skips all three.
-     */
-    const narration = !!d.dj_narration;
-    const result = {
-      track_id: narration ? `spicetify:dj:${d.uri}` : d.track_id || `spicetify:${d.track_name}:${d.artist_name}`,
-      track_name: narration ? 'DJ is talking' : d.track_name,
-      artist_name: narration ? 'Spotify DJ' : d.artist_name,
-      album_name: narration ? '' : d.album_name,
-      duration_ms: d.duration_ms,
-      progress_ms: compensatedProgress,
-      is_playing: true,
-      is_live: false,
-      album_art_url: d.album_art_url,
-      spotify_url: narration ? d.context_url : d.spotify_url,
-      artist_url: d.artist_url,
-      album_url: d.album_url || '',
-      context_name: d.context_name || '',
-      context_url: d.context_url || '',
-      context_type: d.context_type || '',
-      artist_art_url: d.artist_art_url || '',
-      media_source: 'spotify',
-      is_shuffle: d.is_shuffle ?? false,
-      repeat_mode: ((d.repeat_mode === 'track' || d.repeat_mode === 'context') ? d.repeat_mode : 'off') as 'off' | 'track' | 'context',
-      is_local: d.is_local ?? false,
-      is_dj: d.is_dj ?? false,
-      is_dj_narration: narration,
-      _received_at: performance.now(),
-      _from_push: true,
-    };
-    return result;
+    return spotifyPayloadTrack(this.latestData, this.receivedAt);
   }
 
   /** True while pushes are still arriving at the cadence this source has been keeping. */
