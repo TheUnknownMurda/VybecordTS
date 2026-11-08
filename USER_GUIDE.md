@@ -168,6 +168,18 @@ The channel's name and picture come from Twitch itself (and from Kick's own site
 
 **Kick captions as lyrics.** Turn on captions (**CC**) in Kick's player and, on a live channel or a past broadcast, what is said shows on the card the way a song's lyrics do: the line before on top and, under it, the line being said, growing word by word as the player shows them. The **Now playing** window marks them **Live captions** (just **Captions** on a past broadcast). It works with both kinds Kick offers: captions that come with the stream, and the ones Chrome makes from the stream's sound. The extension reads them off the player, so it only sees them while they are on, and the card goes back to the stream's title when nobody has spoken for 25 seconds. Skip ahead or back in a past broadcast and the lines start over from where you land. With translation on, each line is translated once it is complete. When people talk fast, Kick's own player skips lines it has no room for, and those can't reach the card either. The **Lyrics** switch turns them off like any lyrics. Twitch streams and past broadcasts, and clips on either site, have no lyrics.
 
+### YouTube Shorts
+
+With the extension (2.2.2 or later), a Short gets a card of its own instead of passing as a browser tab:
+
+- the Short's title without its hashtags, and its channel, which links to the channel's page;
+- the Short's own picture, upright, rather than a strip of it between two blurred bands;
+- **YouTube Shorts** as the third line, and a timer for how long you have been watching Shorts, not a progress bar that starts over with every loop. Swiping to the next Short changes the title and the picture, never the timer. Watching a regular video, or a couple of minutes without any Short playing, starts it over;
+- **Watching**, or **Listening to** if you prefer: that is **Settings → Discord presence → Activity type for Shorts**, also a click away on the card's verb in **Now playing**. It covers every card, and everything that is not a Short keeps its own verb;
+- the button opens the Short.
+
+A Short is never looked up as a song: its title is not a song's name, and a song playing under it is a few seconds from the middle, which a song's timings would not follow. If the Short has captions on YouTube, what is said shows on the card, like a video's. Shorts stay out of the listening history, **Activity** and Last.fm, the way an offline channel does. Without the extension, Windows only sees a browser tab, and a Short shows the way it used to.
+
 ### Two things playing at once
 
 On **Now playing**, open the **Source** menu and pick the one you want announced. It stays pinned until you pick **Automatic**.

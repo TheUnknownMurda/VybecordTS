@@ -12,7 +12,7 @@ import { state, subscribe, saveConfig } from '../state.js';
 import { goto } from '../router.js';
 import { discordPreview } from '../discord-card.js';
 // The card's choices live with the editor on Now playing, so both offer the same lists.
-import { ACTIVITY_TYPES, ACTIVITY_KEYS, STATUS_DISPLAY, ICON_MODES, ICON_KEYS } from '../card-editor.js';
+import { ACTIVITY_TYPES, ACTIVITY_KEYS, SHORTS_ACTIVITY_TYPES, STATUS_DISPLAY, ICON_MODES, ICON_KEYS } from '../card-editor.js';
 import { showWhatsNew } from '../whats-new.js';
 import { spicetifyCard } from './spicetify-card.js';
 import { updateCard } from './update-card.js';
@@ -272,6 +272,8 @@ function presenceCat(body, { search }) {
         cfg('rpc_show_playlist', true) !== false, (v) => put('rpc_show_playlist', v)),
       multi ? null : selectRow('Activity type', 'The verb Discord shows before the activity.',
         cfg('rpc_activity_type', 2), ACTIVITY_TYPES, (v) => put('rpc_activity_type', Number(v))),
+      selectRow('Activity type for Shorts', 'The verb while a YouTube Short plays, on every card. Everything else keeps its activity type.',
+        cfg('rpc_shorts_activity_type', 3), SHORTS_ACTIVITY_TYPES, (v) => put('rpc_shorts_activity_type', Number(v))),
       selectRow('Status line', 'What the one-line status in the member list shows.',
         cfg('rpc_status_display', 'app'), STATUS_DISPLAY, (v) => put('rpc_status_display', v)),
       cfg('rpc_status_display') === 'custom'
