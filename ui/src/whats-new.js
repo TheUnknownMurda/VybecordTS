@@ -31,6 +31,9 @@ const ICONS = {
   sliders: '<svg viewBox="0 0 24 24"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg>',
   wrench: '<svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 00-5.2 5.2L3.5 17.5a2.1 2.1 0 003 3l6-6a4 4 0 005.2-5.2l-2.5 2.5-2.6-.4-.4-2.6z"/></svg>',
   spark: '<svg viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M18 6l-2.5 2.5M8.5 15.5L6 18"/></svg>',
+  key: '<svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l8-8M16 7l2.5 2.5M14 9l2 2"/></svg>',
+  shorts: '<svg viewBox="0 0 24 24"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M10.5 9.5v5l4-2.5z"/></svg>',
+  verb: '<svg viewBox="0 0 24 24"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z"/><circle cx="12" cy="12" r="2.5"/></svg>',
 };
 
 /**
@@ -39,6 +42,18 @@ const ICONS = {
  * telling about gets no entry.
  */
 const ENTRIES = [
+  {
+    version: '2.13.0',
+    headline: 'Spotify’s full details without Spicetify, and YouTube Shorts get a card of their own.',
+    items: [
+      ['key', 'Spotify without Spicetify',
+        'With Spotify Premium and a Spotify app of your own, Vybecord gets the playlist, every artist, shuffle and repeat and the exact position without patching Spotify: Settings → Integrations → Spotify.'],
+      ['shorts', 'YouTube Shorts, as Shorts',
+        'A Short shows its own title, channel and upright picture, with a timer for your Shorts session instead of a bar that restarts at every loop. It needs the browser extension 2.2.2.'],
+      ['verb', 'Watching or Listening to',
+        'Pick what a Short says on Discord: Settings → Discord presence → Activity type for Shorts, or click the verb on your card.'],
+    ],
+  },
   {
     version: '2.12.0',
     headline: 'Now playing is a mirror, and your Discord card changes with a click.',
