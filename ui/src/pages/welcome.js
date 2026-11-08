@@ -100,7 +100,7 @@ export function render(root) {
         el('div', { class: 'wel-desc', text: 'Any time from Settings → Integrations.' }),
       ]),
       opt('Browser extension', 'Recognises YouTube, SoundCloud, Twitch and Kick tabs by name, with the exact position.', ext, extBtn),
-      opt('Spotify, through Spicetify', 'Spotify’s own synced lyrics, every artist, the playlist you are in.', spot, spotBtn),
+      opt('Spotify, in full', 'Every artist, the playlist you are in, the real cover — through Spicetify, which adds Spotify’s own synced lyrics, or with Premium through a Spotify app of your own.', spot, spotBtn),
       opt('Last.fm', 'Scrobble everything you play.', fm, fmBtn),
       el('div', { class: 'wel-opt', style: 'padding:0 14px' }, [
         el('div', { style: 'flex:1' }, [
@@ -138,9 +138,15 @@ export function render(root) {
       api.extensionInfo()
         .then((i) => { if (mine === asked) done(ext, extBtn, i?.connected, i?.connected ? 'Connected' : 'Not set up'); })
         .catch(() => { if (mine === asked) done(ext, extBtn, false, 'Unknown'); });
-      api.spicetifyInfo()
-        .then((i) => { if (mine === asked) done(spot, spotBtn, i?.connected, i?.connected ? 'Connected' : i?.installed && i?.extensionEnabled ? 'Installed' : 'Not set up'); })
-        .catch(() => { if (mine === asked) done(spot, spotBtn, false, 'Unknown'); });
+      // Either way in counts: Spicetify reporting, or a Spotify sign-in of the user's own.
+      Promise.all([api.spicetifyInfo().catch(() => null), api.spotifyWebStatus().catch(() => null)])
+        .then(([i, w]) => {
+          if (mine !== asked) return;
+          if (i?.connected) done(spot, spotBtn, true, 'Connected');
+          else if (w?.signedIn) done(spot, spotBtn, true, 'Signed in');
+          else if (!i && !w) done(spot, spotBtn, false, 'Unknown');
+          else done(spot, spotBtn, false, i?.installed && i?.extensionEnabled ? 'Installed' : 'Not set up');
+        });
     };
   }
 

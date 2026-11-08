@@ -704,7 +704,13 @@ export class LyricsEngine {
       if (this.trackData) {
         artChanged = trackData.album_art_url !== this.trackData.album_art_url;
         modeChanged = trackData.is_shuffle !== this.trackData.is_shuffle ||
-                      trackData.repeat_mode !== this.trackData.repeat_mode;
+                      trackData.repeat_mode !== this.trackData.repeat_mode ||
+                      // The Web API names a playlist a beat after the song
+                      // starts (it is a second request), so the name can
+                      // arrive mid-track. Spotify only: on a stream this field
+                      // is a follower count, which is not worth a push.
+                      (trackData.media_source === 'spotify'
+                        && (trackData.context_name ?? '') !== (this.trackData.context_name ?? ''));
       }
       this.trackData = trackData;
     }

@@ -17,6 +17,7 @@ import { showWhatsNew } from '../whats-new.js';
 import { spicetifyCard } from './spicetify-card.js';
 import { updateCard } from './update-card.js';
 import { lastfmCard } from './lastfm-card.js';
+import { spotifyWebCard } from './spotify-web-card.js';
 
 const api = window.vybecord;
 
@@ -197,7 +198,8 @@ function cardGroup(title, card, desc) {
   return el('section', { class: 'set-group', 'aria-label': title }, [
     el('div', { class: 'eyebrow', text: title }),
     desc ? el('div', { class: 'set-group-desc', text: desc }) : null,
-    card,
+    // One card, or several stacked: Spotify has two ways in.
+    ...[].concat(card),
   ]);
 }
 
@@ -487,7 +489,8 @@ function integrationsCat(body) {
   body.append(
     cardGroup('Browser extension', extensionCard(),
       'Windows says what is playing but never which site a tab is on. The extension adds the site, the track link, the exact position and live stream uptime. Everything works without it.'),
-    cardGroup('Spotify', spicetifyCard()),
+    cardGroup('Spotify', [spicetifyCard(), spotifyWebCard()],
+      'Two ways to read Spotify properly: Spicetify, which patches the Spotify app, or your own Spotify app through Spotify’s API, for Premium accounts. Spotify works without either.'),
     cardGroup('Last.fm', lastfmCard()),
     group('Cover images', [
       toggleRow('Publish the player’s cover',

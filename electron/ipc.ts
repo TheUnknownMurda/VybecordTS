@@ -34,6 +34,7 @@ import {
   translateText, translateBatch, clearTranslationCache, TRANSLATE_LANGS,
 } from '../src/core/translate.js';
 import { ytDlpStatus, ytDlpDropDir } from '../src/core/youtube-captions.js';
+import { SIGN_IN_CANCELLED } from '../src/core/spotify-auth.js';
 import {
   extensionPath, extensionExists, detectBrowsers,
   revealExtensionFolder, copyExtensionsUrl, copyExtensionPath,
@@ -360,6 +361,29 @@ export function registerIpc(
     return { ok, ...scrobbleStatus() };
   });
   handle('lastfm:disconnect', () => { disconnectScrobble(); return { ok: true, ...scrobbleStatus() }; });
+
+  // ── Spotify Web API ──
+  handle('spotifyWeb:status', () => backend.spotifyWebStatus());
+  /**
+   * Opens Spotify's consent page in the default browser and stays pending
+   * until Spotify redirects back to the loopback server (or the user cancels,
+   * or five minutes pass). The renderer shows "waiting" for that long and
+   * offers spotifyWeb:cancel. A cancellation resolves rather than throws, so
+   * the window has no error to show for something the user chose to do.
+   */
+  handle('spotifyWeb:signIn', async () => {
+    const { url, done } = await backend.spotifyWebBeginSignIn();
+    await shell.openExternal(url);
+    try {
+      await done;
+    } catch (e) {
+      if ((e as Error).message !== SIGN_IN_CANCELLED) throw e;
+      return { ok: false, cancelled: true, ...backend.spotifyWebStatus() };
+    }
+    return { ok: true, cancelled: false, ...backend.spotifyWebStatus() };
+  });
+  handle('spotifyWeb:cancel', () => { backend.spotifyWebCancelSignIn(); return { ok: true }; });
+  handle('spotifyWeb:signOut', () => { backend.spotifyWebSignOut(); return { ok: true, ...backend.spotifyWebStatus() }; });
 
   // ── Bug report ──
   /** Whether a report can be sent at all. Deliberately a boolean, not the URL. */

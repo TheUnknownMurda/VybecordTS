@@ -39,6 +39,8 @@ import { createLogger } from './core/logger.js';
 import { ConfigManager, sanitizeConfigUpdate, normalizeUserPath } from './core/config.js';
 import { NativeMediaSource, looksLikeSpotifyAd, sourceFromAppId, sourcePriority, type DetectedPlayer } from './core/native-media-source.js';
 import { SpicetifySource } from './core/spicetify-source.js';
+import { SpotifyAuth, type SpotifyAuthStatus } from './core/spotify-auth.js';
+import { SpotifyWebSource, type SpotifyWebStatus } from './core/spotify-web-source.js';
 import { YouTubeSource } from './core/youtube-source.js';
 import { SoundCloudSource } from './core/soundcloud-source.js';
 import { BandcampSource } from './core/bandcamp-source.js';
@@ -370,6 +372,15 @@ export class VybecordBackend extends EventEmitter {
    * they were absent.
    */
   private spicetify: SpicetifySource;
+  /**
+   * Spotify through the Web API, with the user's own Client ID — for people
+   * who will not install Spicetify. Polled rather than pushed, and standing by
+   * whenever Spicetify reports; see spotify-web-source.ts.
+   */
+  private spotifyAuth: SpotifyAuth;
+  private spotifyWeb: SpotifyWebSource;
+  /** Windows' Spotify session as of the last poll, so a change can nudge the Web API. */
+  private lastSpotifySession = '';
   private youtubeSource: YouTubeSource;
   private soundcloudSource: SoundCloudSource;
   private bandcampSource: BandcampSource;
@@ -449,6 +460,15 @@ export class VybecordBackend extends EventEmitter {
       this.slots.push(slot);
     }
     this.spicetify = new SpicetifySource();
+    this.spotifyAuth = new SpotifyAuth(configDir, () => {
+      // Signed in or out: start or stop asking, and let the window repaint.
+      this.spotifyWeb.sync();
+      this.emitStatus();
+    });
+    this.spotifyWeb = new SpotifyWebSource(this.spotifyAuth, {
+      standby: () => this.spotifyWebStandsBy(),
+      onChange: () => this.reconcile(false),
+    });
     this.youtubeSource = new YouTubeSource();
     this.soundcloudSource = new SoundCloudSource();
     this.bandcampSource = new BandcampSource();
@@ -542,6 +562,8 @@ export class VybecordBackend extends EventEmitter {
     }
 
     this.applyLastFmConfig();
+
+    this.applySpotifyWebConfig();
 
     this.applyArtUploadConfig();
 
@@ -957,6 +979,15 @@ export class VybecordBackend extends EventEmitter {
         web: false,   // Spicetify runs inside the Spotify client, not a browser tab
         detail: t => `${t.is_local ? ' [local]' : ''}${t.context_name ? ` [${t.context_name}]` : ''}`,
       },
+      // Inactive whenever Spicetify reports, so the two never both put up the
+      // same song. Not `web` either: the account may be playing on the desktop
+      // client, a phone or a speaker, and nothing here says it is a tab.
+      {
+        source: this.spotifyWeb, configKey: 'detect_spotify', label: 'spotify-web-api',
+        web: false,
+        detail: t => `${t.is_local ? ' [local]' : ''}${t.context_name ? ` [${t.context_name}]` : ''}`
+          + `${this.spotifyWeb.deviceLabel ? ` [on ${this.spotifyWeb.deviceLabel}]` : ''}`,
+      },
       { source: this.youtubeSource,    configKey: 'detect_youtube',    label: 'youtube-userscript',    web: true },
       { source: this.soundcloudSource, configKey: 'detect_soundcloud', label: 'soundcloud-userscript', web: true },
       // Bandcamp has no switch of its own; it rides the "other apps" one.
@@ -996,7 +1027,8 @@ export class VybecordBackend extends EventEmitter {
     const anyPin = this.media?.anyPinned ?? false;
     const defer = (reporting: boolean, paused: boolean) => reporting && !(paused && anyPin);
     if (src === 'spotify') {
-      return defer(this.spicetify.isActive && !this.spicetify.isPaused, this.spicetify.isPaused);
+      const spotify = this.spotifyPush();
+      return defer(spotify.isActive && !spotify.isPaused, spotify.isPaused);
     }
     const unnamedTab = src.startsWith('browser_') || src === 'unknown';
     if (src === 'youtube' || src === 'youtube_music' || unnamedTab) {
@@ -1496,6 +1528,7 @@ export class VybecordBackend extends EventEmitter {
           log.info(ad ? '[AD] Spotify advertisement — presence hidden' : '[AD] Advertisement over');
           this.emitStatus();
         }
+        this.nudgeSpotifyWeb();
       }
       this.reconcile(true);
     } catch (e) {
@@ -1725,7 +1758,7 @@ export class VybecordBackend extends EventEmitter {
 
   /** The push source reporting `src`, for the services that can pause. */
   private pushSourceFor(src: string): { readonly isActive: boolean; readonly isPaused: boolean } | null {
-    if (src === 'spotify') return this.spicetify;
+    if (src === 'spotify') return this.spotifyPush();
     if (src === 'youtube' || src === 'youtube_music') return this.youtubeSource;
     if (src === 'soundcloud') return this.soundcloudSource;
     if (src === 'bandcamp') return this.bandcampSource;
@@ -2614,6 +2647,8 @@ export class VybecordBackend extends EventEmitter {
     if ('lastfm_api_key' in accepted || 'lastfm_api_secret' in accepted) {
       this.applyLastFmConfig();
     }
+    // Likewise: pasting the Client ID in makes the sign-in button work at once.
+    if ('spotify_client_id' in accepted) this.applySpotifyWebConfig();
     // Same reasoning: a cookies file pasted in should work on the next track,
     // not after a restart.
     if ('cc_cookies_file' in accepted) {
@@ -2669,6 +2704,77 @@ export class VybecordBackend extends EventEmitter {
       this.configDir,
     );
   }
+
+  /** Hand the Spotify sign-in the configured Client ID; a different one ends the old session. */
+  private applySpotifyWebConfig(): void {
+    this.spotifyAuth.configure(String(this.config.get('spotify_client_id') || ''));
+    this.spotifyWeb.sync();
+  }
+
+  // ── Spotify Web API (the settings card's calls) ──
+
+  /**
+   * Spotify's reporter of the moment: Spicetify while it reports, the Web API
+   * otherwise. The two are never active together — the Web API stands by
+   * while Spicetify reports — so this only says which one to ask.
+   */
+  private spotifyPush(): SpicetifySource | SpotifyWebSource {
+    return this.spotifyWeb.isActive ? this.spotifyWeb : this.spicetify;
+  }
+
+  /**
+   * Whether the Web API has nothing to add right now: Spicetify is reporting
+   * the same playback, sooner and with Spotify's lyrics, or Spotify is not to
+   * be announced at all — the detection switch off, with no pin overriding it.
+   */
+  private spotifyWebStandsBy(): boolean {
+    if (this.spicetify.isActive) return true;
+    return this.config.get('detect_spotify') === false && !this.isPinnedSource('spotify');
+  }
+
+  /**
+   * Ask the Web API at once when Windows sees Spotify change track or pause.
+   *
+   * Most PCs have a Spotify media session, and it hears a change the moment it
+   * happens, where the Web API only hears it at its next poll. The session
+   * cannot supply the details, but it can say when to ask for them.
+   */
+  private nudgeSpotifyWeb(): void {
+    if (!this.media || !this.spotifyWeb.isRunning) return;
+    const p = this.media.listPlayers().find(pl => sourceFromAppId(pl.appId) === 'spotify');
+    const seen = p ? `${p.title}\0${p.playing}` : '';
+    if (seen === this.lastSpotifySession) return;
+    this.lastSpotifySession = seen;
+    if (seen) this.spotifyWeb.pollSoon();
+  }
+
+  spotifyWebStatus(): SpotifyAuthStatus & {
+    playback: SpotifyWebStatus;
+    /** Why the Web API stands by, when it does. */
+    standbyReason: '' | 'spicetify' | 'detection_off';
+  } {
+    const playback = this.spotifyWeb.status();
+    return {
+      ...this.spotifyAuth.status(),
+      playback,
+      standbyReason: playback.state !== 'standby' ? ''
+        : this.spicetify.isActive ? 'spicetify' : 'detection_off',
+    };
+  }
+
+  /** Open the sign-in: the URL for the browser, and a promise of Spotify's answer. */
+  spotifyWebBeginSignIn(): Promise<{ url: string; done: Promise<void> }> {
+    return this.spotifyAuth.beginSignIn();
+  }
+
+  spotifyWebCancelSignIn(): void {
+    this.spotifyAuth.cancelSignIn();
+  }
+
+  spotifyWebSignOut(): void {
+    this.spotifyAuth.signOut();
+  }
+
   getCurrentTrack(slotIndex = 0) { return this.slotAt(slotIndex).track; }
   getCurrentLyricsState(slotIndex = 0) { return this.slotAt(slotIndex).lastLyricsState; }
 
@@ -3353,6 +3459,8 @@ export class VybecordBackend extends EventEmitter {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
     }
+    this.spotifyWeb.stop();
+    this.spotifyAuth.cancelSignIn();
 
     // 3. Stop lyrics engines
     for (const slot of this.slots) slot.engine.stop();

@@ -52,6 +52,7 @@ Vybecord is a Windows desktop app (Electron + TypeScript). It reads the Windows 
 - **Player picker.** When several things are playing, a ranking decides which one wins. You can also pin a specific player, and each platform has its own on/off switch.
 - **Spotify ad filter.** Your status clears during ad breaks so the advertiser isn't shown on your profile.
 - **Optional Spicetify extension.** Track changes arrive the moment they happen, with exact progress, every artist, playlist context, CDN artwork, and Spotify's own timed lyrics. The app installs it for you from Settings.
+- **Or Spotify's API, without Spicetify.** With Spotify Premium, sign in with a Spotify app of your own and get the same details (every artist, playlist, real cover, shuffle and repeat, exact position) on any device you play on. Only Spotify's own lyrics stay Spicetify-only.
 - **Optional browser extension** for Chrome, Edge, Brave, Opera, Vivaldi and Firefox. It identifies the site (Spotify Web, YouTube, YouTube Music, SoundCloud, Bandcamp, Twitch, Kick) and adds the canonical link, the exact position and live-stream uptime.
 
 **Discord presence**
@@ -84,6 +85,7 @@ Vybecord is a Windows desktop app (Electron + TypeScript). It reads the Windows 
 Windows media session (WinRT) ──► media worker thread ──► NativeMediaSource ──┐
 Spicetify extension (inside Spotify) ──┐                                       │
 Browser extension (content scripts) ───┴──► 127.0.0.1:8888 push server ───────┤
+Spotify Web API (your own app, optional) ──► polled with your sign-in ────────┤
                                                                                ▼
                                                                     VybecordBackend
                                                      ranks every source, assigns up to five
@@ -101,6 +103,7 @@ Browser extension (content scripts) ───┴──► 127.0.0.1:8888 push se
 - The WinRT addon runs on a **worker thread**. Electron's main thread is a single-threaded COM apartment, and in that apartment the media-session calls never return.
 - **Position is extrapolated, not polled.** Players publish their position only every few seconds (Spotify about every 4.5 s). Each update becomes an *anchor* (a position plus a monotonic timestamp). The position is projected forward from the anchor and resynchronised every 3 s. The anchor only moves when the player reports a value it hasn't reported before.
 - **The extensions talk to the app over loopback** (`127.0.0.1:8888`), and only extension origins are accepted. See [Extension push endpoint](#extension-push-endpoint).
+- **Spotify's API is read into the same shape as the Spicetify extension's push**, through the same code, so a song keeps its identity when one hands over to the other. It stands by while Spicetify reports.
 - **Lyrics are scheduled, not polled.** The engine sets a timer for the exact moment the next line starts, compensates for measured Discord IPC latency, and recalibrates when the player reports a seek.
 
 ## Requirements
@@ -156,7 +159,22 @@ spicetify apply
 
 The extension also adds a Vybecord entry to the Spicetify Marketplace's *Installed* tab.
 
-### 3. Optional: browser extension
+### 3. Optional: Spotify through Spotify's API (no Spicetify)
+
+If you would rather not patch Spotify with Spicetify, Vybecord can read Spotify through the [Spotify Web API](https://developer.spotify.com/documentation/web-api) instead, signed in with a Spotify app of your own. You get the same details as with Spicetify: every artist, the playlist you are in, the real cover, shuffle and repeat, and the exact position, on whatever device the account is playing (the desktop app, the web player, a phone or a speaker). What you don't get is Spotify's own lyrics: the Web API has none, so lyrics come from the other sources, and a track change is noticed within a few seconds rather than instantly.
+
+**You need Spotify Premium.** Since March 2026, Spotify only runs an app in development mode while its owner has Premium, and for up to five accounts. You are the owner and the only account it needs.
+
+1. On the [Spotify developer dashboard](https://developer.spotify.com/dashboard), create an app. Any name and description will do. Where it asks which APIs you plan to use, tick **Web API**.
+2. In the app's settings, add this **Redirect URI**, exactly: `http://127.0.0.1:8889/callback` (Spotify refuses `localhost`, and port 8888 is the extensions' endpoint).
+3. Copy the app's **Client ID** (there is no secret to copy: the sign-in uses PKCE) and paste it in **Settings → Integrations → Spotify → Spotify without Spicetify**.
+4. Click **Sign in with Spotify** and approve the page that opens in your browser. It only asks to see what you are playing.
+
+The card then shows the account and the device it is playing on. While the Spicetify extension is reporting, the API stands by: Spicetify says the same things sooner, along with Spotify's lyrics. Spotify ends the sign-in six months after you signed in (refreshing does not extend it), so the card warns you two weeks before; sign in again then. **Sign out** forgets the sign-in on this PC. To revoke the app's access on Spotify's side too, use **Manage access on Spotify** ([spotify.com/account/apps](https://www.spotify.com/account/apps/)).
+
+The sign-in listens on `127.0.0.1:8889` only while it waits for Spotify's answer, five minutes at most. The playback is read every 3 seconds while a song plays (and right at its expected end), every 5 seconds while paused and every 10 seconds when nothing is playing. When Windows has a Spotify media session, a change there triggers an immediate read.
+
+### 4. Optional: browser extension
 
 Windows reports *what* is playing in a browser, but not *which site* it's on: a SoundCloud tab and a YouTube tab both show up as just "the browser". The extension in [`extension/`](extension/) reads the page instead. It supports Spotify Web, YouTube and YouTube Music, SoundCloud, Bandcamp, Twitch and Kick, and adds the site, the canonical link, the exact position (read from the page's own media element), the live-stream start time and, on Kick, the player's captions. The extension isn't published on any browser store, so you load it manually.
 
@@ -179,7 +197,7 @@ Firefox removes temporary add-ons when it closes. Use the `-firefox.zip` package
 
 The extension's toolbar icon opens its options, where each site has its own switch (all are on by default). The app listens for the extension only while **Settings → Integrations → Browser extension → Accept data from the extension** is on (the default).
 
-### 4. Optional: offline LRCLIB lyrics dump
+### 5. Optional: offline LRCLIB lyrics dump
 
 [LRCLIB](https://lrclib.net) publishes its full database. With a local copy, lyrics lookups take about a millisecond and work offline, and the database can be searched under **Lyrics → LRCLIB dump**.
 
@@ -224,7 +242,7 @@ Closing the window hides it to the notification area, and the presence keeps run
 | `1` | **Now playing** | A mirror: **On your screen** on the left, **On Discord** on the right, and between them the switches that decide what crosses over. **On your screen** is the track: its cover, title, artist and album, the player it comes from, whether it is paused (a paused song stays on the card, its bar stopped where it paused, for as long as its player holds it paused and that presence would show it again on Play: closing the player takes it off, and so does switching its platform's detection off or pinning the presence to another player, until that is undone) or live, chips for shuffle, repeat, a local file or being away, and the progress bar. Under it, the scrolling lyrics, or, for lyrics found without timings, the words as plain text to scroll, marked **Words only** (the timing row and **Copy .lrc** step aside for them). Above the lyrics, **Big lyrics** fills the window with them, Spotify style (large lines on the cover's colour, following the song; **Esc** closes it), **Full lyrics** lists every line with its timestamp, and **Copy .lrc** copies them. Under them you can adjust the timing offset and report wrong lyrics. In the middle, each switch has an arrow toward the side it changes: **Visible** (`rpc_enabled`), **Lyrics** (the shown card's `show_lyrics` key, both sides), **Romanise** (Discord only), **Translate** toward the window and **Translate** toward Discord, with the language, then **Hide on Discord when** **Paused**, **Away** or a **Spotify ad** plays. **On Discord** draws every card in play as Discord does: the shown one whole, the others small (click one to show it on the left), **+ Add a card**, and × on the last one to use one fewer. The shown card carries the **Source** menu, which lists every media session Windows reports and pins the card to one, or puts it back on **Automatic**. Click any part of that card, or **Customize**, and a bubble beside it holds the settings behind that part: the activity type and the status line, lyrics or the title on the two lines, romanisation and translation on Discord, naming the playlist, the small icon, publishing the cover, and your button. **Why?** lists what stands between the song and the card (Discord closed, the presence off, an ad, a pause, a pin, being away, lyrics switched off or not found), each with a button that fixes it. |
 | `2` | **Lyrics** | Your lyrics library, with three tabs: **My lyrics**, **Blocked** (lyrics you marked as wrong) and **LRCLIB dump**. **Add lyrics** opens the import form. |
 | `3` | **Activity** | Your listening over **7 days**, **30 days**, **12 months** or **All time**: time listened, tracks played, different artists, a chart of listening time, top artists, top tracks and recently played. **See all** opens the full log, with the time actually listened for each play. The page refreshes itself when a track changes. Dates are in English, on the 12- or 24-hour clock of the system's language. |
-| `4` | **Settings** | Six categories: **Discord presence**, **Lyrics & translation**, **Detection**, **Integrations** (browser extension, Spotify through Spicetify, Last.fm, cover images), **App & window**, and **About**. A search box filters every setting. Changes apply immediately. |
+| `4` | **Settings** | Six categories: **Discord presence**, **Lyrics & translation**, **Detection**, **Integrations** (browser extension, Spotify through Spicetify or through your own Spotify app, Last.fm, cover images), **App & window**, and **About**. A search box filters every setting. Changes apply immediately. |
 | | **Help & setup** | The setup checklist, at the bottom of the sidebar. |
 
 The number keys don't change pages while a text field has focus. **Report a problem** and **Quit** are under **Settings → About**.
@@ -235,7 +253,7 @@ When several players are active, the highest-ranked one wins:
 
 | Rank | Source |
 | --- | --- |
-| Highest | Anything reported by the Spicetify or browser extension, in this order: Spotify, YouTube / YouTube Music, SoundCloud, Bandcamp, Kick, Twitch |
+| Highest | Anything reported by the Spicetify or browser extension (or by Spotify's API, when you signed in with your own app), in this order: Spotify, YouTube / YouTube Music, SoundCloud, Bandcamp, Kick, Twitch |
 | 10 | Spotify |
 | 9 | Apple Music, Deezer, Tidal |
 | 8 | Amazon Music |
@@ -353,6 +371,7 @@ Everything has a control in **Settings**, except the few keys marked *config onl
 | `lyrics-cache.json` | Lyrics already found, up to 500 tracks for 30 days, so a song heard again shows its lyrics at once. The **Clear lyrics cache** button in **Settings** empties it. |
 | `translate-cache.json` | Translation cache, up to 5,000 lines. |
 | `lastfm-session.txt`, `lastfm-queue.json` | Last.fm session and scrobbles waiting to be sent. |
+| `spotify-session.json` | The Spotify sign-in (a refresh token, the account name and when you signed in), when you use Spotify without Spicetify. |
 | `window-state.json` | Last window position and size. Delete it to reset. |
 | `logs\vybecord.log` | Log file. It is renamed to `vybecord.old.log` when it reaches 5 MB. |
 | `bin\` | Put your own `yt-dlp.exe` here to override the bundled one. |
@@ -416,6 +435,7 @@ The second presence button is fixed. It links to what is playing and is labelled
 | --- | --- | --- | --- |
 | `extension_enabled` | `true` | boolean | Browser extension → Accept data from the extension (opens `127.0.0.1:8888`) |
 | `lastfm_api_key`, `lastfm_api_secret` | not set | strings | Last.fm. The secret is never sent back to the window in clear text. |
+| `spotify_client_id` | `""` | up to 64 characters (a Client ID is 32 hex digits) | Spotify → Spotify without Spicetify: your own Spotify app's Client ID. The sign-in itself is kept in `spotify-session.json`. |
 | `art_upload_enabled` | `true` | boolean | Cover images → Publish the player's cover |
 | `art_upload_url` | `"https://vybecord-art.vybecord.workers.dev"` | up to 256 characters | *config only*: the cover store to publish to (see [`worker/`](worker/)) |
 
@@ -580,7 +600,8 @@ electron/                    Electron main process
 src/
   backend.ts                 orchestrator: sources → ranking → presence slots → lyrics → Discord
   core/                      media source, push sources (Spicetify, YouTube, SoundCloud, Bandcamp,
-                             Twitch, Kick), Discord IPC and socket pool, lyrics providers, local
+                             Twitch, Kick), the Spotify Web API sign-in and poll, Discord IPC and
+                             socket pool, lyrics providers, local
                              DBs, cover art, art upload, Last.fm, history, translation,
                              romanisation, captions, config, logger
   sync/lyrics-engine.ts      timed line scheduling and Discord activity building
@@ -711,6 +732,12 @@ Releases are made by hand from `desktop-app`. There is no release CI.
 **The browser extension shows "Not detected".** Check that **Accept data from the extension** is on and that something is playing in a supported site. If it shows **Port 8888 unavailable**, another program (usually a second copy of Vybecord) holds the port. Close it and reopen Vybecord.
 
 **The Spicetify card shows "Update needed".** The app was updated but Spotify still runs the old extension. Run the setup again.
+
+**Spotify's page says "INVALID_CLIENT: Invalid redirect URI".** The Redirect URI in your Spotify app's settings isn't exactly `http://127.0.0.1:8889/callback`. Fix it there, save, and sign in again.
+
+**The Spotify card says Spotify refused (403).** Spotify only runs an app in development mode while its owner has Premium. If the owner does, add your Spotify e-mail under **User Management** in the app's settings on the developer dashboard.
+
+**The Spotify card asks to sign in again.** Spotify ends the sign-in six months after you signed in, or when the app's access is removed on spotify.com. Click **Sign in with Spotify**.
 
 **The cover shows on the window but not on Discord.** Cover publishing is off and the album isn't in the Deezer or iTunes catalogues, or the track is a live stream (streams are never looked up).
 

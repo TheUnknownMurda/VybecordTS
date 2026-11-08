@@ -17,6 +17,9 @@ window-state.json
 lyrics-offsets.json
 lastfm-session.txt
 lastfm-queue.json
+# The Spotify Web API sign-in: a refresh token (see src/core/spotify-auth.ts).
+spotify-session.json
+spotify-session.json.tmp
 # The user's own yt-dlp override (Settings → Lyrics → YouTube captions).
 /bin/
 

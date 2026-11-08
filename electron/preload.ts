@@ -15,6 +15,14 @@ const EVENTS = [
 ] as const;
 type BackendEvent = typeof EVENTS[number];
 
+/** What the Spotify Web API card paints from — see VybecordBackend.spotifyWebStatus(). */
+interface SpotifyWebInfo {
+  clientId: string; configured: boolean; signedIn: boolean; signingIn: boolean;
+  user: string; authorizedAt: number; endsAt: number; error: string; redirectUri: string;
+  playback: { state: 'off' | 'standby' | 'playing' | 'paused' | 'idle' | 'error'; device: string; error: string };
+  standbyReason: '' | 'spicetify' | 'detection_off';
+}
+
 const invoke = <T = unknown>(channel: string, ...args: unknown[]): Promise<T> =>
   ipcRenderer.invoke(channel, ...args) as Promise<T>;
 
@@ -117,6 +125,13 @@ const api = {
   lastfmBeginAuth: () => invoke<{ token: string }>('lastfm:beginAuth'),
   lastfmComplete: (token: string) => invoke('lastfm:complete', token),
   lastfmDisconnect: () => invoke('lastfm:disconnect'),
+
+  // ── Spotify Web API ──
+  spotifyWebStatus: () => invoke<SpotifyWebInfo>('spotifyWeb:status'),
+  /** Opens Spotify's page in the browser; resolves once the user has answered there (or cancelled). */
+  spotifyWebSignIn: () => invoke<SpotifyWebInfo & { ok: boolean; cancelled: boolean }>('spotifyWeb:signIn'),
+  spotifyWebCancel: () => invoke('spotifyWeb:cancel'),
+  spotifyWebSignOut: () => invoke<SpotifyWebInfo & { ok: boolean }>('spotifyWeb:signOut'),
 
   // ── Bug report ──
   bugReportAvailable: () => invoke<boolean>('bugreport:available'),

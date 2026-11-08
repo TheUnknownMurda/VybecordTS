@@ -46,7 +46,7 @@ Les mises à jour se téléchargent toutes seules et s'installent quand tu quitt
 | **Now playing** | Deux côtés, comme un miroir. **On your screen**, à gauche : le morceau en cours (pochette, titre, artiste, album, lecteur et progression ; en pause, il reste affiché avec sa barre arrêtée, jusqu'à ce que tu fermes le lecteur ou que tu coupes sa détection) et les paroles qui défilent (clique dessus pour voir tout le morceau, ou sur **Big lyrics** pour les afficher en grand dans toute la fenêtre, comme Spotify ; **Échap** ferme). Des paroles trouvées sans minutage s'affichent en texte simple à faire défiler, marquées **Words only**. **On Discord**, à droite : ta carte telle que tes amis la voient, avec son menu **Source**, qui choisit le lecteur suivi. **Clique sur n'importe quelle partie de la carte** (ou sur **Customize**) pour la modifier : ce qu'affichent les lignes, le verbe, l'icône sur la pochette, ton bouton… Au milieu, des interrupteurs avec une flèche vers le côté qu'ils changent : **Visible** retire ton statut de Discord ou le remet, **Lyrics** active ou coupe les paroles des deux côtés, **Romanise** et l'un des deux **Translate** agissent sur Discord, l'autre **Translate** sur la fenêtre, et **Hide on Discord when** gère les pauses, l'absence et les pubs Spotify. **Why?** dit ce qui empêche ta carte d'apparaître sur Discord, avec un bouton pour corriger. |
 | **Lyrics** | Ta bibliothèque de paroles perso : **My lyrics**, **Blocked** (les paroles signalées comme fausses) et le dump **LRCLIB** hors ligne. **Add lyrics** sert à importer ou écrire de nouvelles paroles. |
 | **Activity** | Ce que tu as écouté sur 7 jours, 30 jours, 12 mois ou depuis toujours : temps d'écoute, graphique, top artistes et titres, et tes dernières écoutes (**See all** ouvre tout l'historique). La page se met à jour toute seule à la fin de chaque morceau. |
-| **Settings** | Discord presence, Lyrics & translation, Detection, Integrations (extension navigateur, Spotify, Last.fm), App & window et About. La barre de recherche trouve n'importe quel réglage. |
+| **Settings** | Discord presence, Lyrics & translation, Detection, Integrations (extension navigateur, Spotify par Spicetify ou ta propre app Spotify, Last.fm), App & window et About. La barre de recherche trouve n'importe quel réglage. |
 | **Help & setup** | La liste de configuration, en bas de la barre latérale. |
 
 Le bas de la barre latérale indique aussi si Discord est connecté et ce qui est détecté.
@@ -137,6 +137,19 @@ Son icône ouvre une page de réglages avec un interrupteur par site — Spotify
 
 Avec elle, chaque site est correctement identifié, la présence pointe directement vers le morceau, et la barre de progression lit l'élément audio de la page au lieu de la position système, plus grossière. Sans elle, tout ce qui suit reste valable.
 
+### Les détails de Spotify sans Spicetify
+
+Spicetify est la façon la plus complète de lire Spotify, mais il modifie l'appli Spotify. Si tu as **Spotify Premium** et que tu préfères t'en passer, Vybecord peut interroger l'API de Spotify à la place, avec une app Spotify à toi. **Settings → Integrations → Spotify → Spotify without Spicetify** te guide :
+
+1. Sur le [tableau de bord développeur de Spotify](https://developer.spotify.com/dashboard), crée une app (n'importe quel nom et description). À la question sur les API que tu comptes utiliser, coche **Web API**.
+2. Dans les réglages de l'app, ajoute ce Redirect URI, exactement : `http://127.0.0.1:8889/callback`. Le panneau a un bouton **Copy** pour ça.
+3. Colle le **Client ID** de l'app dans le panneau et clique sur **Save**. Il n'y a pas de secret à copier.
+4. Clique sur **Sign in with Spotify** et approuve la page qui s'ouvre dans ton navigateur. Elle permet seulement à l'app de voir ce que tu écoutes.
+
+Tu as alors la vraie pochette, tous les artistes, la playlist, l'aléatoire et la répétition et la position exacte, sur n'importe quel appareil où tu joues (le PC, le lecteur web, ton téléphone). Les paroles officielles de Spotify sont la seule chose qu'elle ne peut pas donner : les paroles viennent des sources habituelles. Un changement de morceau apparaît en quelques secondes plutôt qu'instantanément. Pendant que Spicetify rapporte, ce mode se met en veille.
+
+Spotify ne fait tourner une telle app que si son propriétaire (toi) a Premium. Si le panneau dit que Spotify a refusé, ajoute ton courriel Spotify dans **User Management** dans les réglages de l'app. Spotify met fin à la connexion six mois après que tu t'es connecté, donc le panneau te prévient deux semaines avant ; reconnecte-toi à ce moment-là. Si la page de Spotify affiche **INVALID_CLIENT: Invalid redirect URI**, le Redirect URI de ton app n'est pas exactement celui ci-dessus.
+
 ### SoundCloud apparaît comme un navigateur, pas comme SoundCloud
 
 Sans l'extension navigateur, Windows indique à Vybecord ce qui joue, mais pas sur quel site : un onglet SoundCloud et un onglet YouTube sont identiques. Installe l'extension (voir plus haut) et SoundCloud est annoncé comme SoundCloud, avec un lien vers le morceau.
@@ -174,16 +187,16 @@ Chaque carte est une application Discord à part. Spotify, SoundCloud et Apple M
 ## Questions fréquentes
 
 **Est-ce que ça marche sans Spotify Premium ?**
-Oui. Vybecord ne parle jamais à l'API de Spotify — il lit ce que Windows sait déjà.
+Oui. Vybecord lit ce que Windows sait déjà, et Spicetify marche aussi avec un compte gratuit. Premium ne compte que si tu choisis de lire Spotify par son API plutôt que par Spicetify (voir *Les détails de Spotify sans Spicetify*).
 
 **Faut-il installer Spicetify ou une extension de navigateur ?**
-Non. Les anciennes versions le demandaient, plus celle-ci. Ce sont deux bonus optionnels : Spicetify apporte les changements de morceau instantanés, les paroles officielles de Spotify et le DJ (la carte l'indique, et la voix du DJ entre les chansons n'a ni paroles ni historique) (à configurer dans **Settings → Integrations → Spotify**), et l'extension navigateur indique à Vybecord sur quel site joue un onglet.
+Non. Les anciennes versions le demandaient, plus celle-ci. Ce sont deux bonus optionnels : Spicetify apporte les changements de morceau instantanés, les paroles officielles de Spotify et le DJ (la carte l'indique, et la voix du DJ entre les chansons n'a ni paroles ni historique) (à configurer dans **Settings → Integrations → Spotify**), et l'extension navigateur indique à Vybecord sur quel site joue un onglet. Avec Premium, ta propre app Spotify donne presque tout ce que donne Spicetify, sans toucher à Spotify.
 
 **Ça marche avec quoi ?**
 Tout ce qui apparaît dans l'encart média de Windows : Spotify, les onglets de navigateur (YouTube, SoundCloud, Deezer…), VLC, foobar2000, MusicBee, AIMP, Apple Music, Tidal, Amazon Music.
 
 **Est-ce que mes données sortent de mon PC ?**
-Les titres et artistes sont envoyés aux services de paroles (LRCLib, Netease, Musixmatch, Genius) pour chercher les paroles, à Deezer et iTunes d'Apple pour trouver la pochette, et à Discord pour le statut. La pochette que montre ton lecteur (celle de Spotify, d'Apple Music, d'un fichier local) est publiée sur le stockage de pochettes de Vybecord, sans ses métadonnées, et un catalogue n'est consulté que s'il n'y en a pas — désactivable dans **Settings → Integrations → Cover images**. Pour une chaîne Twitch, le nom de la chaîne part chez Twitch pour obtenir son titre, son image et l'heure de début du stream. Si tu actives la traduction, les lignes de paroles partent au service de traduction ; si tu actives Last.fm, tes écoutes y vont aussi. L'historique, les réglages et les paroles importées restent en local. La liste complète est dans la [politique de confidentialité](https://theunknownmurda.github.io/VybecordTS/privacy/).
+Les titres et artistes sont envoyés aux services de paroles (LRCLib, Netease, Musixmatch, Genius) pour chercher les paroles, à Deezer et iTunes d'Apple pour trouver la pochette, et à Discord pour le statut. La pochette que montre ton lecteur (celle de Spotify, d'Apple Music, d'un fichier local) est publiée sur le stockage de pochettes de Vybecord, sans ses métadonnées, et un catalogue n'est consulté que s'il n'y en a pas — désactivable dans **Settings → Integrations → Cover images**. Pour une chaîne Twitch, le nom de la chaîne part chez Twitch pour obtenir son titre, son image et l'heure de début du stream. Si tu actives la traduction, les lignes de paroles partent au service de traduction ; si tu actives Last.fm, tes écoutes y vont aussi ; si tu te connectes avec ta propre app Spotify, Vybecord demande à Spotify ce que tu écoutes. L'historique, les réglages et les paroles importées restent en local. La liste complète est dans la [politique de confidentialité](https://theunknownmurda.github.io/VybecordTS/privacy/).
 
 **Où sont mes fichiers ?**
 Dans `%APPDATA%\Vybecord` — colle ce chemin dans l'explorateur.
