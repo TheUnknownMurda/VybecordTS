@@ -219,7 +219,7 @@ function credits(value: string): string[] {
   return (value ?? '').split(RE_CREDIT_SPLIT).map(normalise).filter(Boolean);
 }
 
-function normalise(value: string): string {
+export function normalise(value: string): string {
   return (value ?? '')
     // Separate accented letters from their marks, then drop the marks, so
     // "Beyoncé" and "Beyonce" are one name. Names now have to match exactly
