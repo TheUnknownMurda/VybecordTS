@@ -14,12 +14,11 @@ import { goto } from '../router.js';
 const api = window.vybecord;
 
 const TICK = '<svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg>';
-const MARK = '<svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
 const ARROW = '<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
 
 export function render(root) {
-  const mark = el('span', { class: 'wel-mark', 'aria-hidden': 'true' });
-  mark.innerHTML = MARK;
+  // The logo, copied next to index.html at build time (scripts/build-electron.mjs).
+  const mark = el('img', { class: 'wel-mark', src: 'logo.svg', alt: '', width: 52, height: 52, draggable: 'false' });
 
   const discordStep = el('li', { class: 'wel-step' });
   const mediaStep = el('li', { class: 'wel-step' });

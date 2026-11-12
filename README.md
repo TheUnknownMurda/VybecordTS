@@ -616,8 +616,8 @@ spicetify-extension/         vybecord.js, the Spicetify extension
 extension/                   browser extension (Manifest V3), see extension/README.md
 worker/                      Cloudflare Worker + R2 cover store, see worker/README.md
 website/                     static website (GitHub Pages)
-scripts/                     build, native fetch, yt-dlp fetch, extension packaging, latest.yml
-assets/                      app icon, Spicetify Marketplace preview
+scripts/                     build, native fetch, yt-dlp fetch, icons, extension packaging, latest.yml
+assets/                      logo (SVG), app icon, Spicetify Marketplace preview
 manifest.json                Spicetify Marketplace manifest for the extension
 ```
 
@@ -653,7 +653,17 @@ node scripts/make-latest-yml.mjs
 node scripts/pack-extension.mjs
 ```
 
-This writes `release/vybecord-extension-<version>.zip` (Chromium) and `release/vybecord-extension-<version>-firefox.zip`. The Firefox package is the same code with `background.scripts` instead of a service worker. The extension has its own version number in [`extension/manifest.json`](extension/manifest.json). The icons are generated from the website's logo by [`scripts/make-extension-icons.ps1`](scripts/make-extension-icons.ps1) (`pwsh scripts/make-extension-icons.ps1`).
+This writes `release/vybecord-extension-<version>.zip` (Chromium) and `release/vybecord-extension-<version>-firefox.zip`. The Firefox package is the same code with `background.scripts` instead of a service worker. The extension has its own version number in [`extension/manifest.json`](extension/manifest.json). Its icons come from the logo, see [Logo and icons](#logo-and-icons).
+
+### Logo and icons
+
+The logo has two cuts in [`assets/logo/`](assets/logo/): `vybecord.svg`, with its glow, for 72 px and up, and `vybecord-small.svg`, with heavier strokes, a bigger glyph and no glow, for 64 px and down, where the full cut blurs. Every raster copy is drawn from them:
+
+```powershell
+npx electron scripts/make-icons.mjs
+```
+
+This rewrites `assets/icon.ico` (window, taskbar, tray and installer: 16 frames from 16 to 256 px, so Windows has a frame at every size it asks for at the common display scales) and `extension/icons/icon{16,32,48,128}.png`. It uses Electron's own Chromium, so there is nothing to install. The title bar and the Welcome page show `vybecord-small.svg` itself, which the build copies next to `index.html` as `logo.svg`. After a change to the logo, bump the extension's version so the store packages carry the new icons.
 
 ### Website
 
