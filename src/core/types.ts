@@ -11,7 +11,11 @@ export interface TrackData {
   spotify_url: string;
   artist_url: string;
   media_source: string;
-  /** Direct link to the album page */
+  /**
+   * Direct link to the album page. On a Twitch or Kick card, the page of the
+   * category album_name names. Clicking the cover opens it (see largeImageUrl
+   * in lyrics-engine.ts).
+   */
   album_url?: string;
   /** Name of the current playback context (playlist, album, artist radio, etc.) */
   context_name?: string;

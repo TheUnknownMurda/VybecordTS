@@ -276,6 +276,7 @@
             display_name: '',
             followers: '',
             category: '',
+            category_slug: '',
             stream_title: '',
             profile_url: page.username ? `https://www.twitch.tv/${page.username}` : '',
             is_live: false,
@@ -331,7 +332,16 @@
                  */
                 const gameEl = scope && scope.querySelector('[data-a-target="stream-game-link"], a[href*="/directory/category/"]');
                 const game = gameEl ? gameEl.textContent.trim() : '';
-                if (game && game.length <= 64 && !game.includes('\n')) info.category = game;
+                if (game && game.length <= 64 && !game.includes('\n')) {
+                    info.category = game;
+                    // Its slug, from the same link's address: the app sends
+                    // clicks on the card's picture to the category's page.
+                    const link = gameEl.closest('a') || gameEl;
+                    const m = (link.getAttribute('href') || '').match(/\/directory\/category\/([^/?#]+)/);
+                    if (m) {
+                        try { info.category_slug = decodeURIComponent(m[1]); } catch { /* a malformed address names nothing */ }
+                    }
+                }
             }
         }
 

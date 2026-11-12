@@ -11,8 +11,9 @@
  * So each page a viewer can be on — a live channel, an offline channel, a past
  * broadcast, a clip — maps to the same layout here: the channel on the first
  * line, what it is showing on the second, and the category or the kind of
- * video in the cover's tooltip. Kept in one place so the two platforms cannot
- * drift apart again.
+ * video in the cover's tooltip. The cover is the channel's picture, and
+ * clicking it opens the category's page when there is one. Kept in one place
+ * so the two platforms cannot drift apart again.
  */
 
 import type { TrackData } from './types.js';
@@ -30,6 +31,11 @@ export interface BroadcastView {
   /** The stream's title, or the video's. */
   title: string;
   category: string;
+  /**
+   * The category's page on the platform, where clicking the cover goes; ''
+   * while it is not known. The picture stays the channel's.
+   */
+  categoryUrl?: string;
   /** Live only: the page's follower line, shown where a playlist would be. */
   followers?: string;
   /** Live only: when the stream started, epoch ms. */
@@ -76,6 +82,7 @@ export function broadcastTrack(v: BroadcastView, now: number): TrackData {
       track_id: `${v.platform}:${v.id}`,
       artist_name: v.title || v.category || 'Just Chatting',
       album_name: v.category ? `🎮 ${v.category}` : '',
+      album_url: v.category ? v.categoryUrl || '' : '',
       duration_ms: 0, // Live streams have no duration
       progress_ms: 0,
       is_playing: true,
@@ -130,6 +137,7 @@ export function broadcastTrack(v: BroadcastView, now: number): TrackData {
     track_id: `${v.platform}:${v.kind === 'clip' ? 'c' : 'v'}:${v.id}`,
     artist_name: v.title || v.videoLabel || 'Video',
     album_name: tooltip,
+    album_url: v.category ? v.categoryUrl || '' : '',
     duration_ms: dur,
     progress_ms: dur > 0 ? Math.min(pos, dur) : pos,
     is_playing: true,

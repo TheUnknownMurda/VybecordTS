@@ -233,8 +233,16 @@
         return ms;
     }
 
-    function firstCategory(list) {
-        return Array.isArray(list) && list[0] && list[0].name ? String(list[0].name) : '';
+    /**
+     * A category as the app takes it: the name for the card, and the slug for
+     * the link on the card's picture, which opens kick.com/category/<slug>.
+     * The slug is Kick's own: it cannot be made from the name ("Grand Theft
+     * Auto V (GTA)" is grand-theft-auto-v).
+     */
+    function categoryOf(c) {
+        return c && c.name
+            ? { name: String(c.name), slug: c.slug ? String(c.slug) : '' }
+            : { name: '', slug: '' };
     }
 
     /** The page's video: position and length, for a past broadcast or a clip. */
@@ -256,6 +264,7 @@
             display_name: '',
             followers: '',
             category: '',
+            category_slug: '',
             stream_title: '',
             profile_url: `https://kick.com/${page.slug}`,
             is_live: false,
@@ -280,7 +289,9 @@
             info.is_live = !!(live && live.is_live !== false);
             if (info.is_live) {
                 info.stream_title = live.session_title || '';
-                info.category = firstCategory(live.categories);
+                const category = categoryOf(Array.isArray(live.categories) ? live.categories[0] : null);
+                info.category = category.name;
+                info.category_slug = category.slug;
                 info.stream_start_time_ms = kickTime(live.start_time) || kickTime(live.created_at);
             } else {
                 const last = Array.isArray(data.previous_livestreams) ? data.previous_livestreams[0] : null;
@@ -299,7 +310,9 @@
             info.display_name = ch.username || user.username || '';
             info.profile_picture_url = user.profile_pic || '';
             info.stream_title = video.title || '';
-            info.category = (video.category && video.category.name) || '';
+            const category = categoryOf(video.category);
+            info.category = category.name;
+            info.category_slug = category.slug;
             // In seconds here, where the old API gave milliseconds.
             if (!info.duration_ms && video.duration > 0) info.duration_ms = video.duration * 1000;
         } else {
@@ -309,7 +322,9 @@
             info.display_name = ch.username || '';
             info.profile_picture_url = ch.profile_picture || '';
             info.stream_title = clip.title || '';
-            info.category = (clip.category && clip.category.name) || '';
+            const category = categoryOf(clip.category);
+            info.category = category.name;
+            info.category_slug = category.slug;
             if (!info.duration_ms && clip.duration > 0) info.duration_ms = clip.duration * 1000;
         }
         info.profile_url = `https://kick.com/${info.username}`;
@@ -458,6 +473,7 @@
             display_name: '',
             followers: '',
             category: '',
+            category_slug: '',
             stream_title: '',
             profile_url: '',
             is_live: false,
@@ -515,6 +531,10 @@
                     !text.toLowerCase().includes('these cookies') &&
                     text.length < 50) { // Categories are usually short
                     category = text;
+                    // A link to the category's page names its slug.
+                    const link = el.closest('a[href*="/category/"]');
+                    const m = link && (link.getAttribute('href') || '').match(/\/category\/([A-Za-z0-9_-]+)/);
+                    if (m) info.category_slug = m[1];
                     break;
                 }
             }

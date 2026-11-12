@@ -490,7 +490,7 @@ Your history, imported lyrics, settings and Last.fm session stay on your machine
 | `api.deezer.com`, `itunes.apple.com` | Cover lookup | Track and artist. |
 | `vybecord-art.vybecord.workers.dev` | Cover publishing (`art_upload_enabled`) | The cover image only, with its metadata removed. |
 | YouTube (through yt-dlp) | YouTube captions | Video title and channel, or the video ID. |
-| `gql.twitch.tv` | Twitch tab through the extension | The channel name, or the past broadcast's id or the clip's slug, to get the channel's name, picture, live status and stream start time, or the video's title and length. |
+| `gql.twitch.tv` | Twitch tab through the extension | The channel name, or the past broadcast's id or the clip's slug, to get the channel's name, picture, live status and stream start time, or the video's title and length, and the page of its category. With an extension older than 2.2.3, which does not send the category's slug, the category's name, to find its page. |
 | Google Translate, Lingva mirrors, MyMemory | Translation turned on | The lyric lines. |
 | `ws.audioscrobbler.com` (Last.fm) | Scrobbling turned on | Plays. |
 | GitHub Releases | Update checks (installed builds) | Nothing beyond the request itself. |

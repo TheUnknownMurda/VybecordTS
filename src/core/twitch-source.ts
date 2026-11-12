@@ -57,6 +57,11 @@ export interface TwitchPayload {
   display_name: string;
   followers: string;
   category: string;
+  /**
+   * The category's slug, from the page's link to it (extension 2.2.3+). Older
+   * scripts send none, and the category is looked up by name instead.
+   */
+  category_slug: string;
   stream_title: string;
   profile_url: string;
   /** The page's reading: true only when it shows the live player. */
@@ -90,6 +95,27 @@ export interface TwitchPayload {
 const RE_VIDEO_ID = /^\d{1,20}$/;
 const RE_CLIP_SLUG = /^[A-Za-z0-9_-]{1,100}$/;
 
+/**
+ * A category's slug, as it goes in the category page's address, or ''.
+ *
+ * It cannot be made from the name: "Pokémon Legends: Z-A" is
+ * pokemon-legends-z. So it is always Twitch's own, from the page's link to
+ * the category or from Twitch's answer.
+ */
+const RE_CATEGORY_SLUG = /^[\p{L}\p{N}-]{1,100}$/u;
+
+function asCategorySlug(value: unknown): string {
+  // Read one past the limit, so a longer one fails the test instead of
+  // being cut into the slug of nothing.
+  const slug = asText(value, 101);
+  return RE_CATEGORY_SLUG.test(slug) ? slug : '';
+}
+
+/** The page clicking a Twitch card's cover opens. */
+function categoryPage(slug: string): string {
+  return `https://www.twitch.tv/directory/category/${encodeURIComponent(slug)}`;
+}
+
 /** Coerce a push into the shape above, whatever actually arrived. */
 export function normalizeTwitchPayload(raw: unknown): TwitchPayload {
   const d = asRecord(raw);
@@ -103,6 +129,7 @@ export function normalizeTwitchPayload(raw: unknown): TwitchPayload {
     display_name: asText(d.display_name, 64),
     followers: asText(d.followers, 32),
     category: asText(d.category, 64),
+    category_slug: asCategorySlug(d.category_slug),
     stream_title: asText(d.stream_title),
     profile_url: asUrl(d.profile_url),
     is_live: asBool(d.is_live),
@@ -183,6 +210,11 @@ interface GqlUser {
   profileImageURL?: string;
 }
 
+interface GqlGame {
+  displayName?: string;
+  slug?: string;
+}
+
 /**
  * What Twitch last said about a channel.
  *
@@ -205,6 +237,8 @@ interface ChannelInfo {
   avatarUrl: string;
   title: string;
   category: string;
+  /** The category's slug, for the link to its page: see categoryUrl(). */
+  categorySlug: string;
   /** The last stream's title, for an offline card. */
   lastTitle: string;
   /** `Date.now()` of the last completed attempt. */
@@ -220,6 +254,7 @@ interface VideoInfo {
   durationMs: number;
   label: string;
   category: string;
+  categorySlug: string;
   login: string;
   displayName: string;
   avatarUrl: string;
@@ -276,11 +311,11 @@ async function fetchChannel(login: string): Promise<ChannelLookup> {
   // query cannot be steered by whatever the push happened to claim.
   const data = await gql<{
     user?: GqlUser & {
-      stream?: { createdAt?: string; title?: string; game?: { displayName?: string } | null } | null;
+      stream?: { createdAt?: string; title?: string; game?: GqlGame | null } | null;
       lastBroadcast?: { title?: string | null } | null;
     } | null;
   }>(`query { user(login: ${JSON.stringify(login)}) { login displayName profileImageURL(width: 300) `
-    + 'stream { createdAt title game { displayName } } lastBroadcast { title } } }');
+    + 'stream { createdAt title game { displayName slug } } lastBroadcast { title } } }');
   if (!data) return null;
   const user = data.user;
   if (!user) return 'missing';
@@ -292,11 +327,17 @@ async function fetchChannel(login: string): Promise<ChannelLookup> {
     avatarUrl: asUrl(user.profileImageURL),
     title: asText(stream?.title),
     category: asText(stream?.game?.displayName, 64),
+    categorySlug: asCategorySlug(stream?.game?.slug),
     lastTitle: asText(user.lastBroadcast?.title),
   };
 }
 
 type VideoLookup = Omit<VideoInfo, 'checkedAt' | 'attempts'> | null;
+
+/** What Twitch says when there is no such video or clip. */
+const NO_VIDEO: Omit<VideoInfo, 'checkedAt' | 'attempts'> = {
+  found: false, title: '', durationMs: 0, label: '', category: '', categorySlug: '', login: '', displayName: '', avatarUrl: '',
+};
 
 /** Ask Twitch about a past broadcast (`v:<id>`) or a clip (`c:<slug>`). */
 async function fetchVideo(key: string): Promise<VideoLookup> {
@@ -305,17 +346,18 @@ async function fetchVideo(key: string): Promise<VideoLookup> {
   if (key.startsWith('v:')) {
     const data = await gql<{
       video?: { title?: string; lengthSeconds?: number; broadcastType?: string;
-        game?: { displayName?: string } | null; owner?: GqlUser | null } | null;
-    }>(`query { video(id: ${JSON.stringify(id)}) { title lengthSeconds broadcastType game { displayName } owner { ${owner} } } }`);
+        game?: GqlGame | null; owner?: GqlUser | null } | null;
+    }>(`query { video(id: ${JSON.stringify(id)}) { title lengthSeconds broadcastType game { displayName slug } owner { ${owner} } } }`);
     if (!data) return null;
     const v = data.video;
-    if (!v) return { found: false, title: '', durationMs: 0, label: '', category: '', login: '', displayName: '', avatarUrl: '' };
+    if (!v) return NO_VIDEO;
     return {
       found: true,
       title: asText(v.title),
       durationMs: asNonNegativeInt(v.lengthSeconds) * 1000,
       label: VIDEO_LABELS[v.broadcastType || ''] || 'Video',
       category: asText(v.game?.displayName, 64),
+      categorySlug: asCategorySlug(v.game?.slug),
       login: normaliseLogin(v.owner?.login),
       displayName: asText(v.owner?.displayName, 64),
       avatarUrl: asUrl(v.owner?.profileImageURL),
@@ -323,21 +365,29 @@ async function fetchVideo(key: string): Promise<VideoLookup> {
   }
   const data = await gql<{
     clip?: { title?: string; durationSeconds?: number;
-      game?: { displayName?: string } | null; broadcaster?: GqlUser | null } | null;
-  }>(`query { clip(slug: ${JSON.stringify(id)}) { title durationSeconds game { displayName } broadcaster { ${owner} } } }`);
+      game?: GqlGame | null; broadcaster?: GqlUser | null } | null;
+  }>(`query { clip(slug: ${JSON.stringify(id)}) { title durationSeconds game { displayName slug } broadcaster { ${owner} } } }`);
   if (!data) return null;
   const c = data.clip;
-  if (!c) return { found: false, title: '', durationMs: 0, label: '', category: '', login: '', displayName: '', avatarUrl: '' };
+  if (!c) return NO_VIDEO;
   return {
     found: true,
     title: asText(c.title),
     durationMs: asNonNegativeInt(c.durationSeconds) * 1000,
     label: 'Clip',
     category: asText(c.game?.displayName, 64),
+    categorySlug: asCategorySlug(c.game?.slug),
     login: normaliseLogin(c.broadcaster?.login),
     displayName: asText(c.broadcaster?.displayName, 64),
     avatarUrl: asUrl(c.broadcaster?.profileImageURL),
   };
+}
+
+/** What Twitch said a category's slug is. */
+interface CategorySlug {
+  /** '' when Twitch was not reached or knows no category by that name. */
+  slug: string;
+  checkedAt: number;
 }
 
 /** One tab's latest push, plus what this side has settled on for it. */
@@ -365,6 +415,8 @@ export class TwitchSource {
 
   private readonly channels = new Map<string, ChannelInfo>();
   private readonly videos = new Map<string, VideoInfo>();
+  /** Category name, lowercased, → its slug; see categoryUrl(). */
+  private readonly categories = new Map<string, CategorySlug>();
   private readonly lookupsInFlight = new Set<string>();
 
   /** @param onResolved  told when a lookup lands, so a held tab need not wait for its next push. */
@@ -398,8 +450,17 @@ export class TwitchSource {
       offlineSince: samePage ? prev!.offlineSince : now,
     }, now);
 
-    if (page.startsWith('ch:')) void this.resolveChannel(page.slice(3), data.page_ready ? data.is_live : null);
-    else if (page) void this.resolveVideo(page);
+    if (page.startsWith('ch:')) {
+      void this.resolveChannel(page.slice(3), data.page_ready ? data.is_live : null);
+      // The page's category, when the page's link to it gave no slug and the
+      // channel's own answer is not on its way: that names its category's
+      // slug too, and when the two disagree the next push asks.
+      if (data.category && !data.category_slug && !this.lookupsInFlight.has(page)) {
+        void this.resolveCategory(data.category);
+      }
+    } else if (page) {
+      void this.resolveVideo(page);
+    }
     return data;
   }
 
@@ -453,6 +514,7 @@ export class TwitchSource {
             avatarUrl: prev?.avatarUrl ?? '',
             title: prev?.title ?? '',
             category: prev?.category ?? '',
+            categorySlug: prev?.categorySlug ?? '',
             lastTitle: prev?.lastTitle ?? '',
             checkedAt: Date.now(),
             // A login Twitch does not know will not become one on a retry.
@@ -465,6 +527,7 @@ export class TwitchSource {
       this.channels.delete(login);
       this.channels.set(login, entry);
       evictOldest(this.channels, MAX_CACHED);
+      this.rememberCategory(entry.category, entry.categorySlug);
 
       if (entry.liveness === 'live' && entry.startMs > 0 && entry.startMs !== prev?.startMs) {
         log.info(`[TWITCH] Real stream start for ${login} ✓ ${new Date(entry.startMs).toISOString()}`);
@@ -491,18 +554,62 @@ export class TwitchSource {
       const result = await fetchVideo(key);
       if (!this.openPages().has(key)) return;
       const entry: VideoInfo = result === null
-        ? {
-            found: false, title: '', durationMs: 0, label: '', category: '', login: '', displayName: '', avatarUrl: '',
-            checkedAt: Date.now(), attempts: (cached?.attempts ?? 0) + 1,
-          }
+        ? { ...NO_VIDEO, checkedAt: Date.now(), attempts: (cached?.attempts ?? 0) + 1 }
         : { ...result, checkedAt: Date.now(), attempts: result.found ? 0 : MAX_ATTEMPTS };
       this.videos.delete(key);
       this.videos.set(key, entry);
       evictOldest(this.videos, MAX_CACHED);
+      this.rememberCategory(entry.category, entry.categorySlug);
       if (entry.found) log.info(`[TWITCH] ${entry.label} by ${entry.login}: "${entry.title}"`);
       this.onResolved?.();
     } finally {
       this.lookupsInFlight.delete(key);
+    }
+  }
+
+  /**
+   * The page of the category a card names, or '' while its slug is not known.
+   *
+   * Twitch's answer about a channel or a video names the slug with the
+   * category, but a live card names the page's category first: the page
+   * follows the streamer the moment they switch game, and the answer can be
+   * ten minutes old. The page's own link to the category carries its slug,
+   * from extension 2.2.3 on; for an older one, slugs are filed by name, from
+   * every answer, and a name no answer has covered is asked about on its own
+   * (resolveCategory).
+   */
+  private categoryUrl(name: string): string {
+    const slug = name ? this.categories.get(name.toLowerCase())?.slug : '';
+    return slug ? categoryPage(slug) : '';
+  }
+
+  private rememberCategory(name: string, slug: string): void {
+    if (!name) return;
+    const key = name.toLowerCase();
+    // An answer that named no slug (a lookup that failed) does not erase one.
+    if (!slug && this.categories.get(key)?.slug) return;
+    this.categories.delete(key);
+    this.categories.set(key, { slug, checkedAt: Date.now() });
+    evictOldest(this.categories, MAX_CACHED);
+  }
+
+  /** Ask Twitch for a category's slug by its name; once, or again a minute after a miss. */
+  private async resolveCategory(name: string): Promise<void> {
+    const key = name.toLowerCase();
+    const known = this.categories.get(key);
+    if (known && (known.slug || Date.now() - known.checkedAt < RETRY_AFTER_MS)) return;
+    const flight = `cat:${key}`;
+    if (this.lookupsInFlight.has(flight)) return;
+    this.lookupsInFlight.add(flight);
+    try {
+      // Twitch matches the name whatever its case. JSON.stringify quotes it
+      // the way GraphQL wants, as for the login in fetchChannel.
+      const data = await gql<{ game?: GqlGame | null }>(`query { game(name: ${JSON.stringify(name)}) { slug } }`);
+      const slug = asCategorySlug(data?.game?.slug);
+      this.rememberCategory(name, slug);
+      if (slug) this.onResolved?.();
+    } finally {
+      this.lookupsInFlight.delete(flight);
     }
   }
 
@@ -528,13 +635,15 @@ export class TwitchSource {
         receivedAt: t.receivedAt,
       };
       if (live) {
+        // The page's title and category update as the streamer changes them;
+        // the lookup's are up to ten minutes old.
+        const category = d.category || info?.category || '';
         return {
           ...common,
           kind: 'live',
-          // The page's title and category update as the streamer changes them;
-          // the lookup's are up to ten minutes old.
           title: d.stream_title || info?.title || '',
-          category: d.category || info?.category || '',
+          category,
+          categoryUrl: d.category && d.category_slug ? categoryPage(d.category_slug) : this.categoryUrl(category),
           followers: d.followers,
           // Twitch's own createdAt once it has resolved, else the script's estimate
           startMs: info?.startMs || d.startEstimateMs || 0,
@@ -558,6 +667,7 @@ export class TwitchSource {
     const login = found?.login || normaliseLogin(d.username);
     const channelUrl = login ? `https://www.twitch.tv/${login}` : 'https://www.twitch.tv';
     const isClip = page.startsWith('c:');
+    const category = found?.category || d.category;
     return {
       platform: 'twitch',
       kind: isClip ? 'clip' : 'vod',
@@ -566,7 +676,8 @@ export class TwitchSource {
       channelUrl,
       avatarUrl: found?.avatarUrl || d.profile_picture_url,
       title: found?.title || d.stream_title,
-      category: found?.category || d.category,
+      category,
+      categoryUrl: this.categoryUrl(category),
       pageUrl: isClip
         ? `${channelUrl}/clip/${page.slice(2)}`
         : `https://www.twitch.tv/videos/${page.slice(2)}`,

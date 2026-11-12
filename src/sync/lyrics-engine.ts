@@ -214,8 +214,8 @@ export class LyricsEngine {
    * line of that track's lyrics. cachedStateUrl is the metadata answer only --
    * the context or the artist, matching the branch in rebuildNoLyricsCache;
    * while lyrics are showing, the state field is a lyric line and takes the
-   * track link instead. cachedLargeUrl is the album, which is whose cover the
-   * image is.
+   * track link instead. cachedLargeUrl depends on the platform: see
+   * largeImageUrl.
    */
   private cachedDetailsUrl = '';
   private cachedStateUrl = '';
@@ -704,7 +704,12 @@ export class LyricsEngine {
       // raw incoming value would report a change on every tick and force a redundant
       // RPC push. What matters is whether the *effective* art actually moved.
       if (this.trackData) {
-        artChanged = trackData.album_art_url !== this.trackData.album_art_url;
+        artChanged = trackData.album_art_url !== this.trackData.album_art_url
+          // Where the cover leads can arrive after the track does, the way the
+          // cover itself can: a stream's category page is looked up by name
+          // and moves when the streamer switches game, without the stream
+          // becoming a new track (twitch-source.ts).
+          || (trackData.album_url ?? '') !== (this.trackData.album_url ?? '');
         modeChanged = trackData.is_shuffle !== this.trackData.is_shuffle ||
                       trackData.repeat_mode !== this.trackData.repeat_mode ||
                       // The Web API names a playlist a beat after the song
@@ -1536,9 +1541,7 @@ export class LyricsEngine {
       // the video, and a title search can land on somebody's re-upload.
       this.cachedDetailsUrl = d.spotify_url || d.video_url || this.cachedSpotifySearch;
     }
-    // A local file is on no service, so a cover link would only be a search
-    // for it — the same reason details and state stay plain above.
-    this.cachedLargeUrl = d.is_local ? '' : (d.album_url || d.spotify_url || d.video_url || this.cachedSpotifySearch);
+    this.cachedLargeUrl = largeImageUrl(d, this.cachedSpotifySearch);
   }
 
   /** Pre-compute no-lyrics display parts (avoid deduplicateArtist + toLowerCase per emit). */
@@ -2265,6 +2268,30 @@ export function spotifyAppLink(url: string): string {
   // Discord's limit on a button URL: past it the button is dropped (see
   // discord-ipc.ts), and the plain link is better than no button.
   return out.length <= 512 ? out : url;
+}
+
+/**
+ * Where clicking the cover goes, per platform.
+ *
+ * The image is not the same thing everywhere, so neither is the link:
+ *
+ * - Twitch and Kick: the category's page, which album_url carries for them
+ *   (broadcast-track.ts). The picture stays the channel's, but the first line
+ *   already opens the channel, and the category, named in the picture's own
+ *   tooltip, had no link anywhere on the card. Without one (an offline
+ *   channel, a category not resolved yet) the channel or the video, as before.
+ * - SoundCloud and YouTube: the song or the video itself. An upload has no
+ *   album, and if a source ever names one it is still not what was clicked.
+ * - Everything else, Spotify and Apple Music first: the album, whose cover the
+ *   image is (Apple Music's is looked up, see apple-music-link.ts).
+ * - A local file: nothing. It is on no service, so a link could only be a
+ *   search for it, the same reason details and state stay plain for it.
+ */
+function largeImageUrl(d: TrackData, search: string): string {
+  if (d.is_local) return '';
+  if (d.media_source === 'soundcloud') return d.spotify_url || search;
+  if (d.media_source === 'youtube' || d.is_short) return d.video_url || search;
+  return d.album_url || d.spotify_url || d.video_url || search;
 }
 
 function platformSearchUrl(source: string, query: string): string {
