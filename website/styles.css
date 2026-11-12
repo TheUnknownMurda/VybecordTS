@@ -205,25 +205,13 @@ kbd {
   stroke: none;
 }
 
-/* The app's title-bar mark: a green tile with the note cut out of it. */
+/* The logo, as in the app's title bar: favicon.svg (the small cut) up to 28 px,
+   logo.svg (the full cut, with its glow) at 56. It brings its own tile. */
 .mark {
   width: 28px;
   height: 28px;
   flex: none;
-  border-radius: 8px;
-  display: grid;
-  place-items: center;
-  background: var(--accent-hex);
-  color: var(--on-accent);
-}
-.mark svg {
-  width: 16px;
-  height: 16px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2.4;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  display: block;
 }
 
 /* ── Buttons ───────────────────────────────────────────────────────────────── */
@@ -610,11 +598,6 @@ h2 {
 .win-bar .mark {
   width: 20px;
   height: 20px;
-  border-radius: 6px;
-}
-.win-bar .mark svg {
-  width: 12px;
-  height: 12px;
 }
 .win-btns {
   display: flex;
@@ -1586,16 +1569,13 @@ h2 {
     padding: 72px 56px;
   }
 }
+/* 12px follows the tile's corners without clipping them, so the glow hugs the tile. */
 .dl .mark {
   width: 56px;
   height: 56px;
   margin: 0 auto 24px;
-  border-radius: 16px;
+  border-radius: 12px;
   box-shadow: 0 14px 40px -12px rgba(var(--accent), 0.7);
-}
-.dl .mark svg {
-  width: 30px;
-  height: 30px;
 }
 .dl > p {
   max-width: 34em;
@@ -1802,11 +1782,6 @@ h2 {
   width: 56px;
   height: 56px;
   margin: 0 auto 24px;
-  border-radius: 16px;
-}
-.center-page .mark svg {
-  width: 30px;
-  height: 30px;
 }
 .center-page h1 {
   font-size: clamp(30px, 5vw, 40px);
