@@ -38,6 +38,8 @@ const ICONS = {
   gamepad: '<svg viewBox="0 0 24 24"><path d="M7 7.5h10a4 4 0 014 4V15a2.5 2.5 0 01-4.6 1.4L15 14.5H9l-1.4 1.9A2.5 2.5 0 013 15v-3.5a4 4 0 014-4z"/><path d="M7.5 10.5v3M6 12h3M15.5 11.5v0M17.5 13v0"/></svg>',
   disc: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/></svg>',
   pause: '<svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>',
+  palette: '<svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 000 18c1.2 0 1.9-.9 1.9-1.9 0-.5-.2-.9-.5-1.2-.3-.4-.5-.8-.5-1.3 0-1 .8-1.8 1.8-1.8H17a4 4 0 004-4C21 6.5 17 3 12 3z"/><path d="M7.5 12v0M9.5 7.8v0M14.5 7.8v0M17 11.5v0"/></svg>',
+  chart: '<svg viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M7 16.5V11M12 16.5V4.5M17 16.5V8"/></svg>',
 };
 
 /**
@@ -46,6 +48,20 @@ const ICONS = {
  * telling about gets no entry.
  */
 const ENTRIES = [
+  {
+    version: '2.15.0',
+    headline: 'Pick the window’s colour, and see your listening platform by platform.',
+    items: [
+      ['palette', 'Your colour',
+        'Settings → App & window → Accent colour: eight swatches, or any colour you like. The background takes its tint too.'],
+      ['chart', 'Activity, platform by platform',
+        'Pick a platform to see its own numbers, how they compare with the period before, the hours you listen, your records, top albums and new artists. Twitch and Kick get a view of their own.'],
+      ['shorts', 'Shorts, as they are',
+        'A Short’s card shows its own progress bar, [Shorts] before its title and its hashtags at the end, and its second line opens the channel.'],
+      ['logo', 'Nothing playing, under Vybecord’s icon',
+        'After a few seconds of silence, Discord’s Active Now list shows Vybecord’s logo beside your card instead of the last player’s.'],
+    ],
+  },
   {
     version: '2.14.0',
     headline: 'Vybecord gets a logo of its own, and the picture on your card leads somewhere.',
