@@ -569,6 +569,13 @@ export class DiscordIPC {
 
     if (urlOk(activity.details_url)) rpcActivity.details_url = activity.details_url;
     if (urlOk(activity.state_url)) rpcActivity.state_url = activity.state_url;
+    // Not a documented SET_ACTIVITY field, but the client's validator lets
+    // unknown keys through and keeps them on the activity it shares — read in
+    // its bundle, 2026-11. Without it Discord stamps its own. See
+    // cardOrderStamp() in backend.ts.
+    if (activity.created_at && Number.isFinite(activity.created_at)) {
+      rpcActivity.created_at = Math.floor(activity.created_at);
+    }
 
     // Serialize the activity body; skip full re-stringify if unchanged (heartbeats)
     const activityJson = JSON.stringify(rpcActivity);

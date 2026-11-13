@@ -191,6 +191,7 @@ Ou affiche-les toutes. **Settings → Discord presence → Several presences** m
 - **Activity type on presence N** donne à chaque carte son propre verbe : *Listening* pour la chanson, *Watching* pour le stream. Les cartes 2 à 5 disent la même chose que la présence 1 tant que tu ne les changes pas.
 - **Now playing** montre toutes les cartes du côté **On Discord** ; clique sur une petite carte pour voir ses paroles et l'afficher en grand. Son menu **Source** épingle cette présence à un lecteur, pour qu'elle ne s'échange jamais avec une autre, et un clic sur ses parties les modifie.
 - L'historique d'écoute (et donc **Activity**) et Last.fm ne suivent que la présence 1.
+- Les cartes gardent leur ordre sur ton profil, la présence 1 en haut, même quand les paroles défilent sur toutes. Discord place quand même une carte *Playing* au-dessus des cartes *Listening* et *Watching*, quel que soit son numéro.
 
 Chaque carte est une application Discord à part. Spotify, SoundCloud et Apple Music en ont une chacun, YouTube trois, et Kick et Twitch cinq chacun : jusqu'à cinq streams Kick ou Twitch gardent tous leur logo. Une carte dont la plateforme n'a plus d'application libre en emprunte une autre. Avec celle par défaut, ça fait dix-sept applications pour cinq cartes au maximum : il n'y a rien à configurer.
 
