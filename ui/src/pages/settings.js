@@ -680,7 +680,7 @@ function accentRow() {
   return el('div', { class: 'row' }, [
     el('div', {}, [
       el('div', { class: 'row-label', text: 'Accent colour' }),
-      el('div', { class: 'row-desc', text: 'The colour of the buttons, switches, links and the page you are on. Your Discord card keeps Discord’s own colours.' }),
+      el('div', { class: 'row-desc', text: 'The colour of the buttons, switches and links, and the tint of the background. Emerald keeps the original neutral background. Your Discord card keeps Discord’s own colours.' }),
     ]),
     el('div', { class: 'row-control accent-pick' }, [...swatches, custom]),
   ]);

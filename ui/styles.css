@@ -22,12 +22,14 @@
   /* Text sitting on a filled accent button. */
   --on-accent: #04140d;
 
-  --bg-base: #0b0b10;
-  --bg-side: #0f0f15;
-  --bg-elevated: #14141c;
-  --bg-surface: #1c1c26;
-  --bg-hover: #23232e;
-  --bg-sunken: #101017;
+  /* Each surface reads a -d twin first: a picked accent colour tints them
+     (ui/src/accent.js) without the dark values leaking into the light theme. */
+  --bg-base: var(--bg-base-d, #0b0b10);
+  --bg-side: var(--bg-side-d, #0f0f15);
+  --bg-elevated: var(--bg-elevated-d, #14141c);
+  --bg-surface: var(--bg-surface-d, #1c1c26);
+  --bg-hover: var(--bg-hover-d, #23232e);
+  --bg-sunken: var(--bg-sunken-d, #101017);
 
   --border-s: rgba(255, 255, 255, 0.07);
   --border-d: rgba(255, 255, 255, 0.13);
@@ -56,12 +58,12 @@ html[data-theme='light'] {
   --accent-text: var(--accent-text-l, #047857);
   --on-accent: #04140d;
 
-  --bg-base: #f4f4f7;
-  --bg-side: #ececf1;
-  --bg-elevated: #ffffff;
-  --bg-surface: #f1f1f5;
-  --bg-hover: #e7e7ee;
-  --bg-sunken: #f7f7fa;
+  --bg-base: var(--bg-base-l, #f4f4f7);
+  --bg-side: var(--bg-side-l, #ececf1);
+  --bg-elevated: var(--bg-elevated-l, #ffffff);
+  --bg-surface: var(--bg-surface-l, #f1f1f5);
+  --bg-hover: var(--bg-hover-l, #e7e7ee);
+  --bg-sunken: var(--bg-sunken-l, #f7f7fa);
 
   --border-s: rgba(0, 0, 0, 0.08);
   --border-d: rgba(0, 0, 0, 0.14);
@@ -159,6 +161,11 @@ a {
 }
 html[data-theme='light'] .orb {
   opacity: 0.1;
+}
+/* With a picked accent colour the glow is that colour, not the cover's: the
+   background is meant to be the colour chosen (ui/src/accent.js). */
+html[data-accent='custom'] .orb {
+  background: var(--accent-hex);
 }
 
 /* ── Title bar ────────────────────────────────────────────────────────────── */

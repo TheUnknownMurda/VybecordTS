@@ -76,7 +76,7 @@ Vybecord is a Windows desktop app (Electron + TypeScript). It reads the Windows 
 
 **App**
 
-- Frameless window with dark and light themes, in the accent colour of your choice (**Settings → App & window → Accent colour**: eight swatches or any colour). The app runs in the system tray, so closing the window doesn't stop the presence.
+- Frameless window with dark and light themes, in the accent colour of your choice (**Settings → App & window → Accent colour**: eight swatches or any colour), which also tints the background and its glow. Emerald, the default, keeps the original neutral background. The app runs in the system tray, so closing the window doesn't stop the presence.
 - Listening history (up to 10,000 plays) shown on the **Activity** page over 7 days, 30 days, 12 months or all time: time listened per day, top artists and tracks, and the full log.
 - Optional Last.fm scrobbling, with a queue for scrobbles made while offline.
 - Automatic updates from GitHub Releases. They install when you quit the app.
