@@ -34,6 +34,10 @@ const ICONS = {
   key: '<svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l8-8M16 7l2.5 2.5M14 9l2 2"/></svg>',
   shorts: '<svg viewBox="0 0 24 24"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M10.5 9.5v5l4-2.5z"/></svg>',
   verb: '<svg viewBox="0 0 24 24"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z"/><circle cx="12" cy="12" r="2.5"/></svg>',
+  logo: '<svg viewBox="0 0 24 24"><path d="M4.5 5l7.5 14 7.5-14"/></svg>',
+  gamepad: '<svg viewBox="0 0 24 24"><path d="M7 7.5h10a4 4 0 014 4V15a2.5 2.5 0 01-4.6 1.4L15 14.5H9l-1.4 1.9A2.5 2.5 0 013 15v-3.5a4 4 0 014-4z"/><path d="M7.5 10.5v3M6 12h3M15.5 11.5v0M17.5 13v0"/></svg>',
+  disc: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/></svg>',
+  pause: '<svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>',
 };
 
 /**
@@ -42,6 +46,20 @@ const ICONS = {
  * telling about gets no entry.
  */
 const ENTRIES = [
+  {
+    version: '2.14.0',
+    headline: 'Vybecord gets a logo of its own, and the picture on your card leads somewhere.',
+    items: [
+      ['logo', 'A logo of its own',
+        'The window, the taskbar, the tray, the installer and the browser extension now show Vybecord’s own V.'],
+      ['gamepad', 'Twitch and Kick: the category, one click away',
+        'Clicking the streamer’s picture on a Twitch or Kick card opens the category they are in. Kick needs the browser extension 2.2.3.'],
+      ['disc', 'Apple Music albums',
+        'Clicking an Apple Music cover on Discord opens the album on Apple Music, the way Spotify’s does.'],
+      ['pause', 'Nothing playing, by Vybecord',
+        'When nothing plays, your card says Listening to Vybecord, with the new logo.'],
+    ],
+  },
   {
     version: '2.13.0',
     headline: 'Spotify’s full details without Spicetify, and YouTube Shorts get a card of their own.',
