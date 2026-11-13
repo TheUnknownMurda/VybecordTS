@@ -172,9 +172,10 @@ The channel's name and picture come from Twitch itself (and from Kick's own site
 
 With the extension (2.2.2 or later), a Short gets a card of its own instead of passing as a browser tab:
 
-- the Short's title without its hashtags, and its channel, which links to the channel's page;
+- **[Shorts]** before the Short's title, and its hashtags after it, wherever the title had them (#shorts itself goes: [Shorts] already says it);
+- its channel, which opens the channel's page. When the extension cannot read the link off the page, Vybecord asks YouTube for it, so the link can come a few seconds after the Short;
 - the Short's own picture, upright, rather than a strip of it between two blurred bands;
-- **YouTube Shorts** as the third line, and a timer for how long you have been watching Shorts, not a progress bar that starts over with every loop. Swiping to the next Short changes the title and the picture, never the timer. Watching a regular video, or a couple of minutes without any Short playing, starts it over;
+- **YouTube Shorts** as the third line, and the Short's own progress bar, from its start to its end, which starts over with every loop;
 - **Watching**, or **Listening to** if you prefer: that is **Settings → Discord presence → Activity type for Shorts**, also a click away on the card's verb in **Now playing**. It covers every card, and everything that is not a Short keeps its own verb;
 - the button opens the Short.
 

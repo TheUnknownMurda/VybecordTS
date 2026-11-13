@@ -678,6 +678,7 @@ export class LyricsEngine {
 
     let artChanged = false;
     let modeChanged = false;
+    let linkChanged = false;
 
     if (trackData) {
       /*
@@ -718,6 +719,12 @@ export class LyricsEngine {
                       // is a follower count, which is not worth a push.
                       (trackData.media_source === 'spotify'
                         && (trackData.context_name ?? '') !== (this.trackData.context_name ?? ''));
+        // A Short's channel page can come a beat after the Short does: YouTube
+        // is asked for it when the extension could not read it off the page
+        // (youtube-channel.ts). The words stay, where the line leads changes.
+        // Shorts only: one source sets it, once, so it cannot flicker.
+        linkChanged = !!trackData.is_short
+          && (trackData.artist_url ?? '') !== (this.trackData.artist_url ?? '');
       }
       this.trackData = trackData;
     }
@@ -735,6 +742,13 @@ export class LyricsEngine {
       this.rebuildNoLyricsCache();
       this.lastRpcDetails = '';   // reset dedup so new suffix pushes
       this.forceRpcPush();
+      this.emitUpdate();
+    }
+
+    // The link is not part of what the dedup compares, so the push is forced.
+    if (linkChanged) {
+      this.rebuildNoLyricsCache();
+      this.resetDedup();
       this.emitUpdate();
     }
 
@@ -792,10 +806,8 @@ export class LyricsEngine {
       const offset = baseMs + this.measuredLatencyMs + this.getTotalOffsetMs();
       this.currentIdx = findLyricIndex(this.lyrics, progressMs + offset);
       this.resetCoverage();
-      // A Short with nothing to sing has nothing new to show after a loop: its
-      // timer counts the sitting, so the card is the same card. Forcing it out
-      // anyway cost an update per loop, every few seconds.
-      if (this.lyrics.length || !this.trackData?.is_short) this.resetDedup();
+      // A Short with nothing to sing changes too: its bar starts over.
+      this.resetDedup();
       this.emitUpdate();
       this.cancelTimer();
       this.scheduleNext();
@@ -1571,7 +1583,7 @@ export class LyricsEngine {
     // A Short's, under its captions: its title and its channel, plain, since
     // neither is a song or an artist.
     this.cachedInfoText = d.media_source === 'kick' || d.media_source === 'twitch' || d.is_short
-      ? truncate([d.track_name, this.cachedDisplayArtist, d.album_name].filter(Boolean).join(' | ') || '  ', 128)
+      ? truncate([cardTitle(d), this.cachedDisplayArtist, d.album_name].filter(Boolean).join(' | ') || '  ', 128)
       : buildInfoText(d, '', '', this.cfgShowPlaylist);
     // Insert play mode suffix after context/album in infoText (visible in large_text when lyrics are showing)
     if (this.cachedPlayModeSuffix) {
@@ -1643,20 +1655,21 @@ export class LyricsEngine {
      * went live, not from when this app noticed it.
      */
     /*
-     * A Short has no bar either. It loops, so a bar for it ran to the end and
-     * sat there until the next push brought it back to the start, every ten
-     * to sixty seconds, and each loop was one more update for the rate limiter
-     * to hold back. The card counts the sitting instead (shorts_since_ms),
-     * which does not move from one Short to the next: swiping changes the
-     * title and the cover, never the timer.
+     * A Short gets its own bar, from its start to its end, like any video.
+     *
+     * It had a timer for the whole run of Shorts instead (2.13.0), with no
+     * end, which Discord draws the way it draws a live stream's: a Short read
+     * as a broadcast. The bar's catch is the loop: it reaches the end and
+     * waits there for the push that brings the player back to the start (the
+     * extension sends one when the player seeks, and every 2.5 s anyway),
+     * which re-anchors the clock and puts the bar out again from the start
+     * (see loopedShort).
      */
     const startTs = d.is_live && d.stream_start_time_ms
       ? Math.floor(d.stream_start_time_ms / 1000)
-      : d.is_short && d.shorts_since_ms
-        ? Math.floor(d.shorts_since_ms / 1000)
-        : this.trackStartUnix;
+      : this.trackStartUnix;
 
-    const endTs = d.duration_ms > 0 && !d.is_short ? startTs + Math.floor(d.duration_ms / 1000) : 0;
+    const endTs = d.duration_ms > 0 ? startTs + Math.floor(d.duration_ms / 1000) : 0;
 
     let details: string;
     let state: string;
@@ -1731,7 +1744,7 @@ export class LyricsEngine {
         : this.cachedInfoText;
     } else {
       // No lyrics / lyrics disabled — use pre-computed display parts
-      details = truncate(d.track_name, 128);
+      details = truncate(cardTitle(d), 128);
       const ctx = this.cachedContextName;
 
       if (ctx && !this.cachedIsRedundantCtx) {
@@ -1757,7 +1770,7 @@ export class LyricsEngine {
         if (status) {
           largeText = truncate(status, 128);
         } else if (d.is_short) {
-          // The third line says what the timer counts: time on Shorts.
+          // The picture's hover text, and the third line on a Listening card.
           largeText = SHORTS_NAME;
         } else {
           // Kick/Twitch: don't add album emoji
@@ -1839,7 +1852,10 @@ export class LyricsEngine {
       },
       buttons: this.cachedButtons.length > 0 ? this.cachedButtons : undefined,
       details_url: this.cachedDetailsUrl,
-      state_url: stateIsLyric ? this.cachedDetailsUrl : this.cachedStateUrl,
+      // A Short's second line opens its channel whatever it shows, the next
+      // caption included: the channel is what a friend would go looking for
+      // after the Short itself, which the first line already opens.
+      state_url: stateIsLyric && !d.is_short ? this.cachedDetailsUrl : this.cachedStateUrl,
       large_url: this.cachedLargeUrl,
     };
 
@@ -2301,6 +2317,19 @@ function platformSearchUrl(source: string, query: string): string {
 
 /** What a Short is called on the card. */
 const SHORTS_NAME = 'YouTube Shorts';
+/** What a Short's title opens with on the card. */
+const SHORTS_TITLE_TAG = '[Shorts]';
+
+/**
+ * The title as the card prints it. A Short's opens with [Shorts]: the title
+ * is the line every friend reads, and the rest of what says Short on the card
+ * is hover text, the small icon's and the picture's (which a Listening card
+ * also prints as its third line). Put in the track's own name it would show
+ * in this window too, where Now playing says Shorts already.
+ */
+function cardTitle(d: TrackData): string {
+  return d.is_short ? `${SHORTS_TITLE_TAG} ${d.track_name}` : d.track_name;
+}
 
 const PLATFORM_NAMES: Record<string, string> = {
   spotify: 'Spotify', apple_music: 'Apple Music', deezer: 'Deezer',

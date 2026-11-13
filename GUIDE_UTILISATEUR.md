@@ -172,9 +172,10 @@ Le nom et la photo de la chaîne viennent de Twitch lui‑même (et du site de K
 
 Avec l'extension (2.2.2 ou plus récente), un Short a sa propre carte au lieu de passer pour un onglet de navigateur :
 
-- le titre du Short sans ses hashtags, et sa chaîne, qui mène à la page de la chaîne ;
+- **[Shorts]** devant le titre du Short, et ses hashtags après, où que le titre les ait mis (#shorts lui-même disparaît : [Shorts] le dit déjà) ;
+- sa chaîne, qui mène à la page de la chaîne. Quand l'extension ne peut pas lire le lien sur la page, Vybecord le demande à YouTube, alors le lien peut arriver quelques secondes après le Short ;
 - l'image du Short, à la verticale, plutôt qu'une bande entre deux zones floues ;
-- **YouTube Shorts** en troisième ligne, et un compteur du temps passé sur les Shorts, au lieu d'une barre de progression qui repart à chaque boucle. Passer au Short suivant change le titre et l'image, jamais le compteur. Regarder une vidéo normale, ou deux minutes sans aucun Short en lecture, le remet à zéro ;
+- **YouTube Shorts** en troisième ligne, et la barre de progression du Short lui-même, de son début à sa fin, qui repart à chaque boucle ;
 - **Watching**, ou **Listening to** si tu préfères : c'est **Settings → Discord presence → Activity type for Shorts**, aussi à un clic sur le verbe de la carte dans **Now playing**. Ça vaut pour toutes les cartes, et tout ce qui n'est pas un Short garde son propre verbe ;
 - le bouton ouvre le Short.
 
