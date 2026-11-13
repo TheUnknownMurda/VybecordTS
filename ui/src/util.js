@@ -85,6 +85,16 @@ export function fmtDay(d, opts) {
   return d.toLocaleDateString('en-US', opts);
 }
 
+/**
+ * A clock hour (0–23) on the system's clock: "9 PM" or "21:00". `short` is
+ * for an axis: "9p" or "21".
+ */
+export function fmtHour(h, short = false) {
+  if (!TWELVE_HOUR) return short ? String(h).padStart(2, '0') : `${String(h).padStart(2, '0')}:00`;
+  const n = h % 12 || 12;
+  return short ? `${n}${h < 12 ? 'a' : 'p'}` : `${n} ${h < 12 ? 'AM' : 'PM'}`;
+}
+
 export function fmtDate(value) {
   const d = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(d.getTime())) return '—';

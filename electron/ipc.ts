@@ -185,6 +185,8 @@ export function registerIpc(
   // Every lyric handler takes the presence it is about; the window passes
   // the one whose lyrics it is showing, and nothing means presence 1.
   const slotArg = (slot: unknown) => (typeof slot === 'number' && slot >= 0 ? Math.floor(slot) : 0);
+  /** A platform key as the history writes it (`spotify`, `browser_edge`); anything else is none. */
+  const platformArg = (src: unknown) => (typeof src === 'string' && /^[a-z0-9_]{1,40}$/.test(src) ? src : undefined);
   handle('track:current', (slot?: number) => backend.getCurrentTrack(slotArg(slot)));
   handle('lyrics:current', (slot?: number) => backend.getCurrentLyricsState(slotArg(slot)));
   handle('lyrics:lrc', (slot?: number) => backend.getCurrentLyricsLrc(slotArg(slot)));
@@ -289,9 +291,11 @@ export function registerIpc(
   // ── Listening history ──
   // `anchor` pins the listing to the log as it stood when paging began, so a
   // track finishing mid-scroll cannot repeat a row at the seam between pages.
-  handle('history:list', (limit = 50, offset = 0, anchor?: number) =>
-    backend.getListeningHistory(limit, offset, anchor));
-  handle('history:wrapped', (days?: number) => backend.getListeningWrapped(days));
+  // `source` narrows both to one platform, or to all music with 'music'.
+  handle('history:list', (limit = 50, offset = 0, anchor?: number, source?: unknown) =>
+    backend.getListeningHistory(limit, offset, anchor, platformArg(source)));
+  handle('history:wrapped', (days?: number, source?: unknown) =>
+    backend.getListeningWrapped(typeof days === 'number' && days > 0 ? days : undefined, platformArg(source)));
 
   // ── Custom lyrics library ──
   handle('custom:list', (limit = 50, offset = 0, search?: string) =>

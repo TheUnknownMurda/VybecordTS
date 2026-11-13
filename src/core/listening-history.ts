@@ -1,12 +1,16 @@
 /**
  * Persistent listening history — records every track play with timing data.
- * Provides all-time aggregate stats ("Wrapped") and a recent timeline.
+ * Serves the log a page at a time; the Activity page's numbers are worked out
+ * from it in listening-stats.ts.
  * Stored in listening-history.json (max MAX_ENTRIES entries, FIFO eviction).
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { createLogger } from './logger.js';
+import { computeStats, isStreamEntry, STREAM_SOURCES, type WrappedStats } from './listening-stats.js';
+
+export type { WrappedStats } from './listening-stats.js';
 
 const log = createLogger('History');
 const MAX_ENTRIES = 10_000;
@@ -43,16 +47,6 @@ const MAX_UNKNOWN_LISTEN_MS = 4 * 60 * 60_000;
  */
 const MAX_PAUSE_RESUME_MS = 30 * 60_000;
 
-/**
- * Sources that are not music.
- *
- * A Twitch or Kick stream has no track identity — its "title" is the stream's
- * banner and its "artist" is the streamer — and one sitting runs for hours, so
- * a single afternoon outweighs a year of songs in every aggregate. They stay in
- * the log, which promises everything the app saw, and stay out of the stats.
- */
-const STREAM_SOURCES = new Set(['twitch', 'kick']);
-
 export interface HistoryEntry {
   track: string;
   artist: string;
@@ -61,7 +55,7 @@ export interface HistoryEntry {
   source: string;
   startedAt: string;   // ISO date
   listenedMs: number;
-  /** Set for live streams. Absent on entries written before the field — see isStream(). */
+  /** Set for live streams. Absent on entries written before the field — see isStreamEntry(). */
   kind?: 'stream';
 }
 
@@ -91,19 +85,6 @@ export interface HistoryPage {
   total: number;
   /** Pass back on the next call to keep paging the same listing. */
   anchor: number;
-}
-
-export interface WrappedStats {
-  totalListenedMs: number;
-  totalTracks: number;
-  uniqueTracks: number;
-  uniqueArtists: number;
-  topTracks: { name: string; artist: string; art: string; totalMs: number; plays: number }[];
-  topArtists: { name: string; totalMs: number; plays: number }[];
-  activeDays: number;
-  avgDailyMs: number;
-  /** Time listened per local day (YYYY-MM-DD), oldest first; days with nothing are absent. */
-  byDay: { day: string; ms: number }[];
 }
 
 let historyPath = '';
@@ -319,26 +300,6 @@ function saveToDisk(): void {
   }
 }
 
-/** True for an entry that is a live stream rather than a track. */
-/**
- * Day key in the calendar the user actually lives in.
- *
- * startedAt is UTC, and slicing its first ten characters counts by UTC days.
- * Anyone listening in the evening west of Greenwich has one sitting straddle
- * UTC midnight, which inflates activeDays and deflates the daily average that
- * divides by it -- measured at 10% on a real log from UTC-4.
- */
-function localDayKey(iso: string): string {
-  const d = new Date(iso);
-  const month = d.getMonth() + 1;
-  const day = d.getDate();
-  return `${d.getFullYear()}-${month < 10 ? '0' : ''}${month}-${day < 10 ? '0' : ''}${day}`;
-}
-
-function isStream(e: HistoryEntry): boolean {
-  return e.kind === 'stream' || STREAM_SOURCES.has(e.source);
-}
-
 /**
  * A page of the log, newest first.
  *
@@ -346,81 +307,43 @@ function isStream(e: HistoryEntry): boolean {
  * are absolute, so a track finishing while the user pages down neither shifts
  * the rows already on screen nor repeats one at the seam between two pages.
  * Omit it on the first call and pass the returned value back afterwards.
+ *
+ * `source` narrows it to one platform, or to every music platform with
+ * 'music' (live streams left out), matching what the Activity page is showing.
+ * `offset` and `total` then count matching rows only; the anchor is still a
+ * position in the whole log, so it pins a narrowed listing just the same.
  */
-export function getHistoryPage(limit = 50, offset = 0, anchor?: number): HistoryPage {
+export function getHistoryPage(limit = 50, offset = 0, anchor?: number, source?: string): HistoryPage {
   const newest = evicted + entries.length;
   const from = anchor !== undefined && anchor >= 0 ? Math.min(anchor, newest) : newest;
 
   // Walk backwards by position instead of copying + reversing all 10k entries
   // just to slice 50 off the front.
   const out: HistoryEntry[] = [];
-  for (let pos = from - 1 - Math.max(0, offset); pos >= evicted && out.length < limit; pos--) {
-    out.push(entries[pos - evicted]);
+  if (!source) {
+    for (let pos = from - 1 - Math.max(0, offset); pos >= evicted && out.length < limit; pos--) {
+      out.push(entries[pos - evicted]);
+    }
+    return { entries: out, total: Math.max(0, from - evicted), anchor: from };
   }
-  return { entries: out, total: Math.max(0, from - evicted), anchor: from };
+
+  // Narrowed, the whole log is walked: `total` needs every match counted, and
+  // at 10,000 rows that is still well under a millisecond.
+  const matches = source === 'music' ? (e: HistoryEntry) => !isStreamEntry(e) : (e: HistoryEntry) => e.source === source;
+  let total = 0;
+  for (let pos = from - 1; pos >= evicted; pos--) {
+    const e = entries[pos - evicted];
+    if (!matches(e)) continue;
+    if (total >= offset && out.length < limit) out.push(e);
+    total++;
+  }
+  return { entries: out, total, anchor: from };
 }
 
-/** Compute all-time aggregate stats ("Wrapped"). */
-export function getWrappedStats(days?: number): WrappedStats {
-  const cutoff = days && days > 0 ? Date.now() - days * 86_400_000 : 0;
-  const source = entries.filter(e =>
-    !isStream(e) && (!cutoff || Date.parse(e.startedAt) >= cutoff));
-
-  const trackMap = new Map<string, { name: string; artist: string; art: string; totalMs: number; plays: number }>();
-  const artistMap = new Map<string, { name: string; totalMs: number; plays: number }>();
-  const dayMap = new Map<string, number>();
-
-  let totalMs = 0;
-
-  for (const e of source) {
-    totalMs += e.listenedMs;
-    const day = localDayKey(e.startedAt);
-    dayMap.set(day, (dayMap.get(day) ?? 0) + e.listenedMs);
-
-    // Track aggregation
-    const tKey = `${e.track.toLowerCase()}|${e.artist.toLowerCase().split(/[,]/)[0].trim()}`;
-    const existing = trackMap.get(tKey);
-    if (existing) {
-      existing.totalMs += e.listenedMs;
-      existing.plays++;
-      if (e.art) existing.art = e.art;
-    } else {
-      trackMap.set(tKey, { name: e.track, artist: e.artist, art: e.art, totalMs: e.listenedMs, plays: 1 });
-    }
-
-    // Artist aggregation
-    const primaryArtist = e.artist.split(/[,]/)[0].trim();
-    const aKey = primaryArtist.toLowerCase();
-    const existingA = artistMap.get(aKey);
-    if (existingA) {
-      existingA.totalMs += e.listenedMs;
-      existingA.plays++;
-      if (primaryArtist.length > existingA.name.length) existingA.name = primaryArtist;
-    } else {
-      artistMap.set(aKey, { name: primaryArtist, totalMs: e.listenedMs, plays: 1 });
-    }
-  }
-
-  const topTracks = [...trackMap.values()]
-    .sort((a, b) => b.totalMs - a.totalMs)
-    .slice(0, 10);
-
-  const topArtists = [...artistMap.values()]
-    .sort((a, b) => b.totalMs - a.totalMs)
-    .slice(0, 10);
-
-  const activeDays = dayMap.size;
-
-  return {
-    totalListenedMs: totalMs,
-    totalTracks: source.length,
-    uniqueTracks: trackMap.size,
-    uniqueArtists: artistMap.size,
-    topTracks,
-    topArtists,
-    activeDays,
-    avgDailyMs: activeDays > 0 ? Math.round(totalMs / activeDays) : 0,
-    // The keys are zero-padded, so a string sort is a date sort.
-    byDay: [...dayMap.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([day, ms]) => ({ day, ms })),
-  };
+/**
+ * The Activity page's numbers for a range (in days, 0 or none for all time)
+ * and a platform ('' or none for every music platform together).
+ */
+export function getWrappedStats(days?: number, source?: string): WrappedStats {
+  return computeStats(entries, { days, source });
 }
