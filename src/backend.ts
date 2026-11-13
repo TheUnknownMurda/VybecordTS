@@ -200,6 +200,21 @@ const MAX_PUSHED_LYRIC_LINES = 2000;
 const AGE_GATED_LINE = '🔞 CC unavailable — age-restricted video';
 
 /**
+ * The picture on the "Nothing playing" card: the Vybecord logo drawn edge to
+ * edge, the Discord application's icon, since Discord rounds the corners of a
+ * card's picture itself.
+ *
+ * Discord only shows a picture it can download, so this is the URL of
+ * assets/logo/vybecord-discord.png. It names the commit that added the file
+ * rather than a branch: it worked before that commit reached desktop-app, it
+ * keeps working for every copy of the app already installed whatever later
+ * happens to the file, and a new picture gets a new URL, which Discord's
+ * image cache cannot hold back. The window's preview of the card draws the
+ * same URL (IDLE_ART in ui/src/discord-card.js).
+ */
+const IDLE_ART = 'https://raw.githubusercontent.com/TheUnknownMurda/VybecordTS/976ffbf38eea327e0b09dea13e7eda03f13e2f45/assets/logo/vybecord-discord.png';
+
+/**
  * Bounds on a cookie handover from the extension. A signed-in YouTube jar is
  * a few dozen cookies; these are slack, not targets.
  */
@@ -3378,11 +3393,16 @@ export class VybecordBackend extends EventEmitter {
 
     ipc.setActivity({
       type: this.config.get('rpc_activity_type'),
+      // Presence 1 keeps the application of whatever played last, and Discord
+      // heads a card with the application's name unless the activity names
+      // itself: after Spotify, the card read "Listening to Spotify" over
+      // "Nothing playing". The window's preview already headed it Vybecord.
+      name: 'Vybecord',
       status_display_type: sdt,
       details: '⏸ Nothing playing',
       state: '  ',
       assets: {
-        large_image: 'https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/T13Beb2q34Er50o2JrKn2.gif',
+        large_image: IDLE_ART,
         large_text: '  ',
       },
       buttons: buttons.length > 0 ? buttons : undefined,
