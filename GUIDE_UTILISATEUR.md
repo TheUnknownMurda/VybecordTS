@@ -115,6 +115,10 @@ La musique, elle, n'est jamais interrompue : seule la publication vers Discord e
 
 Le délai se change dans **Settings → Discord presence → Away after**, et l'option se coupe juste au-dessus avec **Hide when I'm away**.
 
+### Sans musique, ma carte affiche « Nothing playing »
+
+Quand aucun lecteur ne joue quoi que ce soit, la présence 1 affiche **Listening to Vybecord · Nothing playing** avec le logo de Vybecord. Pendant ses cinq premières secondes, la liste Active Now de Discord montre encore l'icône du dernier lecteur à côté ; ensuite la carte passe sur l'application de Vybecord et l'icône suit. Pour ne rien afficher du tout à la place, active **Hide when paused**.
+
 ### La pochette s'affiche dans la fenêtre mais pas sur Discord
 
 La fenêtre lit l'image directement sur ton disque. Discord ne peut pas : il lui faut une URL. Vybecord publie donc la pochette que montre ton lecteur (celle de Spotify, d'Apple Music, ou celle d'un fichier local) sur son propre stockage de pochettes, et Discord la charge de là : jamais l'audio, et les infos d'appareil photo et de localisation sont retirées avant. C'est **Settings → Integrations → Cover images → Publish the player's cover**, activé par défaut.

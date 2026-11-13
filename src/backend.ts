@@ -245,6 +245,14 @@ const DEFAULT_DISCORD_APP_ID = '1396531182426128394';
 const APP_ID_SWITCH_DEBOUNCE_MS = 1500;
 
 /**
+ * How long "nothing playing" lasts before its card moves onto the default
+ * application (see scheduleIdleAppMove). Longer than a pause to skip an ad or
+ * the gap between two songs, short enough that the icon is right by the time
+ * anyone looks.
+ */
+const IDLE_APP_MOVE_MS = 5000;
+
+/**
  * Platform-specific Discord applications, the first of each list being the one
  * presence 1 uses.
  *
@@ -426,6 +434,8 @@ export class VybecordBackend extends EventEmitter {
   private userAway = false;
   /** When the cards now on the profile started going up; 0 with none. See cardOrderStamp(). */
   private cardEpoch = 0;
+  /** Pending move of the idle card onto the default application; see scheduleIdleAppMove(). */
+  private idleAppTimer: ReturnType<typeof setTimeout> | null = null;
   private lastAdState = false;  // so the ad status is pushed on change, not every poll
   private configDir: string;
 
@@ -3425,6 +3435,7 @@ export class VybecordBackend extends EventEmitter {
       ipc.clearActivity().catch(() => {});
       return;
     }
+    this.scheduleIdleAppMove(slot);
 
     const btn1 = this.config.get('rpc_button1_label');
     const btn1Url = this.config.get('rpc_button1_url');
@@ -3438,10 +3449,11 @@ export class VybecordBackend extends EventEmitter {
 
     ipc.setActivity({
       type: this.config.get('rpc_activity_type'),
-      // Presence 1 keeps the application of whatever played last, and Discord
-      // heads a card with the application's name unless the activity names
-      // itself: after Spotify, the card read "Listening to Spotify" over
-      // "Nothing playing". The window's preview already headed it Vybecord.
+      // For its first seconds the card is still on the application of
+      // whatever played last (see scheduleIdleAppMove), and Discord heads a
+      // card with the application's name unless the activity names itself:
+      // after Spotify, the card read "Listening to Spotify" over "Nothing
+      // playing". The window's preview already headed it Vybecord.
       name: 'Vybecord',
       status_display_type: sdt,
       details: '⏸ Nothing playing',
@@ -3452,6 +3464,36 @@ export class VybecordBackend extends EventEmitter {
       },
       buttons: buttons.length > 0 ? buttons : undefined,
     });
+  }
+
+  /**
+   * Move the "nothing playing" card onto the default application once the
+   * silence has lasted.
+   *
+   * Discord's Active Now list and profile popout draw the application's own
+   * icon (set in the Developer Portal) beside the card, whatever the card's
+   * picture is. Presence 1 used to keep the application of whatever played
+   * last, so 2.14.0's idle card, named Vybecord and wearing the new logo,
+   * still sat under SoundCloud's or Spotify's icon. The default application
+   * wears Vybecord's.
+   *
+   * Not at once: a pause and its resume, or the gap between two songs, would
+   * flip the card between two applications each time, and each flip takes it
+   * off Discord for a moment. The pool keeps a released socket open for a
+   * minute, so the music coming back after the move costs a republish, not a
+   * reconnect.
+   */
+  private scheduleIdleAppMove(slot: PresenceSlot): void {
+    const target = this.defaultAppId();
+    if (slot.appId === target || this.idleAppTimer) return;
+    this.idleAppTimer = setTimeout(() => {
+      this.idleAppTimer = null;
+      if (this.shuttingDown || this.slots.some(s => s.track) || slot.appId === target) return;
+      // Nothing would show on the new application either: no socket to open.
+      if (this.presenceHidden || !this.config.get('rpc_enabled') || this.config.get('rpc_only_when_playing')) return;
+      this.applyDiscordAppId(slot, target, 'idle');
+    }, IDLE_APP_MOVE_MS);
+    this.idleAppTimer.unref?.();
   }
 
   /**

@@ -336,7 +336,7 @@ These thresholds come from observation: every ad seen ran 30 s, and the shortest
 ### Away and paused
 
 - **Hide when I'm away** (on by default) takes the presence down after **Away after** minutes without keyboard or mouse input (10 by default, which matches Discord's own idle delay), and puts it back on the first input. The music isn't affected.
-- **Hide when paused** (off by default) clears the presence as soon as playback stops.
+- **Hide when paused** (off by default) clears the presence as soon as playback stops. With it off and nothing playing at all, presence 1 shows a **Nothing playing** card headed Vybecord. After five seconds of silence that card moves onto the default Vybecord application, so Discord's Active Now list and profile popout show Vybecord's icon beside it rather than the last player's.
 
 Both are under **Settings → Discord presence → Visibility**.
 

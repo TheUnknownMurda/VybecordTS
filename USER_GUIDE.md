@@ -115,6 +115,10 @@ The music is never interrupted; only the publishing to Discord is paused. **Now 
 
 The delay lives in **Settings → Discord presence → Away after**, and the switch just above it, **Hide when I'm away**, turns the whole thing off.
 
+### With nothing playing, my card says "Nothing playing"
+
+Once no player has anything at all, presence 1 shows **Listening to Vybecord · Nothing playing** with the Vybecord logo. For its first five seconds Discord's Active Now list still shows the last player's icon beside it; then the card moves onto Vybecord's own application and the icon follows. To show nothing at all instead, turn on **Hide when paused**.
+
 ### The cover does not show on Discord (but shows in the window)
 
 The window reads the artwork straight off your disk. Discord cannot — it needs a URL. So Vybecord publishes the cover your player shows (Spotify's, Apple Music's, or the one inside a local file) to its own cover store, and Discord loads it from there: never the audio, and with camera and location tags stripped first. That is **Settings → Integrations → Cover images → Publish the player's cover**, on by default.
