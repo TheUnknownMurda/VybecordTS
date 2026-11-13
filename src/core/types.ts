@@ -126,6 +126,13 @@ export interface DiscordActivity {
   details_url?: string;
   state_url?: string;
   large_url?: string;
+  /**
+   * Unix ms. Discord lists a user's cards newest `created_at` first, so this is
+   * what keeps several cards in the order of their presences — see
+   * cardOrderStamp() in backend.ts. Set only on the way to Discord, never by
+   * the engine.
+   */
+  created_at?: number;
 }
 
 // ── Config schema ──
