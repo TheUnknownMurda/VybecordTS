@@ -2851,8 +2851,8 @@ export class VybecordBackend extends EventEmitter {
   }
 
   /** Get a page of the persistent listening history (most recent first). */
-  getListeningHistory(limit = 50, offset = 0, anchor?: number) { return getHistoryPage(limit, offset, anchor); }
-  getListeningWrapped(days?: number) { return getWrappedStats(days); }
+  getListeningHistory(limit = 50, offset = 0, anchor?: number, source?: string) { return getHistoryPage(limit, offset, anchor, source); }
+  getListeningWrapped(days?: number, source?: string) { return getWrappedStats(days, source); }
 
   isDiscordConnected() { return this.pool.anyConnected; }
   isMediaSourceReady() { return this.media?.isReady ?? false; }

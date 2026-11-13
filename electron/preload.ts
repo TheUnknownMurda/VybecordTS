@@ -90,8 +90,8 @@ const api = {
   preferPlayer: (appId: string | null, slot = 0) => invoke('players:prefer', appId, slot),
 
   // ── Listening history ──
-  getHistory: (limit?: number, offset?: number, anchor?: number) => invoke('history:list', limit, offset, anchor),
-  getWrapped: (days?: number) => invoke('history:wrapped', days),
+  getHistory: (limit?: number, offset?: number, anchor?: number, source?: string) => invoke('history:list', limit, offset, anchor, source),
+  getWrapped: (days?: number, source?: string) => invoke('history:wrapped', days, source),
 
   // ── Custom lyrics ──
   listCustom: (limit?: number, offset?: number, search?: string) => invoke('custom:list', limit, offset, search),
