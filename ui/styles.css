@@ -14,17 +14,22 @@
   --accent: 16, 185, 129;
   --accent-hex: #10b981;
   /* The accent as text on a card — a lighter step in the dark theme, a darker
-     one in the light theme, so a link or a value never drops below 4.5:1. */
-  --accent-text: #34d399;
+     one in the light theme, so a link or a value never drops below 4.5:1.
+     Each theme reads its own step, so a chosen accent (ui/src/accent.js) can
+     set both on <html> without one theme's step leaking into the other. */
+  --accent-text: var(--accent-text-d, #34d399);
+  --accent-hover: #34d399;
   /* Text sitting on a filled accent button. */
   --on-accent: #04140d;
 
-  --bg-base: #0b0b10;
-  --bg-side: #0f0f15;
-  --bg-elevated: #14141c;
-  --bg-surface: #1c1c26;
-  --bg-hover: #23232e;
-  --bg-sunken: #101017;
+  /* Each surface reads a -d twin first: a picked accent colour tints them
+     (ui/src/accent.js) without the dark values leaking into the light theme. */
+  --bg-base: var(--bg-base-d, #0b0b10);
+  --bg-side: var(--bg-side-d, #0f0f15);
+  --bg-elevated: var(--bg-elevated-d, #14141c);
+  --bg-surface: var(--bg-surface-d, #1c1c26);
+  --bg-hover: var(--bg-hover-d, #23232e);
+  --bg-sunken: var(--bg-sunken-d, #101017);
 
   --border-s: rgba(255, 255, 255, 0.07);
   --border-d: rgba(255, 255, 255, 0.13);
@@ -50,15 +55,15 @@
 }
 
 html[data-theme='light'] {
-  --accent-text: #047857;
+  --accent-text: var(--accent-text-l, #047857);
   --on-accent: #04140d;
 
-  --bg-base: #f4f4f7;
-  --bg-side: #ececf1;
-  --bg-elevated: #ffffff;
-  --bg-surface: #f1f1f5;
-  --bg-hover: #e7e7ee;
-  --bg-sunken: #f7f7fa;
+  --bg-base: var(--bg-base-l, #f4f4f7);
+  --bg-side: var(--bg-side-l, #ececf1);
+  --bg-elevated: var(--bg-elevated-l, #ffffff);
+  --bg-surface: var(--bg-surface-l, #f1f1f5);
+  --bg-hover: var(--bg-hover-l, #e7e7ee);
+  --bg-sunken: var(--bg-sunken-l, #f7f7fa);
 
   --border-s: rgba(0, 0, 0, 0.08);
   --border-d: rgba(0, 0, 0, 0.14);
@@ -156,6 +161,11 @@ a {
 }
 html[data-theme='light'] .orb {
   opacity: 0.1;
+}
+/* With a picked accent colour the glow is that colour, not the cover's: the
+   background is meant to be the colour chosen (ui/src/accent.js). */
+html[data-accent='custom'] .orb {
+  background: var(--accent-hex);
 }
 
 /* ── Title bar ────────────────────────────────────────────────────────────── */
@@ -553,8 +563,8 @@ h2 {
   color: var(--on-accent);
 }
 .btn-primary:hover:not(:disabled) {
-  background: #34d399;
-  border-color: #34d399;
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
   color: var(--on-accent);
 }
 .btn-ghost {
@@ -1190,6 +1200,10 @@ label.field > span {
   box-shadow: 0 0 0 2px #28282d;
   display: none;
   pointer-events: none;
+}
+/* A dark accent takes white text (ui/src/accent.js), and so does the pencil. */
+html[data-on-accent='light'] .dc.editable .dc-zone::after {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 20h4L19.5 8.5a2.1 2.1 0 00-3-3L5 17v3z'/%3E%3Cpath d='M14.5 7.5l2 2'/%3E%3C/svg%3E");
 }
 .dc.editable .dc-zone:hover::after,
 .dc.editable .dc-zone:focus-visible::after,
@@ -3134,6 +3148,61 @@ html[data-theme='light'] .lyr-clickable:hover {
 .toast.ok {
   border-color: var(--border-a);
   color: var(--accent-text);
+}
+.toast.warn {
+  border-color: color-mix(in srgb, var(--amber) 45%, transparent);
+}
+/* Settings → App & window → Accent colour. */
+.accent-pick {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  max-width: 300px;
+}
+.accent-swatch {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+.accent-swatch.on {
+  border-color: var(--text-primary);
+}
+.accent-swatch:focus-visible,
+.accent-custom:focus-visible {
+  outline: 2px solid var(--accent-hex);
+  outline-offset: 2px;
+}
+/* .row-control input sizes every input in a row; this one is a swatch-sized button. */
+.row-control .accent-custom {
+  flex: none;
+  width: 30px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border-d);
+  border-radius: var(--r-sm);
+  background: none;
+  cursor: pointer;
+}
+.accent-custom::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+.accent-custom::-webkit-color-swatch {
+  border: 0;
+  border-radius: 5px;
+}
+/* The card-order warning under the lyrics switches in Settings. */
+.set-warn {
+  padding: 10px 14px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 8%, transparent);
 }
 @keyframes toast-in {
   from {

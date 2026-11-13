@@ -76,7 +76,7 @@ Vybecord is a Windows desktop app (Electron + TypeScript). It reads the Windows 
 
 **App**
 
-- Frameless window with dark and light themes. The app runs in the system tray, so closing the window doesn't stop the presence.
+- Frameless window with dark and light themes, in the accent colour of your choice (**Settings → App & window → Accent colour**: eight swatches or any colour), which also tints the background and its glow. Emerald, the default, keeps the original neutral background. The app runs in the system tray, so closing the window doesn't stop the presence.
 - Listening history (up to 10,000 plays) shown on the **Activity** page over 7 days, 30 days, 12 months or all time: time listened per day, top artists and tracks, and the full log.
 - Optional Last.fm scrobbling, with a queue for scrobbles made while offline.
 - Automatic updates from GitHub Releases. They install when you quit the app.
@@ -278,7 +278,7 @@ Windows Media Player (both the classic and the new app), Groove Music, Movies & 
 - **Activity type on presence N** gives each card its own verb: Listening for the song, Watching for the stream. Presences 2 to 5 follow presence 1 until you change them.
 - **Now playing** shows every card on its **On Discord** side. Click a small one to show its lyrics on the left and draw it whole; its **Source** menu then pins that presence to a player, and its parts open its settings.
 - The listening history (and so **Activity**) and Last.fm only follow **presence 1**.
-- **The cards stay in order on the profile**: presence 1 on top, then 2, and so on. Discord sorts a user's cards by type first (Competing, then Playing, then Listening and Watching together), then newest `created_at` first. Left to Discord, the card that had just changed came out newest, so two cards with lyrics swapped places at every line. Each card now goes out with a `created_at` set by its position (see `cardOrderStamp()` in `src/backend.ts`), which no lyric line changes, so no update is added and none is delayed. The type still comes first: a card set to *Playing* sits above *Listening* and *Watching* ones whatever its number.
+- **The cards can swap places on the profile.** Discord sorts a user's cards by type first (Competing, then Playing, then Listening and Watching together), then puts the card that changed last on top, so two cards with lyrics can trade places at each line. Vybecord cannot hold the order, and the window warns when lyrics go on a second card. Tried and dropped on 2026-11-13, each watched from another account: a fixed `created_at` per card (Discord stamps its own), and re-sending the upper card after each change of the lower one, unchanged, with its start moved by 1 ms, or with its hover text changed.
 
 Discord shows one card per application. Each card publishes under its platform's own application (a platform can have several, see `PLATFORM_DISCORD_APP_IDS` in `src/backend.ts`). When they are all in use by higher cards, the card borrows another one: first the default Vybecord application, then any built-in platform application nobody is using. The card header still names the real platform, but Discord's **Active Now** list shows the borrowed application's own icon next to the card, so a Kick card on Spotify's application wears the Spotify logo there. That is why a card moves back up as soon as a better application is free: its platform's own, or else the default one. It never moves between two applications of the same rank, since each move takes it off Discord for a moment. Kick and Twitch have five applications each (one per card) and YouTube three, so five Kick streams all show the Kick logo. Seventeen applications for at most five cards means one is always free, so there is nothing to set up. If no application is free anyway, the card stays off Discord (it still shows in the window) and the log says why.
 
@@ -336,7 +336,7 @@ These thresholds come from observation: every ad seen ran 30 s, and the shortest
 ### Away and paused
 
 - **Hide when I'm away** (on by default) takes the presence down after **Away after** minutes without keyboard or mouse input (10 by default, which matches Discord's own idle delay), and puts it back on the first input. The music isn't affected.
-- **Hide when paused** (off by default) clears the presence as soon as playback stops.
+- **Hide when paused** (off by default) clears the presence as soon as playback stops. With it off and nothing playing at all, presence 1 shows a **Nothing playing** card headed Vybecord. After five seconds of silence that card moves onto the default Vybecord application, so Discord's Active Now list and profile popout show Vybecord's icon beside it rather than the last player's.
 
 Both are under **Settings → Discord presence → Visibility**.
 
@@ -448,6 +448,7 @@ The second presence button is fixed. It links to what is playing and is labelled
 | Key | Default | Accepted values | Setting |
 | --- | --- | --- | --- |
 | `theme` | `"dark"` | `dark`, `light` | Theme |
+| `accent_color` | `"#10b981"` | `#rrggbb` | Accent colour (anything else falls back to the default) |
 | `minimize_to_tray` | `true` | boolean | Close to tray |
 | `tray_enabled` | `true` | boolean | Show tray icon |
 | `start_minimized` | `false` | boolean | Start hidden |

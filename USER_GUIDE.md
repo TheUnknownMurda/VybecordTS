@@ -33,7 +33,7 @@ Your Discord status updates on its own. The first time, Vybecord opens on **Help
 
 Vybecord keeps running in the notification area, next to the clock. Click the icon to bring the window back, or right-click → **Quit** to actually exit. The same right-click menu works without opening the window: it shows the song playing, opens any page (**Go to**), and has switches for **Show on Discord**, **Show lyrics** (one per presence when there are several), **Translate lyrics on Discord**, the number of **Presences**, which players are detected (**Detection**, one switch per platform as in Settings), **Hide when paused**, **Hide when I’m away**, **Hide during Spotify ads** and **Launch at sign-in**, plus **Check for updates**. They are the same settings as in the window.
 
-You can change this under **Settings → App & window → Close to tray**.
+You can change this under **Settings → App & window → Close to tray**. The same page has **Theme** (dark or light) and **Accent colour**, the green of the buttons, switches and links: pick a swatch or any colour, and the background takes its tint too (Emerald, the default, keeps the original neutral background). Your Discord card keeps Discord's own colours.
 
 ### After an update
 
@@ -115,6 +115,10 @@ The music is never interrupted; only the publishing to Discord is paused. **Now 
 
 The delay lives in **Settings → Discord presence → Away after**, and the switch just above it, **Hide when I'm away**, turns the whole thing off.
 
+### With nothing playing, my card says "Nothing playing"
+
+Once no player has anything at all, presence 1 shows **Listening to Vybecord · Nothing playing** with the Vybecord logo. For its first five seconds Discord's Active Now list still shows the last player's icon beside it; then the card moves onto Vybecord's own application and the icon follows. To show nothing at all instead, turn on **Hide when paused**.
+
 ### The cover does not show on Discord (but shows in the window)
 
 The window reads the artwork straight off your disk. Discord cannot — it needs a URL. So Vybecord publishes the cover your player shows (Spotify's, Apple Music's, or the one inside a local file) to its own cover store, and Discord loads it from there: never the audio, and with camera and location tags stripped first. That is **Settings → Integrations → Cover images → Publish the player's cover**, on by default.
@@ -192,7 +196,7 @@ Or show them all. **Settings → Discord presence → Several presences** puts u
 - **Activity type on presence N** gives each card its own verb: *Listening* for the song, *Watching* for the stream. Cards 2 to 5 say the same as presence 1 until you change them.
 - **Now playing** shows every card on its **On Discord** side; click a small one to see its lyrics and draw it whole. Its **Source** menu pins that presence to a player, so it never swaps with another, and clicking its parts changes them.
 - The listening history (and so **Activity**) and Last.fm follow presence 1 only.
-- The cards keep their order on your profile, presence 1 on top, even with lyrics moving on all of them. Discord does put a *Playing* card above *Listening* and *Watching* ones whatever its number.
+- With lyrics on two cards or more, the cards can swap places on your profile at each line: Discord puts the card that changed last on top, and Vybecord cannot hold the order. The window warns you when lyrics go on a second card. A *Playing* card always sits above *Listening* and *Watching* ones.
 
 Each card is a Discord application of its own. Spotify, SoundCloud and Apple Music have one each, YouTube three, and Kick and Twitch five each, so up to five Kick or Twitch streams all keep their logo; a card whose platform has no application left borrows a free one. With the default that makes seventeen applications for five cards at most, so there is nothing to set up.
 

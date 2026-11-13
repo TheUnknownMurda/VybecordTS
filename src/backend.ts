@@ -245,6 +245,14 @@ const DEFAULT_DISCORD_APP_ID = '1396531182426128394';
 const APP_ID_SWITCH_DEBOUNCE_MS = 1500;
 
 /**
+ * How long "nothing playing" lasts before its card moves onto the default
+ * application (see scheduleIdleAppMove). Longer than a pause to skip an ad or
+ * the gap between two songs, short enough that the icon is right by the time
+ * anyone looks.
+ */
+const IDLE_APP_MOVE_MS = 5000;
+
+/**
  * Platform-specific Discord applications, the first of each list being the one
  * presence 1 uses.
  *
@@ -424,8 +432,8 @@ export class VybecordBackend extends EventEmitter {
    *  the same window in which Discord flips the account to Idle. Driven from
    *  the main process; see setUserAway(). */
   private userAway = false;
-  /** When the cards now on the profile started going up; 0 with none. See cardOrderStamp(). */
-  private cardEpoch = 0;
+  /** Pending move of the idle card onto the default application; see scheduleIdleAppMove(). */
+  private idleAppTimer: ReturnType<typeof setTimeout> | null = null;
   private lastAdState = false;  // so the ad status is pushed on change, not every poll
   private configDir: string;
 
@@ -1704,8 +1712,6 @@ export class VybecordBackend extends EventEmitter {
       this.releaseSlotApp(slot);
       return;
     }
-    // The next card to go up starts the order over — see cardOrderStamp().
-    this.cardEpoch = 0;
     if (!slot.primary) this.releaseSlotApp(slot);
     this.setIdlePresence();
   }
@@ -2987,50 +2993,9 @@ export class VybecordBackend extends EventEmitter {
         // clock, and stopping it would mean re-seeking on every return. Only
         // the publish is dropped.
         if (!this.config.get('rpc_enabled') || this.presenceHidden || !slot.appId) return;
-        this.pool.get(slot.appId)?.setActivity({ ...activity, created_at: this.cardOrderStamp(slot) });
+        this.pool.get(slot.appId)?.setActivity(activity);
       },
     });
-  }
-
-  /**
-   * The `created_at` a card goes to Discord with: what holds several cards in
-   * the order of their presences.
-   *
-   * Discord sorts a user's activities by type (Competing, then Playing, then
-   * Listening and Watching together), then newest `created_at` first — read
-   * in the client's bundle, 2026-11 (the comparator PresenceStore exports).
-   * Left to Discord, the time is stamped on its side and the card that had
-   * just changed came out newest: with lyrics on two cards, the one that had
-   * just moved to its next line went to the top, and the two swapped places
-   * line after line.
-   *
-   * The desktop client keeps the value sent here — its validator lets unknown
-   * keys through, and its own profile sorts by it. Whether Discord's servers
-   * pass it on to everyone else as sent is not in the client's code; only
-   * watching the profile from another account can tell.
-   *
-   * The stamp is the position alone: presence 1 the newest, each card below it
-   * a second older. Nothing about it moves on a lyric line, so the pushes that
-   * carry the lyrics are the same pushes as before, at the same moments, and
-   * no push is ever added to hold the order.
-   *
-   * Rejected: each card's own start time, kept below the card above. It reads
-   * better as a time, but a card arriving above an older one moves every stamp
-   * under it, and a card with no lyrics may not push again for minutes — it
-   * would sit out of order until then, or need a push of its own. By position,
-   * only a swap moves a stamp, and both cards carry their new one on their
-   * next push: at once when the two positions run under different settings
-   * (see updateConfig in lyrics-engine.ts), on the 5-second heartbeat at the
-   * latest.
-   *
-   * The time itself only shows on a card with no timestamps (an offline
-   * channel), as the clock Discord then counts from: the epoch is when the
-   * first of the cards now up went up, not some time in the distant past.
-   */
-  private cardOrderStamp(slot: PresenceSlot): number {
-    if (!this.cardEpoch) this.cardEpoch = Date.now();
-    // A whole second apart, in case anything on the way rounds to one.
-    return this.cardEpoch - slot.index * 1000;
   }
 
   /**
@@ -3425,6 +3390,7 @@ export class VybecordBackend extends EventEmitter {
       ipc.clearActivity().catch(() => {});
       return;
     }
+    this.scheduleIdleAppMove(slot);
 
     const btn1 = this.config.get('rpc_button1_label');
     const btn1Url = this.config.get('rpc_button1_url');
@@ -3438,10 +3404,11 @@ export class VybecordBackend extends EventEmitter {
 
     ipc.setActivity({
       type: this.config.get('rpc_activity_type'),
-      // Presence 1 keeps the application of whatever played last, and Discord
-      // heads a card with the application's name unless the activity names
-      // itself: after Spotify, the card read "Listening to Spotify" over
-      // "Nothing playing". The window's preview already headed it Vybecord.
+      // For its first seconds the card is still on the application of
+      // whatever played last (see scheduleIdleAppMove), and Discord heads a
+      // card with the application's name unless the activity names itself:
+      // after Spotify, the card read "Listening to Spotify" over "Nothing
+      // playing". The window's preview already headed it Vybecord.
       name: 'Vybecord',
       status_display_type: sdt,
       details: '⏸ Nothing playing',
@@ -3452,6 +3419,36 @@ export class VybecordBackend extends EventEmitter {
       },
       buttons: buttons.length > 0 ? buttons : undefined,
     });
+  }
+
+  /**
+   * Move the "nothing playing" card onto the default application once the
+   * silence has lasted.
+   *
+   * Discord's Active Now list and profile popout draw the application's own
+   * icon (set in the Developer Portal) beside the card, whatever the card's
+   * picture is. Presence 1 used to keep the application of whatever played
+   * last, so 2.14.0's idle card, named Vybecord and wearing the new logo,
+   * still sat under SoundCloud's or Spotify's icon. The default application
+   * wears Vybecord's.
+   *
+   * Not at once: a pause and its resume, or the gap between two songs, would
+   * flip the card between two applications each time, and each flip takes it
+   * off Discord for a moment. The pool keeps a released socket open for a
+   * minute, so the music coming back after the move costs a republish, not a
+   * reconnect.
+   */
+  private scheduleIdleAppMove(slot: PresenceSlot): void {
+    const target = this.defaultAppId();
+    if (slot.appId === target || this.idleAppTimer) return;
+    this.idleAppTimer = setTimeout(() => {
+      this.idleAppTimer = null;
+      if (this.shuttingDown || this.slots.some(s => s.track) || slot.appId === target) return;
+      // Nothing would show on the new application either: no socket to open.
+      if (this.presenceHidden || !this.config.get('rpc_enabled') || this.config.get('rpc_only_when_playing')) return;
+      this.applyDiscordAppId(slot, target, 'idle');
+    }, IDLE_APP_MOVE_MS);
+    this.idleAppTimer.unref?.();
   }
 
   /**

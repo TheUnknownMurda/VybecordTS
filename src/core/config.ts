@@ -100,6 +100,8 @@ const DEFAULTS: VybecordConfig = {
   start_minimized: false,
   launch_on_startup: false,
   theme: 'dark',
+  /** The window's accent colour, `#rrggbb`; the renderer falls back to the default on anything else. */
+  accent_color: '#10b981',
   // The version whose What's New was last closed. Empty on a fresh install and
   // after an update from a version that did not have it — see whats-new.js.
   whats_new_seen: '',
@@ -212,6 +214,7 @@ export const CONFIG_SCHEMA: Record<string, FieldSpec> = {
   start_minimized: { type: 'boolean' },
   launch_on_startup: { type: 'boolean' },
   theme: { type: 'string', values: ['dark', 'light'] as const },
+  accent_color: { type: 'string', maxLength: 16 },
   whats_new_seen: { type: 'string', maxLength: 32 },
 };
 

@@ -12,6 +12,8 @@ import { state, subscribe, init } from './state.js';
 import { setNavigator } from './router.js';
 import { mountUpdateBanner } from './update-banner.js';
 import { maybeShowWhatsNew } from './whats-new.js';
+import { lyricCardCount, CARD_ORDER_NOTE } from './why.js';
+import { applyAccent } from './accent.js';
 
 import * as now from './pages/now.js';
 import * as library from './pages/library.js';
@@ -197,9 +199,24 @@ async function main() {
   }
 
   document.documentElement.dataset.theme = state.config.theme === 'light' ? 'light' : 'dark';
+  applyAccent(state.config.accent_color);
+  // Lyrics going on a second card, from any switch (Settings, Now playing,
+  // the card editor, Why?, the tray): warn once, at that moment, that Discord
+  // may then swap the cards around. Counted from the config already loaded, so
+  // starting up with two lyric cards says nothing. Flipping a switch off and
+  // on again while the first warning is still up does not stack a second one.
+  let lyricCards = lyricCardCount(state.config);
+  let warnedAt = 0;
   subscribe('config', (cfg) => {
     document.documentElement.dataset.theme = cfg.theme === 'light' ? 'light' : 'dark';
+    applyAccent(cfg.accent_color);
     paintStatus();
+    const n = lyricCardCount(cfg);
+    if (n >= 2 && lyricCards < 2 && Date.now() - warnedAt > 10_000) {
+      toast(CARD_ORDER_NOTE, 'warn');
+      warnedAt = Date.now();
+    }
+    lyricCards = n;
   });
 
   paintStatus();

@@ -33,7 +33,7 @@ Ton statut Discord se met à jour tout seul. La première fois, Vybecord s'ouvre
 
 Vybecord continue dans la zone de notification (à côté de l'horloge). Clique sur l'icône pour rouvrir la fenêtre, ou clic droit → **Quit** pour vraiment quitter. Le même menu du clic droit marche sans ouvrir la fenêtre : il affiche la chanson en cours, ouvre n'importe quelle page (**Go to**) et a des interrupteurs pour **Show on Discord**, **Show lyrics** (un par présence quand il y en a plusieurs), **Translate lyrics on Discord**, le nombre de présences (**Presences**), les plateformes détectées (**Detection**, une case par plateforme comme dans Settings), **Hide when paused**, **Hide when I’m away**, **Hide during Spotify ads** et **Launch at sign-in**, plus **Check for updates**. Ce sont les mêmes réglages que dans la fenêtre.
 
-Tu peux changer ça dans **Settings → App & window → Close to tray**.
+Tu peux changer ça dans **Settings → App & window → Close to tray**. La même page a **Theme** (sombre ou clair) et **Accent colour**, le vert des boutons, des interrupteurs et des liens : choisis une pastille ou n'importe quelle couleur, et le fond prend aussi sa teinte (Emerald, la couleur par défaut, garde le fond neutre d'origine). Ta carte Discord garde les couleurs de Discord.
 
 ### Après une mise à jour
 
@@ -115,6 +115,10 @@ La musique, elle, n'est jamais interrompue : seule la publication vers Discord e
 
 Le délai se change dans **Settings → Discord presence → Away after**, et l'option se coupe juste au-dessus avec **Hide when I'm away**.
 
+### Sans musique, ma carte affiche « Nothing playing »
+
+Quand aucun lecteur ne joue quoi que ce soit, la présence 1 affiche **Listening to Vybecord · Nothing playing** avec le logo de Vybecord. Pendant ses cinq premières secondes, la liste Active Now de Discord montre encore l'icône du dernier lecteur à côté ; ensuite la carte passe sur l'application de Vybecord et l'icône suit. Pour ne rien afficher du tout à la place, active **Hide when paused**.
+
 ### La pochette s'affiche dans la fenêtre mais pas sur Discord
 
 La fenêtre lit l'image directement sur ton disque. Discord ne peut pas : il lui faut une URL. Vybecord publie donc la pochette que montre ton lecteur (celle de Spotify, d'Apple Music, ou celle d'un fichier local) sur son propre stockage de pochettes, et Discord la charge de là : jamais l'audio, et les infos d'appareil photo et de localisation sont retirées avant. C'est **Settings → Integrations → Cover images → Publish the player's cover**, activé par défaut.
@@ -192,7 +196,7 @@ Ou affiche-les toutes. **Settings → Discord presence → Several presences** m
 - **Activity type on presence N** donne à chaque carte son propre verbe : *Listening* pour la chanson, *Watching* pour le stream. Les cartes 2 à 5 disent la même chose que la présence 1 tant que tu ne les changes pas.
 - **Now playing** montre toutes les cartes du côté **On Discord** ; clique sur une petite carte pour voir ses paroles et l'afficher en grand. Son menu **Source** épingle cette présence à un lecteur, pour qu'elle ne s'échange jamais avec une autre, et un clic sur ses parties les modifie.
 - L'historique d'écoute (et donc **Activity**) et Last.fm ne suivent que la présence 1.
-- Les cartes gardent leur ordre sur ton profil, la présence 1 en haut, même quand les paroles défilent sur toutes. Discord place quand même une carte *Playing* au-dessus des cartes *Listening* et *Watching*, quel que soit son numéro.
+- Avec les paroles sur deux cartes ou plus, les cartes peuvent changer de place sur ton profil à chaque ligne : Discord met en haut la carte qui vient de changer, et Vybecord ne peut pas imposer l'ordre. La fenêtre te prévient quand les paroles s'activent sur une deuxième carte. Une carte *Playing* passe toujours au-dessus des cartes *Listening* et *Watching*.
 
 Chaque carte est une application Discord à part. Spotify, SoundCloud et Apple Music en ont une chacun, YouTube trois, et Kick et Twitch cinq chacun : jusqu'à cinq streams Kick ou Twitch gardent tous leur logo. Une carte dont la plateforme n'a plus d'application libre en emprunte une autre. Avec celle par défaut, ça fait dix-sept applications pour cinq cartes au maximum : il n'y a rien à configurer.
 
