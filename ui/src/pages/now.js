@@ -673,9 +673,9 @@ function paintTrack(playing) {
     return;
   }
 
-  // A Short says so: the card it mirrors does too, and its timer counts the
-  // sitting rather than this one clip. "Shorts" alone, because "Watching on
-  // YouTube Shorts" ran past the card at the smallest window.
+  // A Short says so: the card it mirrors does too, [Shorts] leading its
+  // title. "Shorts" alone, because "Watching on YouTube Shorts" ran past the
+  // card at the smallest window.
   const label = track.is_short ? 'Shorts' : platformInfo(track.media_source)[0];
   /*
    * What leads the line says what the player is doing: the pulse while it

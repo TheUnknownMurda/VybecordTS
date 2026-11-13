@@ -65,16 +65,11 @@ export interface TrackData {
   artist_is_channel?: boolean;
   /**
    * A YouTube Short (youtube.com/shorts/…), reported by the extension. The
-   * card shows it as a Short: no progress bar for a clip that loops, the
-   * sitting's time instead (shorts_since_ms), no lyrics lookup, nothing in
-   * the history or on Last.fm.
+   * card shows it as a Short: [Shorts] before the title, a bar that starts
+   * over with each loop, the second line leading to the channel, no lyrics
+   * lookup, nothing in the history or on Last.fm.
    */
   is_short?: boolean;
-  /**
-   * When the run of Shorts this one belongs to began, epoch ms: the card's
-   * timer counts the sitting, not the Short. See YouTubeSource.
-   */
-  shorts_since_ms?: number;
   /**
    * The OS media session this reading came from, when it came from one.
    *
