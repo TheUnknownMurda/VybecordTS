@@ -196,7 +196,7 @@ Or show them all. **Settings → Discord presence → Several presences** puts u
 - **Activity type on presence N** gives each card its own verb: *Listening* for the song, *Watching* for the stream. Cards 2 to 5 say the same as presence 1 until you change them.
 - **Now playing** shows every card on its **On Discord** side; click a small one to see its lyrics and draw it whole. Its **Source** menu pins that presence to a player, so it never swaps with another, and clicking its parts changes them.
 - The listening history (and so **Activity**) and Last.fm follow presence 1 only.
-- The cards keep their order on your profile, presence 1 on top, even with lyrics moving on all of them. Discord does put a *Playing* card above *Listening* and *Watching* ones whatever its number.
+- With lyrics on two cards or more, the cards can swap places on your profile at each line: Discord puts the card that changed last on top, and Vybecord cannot hold the order. The window warns you when lyrics go on a second card. A *Playing* card always sits above *Listening* and *Watching* ones.
 
 Each card is a Discord application of its own. Spotify, SoundCloud and Apple Music have one each, YouTube three, and Kick and Twitch five each, so up to five Kick or Twitch streams all keep their logo; a card whose platform has no application left borrows a free one. With the default that makes seventeen applications for five cards at most, so there is nothing to set up.
 

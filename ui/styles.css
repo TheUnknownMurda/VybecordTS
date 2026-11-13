@@ -3135,6 +3135,17 @@ html[data-theme='light'] .lyr-clickable:hover {
   border-color: var(--border-a);
   color: var(--accent-text);
 }
+.toast.warn {
+  border-color: color-mix(in srgb, var(--amber) 45%, transparent);
+}
+/* The card-order warning under the lyrics switches in Settings. */
+.set-warn {
+  padding: 10px 14px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 8%, transparent);
+}
 @keyframes toast-in {
   from {
     opacity: 0;

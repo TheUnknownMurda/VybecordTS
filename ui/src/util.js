@@ -219,7 +219,8 @@ export function toast(message, kind = '') {
   if (!host) return;
   const node = el('div', { class: `toast ${kind}`.trim(), text: message });
   host.append(node);
-  setTimeout(() => node.remove(), kind === 'err' ? 6000 : 3200);
+  // A warning is a sentence or two to read, not a word of feedback.
+  setTimeout(() => node.remove(), kind === 'warn' ? 10000 : kind === 'err' ? 6000 : 3200);
 }
 
 /**

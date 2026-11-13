@@ -21,6 +21,29 @@ import { goto } from './router.js';
 /** The lyrics switch of a card; `show_lyrics` is the first one's. */
 export const lyricsKey = (i) => (i > 0 ? `show_lyrics_${i + 1}` : 'show_lyrics');
 
+/** How many of the cards on air carry lyrics. */
+export function lyricCardCount(cfg) {
+  const count = Math.max(1, Math.min(5, Number(cfg.presence_count) || 1));
+  let n = 0;
+  for (let i = 0; i < count; i++) if (cfg[lyricsKey(i)] !== false) n++;
+  return n;
+}
+
+/**
+ * Said when lyrics go on a second card, as a toast (main.js) and under the
+ * switches in Settings.
+ *
+ * Discord puts the card that changed last on top of the others of its type,
+ * and a lyric line is a change, so two cards with lyrics trade places line
+ * after line. Nothing the app sends holds them: a fixed created_at per card
+ * (Discord stamps its own) and re-sending the upper card after each change of
+ * the lower one (unchanged, start moved by 1 ms, hover text changed) were each
+ * tried on 2026-11-13 and watched from another account; none kept the order.
+ * So the user is told rather than surprised.
+ */
+export const CARD_ORDER_NOTE = 'With lyrics on more than one card, your cards can swap places on your Discord profile at each new line: '
+  + 'Discord puts the card that changed last on top, and Vybecord cannot hold the order.';
+
 /** Literal glyphs only, never anything a track can name — see ICONS in pages/now.js. */
 const GLYPH = {
   ok: '<svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg>',

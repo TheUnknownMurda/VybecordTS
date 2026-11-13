@@ -14,6 +14,7 @@ import { discordPreview } from '../discord-card.js';
 // The card's choices live with the editor on Now playing, so both offer the same lists.
 import { ACTIVITY_TYPES, ACTIVITY_KEYS, SHORTS_ACTIVITY_TYPES, STATUS_DISPLAY, ICON_MODES, ICON_KEYS } from '../card-editor.js';
 import { showWhatsNew } from '../whats-new.js';
+import { lyricCardCount, CARD_ORDER_NOTE } from '../why.js';
 import { spicetifyCard } from './spicetify-card.js';
 import { updateCard } from './update-card.js';
 import { lastfmCard } from './lastfm-card.js';
@@ -305,6 +306,7 @@ function presenceCat(body, { search }) {
             i === 0 ? 'The line being sung and the next one; the title, artist and album move to the line under them.' : 'Off shows the track without lyrics on that card.',
             cfg(key, true) !== false, (v) => put(key, v)))
         : []),
+      multi && lyricCardCount(state.config) >= 2 ? el('div', { class: 'set-warn', text: CARD_ORDER_NOTE }) : null,
       ...(multi
         ? ACTIVITY_KEYS.slice(0, presenceCount()).map((key, i) => selectRow(
             `Activity type on presence ${i + 1}`,
