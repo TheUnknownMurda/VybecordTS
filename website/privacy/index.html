@@ -32,7 +32,7 @@
 
 <main class="doc">
   <h1>Privacy Policy</h1>
-  <p class="date">Vybecord browser extension and desktop app · Last updated 30 October 2026</p>
+  <p class="date">Vybecord browser extension and desktop app · Last updated 13 November 2026</p>
 
   <div class="callout">
     <p>
@@ -135,6 +135,12 @@
     sign-in.
   </p>
   <p>
+    For a YouTube Short whose channel link the extension could not read off the page
+    yet, the desktop app asks YouTube's public oEmbed endpoint which channel posted it,
+    so the card's channel line can open the channel. That request carries only the
+    Short's video identifier, and no sign-in.
+  </p>
+  <p>
     The desktop app then publishes what you are playing to your Discord profile, which
     is the purpose of installing it. That step is Discord's, and is covered by
     <a href="https://discord.com/privacy" target="_blank" rel="noopener">Discord's privacy policy</a>.
@@ -162,7 +168,9 @@
   <p>
     Only when there is no such image, or when you turn publishing off, does the app look
     the song up on a public music catalogue &mdash; Deezer, then Apple. That sends only
-    the track and artist name, and nothing of yours is uploaded.
+    the track and artist name, and nothing of yours is uploaded. The same kind of
+    request to Apple finds the album an Apple Music track is on, so that its cover on
+    Discord opens that album.
   </p>
   <p>Precisely what that involves:</p>
   <ul>
