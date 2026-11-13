@@ -37,6 +37,12 @@ export interface KickPayload {
   display_name: string;
   followers: string;
   category: string;
+  /**
+   * The category's slug, from Kick's answer (extension 2.2.3+), for the link
+   * on the card's picture. Older scripts send none, and the picture opens the
+   * channel or the video, as it used to.
+   */
+  category_slug: string;
   stream_title: string;
   profile_url: string;
   is_live: boolean;
@@ -68,6 +74,14 @@ export interface KickPayload {
 const RE_VIDEO_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const RE_CLIP_ID = /^clip_[A-Za-z0-9]{1,40}$/;
 const RE_KICK_SLUG = /^[A-Za-z0-9_-]{1,64}$/;
+const RE_CATEGORY_SLUG = /^[A-Za-z0-9_-]{1,100}$/;
+
+/** A category's slug, pasted into kick.com/category/<slug>, or ''. */
+function asCategorySlug(value: unknown): string {
+  // One past the limit, so a longer one is refused rather than cut short.
+  const slug = asText(value, 101);
+  return RE_CATEGORY_SLUG.test(slug) ? slug : '';
+}
 
 /** Coerce a push into the shape above, whatever actually arrived. */
 export function normalizeKickPayload(raw: unknown): KickPayload {
@@ -82,6 +96,7 @@ export function normalizeKickPayload(raw: unknown): KickPayload {
     display_name: asText(d.display_name, 64),
     followers: asText(d.followers, 32),
     category: asText(d.category, 64),
+    category_slug: asCategorySlug(d.category_slug),
     stream_title: asText(d.stream_title),
     profile_url: asUrl(d.profile_url),
     is_live: asBool(d.is_live),
@@ -219,6 +234,7 @@ export class KickSource {
       channelName: d.display_name || slug || 'Kick',
       channelUrl,
       avatarUrl: d.profile_picture_url || d.thumbnail_url,
+      categoryUrl: d.category_slug ? `https://kick.com/category/${d.category_slug}` : '',
       receivedAt: t.receivedAt,
     };
     if (page.startsWith('ch:')) {

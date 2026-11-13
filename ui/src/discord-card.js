@@ -16,6 +16,13 @@ import { state, subscribe } from './state.js';
 import { presenceModel } from './discord-model.js';
 
 /**
+ * The "Nothing playing" card's picture, IDLE_ART in src/backend.ts, which has
+ * the reasons for the URL. That card is built there without the engine, so no
+ * activityUpdate hands it to the window, and the preview keeps its own copy.
+ */
+const IDLE_ART = 'https://raw.githubusercontent.com/TheUnknownMurda/VybecordTS/976ffbf38eea327e0b09dea13e7eda03f13e2f45/assets/logo/vybecord-discord.png';
+
+/**
  * Why nothing is on the profile right now, or '' when the card is up.
  *
  * @param t the card's track: the focused one's by default; Now playing asks
@@ -91,7 +98,12 @@ export function discordPreview(opts = {}) {
       // all is playing — see setIdlePresence() in the backend.
       const anyPlaying = state.slots.some((s) => s.track);
       if (state.focus === 0 && !anyPlaying && state.config.rpc_only_when_playing !== true) {
-        activity = { type: state.config.rpc_activity_type ?? 2, details: '⏸ Nothing playing', state: '  ' };
+        activity = {
+          type: state.config.rpc_activity_type ?? 2,
+          details: '⏸ Nothing playing',
+          state: '  ',
+          assets: { large_image: IDLE_ART },
+        };
         appName = 'Vybecord';
         draw(BLANK_ART);
       } else {

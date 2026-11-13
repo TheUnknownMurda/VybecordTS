@@ -57,6 +57,7 @@ import {
 import { initLocalDb, closeLocalDb, insertCustomLyrics, listCustomLyrics, getCustomLyrics, updateCustomLyrics, deleteCustomLyrics, findExistingCustomLyrics, searchLrclibDump as searchLrclibDumpDb, getLrclibTrackLyrics as getLrclibTrackLyricsDb, lrclibDumpStatus } from './core/local-lyrics-db.js';
 import { initLastFm, scrobbleTrackStart, checkAndScrobble, scrobblePause, scrobbleTrackEnd } from './core/lastfm.js';
 import { lookupCoverArt } from './core/cover-art.js';
+import { lookupAppleMusicAlbum } from './core/apple-music-link.js';
 import { configureArtUpload, uploadCoverArt, thumbnailSignature } from './core/art-upload.js';
 import { extractLocalArt, extractArtFromPath } from './core/local-art.js';
 import { initBlacklist, flagLyrics, isLyricsFlagged, clearFlags, listFlaggedTracks, clearFlagsByKey } from './core/lyrics-blacklist.js';
@@ -197,6 +198,21 @@ const MAX_PUSHED_LYRIC_LINES = 2000;
  * not be cached as though it were the video's lyrics (see onNewTrack).
  */
 const AGE_GATED_LINE = '🔞 CC unavailable — age-restricted video';
+
+/**
+ * The picture on the "Nothing playing" card: the Vybecord logo drawn edge to
+ * edge, the Discord application's icon, since Discord rounds the corners of a
+ * card's picture itself.
+ *
+ * Discord only shows a picture it can download, so this is the URL of
+ * assets/logo/vybecord-discord.png. It names the commit that added the file
+ * rather than a branch: it worked before that commit reached desktop-app, it
+ * keeps working for every copy of the app already installed whatever later
+ * happens to the file, and a new picture gets a new URL, which Discord's
+ * image cache cannot hold back. The window's preview of the card draws the
+ * same URL (IDLE_ART in ui/src/discord-card.js).
+ */
+const IDLE_ART = 'https://raw.githubusercontent.com/TheUnknownMurda/VybecordTS/976ffbf38eea327e0b09dea13e7eda03f13e2f45/assets/logo/vybecord-discord.png';
 
 /**
  * Bounds on a cookie handover from the extension. A signed-in YouTube jar is
@@ -1438,6 +1454,10 @@ export class VybecordBackend extends EventEmitter {
     if (/^https?:\/\//.test(prevArt) && !/^https?:\/\//.test(osArt)) {
       track.album_art_url = prevArt;
     }
+    // Nor does a snapshot carry the album page looked up for the track
+    // (resolveAlbumLink), and the engine would read its absence as the link
+    // moving back to a search.
+    if (!track.album_url && slot.track?.album_url) track.album_url = slot.track.album_url;
     slot.track = track;
     if (track.album_art_url !== prevArt) {
       this.emit('trackUpdate', track, slot.index);
@@ -1986,6 +2006,9 @@ export class VybecordBackend extends EventEmitter {
     if (!broadcast && !trackData.is_dj_narration && !/^https?:\/\//.test(declaredArt)) {
       const allowUpload = declaredArt === '/api/thumbnail' && (localArtExtracted || this.thumbBelongsTo(trackData));
       this.resolveDiscordArt(slot, trackData, signal, allowUpload);
+    }
+    if (trackData.media_source === 'apple_music' && !trackData.is_local && !trackData.album_url) {
+      this.resolveAlbumLink(slot, trackData);
     }
 
     // Phase 2: ASYNC — fetch lyrics in background (cacheKey was set before Phase 0)
@@ -3370,15 +3393,42 @@ export class VybecordBackend extends EventEmitter {
 
     ipc.setActivity({
       type: this.config.get('rpc_activity_type'),
+      // Presence 1 keeps the application of whatever played last, and Discord
+      // heads a card with the application's name unless the activity names
+      // itself: after Spotify, the card read "Listening to Spotify" over
+      // "Nothing playing". The window's preview already headed it Vybecord.
+      name: 'Vybecord',
       status_display_type: sdt,
       details: '⏸ Nothing playing',
       state: '  ',
       assets: {
-        large_image: 'https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/T13Beb2q34Er50o2JrKn2.gif',
+        large_image: IDLE_ART,
         large_text: '  ',
       },
       buttons: buttons.length > 0 ? buttons : undefined,
     });
+  }
+
+  /**
+   * Point an Apple Music track's cover at its album, as Spotify's points at
+   * its album on Spotify.
+   *
+   * Windows names no album page for Apple Music, so it is looked up
+   * (apple-music-link.ts); until it is found, and when it is not, the cover
+   * opens a search for the song on Apple Music, as it always has.
+   */
+  private resolveAlbumLink(slot: PresenceSlot, trackData: TrackData): void {
+    const trackKey = slot.trackKey;
+    void lookupAppleMusicAlbum(trackKey, trackData.artist_name, trackData.track_name, trackData.album_name)
+      .then((album) => {
+        if (!album || slot.trackKey !== trackKey) return;
+        // Onto the object this play started with as well: the lyrics fetch
+        // publishes that one again when it returns.
+        trackData.album_url = album.url;
+        if (slot.track) slot.track.album_url = album.url;
+        slot.engine.updateTrackData({ ...(slot.track || trackData), album_url: album.url });
+        log.info(`[RPC] Album page: ${album.url} [${slot.name}]`);
+      });
   }
 
   /**
@@ -3422,7 +3472,13 @@ export class VybecordBackend extends EventEmitter {
 
     void (async () => {
       const own = allowUpload ? await uploadCoverArt(signal) : null;
-      const url = own ?? await lookupCoverArt(trackKey, trackData.artist_name, trackData.track_name, signal);
+      // An Apple Music track without its own file to publish takes Apple's
+      // cover of the album its link opens (resolveAlbumLink, the same lookup
+      // and the same request) before asking Deezer.
+      const apple = !own && trackData.media_source === 'apple_music'
+        ? (await lookupAppleMusicAlbum(trackKey, trackData.artist_name, trackData.track_name, trackData.album_name))?.artUrl || null
+        : null;
+      const url = own ?? apple ?? await lookupCoverArt(trackKey, trackData.artist_name, trackData.track_name, signal);
       if (!url) {
         log.debug(`[RPC] No cover for "${trackData.artist_name} - ${trackData.track_name}"`);
         return;
