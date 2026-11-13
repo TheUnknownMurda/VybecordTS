@@ -200,6 +200,8 @@ function copyUi() {
     fs.mkdirSync(dst, { recursive: true });
     fs.copyFileSync(path.join(src, file), path.join(dst, file));
   }
+  // The title bar and Welcome show the logo at 20 and 52 px, so the small cut.
+  fs.copyFileSync(path.join(root, 'assets/logo/vybecord-small.svg'), path.join(dst, 'logo.svg'));
   console.log(`[ui] copied static assets → ${dst}`);
 }
 

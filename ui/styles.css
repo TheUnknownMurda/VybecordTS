@@ -179,23 +179,12 @@ html[data-theme='light'] .orb {
   padding-left: 16px;
   -webkit-app-region: drag;
 }
+/* The logo (logo.svg) brings its own tile, so no background or rounding here. */
 .tb-mark {
   width: 20px;
   height: 20px;
-  border-radius: 6px;
-  background: var(--accent-hex);
-  color: var(--on-accent);
-  display: grid;
-  place-items: center;
-}
-.tb-mark svg {
-  width: 12px;
-  height: 12px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2.4;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  flex: none;
+  display: block;
 }
 .tb-title {
   font-size: 13px;
@@ -3023,20 +3012,7 @@ html[data-theme='light'] .lyr-clickable:hover {
 .wel-mark {
   width: 52px;
   height: 52px;
-  border-radius: 14px;
-  background: var(--accent-hex);
-  color: var(--on-accent);
-  display: grid;
-  place-items: center;
-}
-.wel-mark svg {
-  width: 28px;
-  height: 28px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2.1;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  display: block;
 }
 .wel-head p {
   max-width: 50ch;
