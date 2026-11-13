@@ -33,7 +33,7 @@ Ton statut Discord se met à jour tout seul. La première fois, Vybecord s'ouvre
 
 Vybecord continue dans la zone de notification (à côté de l'horloge). Clique sur l'icône pour rouvrir la fenêtre, ou clic droit → **Quit** pour vraiment quitter. Le même menu du clic droit marche sans ouvrir la fenêtre : il affiche la chanson en cours, ouvre n'importe quelle page (**Go to**) et a des interrupteurs pour **Show on Discord**, **Show lyrics** (un par présence quand il y en a plusieurs), **Translate lyrics on Discord**, le nombre de présences (**Presences**), les plateformes détectées (**Detection**, une case par plateforme comme dans Settings), **Hide when paused**, **Hide when I’m away**, **Hide during Spotify ads** et **Launch at sign-in**, plus **Check for updates**. Ce sont les mêmes réglages que dans la fenêtre.
 
-Tu peux changer ça dans **Settings → App & window → Close to tray**.
+Tu peux changer ça dans **Settings → App & window → Close to tray**. La même page a **Theme** (sombre ou clair) et **Accent colour**, le vert des boutons, des interrupteurs et des liens : choisis une pastille ou n'importe quelle couleur. Ta carte Discord garde les couleurs de Discord.
 
 ### Après une mise à jour
 

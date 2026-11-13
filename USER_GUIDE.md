@@ -33,7 +33,7 @@ Your Discord status updates on its own. The first time, Vybecord opens on **Help
 
 Vybecord keeps running in the notification area, next to the clock. Click the icon to bring the window back, or right-click → **Quit** to actually exit. The same right-click menu works without opening the window: it shows the song playing, opens any page (**Go to**), and has switches for **Show on Discord**, **Show lyrics** (one per presence when there are several), **Translate lyrics on Discord**, the number of **Presences**, which players are detected (**Detection**, one switch per platform as in Settings), **Hide when paused**, **Hide when I’m away**, **Hide during Spotify ads** and **Launch at sign-in**, plus **Check for updates**. They are the same settings as in the window.
 
-You can change this under **Settings → App & window → Close to tray**.
+You can change this under **Settings → App & window → Close to tray**. The same page has **Theme** (dark or light) and **Accent colour**, the green of the buttons, switches and links: pick a swatch or any colour. Your Discord card keeps Discord's own colours.
 
 ### After an update
 

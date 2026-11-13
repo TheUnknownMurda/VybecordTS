@@ -15,6 +15,7 @@ import { discordPreview } from '../discord-card.js';
 import { ACTIVITY_TYPES, ACTIVITY_KEYS, SHORTS_ACTIVITY_TYPES, STATUS_DISPLAY, ICON_MODES, ICON_KEYS } from '../card-editor.js';
 import { showWhatsNew } from '../whats-new.js';
 import { lyricCardCount, CARD_ORDER_NOTE } from '../why.js';
+import { ACCENT_PRESETS, applyAccent, normalizeAccent } from '../accent.js';
 import { spicetifyCard } from './spicetify-card.js';
 import { updateCard } from './update-card.js';
 import { lastfmCard } from './lastfm-card.js';
@@ -641,6 +642,50 @@ function extensionCard() {
 
 // ── App & window ──────────────────────────────────────────────────────────────
 
+/**
+ * The accent colour: a few swatches and a colour input for anything else.
+ *
+ * The window repaints at once (applyAccent), before the config round trip
+ * comes back, so dragging through the colour input's picker previews live; the
+ * value is saved when the picker closes (change), not on every step of the
+ * drag (input), which would write config.json dozens of times a second.
+ */
+function accentRow() {
+  const current = normalizeAccent(cfg('accent_color', ''));
+  const pick = (hex) => {
+    applyAccent(hex);
+    put('accent_color', hex);
+  };
+  const swatches = ACCENT_PRESETS.map(([hex, name]) => {
+    const b = el('button', {
+      type: 'button',
+      class: `accent-swatch${hex === current ? ' on' : ''}`,
+      title: name,
+      'aria-label': name,
+      'aria-pressed': hex === current ? 'true' : 'false',
+      onclick: () => pick(hex),
+    });
+    b.style.background = hex;
+    return b;
+  });
+  const custom = el('input', {
+    type: 'color',
+    class: 'accent-custom',
+    value: current,
+    title: 'Any colour',
+    'aria-label': 'Any colour',
+    oninput: (e) => applyAccent(e.target.value),
+    onchange: (e) => pick(e.target.value),
+  });
+  return el('div', { class: 'row' }, [
+    el('div', {}, [
+      el('div', { class: 'row-label', text: 'Accent colour' }),
+      el('div', { class: 'row-desc', text: 'The colour of the buttons, switches, links and the page you are on. Your Discord card keeps Discord’s own colours.' }),
+    ]),
+    el('div', { class: 'row-control accent-pick' }, [...swatches, custom]),
+  ]);
+}
+
 function appCat(body) {
   const updates = updateCard();
 
@@ -650,6 +695,7 @@ function appCat(body) {
         document.documentElement.dataset.theme = v;
         put('theme', v);
       }),
+      accentRow(),
       toggleRow('Close to tray', 'Closing the window hides it instead of quitting, so the presence keeps running.',
         cfg('minimize_to_tray', true) !== false, (v) => put('minimize_to_tray', v)),
       toggleRow('Show tray icon', 'The icon in the notification area. Without it, opening Vybecord again brings a hidden window back.',
