@@ -13,7 +13,7 @@
  * shows the device the account is playing on.
  */
 
-import { el, toast } from '../util.js';
+import { el, toast, plainError } from '../util.js';
 import { state, saveConfig } from '../state.js';
 
 const api = window.vybecord;
@@ -24,9 +24,6 @@ const CLIENT_ID = /^[0-9a-f]{32}$/i;
 const REFRESH_MS = 4000;
 /** Warn this long before Spotify ends the sign-in. */
 const ENDING_SOON_MS = 14 * 24 * 3600_000;
-
-/** Electron wraps a handler's error in its own sentence; the handler's is the useful part. */
-const plainError = (e) => String(e?.message || e).replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '');
 
 /** A step in the set-up list, ticked once it is done. */
 function step(done, title, body) {

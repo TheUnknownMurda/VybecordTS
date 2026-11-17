@@ -38,6 +38,9 @@ export const BLANK_ART = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEA
 export const $ = (sel, root = document) => root.querySelector(sel);
 export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
+/** Electron wraps a handler's error in its own sentence; the handler's is the useful part. */
+export const plainError = (e) => String(e?.message || e).replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '');
+
 /** Escape text for the rare places that must build an HTML string. */
 export function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => (

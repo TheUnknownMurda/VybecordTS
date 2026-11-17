@@ -108,6 +108,17 @@ const api = {
   searchLrclib: (query: string, limit?: number) => invoke('lrclib:search', query, limit),
   getLrclibTrack: (id: number) => invoke('lrclib:track', id),
 
+  // ── Publishing to LRCLIB ──
+  /**
+   * What publishing an entry would send and what stops it — see PublishPreview
+   * in src/core/lrclib-publish.ts. `remote` also asks LRCLIB what it has now.
+   */
+  lrclibPublishPreview: (id: number, edits?: { album?: string; duration?: number | null }, remote = false) =>
+    invoke('lrclib:publishPreview', id, edits, remote),
+  /** Public and permanent: only ever called from the publish dialog's own button. */
+  lrclibPublish: (id: number, edits?: { album?: string; duration?: number | null }) =>
+    invoke<{ ok: true; publishedAt: string; attempts: number; solveMs: number; savedEdits: boolean }>('lrclib:publish', id, edits),
+
   // ── Cache ──
   clearCache: () => invoke('cache:clear'),
   clearTranslationCache: () => invoke('translate:clearCache'),

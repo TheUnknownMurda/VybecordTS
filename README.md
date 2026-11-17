@@ -69,6 +69,7 @@ Vybecord is a Windows desktop app (Electron + TypeScript). It reads the Windows 
 
 - **Several sources, tried in order:** your own library, then Spotify's lyrics (with Spicetify), then an offline LRCLIB dump, then LRCLIB, Netease and Musixmatch in parallel, then an LRCLIB fuzzy search, then YouTube captions. When there are no synced lyrics, a plain-text version (from LRCLIB or Genius) is shown in the window.
 - **Lyrics library.** Paste timed `.lrc` lyrics or untimed text, then time it with the built-in *Sync while playing* tool. You can edit and delete entries and search an offline LRCLIB dump.
+- **Share on LRCLIB.** Publish an entry of your library to [LRCLIB](https://lrclib.net), the public lyrics database LRCGET and many players read from, after seeing exactly what goes and what LRCLIB already has.
 - **Corrections.** Mark a wrong match so it is never used for that track again. Timing offsets are saved per track.
 - **Kick captions.** On a live Kick channel or a past broadcast, with captions on in Kick's player, what is said shows on the card as lyrics (needs the browser extension).
 - **YouTube Shorts** are never looked up as songs, only given their own captions (needs the browser extension).
@@ -306,6 +307,8 @@ If none of these finds synced lyrics, plain lyrics (LRCLIB, then Genius) are sho
 
 **Importing.** Under **Lyrics → Add lyrics**, **Fill from current track** copies the playing track's details and its lyrics, if any. Paste lyrics that already have `[mm:ss.xx]` timestamps and save. Or paste plain text, start the song, and use **Sync while playing** to time each line as it's sung, with undo, skip and adjustable tap compensation.
 
+**Publishing to LRCLIB.** In **Lyrics → My lyrics**, the upload button on an entry opens **Publish to LRCLIB**, which sends the entry to [LRCLIB](https://lrclib.net), the public database LRCGET and many players fetch lyrics from. The dialog shows what will be sent (title, artist, album, duration, the timed lines, and the same lines without timings as plain lyrics) and what LRCLIB already has for the song. LRCLIB needs an album and a duration, and matches lyrics to a song by its length, to within 2 seconds; when the entry lacks them they can be filled in right there, and they are saved to the entry too. Only fully timed lyrics are accepted, and a version you already published, or one LRCLIB already has line for line, is refused. Nothing is sent until **I understand this is public** is ticked, for each send. Sending takes a few seconds, because LRCLIB has every client solve a proof-of-work challenge first. A publish is public and cannot be undone: LRCLIB has no delete, and the newest version of a song is the one it serves. Published entries are marked **On LRCLIB**.
+
 **Translation and romanisation** are under **Settings → Lyrics & translation**:
 
 - *Translate in this window* and *Translate on Discord too*. Target languages: English, French, Spanish, German, Portuguese, Italian, Russian, Japanese, Korean, Chinese, Arabic, Hindi, Turkish, Polish, Dutch, Swedish.
@@ -367,7 +370,7 @@ Everything has a control in **Settings**, except the few keys marked *config onl
 | File / folder | Contents |
 | --- | --- |
 | `config.json` | All settings (see below). |
-| `custom-lyrics.sqlite3` | Your imported lyrics. Created on first run. |
+| `custom-lyrics.sqlite3` | Your imported lyrics, and when each was published to LRCLIB. Created on first run. |
 | `LRCLIB Dump\` | Drop folder for an LRCLIB dump. |
 | `listening-history.json` | Listening log, up to 10,000 entries. |
 | `flagged-lyrics.json` | Lyrics you marked as wrong. |
@@ -483,12 +486,13 @@ VYBECORD_LOG_LEVEL=debug
 
 ## Privacy and network access
 
-Your history, imported lyrics, settings and Last.fm session stay on your machine. Network requests are made only for the following:
+Your history, imported lyrics (unless you publish one to LRCLIB yourself), settings and Last.fm session stay on your machine. Network requests are made only for the following:
 
 | Destination | When | What is sent |
 | --- | --- | --- |
 | Discord (local IPC pipe) | Always | The presence. |
-| `lrclib.net`, `music.163.com` (Netease), `apic-desktop.musixmatch.com` | Lyrics lookup | Track, artist, album, duration. |
+| `lrclib.net`, `music.163.com` (Netease), `apic-desktop.musixmatch.com` | Lyrics lookup | Track, artist, album, duration. LRCLIB also gets Vybecord's public application ID, which names the app, not you. |
+| `lrclib.net` | **Publish to LRCLIB**: opening the dialog, then confirming a publish | Opening: the entry's title, artist, album and duration, to see what LRCLIB has. Publishing: those, its timed and plain lyrics, and an anonymous proof-of-work token. Both with the application ID. |
 | `genius.com` | Plain-lyrics fallback | Track and artist. |
 | `api.deezer.com`, `itunes.apple.com` | Cover lookup; for Apple Music (iTunes only), the album page the cover links to | Track and artist. |
 | `vybecord-art.vybecord.workers.dev` | Cover publishing (`art_upload_enabled`) | The cover image only, with its metadata removed. |
@@ -608,7 +612,7 @@ src/
   backend.ts                 orchestrator: sources → ranking → presence slots → lyrics → Discord
   core/                      media source, push sources (Spicetify, YouTube, SoundCloud, Bandcamp,
                              Twitch, Kick), the Spotify Web API sign-in and poll, Discord IPC and
-                             socket pool, lyrics providers, local
+                             socket pool, lyrics providers, LRCLIB publishing, local
                              DBs, cover art, art upload, Last.fm, history and its statistics
                              (listening-stats.ts, everything Activity shows), translation,
                              romanisation, captions, config, logger
@@ -629,6 +633,8 @@ manifest.json                Spicetify Marketplace manifest for the extension
 ### Architecture notes
 
 - **Build** ([`scripts/build-electron.mjs`](scripts/build-electron.mjs), esbuild): the main process is bundled as ESM (`main.mjs`). The preload and the two workers are bundled as CommonJS (`.cjs`), because `package.json` declares `"type": "module"`. The renderer is bundled into a single IIFE (`ui/app.js`), because the window loads over `file://`, where Chromium blocks ES module imports. Native and path-sensitive packages (`better-sqlite3`, `@coooookies/windows-smtc-monitor`, `music-metadata`, `electron-updater`, `kuromoji`) are not bundled.
+- **LRCLIB requests** ([`src/core/lrclib-api.ts`](src/core/lrclib-api.ts)): every request to lrclib.net, lookups and publishing alike, carries Vybecord's registered `Lrclib-App-Id`, which roughly doubles the per-IP rate limit. The ID is public by design and goes to no other host. If LRCLIB ever answers 401 to it (registration deleted or rotated), the request is sent again without it and the ID is dropped until the app restarts, so lookups never depend on the registration.
+- **LRCLIB publishing** ([`src/core/lrclib-publish.ts`](src/core/lrclib-publish.ts)): every publish needs a SHA-256 proof of work, about 16.8 million tries on average at LRCLIB's base difficulty. It runs on up to four worker threads started with `eval` from the solver's own source, so it needs no bundle entry or `asarUnpack` line and the main process stays free; with four threads, a solve took about 2 s where it was measured. The solver is a hand-written, allocation-free SHA-256, about 3.6 times faster than calling `crypto.hash()` once per try, where the call into native code is the cost. Every answer is checked again with `node:crypto` before it is sent.
 - **Packaging** (`build` in `package.json`): the workers and native addons are unpacked from the asar, because a worker can't be started from inside an archive. yt-dlp, the kuromoji dictionary, the browser extension and the Spicetify extension ship as `extraResources`.
 - **Presence slots.** The backend holds five `PresenceSlot`s. On every poll and every push, `reconcile()` collects all candidates, ranks them, applies pins, and assigns them to slots. Slots move between positions rather than restarting, so a demoted track keeps its lyrics engine, its Discord socket and its place in the song.
 - **Discord applications.** Switching application is debounced by 1.5 seconds, because Discord refuses connections for a while after rapid reconnects. A socket is kept per application in `DiscordPool` and shared between slots.
@@ -742,6 +748,8 @@ Releases are made by hand from `desktop-app`. There is no release CI.
 **Lyrics are out of sync.** Use **−250 / +250** on **Now playing**. The offset is saved for that track. Some players report their position infrequently. The 3-second resync limits the error but can't remove it completely.
 
 **Wrong lyrics.** Use **Wrong lyrics?** on **Now playing**, or add the correct lyrics under **Lyrics → Add lyrics**.
+
+**Publishing to LRCLIB fails.** The dialog says why, and says whether anything was sent. *Rate-limiting* or *overloaded*: wait the time it gives, then try again. *May or may not have been published*: LRCLIB did not answer in time, so look the song up on lrclib.net before trying again, or the same lyrics may go out twice (new lyrics can take up to a day to show in LRCLIB's search). *Already published exactly this version*: Vybecord remembers what it sent from each entry, and only a changed entry can go out again.
 
 **No lyrics.** Check that **Show lyrics** is on. Live streams are never looked up. Browser tabs often publish a video title ("Artist - Title (Official Video)") rather than a clean track name, which makes matching less reliable. The browser extension improves this.
 

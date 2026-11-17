@@ -3425,6 +3425,105 @@ html[data-theme='light'] {
   margin-bottom: 12px;
 }
 
+/* Publish to LRCLIB — the dialog in library.js (openPublish). */
+/* The "On LRCLIB" mark on a My lyrics row, kept small: at the window's minimum
+   width the row already gives four buttons' room to the title. */
+.badge.pub-badge {
+  min-height: 22px;
+  padding: 0 8px;
+  font-size: 11.5px;
+}
+.pub-track {
+  margin: 16px 0 12px;
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-s);
+}
+.pub-track .muted {
+  margin-top: 4px;
+  font-size: 12.5px;
+}
+.pub-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 190px);
+  gap: 0 12px;
+}
+.pub-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+.pub-hint.is-bad {
+  color: var(--amber);
+}
+.pub-list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.pub-list li + li {
+  margin-top: 4px;
+}
+.pub-sent {
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+.pub-sent summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.pub-preview {
+  max-height: 200px;
+  overflow: auto;
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  white-space: pre-wrap;
+  font-family: 'Cascadia Mono', ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  background: var(--bg-sunken);
+  border: 1px solid var(--border-d);
+  border-radius: 10px;
+  user-select: text;
+}
+.pub-ack {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 4px 0 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.pub-ack input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  accent-color: var(--accent-hex);
+}
+.pub-status {
+  margin-bottom: 10px;
+}
+.pub-status:empty {
+  display: none;
+}
+.pub-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+@media (max-width: 560px) {
+  .pub-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* ── Tabs ─────────────────────────────────────────────────────────────────── */
 
 .tabs {

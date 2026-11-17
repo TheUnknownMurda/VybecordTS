@@ -14,11 +14,11 @@ import { parseLrc } from './lrc-parser.js';
 import { similarity, batchScore } from './similarity.js';
 import { hasLocalDb, searchCustomLyrics, searchDumpLyrics, customLyricsIndex, getCustomLyrics } from './local-lyrics-db.js';
 import { isLyricsFlagged } from './lyrics-blacklist.js';
+import { LRCLIB_BASE, lrclibFetch } from './lrclib-api.js';
 import type { LyricLine, LrcLibResult } from './types.js';
 
 const log = createLogger('Provider');
 
-const LRCLIB_BASE = 'https://lrclib.net';
 const USER_AGENT = 'VybecordTS v1.0.0 (by TheUnknownMurda)';
 const FETCH_TIMEOUT = 8_000;
 
@@ -143,17 +143,20 @@ export function findCustomLyrics(name: string, artist: string): LyricLine[] | nu
   return null;
 }
 
-async function fetchJson<T>(url: string, externalSignal?: AbortSignal): Promise<T | null> {
+/**
+ * A JSON answer, or null. `lrclib` sends the request through lrclibFetch, with
+ * Vybecord's application ID — LRCLIB's alone: Deezer and iTunes come through
+ * here too, and the ID is none of their business.
+ */
+async function fetchJson<T>(url: string, externalSignal?: AbortSignal, lrclib = false): Promise<T | null> {
   try {
     // Combine external abort signal with timeout
     const timeoutSignal = AbortSignal.timeout(FETCH_TIMEOUT);
     const signal = externalSignal
       ? AbortSignal.any([externalSignal, timeoutSignal])
       : timeoutSignal;
-    const resp = await fetch(url, {
-      headers: { 'User-Agent': USER_AGENT },
-      signal,
-    });
+    const init = { headers: { 'User-Agent': USER_AGENT }, signal };
+    const resp = lrclib ? await lrclibFetch(url, init) : await fetch(url, init);
     if (!resp.ok) return null;
     return (await resp.json()) as T;
   } catch {
@@ -176,12 +179,12 @@ async function directLookup(params: DirectParams, signal?: AbortSignal): Promise
   qs.set('artist_name', params.artist_name);
   if (params.album_name) qs.set('album_name', params.album_name);
   if (params.duration != null) qs.set('duration', String(params.duration));
-  return fetchJson<LrcLibResult>(`${LRCLIB_BASE}/api/get?${qs}`, signal);
+  return fetchJson<LrcLibResult>(`${LRCLIB_BASE}/api/get?${qs}`, signal, true);
 }
 
 async function searchLrcLib(query: string, signal?: AbortSignal): Promise<LrcLibResult[]> {
   const qs = new URLSearchParams({ q: query });
-  return (await fetchJson<LrcLibResult[]>(`${LRCLIB_BASE}/api/search?${qs}`, signal)) ?? [];
+  return (await fetchJson<LrcLibResult[]>(`${LRCLIB_BASE}/api/search?${qs}`, signal, true)) ?? [];
 }
 
 // ── Netease Cloud Music provider ──

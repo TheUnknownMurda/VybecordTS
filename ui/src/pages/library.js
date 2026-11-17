@@ -1,16 +1,17 @@
 /**
  * Lyrics library — the local custom-lyrics database.
  *
- * Four jobs: browse and edit what you have imported, write or paste lyrics and
+ * Five jobs: browse and edit what you have imported, write or paste lyrics and
  * time them against the playing track, pull a track out of a LRCLIB dump to
- * seed an entry, and clear tracks you have flagged as having the wrong lyrics.
+ * seed an entry, clear tracks you have flagged as having the wrong lyrics, and
+ * publish an entry to LRCLIB for everyone else.
  *
  * The library itself is what opens. Adding lyrics is one button away rather
  * than the first thing on screen: most visits are to find or fix something
  * already there, and a blank form is a strange way to greet them.
  */
 
-import { el, modal, toast, fmtTime, plural } from '../util.js';
+import { el, modal, toast, fmtTime, fmtDate, plural, plainError } from '../util.js';
 import { state, subscribe } from '../state.js';
 import { goto } from '../router.js';
 
@@ -24,6 +25,8 @@ const GLYPH = {
   check: '<svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg>',
   lyric: '<svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 012-2h13v18H6a2 2 0 01-2-2z"/><path d="M9 7h7M9 11h7"/></svg>',
   flag: '<svg viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>',
+  // Out of a tray: a copy goes out, the entry stays.
+  publish: '<svg viewBox="0 0 24 24"><path d="M12 15V4M7.5 8.5L12 4l4.5 4.5M5 14v5a1 1 0 001 1h12a1 1 0 001-1v-5"/></svg>',
 };
 
 /** A button whose face is a glyph, plus words when there is room for them. */
@@ -275,11 +278,18 @@ function entryRow(e, refresh, ctx) {
       el('div', { class: 'item-title', text: e.track_name }),
       el('div', { class: 'item-sub', text: `${e.artist_name}${e.album_name ? ` · ${e.album_name}` : ''}${e.duration ? ` · ${fmtTime(e.duration * 1000)}` : ''}` }),
     ]),
+    e.lrclib_published_at
+      ? el('span', { class: 'badge accent pub-badge', text: 'On LRCLIB', title: `Published to LRCLIB on ${fmtDate(e.lrclib_published_at)}` })
+      : null,
     el('div', { class: 'item-actions' }, [
       glyphBtn('btn btn-ghost btn-icon', GLYPH.edit, '', { title: 'Edit', 'aria-label': `Edit the lyrics for ${e.track_name}`, onclick: () => editEntry(e, refresh) }),
       glyphBtn('btn btn-ghost btn-icon', GLYPH.time, '', {
         title: 'Re-time against the song', 'aria-label': `Re-time the lyrics for ${e.track_name}`,
         onclick: () => retime(e, ctx),
+      }),
+      glyphBtn('btn btn-ghost btn-icon', GLYPH.publish, '', {
+        title: 'Publish to LRCLIB', 'aria-label': `Publish the lyrics for ${e.track_name} to LRCLIB`,
+        onclick: () => { void openPublish(e, refresh, ctx); },
       }),
       glyphBtn('btn btn-ghost btn-icon', GLYPH.trash, '', {
         title: 'Delete', 'aria-label': `Delete the lyrics for ${e.track_name}`,
@@ -355,6 +365,320 @@ async function editEntry(entry, refresh) {
       }),
     ]),
   ]), { dismissable: false });
+}
+
+// ── Publish to LRCLIB ─────────────────────────────────────────────────────────
+
+const LRCLIB_URL = 'https://lrclib.net';
+const DURATION_HINT = 'LRCLIB matches lyrics to a song by its length, to within 2 seconds.';
+
+/**
+ * "3:31", "211" or "211.4" → seconds; blank → null; anything else → NaN.
+ *
+ * m:ss because that is how a length reads off a player; bare seconds because
+ * that is what the import form has always asked for.
+ */
+function parseDuration(text) {
+  const t = String(text ?? '').trim();
+  if (!t) return null;
+  const ms = /^(\d+):([0-5]?\d(?:\.\d+)?)$/.exec(t);
+  if (ms) return parseInt(ms[1], 10) * 60 + parseFloat(ms[2]);
+  return /^\d+(?:\.\d+)?$/.test(t) ? parseFloat(t) : NaN;
+}
+
+/** Seconds → "3:31" for the duration box; blank when there is none. */
+function durationText(s) {
+  if (!Number.isFinite(s) || s <= 0) return '';
+  const r = Math.round(s);
+  return `${Math.floor(r / 60)}:${String(r % 60).padStart(2, '0')}`;
+}
+
+/**
+ * Send one entry to LRCLIB, after showing exactly what goes and what is in the way.
+ *
+ * Publishing is public and permanent — LRCLIB has no delete — so this is a
+ * dialog of its own rather than a confirm box. What will be sent is on screen,
+ * the album and duration LRCLIB requires can be filled in right where their
+ * absence is reported, and the button stays off until a box saying "this is
+ * public" is ticked, again for every send. The rules live in the backend
+ * (src/core/lrclib-publish.ts), which applies them again before sending; this
+ * only paints their answers.
+ *
+ * Only the fields the user actually changed travel as edits. Sending the boxes
+ * as they stand would turn a stored 211.4 s into the 211 the box displays, and
+ * save that without anyone having touched it.
+ */
+async function openPublish(entry, refresh, ctx) {
+  let full;
+  try {
+    full = await api.getCustom(entry.track_id);
+  } catch (e) {
+    return toast(`Could not open: ${plainError(e)}`, 'err');
+  }
+  if (!full) return toast('This entry is no longer in your library', 'err');
+
+  const id = entry.track_id;
+  const startAlbum = (full.album_name || '').trim();
+  const startDuration = durationText(full.duration);
+  /** Something reached the store — saved edits, a publish — so the list is stale once this closes. */
+  let touched = false;
+
+  await modal((close) => {
+    const album = el('input', { type: 'text', value: startAlbum, placeholder: 'The album the song is on' });
+    const duration = el('input', { type: 'text', value: startDuration, placeholder: 'm:ss', inputmode: 'decimal' });
+    const durationHint = el('div', { class: 'pub-hint', text: DURATION_HINT });
+    const linesLabel = el('div', { class: 'muted' });
+    const sentText = el('pre', { class: 'pub-preview' });
+    const sentBox = el('details', { class: 'pub-sent', hidden: true }, [
+      el('summary', { text: 'What LRCLIB will receive' }),
+      el('div', { class: 'pub-hint', text: 'The title, artist, album and duration above, these timed lines, and the same lines without timings as plain lyrics.' }),
+      sentText,
+    ]);
+    const problemsBox = el('div', { class: 'notice is-warn', hidden: true });
+    const warningsBox = el('div', { class: 'notice is-warn', hidden: true });
+    const historyBox = el('div', { class: 'notice', hidden: true });
+    const remoteBox = el('div', { class: 'notice', hidden: true, 'aria-live': 'polite' });
+    const errorBox = el('div', { class: 'notice is-warn', hidden: true, role: 'alert' });
+    const ack = el('input', { type: 'checkbox', onchange: () => paintButton() });
+    const status = el('div', { class: 'muted pub-status', 'aria-live': 'polite' });
+    const cancelBtn = el('button', { type: 'button', class: 'btn', text: 'Cancel', onclick: () => close() });
+    const sendBtn = el('button', {
+      type: 'button', class: 'btn btn-primary', text: 'Publish to LRCLIB', disabled: true,
+      onclick: () => { void send(); },
+    });
+
+    /** The backend's last answer about this entry. */
+    let preview = null;
+    /** What LRCLIB has: null when not asked, 'pending' while asking. */
+    let remote = null;
+    /** The boxes changed and their answer is not back yet — the last one no longer applies. */
+    let stale = false;
+    let busy = false;
+    /** Answers come back out of order when typing is quick; only the latest may paint. */
+    let seq = 0;
+
+    /** The changed fields, or null while the duration box holds something unreadable. */
+    function edits() {
+      const out = {};
+      if (album.value.trim() !== startAlbum) out.album = album.value.trim();
+      if (duration.value.trim() !== startDuration) {
+        const s = parseDuration(duration.value);
+        if (Number.isNaN(s)) return null;
+        out.duration = s;
+      }
+      return out;
+    }
+
+    async function check() {
+      const mine = ++seq;
+      const ed = edits();
+      durationHint.classList.toggle('is-bad', !ed);
+      durationHint.textContent = ed ? DURATION_HINT : 'Write it as m:ss (3:31) or in seconds (211).';
+      if (!ed) {
+        preview = null;
+        remote = null;
+        stale = false;
+        return paint();
+      }
+      let p;
+      try {
+        p = await api.lrclibPublishPreview(id, ed, false);
+      } catch (e) {
+        if (mine !== seq) return;
+        stale = false;
+        showError(plainError(e));
+        return paintButton();
+      }
+      if (mine !== seq) return;
+      preview = p;
+      remote = p.ready ? 'pending' : null;
+      stale = false;
+      paint();
+      if (!p.ready) return;
+      let r;
+      try {
+        r = await api.lrclibPublishPreview(id, ed, true);
+      } catch (e) {
+        r = { ...p, remote: { status: 'unknown', error: plainError(e) } };
+      }
+      if (mine !== seq) return;
+      preview = r;
+      remote = r.remote || { status: 'unknown', error: 'no answer' };
+      paint();
+    }
+    const recheck = debounce(() => { void check(); }, 450);
+    const onEdit = () => {
+      stale = true;
+      errorBox.hidden = true;
+      paintButton();
+      recheck();
+    };
+    album.addEventListener('input', onEdit);
+    duration.addEventListener('input', onEdit);
+
+    function paint() {
+      const p = preview;
+      const problems = p?.problems || [];
+      problemsBox.hidden = !problems.length;
+      // Filtered, unlike el()'s children: replaceChildren writes a null out as the text "null".
+      problemsBox.replaceChildren(...[
+        el('b', { text: 'Before this can be published:' }),
+        el('ul', { class: 'pub-list' }, problems.map((x) => el('li', { text: x.message }))),
+        problems.some((x) => x.field === 'lyrics')
+          ? el('button', {
+              type: 'button', class: 'btn btn-sm', text: 'Re-time these lyrics', style: 'margin-top:8px',
+              // Leaving for the import view, which repaints from scratch; a
+              // refresh of this list on the way out would only fight it.
+              onclick: () => { touched = false; close(); void retime(entry, ctx); },
+            })
+          : null,
+      ].filter(Boolean));
+
+      const warnings = p?.warnings || [];
+      warningsBox.hidden = !warnings.length;
+      warningsBox.replaceChildren(...warnings.map((w) => el('div', { text: w })));
+
+      historyBox.hidden = !p?.published;
+      if (p?.published) {
+        historyBox.textContent = `You published this entry to LRCLIB on ${fmtDate(p.published.at)}.`
+          + (p.published.unchanged ? '' : ' It has changed since — publishing again sends the new version.');
+      }
+
+      paintRemote();
+      linesLabel.textContent = p ? plural(p.timedLines, 'timed line') : '';
+      sentBox.hidden = !p?.payload;
+      if (p?.payload) sentText.textContent = p.payload.syncedLyrics;
+      paintButton();
+    }
+
+    function paintRemote() {
+      const r = remote;
+      remoteBox.className = 'notice';
+      // "Exactly these lyrics" is a problem, and already listed as one.
+      if (!r || (r !== 'pending' && r.same)) {
+        remoteBox.hidden = true;
+        return;
+      }
+      remoteBox.hidden = false;
+      if (r === 'pending') {
+        remoteBox.textContent = 'Checking what LRCLIB has for this song…';
+        return;
+      }
+      if (r.status === 'none') {
+        remoteBox.textContent = 'LRCLIB has no lyrics for this song yet — yours would be the first.';
+        return;
+      }
+      if (r.status === 'unknown') {
+        remoteBox.className = 'notice is-warn';
+        remoteBox.textContent = `Could not check what LRCLIB already has: ${String(r.error).replace(/\.$/, '')}. You can still publish.`;
+        return;
+      }
+      const where = r.album && r.album.toLowerCase() !== String(preview?.album || '').toLowerCase()
+        ? ` (filed under “${r.album}”)` : '';
+      if (r.status === 'instrumental') remoteBox.className = 'notice is-warn';
+      remoteBox.textContent = r.status === 'synced'
+        ? `LRCLIB already has synced lyrics for this song${where}. Yours would be added as a new version, and become the one LRCLIB hands out.`
+        : r.status === 'plain'
+          ? `LRCLIB only has plain, untimed lyrics for this song${where}. Yours would add the timings.`
+          : `LRCLIB lists this song as an instrumental${where}. Publishing would give it lyrics.`;
+    }
+
+    function paintButton() {
+      const settled = !!preview?.ready && remote !== null && remote !== 'pending' && !stale;
+      sendBtn.disabled = busy || !settled || !ack.checked;
+      ack.disabled = busy;
+      album.disabled = busy;
+      duration.disabled = busy;
+      cancelBtn.disabled = busy;
+    }
+
+    function showError(message) {
+      errorBox.hidden = false;
+      errorBox.textContent = message;
+    }
+
+    async function send() {
+      const ed = edits();
+      if (busy || !ed || !preview?.ready || !ack.checked) return;
+      busy = true;
+      errorBox.hidden = true;
+      paintButton();
+      const started = Date.now();
+      const tick = () => {
+        status.textContent = `Publishing… ${Math.round((Date.now() - started) / 1000)} s. `
+          + 'LRCLIB has every sender solve a small puzzle first, which takes a few seconds.';
+      };
+      tick();
+      const timer = setInterval(tick, 500);
+      try {
+        await api.lrclibPublish(id, ed);
+        touched = true;
+        showDone();
+        toast('Published to LRCLIB ✓', 'ok');
+      } catch (e) {
+        busy = false;
+        status.textContent = '';
+        // The backend saves the album and duration before it sends anything.
+        if (Object.keys(ed).length) touched = true;
+        // Every send is confirmed on its own, a retry included.
+        ack.checked = false;
+        showError(plainError(e));
+        paintButton();
+      } finally {
+        clearInterval(timer);
+      }
+    }
+
+    function showDone() {
+      body.replaceChildren(
+        el('h2', { text: 'Published to LRCLIB' }),
+        el('div', {
+          class: 'muted', style: 'margin:12px 0 20px',
+          text: `“${preview.title}” by ${preview.artist} is on LRCLIB now, for LRCGET and every player that reads it. `
+            + 'It can take up to a day before every LRCLIB search shows it.',
+        }),
+        el('div', { class: 'pub-actions' }, [
+          el('button', { type: 'button', class: 'btn', text: 'Open lrclib.net', onclick: () => api.openExternal(LRCLIB_URL) }),
+          el('button', { type: 'button', class: 'btn btn-primary', text: 'Close', onclick: () => close() }),
+        ]),
+      );
+    }
+
+    const body = el('div', {}, [
+      el('h2', { text: 'Publish to LRCLIB' }),
+      el('div', { class: 'muted', style: 'margin-top:6px' }, [
+        'Shares this entry on ',
+        el('a', { href: '#', text: 'lrclib.net', onclick: (e) => { e.preventDefault(); api.openExternal(LRCLIB_URL); } }),
+        ', the free lyrics database LRCGET and many players download their lyrics from.',
+      ]),
+      el('div', { class: 'pub-track' }, [
+        el('div', { class: 'item-title', text: full.track_name || '(no title)' }),
+        el('div', { class: 'item-sub', text: full.artist_name || '(no artist)' }),
+        linesLabel,
+      ]),
+      el('div', { class: 'pub-fields' }, [
+        field('Album', album),
+        el('label', { class: 'field' }, [el('span', { text: 'Duration' }), duration, durationHint]),
+      ]),
+      problemsBox,
+      warningsBox,
+      historyBox,
+      remoteBox,
+      sentBox,
+      el('label', { class: 'pub-ack' }, [
+        ack,
+        el('span', { text: 'I understand this is public: anyone can see and download these lyrics, and LRCLIB has no way to take them back.' }),
+      ]),
+      errorBox,
+      status,
+      el('div', { class: 'pub-actions' }, [cancelBtn, sendBtn]),
+    ]);
+
+    void check();
+    return body;
+  }, { dismissable: false });
+
+  if (touched) refresh();
 }
 
 // ── Import ────────────────────────────────────────────────────────────────────

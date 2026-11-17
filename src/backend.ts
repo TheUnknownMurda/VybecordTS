@@ -54,7 +54,8 @@ import {
   fetchYouTubeCaptions, clearCCCache, setCcCookiesFile, setBrowserCookies, wantsBrowserCookies,
   type BrowserCookie,
 } from './core/youtube-captions.js';
-import { initLocalDb, closeLocalDb, insertCustomLyrics, listCustomLyrics, getCustomLyrics, updateCustomLyrics, deleteCustomLyrics, findExistingCustomLyrics, searchLrclibDump as searchLrclibDumpDb, getLrclibTrackLyrics as getLrclibTrackLyricsDb, lrclibDumpStatus } from './core/local-lyrics-db.js';
+import { initLocalDb, closeLocalDb, insertCustomLyrics, listCustomLyrics, getCustomLyrics, updateCustomLyrics, deleteCustomLyrics, findExistingCustomLyrics, searchLrclibDump as searchLrclibDumpDb, getLrclibTrackLyrics as getLrclibTrackLyricsDb, lrclibDumpStatus, markCustomLyricsPublished } from './core/local-lyrics-db.js';
+import { previewEntry, publishEntry, publishUserAgent, type PublishEdits, type PublishStore } from './core/lrclib-publish.js';
 import { initLastFm, scrobbleTrackStart, checkAndScrobble, scrobblePause, scrobbleTrackEnd } from './core/lastfm.js';
 import { lookupCoverArt } from './core/cover-art.js';
 import { lookupAppleMusicAlbum } from './core/apple-music-link.js';
@@ -2497,6 +2498,35 @@ export class VybecordBackend extends EventEmitter {
       this.refetchPlayingFor([{ track: entry.track_name, artist: entry.artist_name }], 'DELETE');
     }
     return ok;
+  }
+
+  // ── Publishing to LRCLIB ── (src/core/lrclib-publish.ts)
+
+  /**
+   * The store as publishing sees it. Saves go through updateCustomLyricsEntry
+   * like any other edit, so an album or duration filled in from the publish
+   * dialog drops the stale cache entries an edit from My lyrics would.
+   */
+  private lrclibPublishStore(): PublishStore {
+    return {
+      get: (id) => getCustomLyrics(id),
+      save: (id, data) => this.updateCustomLyricsEntry(id, data),
+      markPublished: (id, hash, at) => markCustomLyricsPublished(id, hash, at),
+    };
+  }
+
+  /**
+   * What publishing an imported entry would send, and what stands in its way.
+   * `remote` adds a look at what LRCLIB serves for the song now — a network
+   * round trip, which the dialog asks for after showing the local answer.
+   */
+  previewLrclibPublish(trackId: number, edits: PublishEdits, remote: boolean, appVersion: string) {
+    return previewEntry(this.lrclibPublishStore(), trackId, edits, { remote, userAgent: publishUserAgent(appVersion) });
+  }
+
+  /** Publish an imported entry to LRCLIB. Public and permanent — the window confirms first. */
+  publishCustomToLrclib(trackId: number, edits: PublishEdits, appVersion: string) {
+    return publishEntry(this.lrclibPublishStore(), trackId, edits, { userAgent: publishUserAgent(appVersion) });
   }
 
   // ── Flagged lyrics management ──

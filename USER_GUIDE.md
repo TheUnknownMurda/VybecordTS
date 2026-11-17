@@ -44,7 +44,7 @@ Updates download on their own and install when you quit. The first time you open
 | Page | What it does |
 | --- | --- |
 | **Now playing** | Two sides, like a mirror. **On your screen**, on the left: the current track (cover, title, artist, album, player and progress; paused, it stays on the card with its bar stopped, until you close the player or switch its detection off) and the scrolling lyrics (click them for the whole song, or **Big lyrics** to fill the window with them, Spotify style; **Esc** closes it). Lyrics found without timings show as plain text you can scroll, marked **Words only**. **On Discord**, on the right: your card as your friends see it, with its **Source** menu, which picks the player it follows. **Click any part of the card** (or **Customize**) to change it: what the lines show, the verb, the icon on the cover, your button… In the middle, switches with an arrow toward the side they change: **Visible** takes your status off Discord or puts it back, **Lyrics** turns them on or off on both sides, **Romanise** and one of the two **Translate** act on Discord, the other **Translate** on the window, and **Hide on Discord when** covers pauses, being away and Spotify ads. **Why?** says what is keeping your card off Discord, with a button to fix it. |
-| **Lyrics** | Your own lyrics library: **My lyrics**, **Blocked** (lyrics you marked as wrong) and the offline **LRCLIB dump**. **Add lyrics** imports or writes new ones. |
+| **Lyrics** | Your own lyrics library: **My lyrics**, **Blocked** (lyrics you marked as wrong) and the offline **LRCLIB dump**. **Add lyrics** imports or writes new ones, and each entry of **My lyrics** can be shared on LRCLIB (see below). |
 | **Activity** | What you listened to over 7 days, 30 days, 12 months or all time, for all your music or one platform (pick it in the row of chips, or click it under **By platform**): time listened and how it compares with the period before, a chart, each platform's share, the hours of the week you listen most, your records and streaks, top artists, tracks and albums, the artists new to you, and your recent plays (**See all** opens the full history). Twitch and Kick, under **Live**, have a view of their own: channels, categories and sittings, kept out of the music totals. It updates by itself as songs finish. |
 | **Settings** | Discord presence, Lyrics & translation, Detection, Integrations (browser extension, Spotify through Spicetify or your own Spotify app, Last.fm), App & window, and About. The search box finds any setting. |
 | **Help & setup** | The setup checklist, at the bottom of the sidebar. |
@@ -52,6 +52,18 @@ Updates download on their own and install when you quit. The first time you open
 The bottom of the sidebar also says whether Discord is connected and what is being detected.
 
 Tip: keys **1–4** jump between Now playing, Lyrics, Activity and Settings. **Ctrl+Q** quits.
+
+### Sharing your lyrics on LRCLIB
+
+[LRCLIB](https://lrclib.net) is the free lyrics database that LRCGET and many music players download their lyrics from. Lyrics you timed yourself can go there too: in **Lyrics → My lyrics**, click the upload button on an entry (**Publish to LRCLIB**).
+
+- The window shows exactly what will be sent: the title, artist, album, duration and the timed lines. The same lines without their timings go along as plain lyrics.
+- LRCLIB needs an album and a duration, and matches lyrics to a song by its length, to within 2 seconds. If the entry has neither, fill them in right there (the duration as `3:31` or `211`); they are saved to your library as well.
+- Only timed lyrics can be published. If some lines have no timing, it says so: time them first with **Re-time these lyrics**.
+- It also says what LRCLIB already has for the song. If it has exactly your lines, there is nothing to publish.
+- Tick **I understand this is public**, then click **Publish to LRCLIB**. Sending takes a few seconds: LRCLIB has every sender solve a small puzzle first, to keep spam out.
+
+It is public and permanent: anyone can download the lyrics, and LRCLIB has no way to delete them. A later publish for the same song adds a newer version, which then replaces yours for everyone. Entries you published show **On LRCLIB**, and the same version cannot be sent twice. LRCLIB's search can take up to a day to show new lyrics.
 
 ---
 
@@ -214,7 +226,7 @@ No. Older versions did; this one does not. Both are optional extras: Spicetify a
 Anything that appears in the Windows media overlay: Spotify, browser tabs (YouTube, SoundCloud, Deezer…), VLC, foobar2000, MusicBee, AIMP, Apple Music, Tidal, Amazon Music.
 
 **Does my data leave my PC?**
-Track and artist names go to the lyrics services (LRCLib, Netease, Musixmatch, Genius) to look lyrics up, to Deezer and Apple's iTunes to find the album cover (and, for Apple Music, the album page the cover opens on Discord, as Spotify's does), and to Discord for the status. The cover your player shows (Spotify's, Apple Music's, a local file's) is published to Vybecord's cover store, stripped of its metadata, and only when there is none is a catalogue asked — switch that off under **Settings → Integrations → Cover images**. For a Twitch channel, the channel name goes to Twitch to get its title, picture and stream start. If you turn on translation, the lyric lines go to the translation service; if you enable Last.fm, your plays go there; if you sign in with your own Spotify app, Vybecord asks Spotify what you are playing. Your history, settings and imported lyrics stay local. The full list is in the [privacy policy](https://theunknownmurda.github.io/VybecordTS/privacy/).
+Track and artist names go to the lyrics services (LRCLib, Netease, Musixmatch, Genius) to look lyrics up, to Deezer and Apple's iTunes to find the album cover (and, for Apple Music, the album page the cover opens on Discord, as Spotify's does), and to Discord for the status. The cover your player shows (Spotify's, Apple Music's, a local file's) is published to Vybecord's cover store, stripped of its metadata, and only when there is none is a catalogue asked — switch that off under **Settings → Integrations → Cover images**. For a Twitch channel, the channel name goes to Twitch to get its title, picture and stream start. If you turn on translation, the lyric lines go to the translation service; if you enable Last.fm, your plays go there; if you sign in with your own Spotify app, Vybecord asks Spotify what you are playing. Your history, settings and imported lyrics stay local, unless you publish an entry to LRCLIB yourself. The full list is in the [privacy policy](https://theunknownmurda.github.io/VybecordTS/privacy/).
 
 **Where are my files?**
 In `%APPDATA%\Vybecord` — paste that into Explorer.

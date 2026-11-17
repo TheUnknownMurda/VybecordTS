@@ -34,6 +34,7 @@ import {
   translateText, translateBatch, clearTranslationCache, TRANSLATE_LANGS,
 } from '../src/core/translate.js';
 import { ytDlpStatus, ytDlpDropDir } from '../src/core/youtube-captions.js';
+import { sanitizeEdits } from '../src/core/lrclib-publish.js';
 import { SIGN_IN_CANCELLED } from '../src/core/spotify-auth.js';
 import {
   extensionPath, extensionExists, detectBrowsers,
@@ -320,6 +321,14 @@ export function registerIpc(
   });
   handle('lrclib:search', (query: string, limit?: number) => backend.searchLrclibDump(query, limit));
   handle('lrclib:track', (id: number) => backend.getLrclibTrackLyrics(id));
+
+  // ── Publishing to LRCLIB (src/core/lrclib-publish.ts) ──
+  // The app version goes into the User-Agent LRCLIB asks every client for.
+  // `edits` is the album and duration typed into the publish dialog.
+  handle('lrclib:publishPreview', (id: number, edits?: unknown, remote?: boolean) =>
+    backend.previewLrclibPublish(Number(id), sanitizeEdits(edits), remote === true, app.getVersion()));
+  handle('lrclib:publish', (id: number, edits?: unknown) =>
+    backend.publishCustomToLrclib(Number(id), sanitizeEdits(edits), app.getVersion()));
 
   // ── Cache ──
   handle('cache:clear', () => ({ cleared: backend.clearLyricsCache() }));

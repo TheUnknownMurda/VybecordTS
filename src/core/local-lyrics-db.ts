@@ -462,6 +462,16 @@ function openCustomDb(dbPath: string): boolean {
     try { customDb.exec(`ALTER TABLE lyrics ADD COLUMN source TEXT DEFAULT 'custom'`); } catch { /* already exists */ }
     try { customDb.exec(`ALTER TABLE lyrics ADD COLUMN created_at TEXT`); } catch { /* already exists */ }
     try { customDb.exec(`ALTER TABLE lyrics ADD COLUMN updated_at TEXT`); } catch { /* already exists */ }
+    /*
+     * When an entry went to LRCLIB, and a fingerprint of exactly what went —
+     * see src/core/lrclib-publish.ts. On the track rather than the lyrics row:
+     * an edit or a re-import changes what the fingerprint covers either way, and
+     * comparing fingerprints is what tells "published" from "published, then
+     * changed". Publishing cannot be undone, so the one thing worth remembering
+     * is enough to stop the same version going out twice.
+     */
+    try { customDb.exec(`ALTER TABLE tracks ADD COLUMN lrclib_published_at TEXT`); } catch { /* already exists */ }
+    try { customDb.exec(`ALTER TABLE tracks ADD COLUMN lrclib_published_hash TEXT`); } catch { /* already exists */ }
 
     // Prepare reusable statements for custom lyrics queries
     stmtCustomExact = customDb.prepare(`
@@ -784,7 +794,15 @@ export interface CustomLyricsEntry {
   duration: number | null;
   synced_lyrics: string;
   created_at: string;
+  /** ISO time it was last published to LRCLIB from here, or null. */
+  lrclib_published_at: string | null;
+  /** Fingerprint of what was published then — see payloadHash in lrclib-publish.ts. */
+  lrclib_published_hash: string | null;
 }
+
+/** The columns every listing of an entry returns, so list and get cannot drift apart. */
+const ENTRY_COLUMNS = `t.id AS track_id, l.id AS lyrics_id, t.name AS track_name, t.artist_name, t.album_name,
+  t.duration, l.synced_lyrics, l.created_at, t.lrclib_published_at, t.lrclib_published_hash`;
 
 /**
  * List custom-imported lyrics from the local database.
@@ -796,7 +814,7 @@ export function listCustomLyrics(limit = 100, offset = 0, search?: string): { en
   try {
     let countSql = `SELECT COUNT(*) as c FROM lyrics l JOIN tracks t ON t.last_lyrics_id = l.id WHERE l.source = 'custom'`;
     let querySql = `
-      SELECT t.id AS track_id, l.id AS lyrics_id, t.name AS track_name, t.artist_name, t.album_name, t.duration, l.synced_lyrics, l.created_at
+      SELECT ${ENTRY_COLUMNS}
       FROM lyrics l
       JOIN tracks t ON t.last_lyrics_id = l.id
       WHERE l.source = 'custom'`;
@@ -828,7 +846,7 @@ export function getCustomLyrics(trackId: number): CustomLyricsEntry | null {
   if (!customDb) return null;
   try {
     const row = customDb.prepare(`
-      SELECT t.id AS track_id, l.id AS lyrics_id, t.name AS track_name, t.artist_name, t.album_name, t.duration, l.synced_lyrics, l.created_at
+      SELECT ${ENTRY_COLUMNS}
       FROM tracks t
       JOIN lyrics l ON l.id = t.last_lyrics_id
       WHERE t.id = ? AND l.source = 'custom'
@@ -837,6 +855,19 @@ export function getCustomLyrics(trackId: number): CustomLyricsEntry | null {
   } catch (e) {
     log.warn(`[LOCAL] getCustomLyrics error: ${e}`);
     return null;
+  }
+}
+
+/** Record that an entry went to LRCLIB, and what exactly went. */
+export function markCustomLyricsPublished(trackId: number, hash: string, at: string): boolean {
+  if (!customDb) return false;
+  try {
+    const { changes } = customDb.prepare('UPDATE tracks SET lrclib_published_at = ?, lrclib_published_hash = ? WHERE id = ?')
+      .run(at, hash, trackId);
+    return changes > 0;
+  } catch (e) {
+    log.warn(`[LOCAL] markCustomLyricsPublished error: ${e}`);
+    return false;
   }
 }
 
