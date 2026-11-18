@@ -54,7 +54,7 @@ import {
   fetchYouTubeCaptions, clearCCCache, setCcCookiesFile, setBrowserCookies, wantsBrowserCookies,
   type BrowserCookie,
 } from './core/youtube-captions.js';
-import { initLocalDb, closeLocalDb, insertCustomLyrics, listCustomLyrics, getCustomLyrics, updateCustomLyrics, deleteCustomLyrics, findExistingCustomLyrics, searchLrclibDump as searchLrclibDumpDb, getLrclibTrackLyrics as getLrclibTrackLyricsDb, lrclibDumpStatus, markCustomLyricsPublished } from './core/local-lyrics-db.js';
+import { initLocalDb, closeLocalDb, insertCustomLyrics, listCustomLyrics, getCustomLyrics, updateCustomLyrics, deleteCustomLyrics, findExistingCustomLyrics, searchLrclibDump as searchLrclibDumpDb, getLrclibTrackLyrics as getLrclibTrackLyricsDb, lrclibDumpStatus, markCustomLyricsPublished, setCustomLyricsFound } from './core/local-lyrics-db.js';
 import { previewEntry, publishEntry, publishUserAgent, type PublishEdits, type PublishStore } from './core/lrclib-publish.js';
 import { initLastFm, scrobbleTrackStart, checkAndScrobble, scrobblePause, scrobbleTrackEnd } from './core/lastfm.js';
 import { lookupCoverArt } from './core/cover-art.js';
@@ -2512,6 +2512,7 @@ export class VybecordBackend extends EventEmitter {
       get: (id) => getCustomLyrics(id),
       save: (id, data) => this.updateCustomLyricsEntry(id, data),
       markPublished: (id, hash, at) => markCustomLyricsPublished(id, hash, at),
+      setFound: (id, hash, at) => setCustomLyricsFound(id, hash, at),
     };
   }
 

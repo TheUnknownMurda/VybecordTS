@@ -472,6 +472,14 @@ function openCustomDb(dbPath: string): boolean {
      */
     try { customDb.exec(`ALTER TABLE tracks ADD COLUMN lrclib_published_at TEXT`); } catch { /* already exists */ }
     try { customDb.exec(`ALTER TABLE tracks ADD COLUMN lrclib_published_hash TEXT`); } catch { /* already exists */ }
+    /*
+     * The same pair for lyrics LRCLIB turned out to have already, line for line,
+     * though nobody sent them from here — typically an entry copied out of the
+     * LRCLIB dump. Kept apart from the published pair because the window says
+     * different things about them: "you published this" would be a lie.
+     */
+    try { customDb.exec(`ALTER TABLE tracks ADD COLUMN lrclib_found_at TEXT`); } catch { /* already exists */ }
+    try { customDb.exec(`ALTER TABLE tracks ADD COLUMN lrclib_found_hash TEXT`); } catch { /* already exists */ }
 
     // Prepare reusable statements for custom lyrics queries
     stmtCustomExact = customDb.prepare(`
@@ -798,11 +806,16 @@ export interface CustomLyricsEntry {
   lrclib_published_at: string | null;
   /** Fingerprint of what was published then — see payloadHash in lrclib-publish.ts. */
   lrclib_published_hash: string | null;
+  /** ISO time LRCLIB was last seen to have exactly this entry's lyrics already, or null. */
+  lrclib_found_at: string | null;
+  /** Fingerprint of the version LRCLIB was seen to have. */
+  lrclib_found_hash: string | null;
 }
 
 /** The columns every listing of an entry returns, so list and get cannot drift apart. */
 const ENTRY_COLUMNS = `t.id AS track_id, l.id AS lyrics_id, t.name AS track_name, t.artist_name, t.album_name,
-  t.duration, l.synced_lyrics, l.created_at, t.lrclib_published_at, t.lrclib_published_hash`;
+  t.duration, l.synced_lyrics, l.created_at, t.lrclib_published_at, t.lrclib_published_hash,
+  t.lrclib_found_at, t.lrclib_found_hash`;
 
 /**
  * List custom-imported lyrics from the local database.
@@ -867,6 +880,19 @@ export function markCustomLyricsPublished(trackId: number, hash: string, at: str
     return changes > 0;
   } catch (e) {
     log.warn(`[LOCAL] markCustomLyricsPublished error: ${e}`);
+    return false;
+  }
+}
+
+/** Record that LRCLIB already has this version of an entry — or, with nulls, that it no longer does. */
+export function setCustomLyricsFound(trackId: number, hash: string | null, at: string | null): boolean {
+  if (!customDb) return false;
+  try {
+    const { changes } = customDb.prepare('UPDATE tracks SET lrclib_found_at = ?, lrclib_found_hash = ? WHERE id = ?')
+      .run(at, hash, trackId);
+    return changes > 0;
+  } catch (e) {
+    log.warn(`[LOCAL] setCustomLyricsFound error: ${e}`);
     return false;
   }
 }

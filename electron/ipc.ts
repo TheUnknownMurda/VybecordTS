@@ -34,7 +34,7 @@ import {
   translateText, translateBatch, clearTranslationCache, TRANSLATE_LANGS,
 } from '../src/core/translate.js';
 import { ytDlpStatus, ytDlpDropDir } from '../src/core/youtube-captions.js';
-import { sanitizeEdits } from '../src/core/lrclib-publish.js';
+import { sanitizeEdits, publishFailure, LrclibPublishError } from '../src/core/lrclib-publish.js';
 import { SIGN_IN_CANCELLED } from '../src/core/spotify-auth.js';
 import {
   extensionPath, extensionExists, detectBrowsers,
@@ -327,8 +327,17 @@ export function registerIpc(
   // `edits` is the album and duration typed into the publish dialog.
   handle('lrclib:publishPreview', (id: number, edits?: unknown, remote?: boolean) =>
     backend.previewLrclibPublish(Number(id), sanitizeEdits(edits), remote === true, app.getVersion()));
-  handle('lrclib:publish', (id: number, edits?: unknown) =>
-    backend.publishCustomToLrclib(Number(id), sanitizeEdits(edits), app.getVersion()));
+  // A refusal comes back as data (publishFailure), not as a throw: Electron
+  // passes a throw on as a bare message, and publishing several needs to know
+  // whether a failure was this entry's or would repeat on the next one.
+  handle('lrclib:publish', async (id: number, edits?: unknown) => {
+    try {
+      return await backend.publishCustomToLrclib(Number(id), sanitizeEdits(edits), app.getVersion());
+    } catch (e) {
+      if (e instanceof LrclibPublishError) return publishFailure(e);
+      throw e;
+    }
+  });
 
   // ── Cache ──
   handle('cache:clear', () => ({ cleared: backend.clearLyricsCache() }));

@@ -115,9 +115,16 @@ const api = {
    */
   lrclibPublishPreview: (id: number, edits?: { album?: string; duration?: number | null }, remote = false) =>
     invoke('lrclib:publishPreview', id, edits, remote),
-  /** Public and permanent: only ever called from the publish dialog's own button. */
+  /**
+   * Public and permanent: only ever called from a publish dialog's own button.
+   * A refusal resolves with `ok: false` rather than rejecting, so a batch can
+   * read `stopsBatch` — see publishFailure in src/core/lrclib-publish.ts.
+   */
   lrclibPublish: (id: number, edits?: { album?: string; duration?: number | null }) =>
-    invoke<{ ok: true; publishedAt: string; attempts: number; solveMs: number; savedEdits: boolean }>('lrclib:publish', id, edits),
+    invoke<
+      | { ok: true; publishedAt: string; attempts: number; solveMs: number; savedEdits: boolean }
+      | { ok: false; code: string; message: string; stopsBatch: boolean }
+    >('lrclib:publish', id, edits),
 
   // ── Cache ──
   clearCache: () => invoke('cache:clear'),

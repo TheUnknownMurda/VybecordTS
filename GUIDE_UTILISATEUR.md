@@ -63,7 +63,9 @@ Astuce : les touches **1 à 4** passent de Now playing à Lyrics, Activity et Se
 - Elle indique aussi ce que LRCLIB a déjà pour cette chanson. S'il a exactement tes lignes, il n'y a rien à publier.
 - Coche **I understand this is public**, puis clique sur **Publish to LRCLIB**. L'envoi prend quelques secondes : LRCLIB fait résoudre un petit calcul à chaque expéditeur, pour éviter le spam.
 
-C'est public et définitif : n'importe qui peut télécharger ces paroles, et LRCLIB ne permet pas de les supprimer. Une publication ultérieure pour la même chanson ajoute une version plus récente, qui remplace alors la tienne pour tout le monde. Les entrées publiées affichent **On LRCLIB**, et la même version ne peut pas être envoyée deux fois. La recherche de LRCLIB peut mettre jusqu'à un jour à afficher de nouvelles paroles.
+Pour en envoyer plusieurs d'un coup, clique sur **Publish several** à côté de la barre de recherche. Coche les entrées voulues (**Select all ready** coche toutes celles qui sont prêtes ; celles à qui il manque quelque chose ont un bouton **Fix** qui ouvre leur propre fenêtre), coche **I understand this is public**, puis publie. Elles partent l'une après l'autre, quelques secondes chacune, et chaque ligne indique comment ça s'est passé. Si LRCLIB ne répond plus ou demande de ralentir, les suivantes ne partent pas et restent cochées, pour réessayer plus tard. **Stop after this one** arrête le lot en cours de route.
+
+C'est public et définitif : n'importe qui peut télécharger ces paroles, et LRCLIB ne permet pas de les supprimer. Une publication ultérieure pour la même chanson ajoute une version plus récente, qui remplace alors la tienne pour tout le monde. Les entrées publiées affichent **On LRCLIB**, tout comme celles que LRCLIB a déjà, ligne pour ligne (une entrée copiée depuis le dump LRCLIB, par exemple) ; survole la mention pour savoir laquelle des deux. La même version ne peut pas être envoyée deux fois. La recherche de LRCLIB peut mettre jusqu'à un jour à afficher de nouvelles paroles.
 
 ---
 

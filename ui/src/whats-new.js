@@ -56,6 +56,8 @@ const ENTRIES = [
     items: [
       ['upload', 'Publish to LRCLIB',
         'Lyrics → My lyrics: the new button on an entry sends it to LRCLIB, where LRCGET and many players find their lyrics. You see exactly what goes first, and fill in an album or a duration if one is missing.'],
+      ['upload', 'Several at once',
+        'Publish several, next to the search box, lists every entry with what each still needs. Tick the ones to share, confirm once, and they go one after the other.'],
       ['key', 'Registered with LRCLIB',
         'Vybecord now tells LRCLIB which app is asking, so lyrics lookups get about twice the room before LRCLIB slows them down.'],
     ],

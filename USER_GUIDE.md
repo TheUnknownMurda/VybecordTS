@@ -63,7 +63,9 @@ Tip: keys **1–4** jump between Now playing, Lyrics, Activity and Settings. **C
 - It also says what LRCLIB already has for the song. If it has exactly your lines, there is nothing to publish.
 - Tick **I understand this is public**, then click **Publish to LRCLIB**. Sending takes a few seconds: LRCLIB has every sender solve a small puzzle first, to keep spam out.
 
-It is public and permanent: anyone can download the lyrics, and LRCLIB has no way to delete them. A later publish for the same song adds a newer version, which then replaces yours for everyone. Entries you published show **On LRCLIB**, and the same version cannot be sent twice. LRCLIB's search can take up to a day to show new lyrics.
+To send several at once, click **Publish several** next to the search box. Tick the entries you want (**Select all ready** ticks every one that is ready; those missing something have a **Fix** button that opens their own window), tick **I understand this is public**, and publish. They go one after the other, a few seconds each, and each row says how it went. If LRCLIB stops answering or asks to slow down, the rest stay unsent and ticked, to try again later. **Stop after this one** ends the batch early.
+
+It is public and permanent: anyone can download the lyrics, and LRCLIB has no way to delete them. A later publish for the same song adds a newer version, which then replaces yours for everyone. Entries you published show **On LRCLIB**, and so do entries LRCLIB turns out to have already, line for line (one copied from the LRCLIB dump, say); hover the mark to see which. The same version cannot be sent twice. LRCLIB's search can take up to a day to show new lyrics.
 
 ---
 

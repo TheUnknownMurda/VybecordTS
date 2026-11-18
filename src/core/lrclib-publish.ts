@@ -91,6 +91,8 @@ export interface PublishSource {
   synced_lyrics: string;
   lrclib_published_at?: string | null;
   lrclib_published_hash?: string | null;
+  lrclib_found_at?: string | null;
+  lrclib_found_hash?: string | null;
 }
 
 export type ProblemField = 'title' | 'artist' | 'album' | 'duration' | 'lyrics' | 'published' | 'remote';
@@ -131,6 +133,8 @@ export interface PublishPreview {
   payload: PublishPayload | null;
   /** This entry was published from here before, and whether it has changed since. */
   published: { at: string; unchanged: boolean } | null;
+  /** LRCLIB was seen to have this entry's lyrics already, sent by someone else, and whether still this version. */
+  found: { at: string; unchanged: boolean } | null;
   /** Only when asked for: it costs a round trip to LRCLIB. */
   remote: RemoteState | null;
 }
@@ -149,6 +153,8 @@ export interface PublishStore {
   get(trackId: number): PublishSource | null;
   save(trackId: number, data: { album_name?: string; duration?: number | null }): boolean;
   markPublished(trackId: number, hash: string, at: string): boolean;
+  /** LRCLIB has this version already (hash and time), or no longer does (nulls). */
+  setFound(trackId: number, hash: string | null, at: string | null): boolean;
 }
 
 export interface PublishOptions {
@@ -160,7 +166,7 @@ export interface PublishOptions {
   sleep?: (ms: number) => Promise<void>;
 }
 
-type FailureCode =
+export type FailureCode =
   | 'network' | 'unknown_outcome' | 'busy' | 'rejected' | 'token' | 'server'
   | 'bad_challenge' | 'solve_failed' | 'invalid' | 'in_progress';
 
@@ -175,6 +181,36 @@ export class LrclibPublishError extends Error {
     super(message);
     this.name = 'LrclibPublishError';
   }
+}
+
+/** A publish that did not go through, as the window gets it: data, not an exception. */
+export interface PublishFailure {
+  ok: false;
+  code: FailureCode;
+  message: string;
+  /** Publishing several: whether the next entry should still be tried. */
+  stopsBatch: boolean;
+}
+
+/**
+ * Failures that belong to one entry: LRCLIB rejecting it, or the entry not
+ * being fit to send. The next entry of a batch may well go through.
+ *
+ * Everything else stops a batch. LRCLIB out of reach, rate-limiting, a broken
+ * challenge or a refused token would only come back on the next entry, and an
+ * answer that never came leaves one entry uncertain already — sending more on
+ * top of that is how a batch ends with nobody knowing what went out.
+ */
+const ENTRY_FAILURES: ReadonlySet<FailureCode> = new Set<FailureCode>(['rejected', 'invalid']);
+
+/**
+ * An error from publishEntry, turned into what the window can act on.
+ *
+ * Electron hands a handler's throw to the renderer as a message and nothing
+ * else, and a batch needs the kind of failure to know whether to go on.
+ */
+export function publishFailure(e: LrclibPublishError): PublishFailure {
+  return { ok: false, code: e.code, message: e.message, stopsBatch: !ENTRY_FAILURES.has(e.code) };
 }
 
 export function publishUserAgent(appVersion: string): string {
@@ -851,23 +887,51 @@ export async function previewEntry(
   const prep = preparePublish(effective);
   const problems = [...prep.problems];
 
+  const hash = prep.payload ? payloadHash(prep.payload) : null;
+
   let published: PublishPreview['published'] = null;
   if (entry.lrclib_published_at) {
-    const unchanged = !!prep.payload && payloadHash(prep.payload) === entry.lrclib_published_hash;
+    const unchanged = !!hash && hash === entry.lrclib_published_hash;
     published = { at: entry.lrclib_published_at, unchanged };
     if (unchanged) {
       problems.push({ field: 'published', message: 'You already published exactly this version from Vybecord.' });
     }
   }
 
+  let found: PublishPreview['found'] = entry.lrclib_found_at
+    ? { at: entry.lrclib_found_at, unchanged: !!hash && hash === entry.lrclib_found_hash }
+    : null;
+  /*
+   * Only what the store holds is remembered. With album or duration typed into
+   * the dialog and not saved yet, LRCLIB is being asked about a version the
+   * entry does not have — and marking the entry with it would be marking the
+   * wrong version.
+   */
+  const asStored = Object.keys(changedFields(entry, edits)).length === 0;
+
   let remote: RemoteState | null = null;
   // Asked only of a payload that could go: a lookup for an entry with no album
   // or duration would be answered for a different song.
   if (opts.remote && prep.payload && !problems.length) {
     remote = await checkLrclib(prep.payload, opts);
-    if (remote.status !== 'none' && remote.status !== 'unknown' && remote.same) {
-      problems.push({ field: 'remote', message: 'LRCLIB already has exactly these lyrics for this song.' });
+    const same = remote.status !== 'none' && remote.status !== 'unknown' && remote.same;
+    if (same) problems.push({ field: 'remote', message: 'LRCLIB already has exactly these lyrics for this song.' });
+    /*
+     * What LRCLIB was just seen to hold replaces what it was last seen to hold:
+     * the row shows On LRCLIB from then on, and stops showing it if LRCLIB's
+     * version has moved on since. An answer that never came changes nothing.
+     */
+    if (asStored && remote.status !== 'unknown') {
+      if (same) {
+        const at = new Date().toISOString();
+        if (store.setFound(trackId, hash, at)) found = { at, unchanged: true };
+      } else if (found && store.setFound(trackId, null, null)) {
+        found = null;
+      }
     }
+  } else if (found?.unchanged && !problems.length) {
+    // What the last look found. Asking with `remote` looks again.
+    problems.push({ field: 'remote', message: 'LRCLIB already has exactly these lyrics for this song.' });
   }
 
   return {
@@ -882,6 +946,7 @@ export async function previewEntry(
     warnings: prep.warnings,
     payload: problems.length ? null : prep.payload,
     published,
+    found,
     remote,
   };
 }
@@ -911,6 +976,11 @@ export async function publishEntry(
     const hash = payloadHash(prep.payload);
     if (entry.lrclib_published_at && entry.lrclib_published_hash === hash) {
       throw new LrclibPublishError('You already published exactly this version from Vybecord.', 'invalid');
+    }
+    // Both dialogs look again with `remote` before offering the button, which
+    // clears a mark LRCLIB has since outgrown; one that is still here is current.
+    if (entry.lrclib_found_at && entry.lrclib_found_hash === hash) {
+      throw new LrclibPublishError('LRCLIB already has exactly these lyrics for this song.', 'invalid');
     }
 
     const changes = changedFields(entry, edits);

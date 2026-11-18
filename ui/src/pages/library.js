@@ -236,7 +236,13 @@ async function renderBrowse(body, refresh, _handover, ctx) {
   searchBox.insertAdjacentHTML('afterbegin', '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>');
 
   body.replaceChildren(
-    searchBox,
+    el('div', { class: 'lib-toolbar' }, [
+      searchBox,
+      glyphBtn('btn', GLYPH.publish, 'Publish several', {
+        title: 'Publish several entries to LRCLIB at once',
+        onclick: () => { void openPublishMany(refresh, ctx); },
+      }),
+    ]),
     el('div', { class: 'card', style: 'padding:8px' }, [list, more, counter]),
   );
 
@@ -278,8 +284,14 @@ function entryRow(e, refresh, ctx) {
       el('div', { class: 'item-title', text: e.track_name }),
       el('div', { class: 'item-sub', text: `${e.artist_name}${e.album_name ? ` · ${e.album_name}` : ''}${e.duration ? ` · ${fmtTime(e.duration * 1000)}` : ''}` }),
     ]),
-    e.lrclib_published_at
-      ? el('span', { class: 'badge accent pub-badge', text: 'On LRCLIB', title: `Published to LRCLIB on ${fmtDate(e.lrclib_published_at)}` })
+    // Sent from here, or found there already (an entry copied from the dump, say).
+    e.lrclib_published_at || e.lrclib_found_at
+      ? el('span', {
+          class: 'badge accent pub-badge', text: 'On LRCLIB',
+          title: e.lrclib_published_at
+            ? `Published to LRCLIB on ${fmtDate(e.lrclib_published_at)}`
+            : `Already on LRCLIB, published by someone else (seen ${fmtDate(e.lrclib_found_at)})`,
+        })
       : null,
     el('div', { class: 'item-actions' }, [
       glyphBtn('btn btn-ghost btn-icon', GLYPH.edit, '', { title: 'Edit', 'aria-label': `Edit the lyrics for ${e.track_name}`, onclick: () => editEntry(e, refresh) }),
@@ -491,10 +503,13 @@ async function openPublish(entry, refresh, ctx) {
       }
       if (mine !== seq) return;
       preview = p;
-      remote = p.ready ? 'pending' : null;
+      // "LRCLIB already has these" alone is what the last look found, and
+      // LRCLIB may have moved on since: that one is asked again, not taken as read.
+      const ask = p.ready || (p.problems.length > 0 && p.problems.every((x) => x.field === 'remote'));
+      remote = ask ? 'pending' : null;
       stale = false;
       paint();
-      if (!p.ready) return;
+      if (!ask) return;
       let r;
       try {
         r = await api.lrclibPublishPreview(id, ed, true);
@@ -502,6 +517,8 @@ async function openPublish(entry, refresh, ctx) {
         r = { ...p, remote: { status: 'unknown', error: plainError(e) } };
       }
       if (mine !== seq) return;
+      // The look can mark the entry On LRCLIB, or take the mark away: the list behind needs to know.
+      if ((r.found?.at || '') !== (p.found?.at || '')) touched = true;
       preview = r;
       remote = r.remote || { status: 'unknown', error: 'no answer' };
       paint();
@@ -538,11 +555,16 @@ async function openPublish(entry, refresh, ctx) {
       warningsBox.hidden = !warnings.length;
       warningsBox.replaceChildren(...warnings.map((w) => el('div', { text: w })));
 
-      historyBox.hidden = !p?.published;
-      if (p?.published) {
-        historyBox.textContent = `You published this entry to LRCLIB on ${fmtDate(p.published.at)}.`
-          + (p.published.unchanged ? '' : ' It has changed since — publishing again sends the new version.');
-      }
+      // "LRCLIB already has exactly these" is a problem, listed above; an older
+      // version found there is only history.
+      const history = p?.published
+        ? `You published this entry to LRCLIB on ${fmtDate(p.published.at)}.`
+          + (p.published.unchanged ? '' : ' It has changed since — publishing again sends the new version.')
+        : p?.found && !p.found.unchanged
+          ? `LRCLIB had an earlier version of these lyrics (seen ${fmtDate(p.found.at)}). Publishing sends yours as a new version.`
+          : '';
+      historyBox.hidden = !history;
+      historyBox.textContent = history;
 
       paintRemote();
       linesLabel.textContent = p ? plural(p.timedLines, 'timed line') : '';
@@ -611,7 +633,8 @@ async function openPublish(entry, refresh, ctx) {
       tick();
       const timer = setInterval(tick, 500);
       try {
-        await api.lrclibPublish(id, ed);
+        const res = await api.lrclibPublish(id, ed);
+        if (!res?.ok) throw new Error(res?.message || 'Not published.');
         touched = true;
         showDone();
         toast('Published to LRCLIB ✓', 'ok');
@@ -675,6 +698,308 @@ async function openPublish(entry, refresh, ctx) {
     ]);
 
     void check();
+    return body;
+  }, { dismissable: false });
+
+  if (touched) refresh();
+}
+
+// ── Publish several ───────────────────────────────────────────────────────────
+
+/** LRCLIB's docs ask for requests one after another, a few hundred milliseconds apart. */
+const BATCH_GAP_MS = 500;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * What stops an entry, in a few words for its row. The full sentences are the
+ * single dialog's, and the row keeps them as its tooltip.
+ */
+function shortReason(problems) {
+  const words = (problems || []).map((x) => {
+    switch (x.field) {
+      case 'album': return 'No album';
+      case 'duration': return /^No duration/.test(x.message) ? 'No duration' : 'Duration out of range';
+      case 'title': return 'No title';
+      case 'artist': return 'No artist';
+      case 'lyrics': return /^There are no lyrics/.test(x.message) ? 'No lyrics' : 'Needs timings';
+      case 'published': return 'Already published';
+      case 'remote': return 'Already on LRCLIB';
+      default: return 'Could not check';
+    }
+  });
+  return [...new Set(words)].join(' · ');
+}
+
+/**
+ * Publish several entries to LRCLIB, one after the other.
+ *
+ * Each entry goes through the very calls the single dialog makes — a preview
+ * that asks LRCLIB what it has, then a publish — so it gets every check a
+ * single publish gets, and its row can say how its own send went. Nothing is
+ * ticked to begin with: a whole library going public on one click is not a
+ * default, and there is nothing to undo it with. Entries that need something
+ * first are listed with what, and Fix hands them to the single dialog, which
+ * can complete them.
+ *
+ * A failure that belongs to one entry (LRCLIB rejecting it) moves on to the
+ * next; one that would only repeat — LRCLIB out of reach, rate-limiting, an
+ * answer that never came — stops the batch and leaves the rest unsent. The
+ * backend says which is which (stopsBatch); this does not guess from wording.
+ * An entry whose answer never came can no longer be ticked here: sending it
+ * again is how the same lyrics would go out twice.
+ */
+async function openPublishMany(refresh, ctx) {
+  let entries;
+  try {
+    const total = (await api.listCustom(1, 0))?.total || 0;
+    entries = total ? ((await api.listCustom(total, 0))?.entries || []) : [];
+  } catch (e) {
+    return toast(`Could not load your lyrics: ${plainError(e)}`, 'err');
+  }
+  if (!entries.length) return toast('Nothing in My lyrics yet', '');
+
+  // Local checks only — what LRCLIB has is asked entry by entry, as each goes.
+  const previews = await Promise.all(entries.map((e) => api.lrclibPublishPreview(e.track_id, {}, false)
+    .catch((err) => ({ ready: false, problems: [{ field: 'error', message: plainError(err) }], published: null }))));
+
+  /** Nothing wrong with the entry, except that LRCLIB has it already: sent from here, or found there. */
+  const onLrclib = (p) => p?.problems?.length > 0 && p.problems.every((x) => x.field === 'published' || x.field === 'remote');
+
+  /** One per entry: where it stands, and the nodes that show it. */
+  const rows = entries.map((e, i) => ({
+    e,
+    p: previews[i],
+    kind: previews[i]?.ready ? 'ready' : onLrclib(previews[i]) ? 'done' : 'blocked',
+    selected: false,
+    node: null, check: null, status: null, fix: null,
+  }));
+  /** Something was published: the list behind is stale once this closes. */
+  let touched = false;
+
+  await modal((close) => {
+    const filter = el('input', {
+      type: 'search', placeholder: 'Filter by title, artist or album', 'aria-label': 'Filter the entries',
+      oninput: () => paintFilter(),
+    });
+    const selectAll = el('button', { type: 'button', class: 'btn btn-sm', onclick: () => toggleAll() });
+    const list = el('div', { class: 'pub-batch-list' });
+    const ack = el('input', { type: 'checkbox', onchange: () => paintFooter() });
+    const summary = el('div', { class: 'muted pub-status', 'aria-live': 'polite' });
+    const closeBtn = el('button', { type: 'button', class: 'btn', text: 'Cancel', onclick: () => close() });
+    const stopBtn = el('button', {
+      type: 'button', class: 'btn', text: 'Stop after this one', hidden: true,
+      onclick: () => { stopping = true; stopBtn.disabled = true; stopBtn.textContent = 'Stopping…'; },
+    });
+    const goBtn = el('button', { type: 'button', class: 'btn btn-primary', disabled: true, onclick: () => { void run(); } });
+
+    let running = false;
+    let stopping = false;
+    let ranOnce = false;
+
+    function setKind(r, kind) {
+      r.kind = kind;
+      r.node.className = `pub-row is-${kind}`;
+      if (kind !== 'ready') { r.selected = false; r.check.checked = false; }
+    }
+    function setStatus(r, tone, text, detail = '') {
+      r.status.className = `pub-row-status${tone ? ` is-${tone}` : ''}`;
+      r.status.textContent = text;
+      r.status.title = detail;
+    }
+    const reasons = (problems) => (problems || []).map((x) => x.message).join('\n');
+
+    function rowNode(r) {
+      r.check = el('input', {
+        type: 'checkbox', 'aria-label': `Publish ${r.e.track_name}`,
+        onchange: () => { r.selected = r.check.checked; paintFooter(); },
+      });
+      r.status = el('div');
+      r.fix = r.kind === 'blocked' ? el('button', {
+        type: 'button', class: 'btn btn-sm', text: 'Fix',
+        title: 'Open this entry’s own publish window, where it can be completed',
+        onclick: () => { close(); void openPublish(r.e, refresh, ctx); },
+      }) : null;
+      const meta = [r.e.artist_name, r.e.album_name, r.e.duration ? fmtTime(r.e.duration * 1000) : '']
+        .filter(Boolean).join(' · ');
+      r.node = el('div', { class: `pub-row is-${r.kind}` }, [
+        el('label', { class: 'pub-row-main' }, [
+          r.check,
+          el('div', { class: 'pub-row-body' }, [
+            el('div', { class: 'pub-row-title', text: r.e.track_name || '(no title)' }),
+            el('div', { class: 'pub-row-meta', text: meta }),
+          ]),
+        ]),
+        r.status,
+        r.fix,
+      ]);
+      if (r.kind === 'ready') setStatus(r, '', plural(r.p.timedLines, 'timed line'));
+      else if (r.kind === 'done') {
+        setStatus(r, 'ok', r.p.published?.unchanged
+          ? `Published ${fmtDate(r.p.published.at)}`
+          : `Already there · seen ${fmtDate(r.p.found?.at)}`);
+      }
+      else setStatus(r, 'bad', shortReason(r.p?.problems), reasons(r.p?.problems));
+      return r.node;
+    }
+
+    const groups = [
+      ['ready', 'Ready to publish'],
+      ['blocked', 'Need something first'],
+      ['done', 'Already on LRCLIB'],
+    ].map(([kind, label]) => {
+      const members = rows.filter((r) => r.kind === kind);
+      const node = members.length ? el('div', { class: 'pub-batch-group' }, [
+        el('div', { class: 'pub-batch-head', text: `${label} · ${members.length}` }),
+        ...members.map(rowNode),
+      ]) : null;
+      return { node, members };
+    }).filter((g) => g.node);
+    list.replaceChildren(...groups.map((g) => g.node));
+
+    const visibleReady = () => rows.filter((r) => r.kind === 'ready' && !r.node.hidden);
+
+    function paintFilter() {
+      const terms = fold(filter.value).split(/\s+/).filter(Boolean);
+      for (const r of rows) {
+        const hay = fold(`${r.e.track_name} ${r.e.artist_name} ${r.e.album_name}`);
+        r.node.hidden = terms.length > 0 && !terms.every((t) => hay.includes(t));
+      }
+      for (const g of groups) g.node.hidden = g.members.every((r) => r.node.hidden);
+      paintFooter();
+    }
+
+    function toggleAll() {
+      const shown = visibleReady();
+      const on = !(shown.length && shown.every((r) => r.selected));
+      for (const r of shown) { r.selected = on; r.check.checked = on; }
+      paintFooter();
+    }
+
+    function paintFooter() {
+      const shown = visibleReady();
+      const chosen = rows.filter((r) => r.kind === 'ready' && r.selected);
+      selectAll.textContent = shown.length && shown.every((r) => r.selected) ? 'Clear selection' : 'Select all ready';
+      selectAll.disabled = running || !shown.length;
+      goBtn.textContent = chosen.length ? `Publish ${chosen.length} to LRCLIB` : 'Publish to LRCLIB';
+      goBtn.disabled = running || !chosen.length || !ack.checked;
+      ack.disabled = running;
+      filter.disabled = running;
+      closeBtn.disabled = running;
+      closeBtn.textContent = ranOnce ? 'Close' : 'Cancel';
+      stopBtn.hidden = !running;
+      for (const r of rows) {
+        r.check.disabled = running || r.kind !== 'ready';
+        if (r.fix) r.fix.disabled = running;
+      }
+      if (!running && !ranOnce) {
+        const hidden = chosen.filter((r) => r.node.hidden).length;
+        summary.textContent = hidden ? `${hidden} of the ticked entries are hidden by the filter, and will go too.` : '';
+      }
+    }
+
+    /** One entry, start to finish. Says how it went, and whether the batch must stop. */
+    async function publishOne(r) {
+      setStatus(r, 'busy', 'Checking LRCLIB…');
+      let p;
+      try {
+        p = await api.lrclibPublishPreview(r.e.track_id, {}, true);
+      } catch (e) {
+        setStatus(r, 'bad', 'Could not check', plainError(e));
+        return { tally: 'failed', halt: '' };
+      }
+      if (!p.ready) {
+        setStatus(r, 'bad', `Skipped: ${shortReason(p.problems)}`, reasons(p.problems));
+        if (p.problems.some((x) => x.field === 'remote' || x.field === 'published')) {
+          setKind(r, 'done');
+          // The look marked the entry On LRCLIB in the store.
+          touched = true;
+        } else {
+          setKind(r, 'blocked');
+        }
+        return { tally: 'skipped', halt: '' };
+      }
+      const started = Date.now();
+      const tick = () => setStatus(r, 'busy', `Publishing… ${Math.round((Date.now() - started) / 1000)} s`);
+      tick();
+      const timer = setInterval(tick, 500);
+      let res;
+      try {
+        res = await api.lrclibPublish(r.e.track_id, {});
+      } catch (e) {
+        res = { ok: false, code: 'error', message: plainError(e), stopsBatch: true };
+      } finally {
+        clearInterval(timer);
+      }
+      if (res?.ok) {
+        touched = true;
+        setKind(r, 'done');
+        setStatus(r, 'ok', 'Published ✓');
+        return { tally: 'published', halt: '' };
+      }
+      const message = res?.message || 'Not published.';
+      setStatus(r, 'bad', message, message);
+      // Maybe on LRCLIB, maybe not: never offered again from here.
+      if (res?.code === 'unknown_outcome') setKind(r, 'uncertain');
+      return { tally: 'failed', halt: res?.stopsBatch ? message : '' };
+    }
+
+    async function run() {
+      const queue = rows.filter((r) => r.kind === 'ready' && r.selected);
+      if (running || !queue.length || !ack.checked) return;
+      running = true;
+      stopping = false;
+      ranOnce = true;
+      stopBtn.disabled = false;
+      stopBtn.textContent = 'Stop after this one';
+      paintFooter();
+
+      const tally = { published: 0, skipped: 0, failed: 0, notSent: 0 };
+      let halt = '';
+      for (let i = 0; i < queue.length; i++) {
+        const r = queue[i];
+        if (stopping || halt) {
+          setStatus(r, '', 'Not sent');
+          tally.notSent++;
+          continue;
+        }
+        summary.textContent = `Publishing ${i + 1} of ${queue.length}… Each takes a few seconds.`;
+        r.node.scrollIntoView({ block: 'nearest' });
+        const out = await publishOne(r);
+        tally[out.tally]++;
+        halt = out.halt;
+        if (i < queue.length - 1 && !stopping && !halt) await sleep(BATCH_GAP_MS);
+      }
+
+      running = false;
+      // Every batch is confirmed on its own, the rest of an interrupted one included.
+      ack.checked = false;
+      const parts = [
+        tally.published ? `${tally.published} published` : '',
+        tally.skipped ? `${tally.skipped} skipped` : '',
+        tally.failed ? `${tally.failed} failed` : '',
+        tally.notSent ? `${tally.notSent} not sent` : '',
+      ].filter(Boolean);
+      summary.textContent = `${parts.join(' · ') || 'Nothing sent'}.`
+        + (halt ? ` Stopped: ${halt}` : stopping ? ' Stopped on request.' : '');
+      paintFooter();
+    }
+
+    const body = el('div', {}, [
+      el('h2', { text: 'Publish several to LRCLIB' }),
+      el('div', { class: 'muted', style: 'margin-top:6px' },
+        'Tick the entries to share on lrclib.net. They go one after the other, each checked first the way a single '
+        + 'publish is — an entry LRCLIB already has, line for line, is skipped.'),
+      el('div', { class: 'pub-batch-tools' }, [filter, selectAll]),
+      list,
+      el('label', { class: 'pub-ack' }, [
+        ack,
+        el('span', { text: 'I understand this is public: anyone can see and download these lyrics, and LRCLIB has no way to take them back.' }),
+      ]),
+      summary,
+      el('div', { class: 'pub-actions' }, [closeBtn, stopBtn, goBtn]),
+    ]);
+    paintFooter();
     return body;
   }, { dismissable: false });
 
