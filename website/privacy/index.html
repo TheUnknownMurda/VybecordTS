@@ -32,7 +32,7 @@
 
 <main class="doc">
   <h1>Privacy Policy</h1>
-  <p class="date">Vybecord browser extension and desktop app · Last updated 13 November 2026</p>
+  <p class="date">Vybecord browser extension and desktop app · Last updated 17 November 2026</p>
 
   <div class="callout">
     <p>
@@ -41,11 +41,17 @@
       <code>127.0.0.1</code>. It has no server, no account, and no analytics.
     </p>
     <p>
-      The desktop app makes one exception, and only one. Discord can only show a cover
+      On its own, the desktop app makes one exception, and only one. Discord can only show a cover
       that has a web address, so when your player hands the app its cover as an image
       &mdash; Apple Music, a local file, a desktop player &mdash; the app publishes that one
       image so Discord shows exactly what your player shows. Never the audio, and
       nothing that identifies you. It is described in full below, and it has a switch.
+    </p>
+    <p>
+      It publishes one other thing, and only when you tell it to: timed lyrics from your
+      library, to LRCLIB, the public lyrics database many players read from. Only the
+      entries you pick are sent, only after you confirm that the publish is public, and
+      LRCLIB has no way to take them back. That has a section of its own below.
     </p>
     <p>
       The extension can also, if you turn it on, lend the app your YouTube sign-in for
@@ -141,6 +147,16 @@
     Short's video identifier, and no sign-in.
   </p>
   <p>
+    To find lyrics, the desktop app asks LRCLIB (<code>lrclib.net</code>), among other
+    lyrics services, with the song's title, artist, album and duration. Every request it
+    sends to <code>lrclib.net</code>, those lookups and the publishing described below
+    alike, also carries Vybecord's application ID, in a <code>Lrclib-App-Id</code>
+    header. The ID names the app, not you: Vybecord is registered with LRCLIB, every copy
+    sends the same ID, it is written in the app's public source code, and it is sent to
+    <code>lrclib.net</code> only. Being registered lets the app make more requests before
+    LRCLIB slows it down.
+  </p>
+  <p>
     The desktop app then publishes what you are playing to your Discord profile, which
     is the purpose of installing it. That step is Discord's, and is covered by
     <a href="https://discord.com/privacy" target="_blank" rel="noopener">Discord's privacy policy</a>.
@@ -209,6 +225,51 @@
     </li>
   </ul>
 
+  <h2 id="lrclib">Lyrics you publish to LRCLIB</h2>
+  <p>
+    This section is about the desktop app too, and about something it does only when
+    you ask. LRCLIB (<code>lrclib.net</code>) is a public lyrics database, run by its own
+    maintainers and not by us; LRCGET and many music players get their lyrics from it.
+    From Lyrics &rarr; My lyrics, timed lyrics in your library can be published there,
+    one entry at a time or several at once.
+  </p>
+  <p>Precisely what that involves:</p>
+  <ul>
+    <li>
+      <strong>LRCLIB is asked first.</strong> So that you can compare, the publish dialog
+      shows what LRCLIB already has for the song, which means sending it the entry's
+      title, artist, album and duration &mdash; what an ordinary lyrics lookup sends.
+      That publishes nothing.
+    </li>
+    <li>
+      <strong>Publishing sends that entry, and nothing else.</strong> The same title,
+      artist, album and duration, the timed lyrics, and the same lines without their
+      timings. Nothing from the rest of your library, and nothing that identifies you.
+    </li>
+    <li>
+      <strong>A proof of work instead of an account.</strong> LRCLIB has no accounts.
+      Before it accepts lyrics, it has the app solve a computing puzzle, which keeps your
+      processor busy for a few seconds, and the answer goes with the lyrics as a token
+      that works once. It shows that the puzzle was solved, and nothing about who
+      solved it.
+    </li>
+    <li>
+      <strong>Nothing goes until you confirm.</strong> Every publish waits for you to
+      tick <em>I understand this is public</em>. Publishing several asks once for the
+      batch, then sends the entries one after the other, each checked with LRCLIB first;
+      one LRCLIB already has, line for line, is skipped.
+    </li>
+    <li>
+      <strong>A publish is public, and permanent.</strong> Anyone can read and download
+      it, and the players that use LRCLIB may show it. LRCLIB has no way to delete it,
+      for you or for us. Publishing the same song again only adds a newer version, which
+      becomes the one LRCLIB serves.
+    </li>
+  </ul>
+  <p>
+    Each of these requests carries Vybecord's application ID, described above.
+  </p>
+
   <h2>What is stored, and where</h2>
   <ul>
     <li>
@@ -276,6 +337,11 @@
     the store and you want it gone, open an issue with its address and it will be
     deleted; because the address is a hash of the image, nothing else can be relying
     on it.
+  </p>
+  <p>
+    Lyrics reach LRCLIB only from the publish dialog, when you confirm, so there is no
+    switch to turn off. Once there, they cannot be withdrawn, by you or by us, because
+    LRCLIB has no delete: check what the dialog shows before you confirm.
   </p>
 
   <h2>Changes and contact</h2>
