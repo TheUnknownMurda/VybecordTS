@@ -33,7 +33,7 @@ Your Discord status updates on its own. The first time, Vybecord opens on **Help
 
 Vybecord keeps running in the notification area, next to the clock. Click the icon to bring the window back, or right-click → **Quit** to actually exit. The same right-click menu works without opening the window: it shows the song playing, opens any page (**Go to**), and has switches for **Show on Discord**, **Show lyrics** (one per presence when there are several), **Translate lyrics on Discord**, the number of **Presences**, which players are detected (**Detection**, one switch per platform as in Settings), **Hide when paused**, **Hide when I’m away**, **Hide during Spotify ads** and **Launch at sign-in**, plus **Check for updates**. They are the same settings as in the window.
 
-You can change this under **Settings → App & window → Close to tray**.
+You can change this under **Settings → App & window → Close to tray**. The same page has **Theme** (dark or light) and **Accent colour**, the green of the buttons, switches and links: pick a swatch or any colour, and the background takes its tint too (Emerald, the default, keeps the original neutral background). Your Discord card keeps Discord's own colours.
 
 ### After an update
 
@@ -44,14 +44,28 @@ Updates download on their own and install when you quit. The first time you open
 | Page | What it does |
 | --- | --- |
 | **Now playing** | Two sides, like a mirror. **On your screen**, on the left: the current track (cover, title, artist, album, player and progress; paused, it stays on the card with its bar stopped, until you close the player or switch its detection off) and the scrolling lyrics (click them for the whole song, or **Big lyrics** to fill the window with them, Spotify style; **Esc** closes it). Lyrics found without timings show as plain text you can scroll, marked **Words only**. **On Discord**, on the right: your card as your friends see it, with its **Source** menu, which picks the player it follows. **Click any part of the card** (or **Customize**) to change it: what the lines show, the verb, the icon on the cover, your button… In the middle, switches with an arrow toward the side they change: **Visible** takes your status off Discord or puts it back, **Lyrics** turns them on or off on both sides, **Romanise** and one of the two **Translate** act on Discord, the other **Translate** on the window, and **Hide on Discord when** covers pauses, being away and Spotify ads. **Why?** says what is keeping your card off Discord, with a button to fix it. |
-| **Lyrics** | Your own lyrics library: **My lyrics**, **Blocked** (lyrics you marked as wrong) and the offline **LRCLIB dump**. **Add lyrics** imports or writes new ones. |
-| **Activity** | What you listened to over 7 days, 30 days, 12 months or all time: time listened, a chart, top artists and tracks, and your recent plays (**See all** opens the full history). It updates by itself as songs finish. |
-| **Settings** | Discord presence, Lyrics & translation, Detection, Integrations (browser extension, Spotify, Last.fm), App & window, and About. The search box finds any setting. |
+| **Lyrics** | Your own lyrics library: **My lyrics**, **Blocked** (lyrics you marked as wrong) and the offline **LRCLIB dump**. **Add lyrics** imports or writes new ones, and each entry of **My lyrics** can be shared on LRCLIB (see below). |
+| **Activity** | What you listened to over 7 days, 30 days, 12 months or all time, for all your music or one platform (pick it in the row of chips, or click it under **By platform**): time listened and how it compares with the period before, a chart, each platform's share, the hours of the week you listen most, your records and streaks, top artists, tracks and albums, the artists new to you, and your recent plays (**See all** opens the full history). Twitch and Kick, under **Live**, have a view of their own: channels, categories and sittings, kept out of the music totals. It updates by itself as songs finish. |
+| **Settings** | Discord presence, Lyrics & translation, Detection, Integrations (browser extension, Spotify through Spicetify or your own Spotify app, Last.fm), App & window, and About. The search box finds any setting. |
 | **Help & setup** | The setup checklist, at the bottom of the sidebar. |
 
 The bottom of the sidebar also says whether Discord is connected and what is being detected.
 
 Tip: keys **1–4** jump between Now playing, Lyrics, Activity and Settings. **Ctrl+Q** quits.
+
+### Sharing your lyrics on LRCLIB
+
+[LRCLIB](https://lrclib.net) is the free lyrics database that LRCGET and many music players download their lyrics from. Lyrics you timed yourself can go there too: in **Lyrics → My lyrics**, click the upload button on an entry (**Publish to LRCLIB**).
+
+- The window shows exactly what will be sent: the title, artist, album, duration and the timed lines. The same lines without their timings go along as plain lyrics.
+- LRCLIB needs an album and a duration, and matches lyrics to a song by its length, to within 2 seconds. If the entry has neither, fill them in right there (the duration as `3:31` or `211`); they are saved to your library as well.
+- Only timed lyrics can be published. If some lines have no timing, it says so: time them first with **Re-time these lyrics**.
+- It also says what LRCLIB already has for the song. If it has exactly your lines, there is nothing to publish.
+- Tick **I understand this is public**, then click **Publish to LRCLIB**. Sending takes a few seconds: LRCLIB has every sender solve a small puzzle first, to keep spam out.
+
+To send several at once, click **Publish several** next to the search box. Tick the entries you want (**Select all ready** ticks every one that is ready; those missing something have a **Fix** button that opens their own window), tick **I understand this is public**, and publish. They go one after the other, a few seconds each, and each row says how it went. If LRCLIB stops answering or asks to slow down, the rest stay unsent and ticked, to try again later. **Stop after this one** ends the batch early.
+
+It is public and permanent: anyone can download the lyrics, and LRCLIB has no way to delete them. A later publish for the same song adds a newer version, which then replaces yours for everyone. Entries you published show **On LRCLIB**, and so do entries LRCLIB turns out to have already, line for line (one copied from the LRCLIB dump, say); hover the mark to see which. The same version cannot be sent twice. LRCLIB's search can take up to a day to show new lyrics.
 
 ---
 
@@ -115,6 +129,10 @@ The music is never interrupted; only the publishing to Discord is paused. **Now 
 
 The delay lives in **Settings → Discord presence → Away after**, and the switch just above it, **Hide when I'm away**, turns the whole thing off.
 
+### With nothing playing, my card says "Nothing playing"
+
+Once no player has anything at all, presence 1 shows **Listening to Vybecord · Nothing playing** with the Vybecord logo. For its first five seconds Discord's Active Now list still shows the last player's icon beside it; then the card moves onto Vybecord's own application and the icon follows. To show nothing at all instead, turn on **Hide when paused**.
+
 ### The cover does not show on Discord (but shows in the window)
 
 The window reads the artwork straight off your disk. Discord cannot — it needs a URL. So Vybecord publishes the cover your player shows (Spotify's, Apple Music's, or the one inside a local file) to its own cover store, and Discord loads it from there: never the audio, and with camera and location tags stripped first. That is **Settings → Integrations → Cover images → Publish the player's cover**, on by default.
@@ -137,6 +155,19 @@ Its icon opens a settings page with a switch per site — Spotify, YouTube, Soun
 
 With it, each site is identified properly, the presence links straight to the track, and the progress bar reads the page's own audio element instead of the coarser system position. Without it, everything below still applies.
 
+### Spotify details without Spicetify
+
+Spicetify is the fullest way to read Spotify, but it patches the Spotify app. If you have **Spotify Premium** and would rather not, Vybecord can ask Spotify's own API instead, with a Spotify app of your own. **Settings → Integrations → Spotify → Spotify without Spicetify** walks you through it:
+
+1. On the [Spotify developer dashboard](https://developer.spotify.com/dashboard), create an app (any name and description). Where it asks which APIs you plan to use, tick **Web API**.
+2. In the app's settings, add this Redirect URI, exactly: `http://127.0.0.1:8889/callback`. The card has a **Copy** button for it.
+3. Paste the app's **Client ID** into the card and click **Save**. There is no secret to copy.
+4. Click **Sign in with Spotify** and approve the page that opens in your browser. It only lets the app see what you are playing.
+
+You then get the real cover, every artist, the playlist, shuffle and repeat and the exact position, on whatever device you play (the PC, the web player, your phone). Spotify's own lyrics are the one thing it cannot give: lyrics come from the usual sources. A track change shows within a few seconds rather than instantly. While Spicetify is reporting, this stands by.
+
+Spotify only runs such an app while its owner (you) has Premium. If the card says Spotify refused, add your Spotify e-mail under **User Management** in the app's settings. Spotify ends the sign-in six months after you signed in, so the card warns you two weeks ahead; sign in again then. If Spotify's page says **INVALID_CLIENT: Invalid redirect URI**, the Redirect URI in your app isn't exactly the one above.
+
 ### SoundCloud shows as a browser, not as SoundCloud
 
 Without the browser extension, Windows tells Vybecord what is playing but not which website it is on: a SoundCloud tab and a YouTube tab look identical. Install the extension (above) and SoundCloud is announced as SoundCloud, with a link to the track.
@@ -151,9 +182,22 @@ With the extension, a Twitch or Kick tab gets a card for whatever it is on:
 - **An offline channel** — the channel and **Offline**, with its last stream's title on the cover. It only takes a card nothing else wants, so music always comes first. To have such a tab show nothing at all, turn off **Offline channels** under **Settings → Detection**.
 - **A past broadcast or a clip** — the channel, the video's title and a progress bar. These used to show up as YouTube.
 
-The channel's name and picture come from Twitch itself (and from Kick's own site on Kick), so a card no longer opens on somebody else's name or on your own avatar while the page loads. After updating Vybecord, click the reload arrow on the extension in your browser's extensions page so it picks up the new version.
+The channel's name and picture come from Twitch itself (and from Kick's own site on Kick), so a card no longer opens on somebody else's name or on your own avatar while the page loads. The picture stays the channel's, the category shows when you hover it, and clicking it opens the category's page (Just Chatting, the game being played…). On Kick that link needs the extension 2.2.3 or later; before that, the picture opens the channel. After updating Vybecord, click the reload arrow on the extension in your browser's extensions page so it picks up the new version.
 
 **Kick captions as lyrics.** Turn on captions (**CC**) in Kick's player and, on a live channel or a past broadcast, what is said shows on the card the way a song's lyrics do: the line before on top and, under it, the line being said, growing word by word as the player shows them. The **Now playing** window marks them **Live captions** (just **Captions** on a past broadcast). It works with both kinds Kick offers: captions that come with the stream, and the ones Chrome makes from the stream's sound. The extension reads them off the player, so it only sees them while they are on, and the card goes back to the stream's title when nobody has spoken for 25 seconds. Skip ahead or back in a past broadcast and the lines start over from where you land. With translation on, each line is translated once it is complete. When people talk fast, Kick's own player skips lines it has no room for, and those can't reach the card either. The **Lyrics** switch turns them off like any lyrics. Twitch streams and past broadcasts, and clips on either site, have no lyrics.
+
+### YouTube Shorts
+
+With the extension (2.2.2 or later), a Short gets a card of its own instead of passing as a browser tab:
+
+- **[Shorts]** before the Short's title, and its hashtags after it, wherever the title had them (#shorts itself goes: [Shorts] already says it);
+- its channel, which opens the channel's page. When the extension cannot read the link off the page, Vybecord asks YouTube for it, so the link can come a few seconds after the Short;
+- the Short's own picture, upright, rather than a strip of it between two blurred bands;
+- **YouTube Shorts** as the third line, and the Short's own progress bar, from its start to its end, which starts over with every loop;
+- **Watching**, or **Listening to** if you prefer: that is **Settings → Discord presence → Activity type for Shorts**, also a click away on the card's verb in **Now playing**. It covers every card, and everything that is not a Short keeps its own verb;
+- the button opens the Short.
+
+A Short is never looked up as a song: its title is not a song's name, and a song playing under it is a few seconds from the middle, which a song's timings would not follow. If the Short has captions on YouTube, what is said shows on the card, like a video's. Shorts stay out of the listening history, **Activity** and Last.fm, the way an offline channel does. Without the extension, Windows only sees a browser tab, and a Short shows the way it used to.
 
 ### Two things playing at once
 
@@ -166,6 +210,7 @@ Or show them all. **Settings → Discord presence → Several presences** puts u
 - **Activity type on presence N** gives each card its own verb: *Listening* for the song, *Watching* for the stream. Cards 2 to 5 say the same as presence 1 until you change them.
 - **Now playing** shows every card on its **On Discord** side; click a small one to see its lyrics and draw it whole. Its **Source** menu pins that presence to a player, so it never swaps with another, and clicking its parts changes them.
 - The listening history (and so **Activity**) and Last.fm follow presence 1 only.
+- With lyrics on two cards or more, the cards can swap places on your profile at each line: Discord puts the card that changed last on top, and Vybecord cannot hold the order. The window warns you when lyrics go on a second card. A *Playing* card always sits above *Listening* and *Watching* ones.
 
 Each card is a Discord application of its own. Spotify, SoundCloud and Apple Music have one each, YouTube three, and Kick and Twitch five each, so up to five Kick or Twitch streams all keep their logo; a card whose platform has no application left borrows a free one. With the default that makes seventeen applications for five cards at most, so there is nothing to set up.
 
@@ -174,16 +219,16 @@ Each card is a Discord application of its own. Spotify, SoundCloud and Apple Mus
 ## FAQ
 
 **Does this need Spotify Premium?**
-No. Vybecord never talks to Spotify's API — it reads what Windows already knows.
+No. Vybecord reads what Windows already knows, and Spicetify works with a free account too. Premium only matters if you choose to read Spotify through its API instead of Spicetify (see *Spotify details without Spicetify*).
 
 **Do I need Spicetify or a browser extension?**
-No. Older versions did; this one does not. Both are optional extras: Spicetify adds instant track changes, Spotify's own lyrics and the DJ (the card names it, and the DJ's voice between songs gets no lyrics and no history) (set it up under **Settings → Integrations → Spotify**), and the browser extension tells Vybecord which site a tab is on.
+No. Older versions did; this one does not. Both are optional extras: Spicetify adds instant track changes, Spotify's own lyrics and the DJ (the card names it, and the DJ's voice between songs gets no lyrics and no history) (set it up under **Settings → Integrations → Spotify**), and the browser extension tells Vybecord which site a tab is on. With Premium, your own Spotify app gives most of what Spicetify gives without touching Spotify.
 
 **What does it work with?**
 Anything that appears in the Windows media overlay: Spotify, browser tabs (YouTube, SoundCloud, Deezer…), VLC, foobar2000, MusicBee, AIMP, Apple Music, Tidal, Amazon Music.
 
 **Does my data leave my PC?**
-Track and artist names go to the lyrics services (LRCLib, Netease, Musixmatch, Genius) to look lyrics up, to Deezer and Apple's iTunes to find the album cover, and to Discord for the status. The cover your player shows (Spotify's, Apple Music's, a local file's) is published to Vybecord's cover store, stripped of its metadata, and only when there is none is a catalogue asked — switch that off under **Settings → Integrations → Cover images**. For a Twitch channel, the channel name goes to Twitch to get its title, picture and stream start. If you turn on translation, the lyric lines go to the translation service; if you enable Last.fm, your plays go there. Your history, settings and imported lyrics stay local. The full list is in the [privacy policy](https://theunknownmurda.github.io/VybecordTS/privacy/).
+Track and artist names go to the lyrics services (LRCLib, Netease, Musixmatch, Genius) to look lyrics up, to Deezer and Apple's iTunes to find the album cover (and, for Apple Music, the album page the cover opens on Discord, as Spotify's does), and to Discord for the status. The cover your player shows (Spotify's, Apple Music's, a local file's) is published to Vybecord's cover store, stripped of its metadata, and only when there is none is a catalogue asked — switch that off under **Settings → Integrations → Cover images**. For a Twitch channel, the channel name goes to Twitch to get its title, picture and stream start. If you turn on translation, the lyric lines go to the translation service; if you enable Last.fm, your plays go there; if you sign in with your own Spotify app, Vybecord asks Spotify what you are playing. Your history, settings and imported lyrics stay local, unless you publish an entry to LRCLIB yourself. The full list is in the [privacy policy](https://theunknownmurda.github.io/VybecordTS/privacy/).
 
 **Where are my files?**
 In `%APPDATA%\Vybecord` — paste that into Explorer.
