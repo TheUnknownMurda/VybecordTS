@@ -22,17 +22,27 @@
  *
  * The player's markup
  * -------------------
- * Amazon's web player is the "atvwebplayersdk" one; its class names are what
- * other extensions read too (checked in their sources and notes, 2025-2026):
- *   .atvwebplayersdk-player-container    the player, around everything below
- *   .atvwebplayersdk-title-text          the show or film
+ * Amazon's web player is the "atvwebplayersdk" one. Its class names come from
+ * other extensions' sources and notes (2025-2026), and what primevideo.com
+ * actually drew on 2026-11-19 corrected two of them:
+ *   #dv-web-player                       the player, the <video> inside it
+ *   .atvwebplayersdk-player-container    a layer over the video holding the
+ *                                        subtitles; others call it the player,
+ *                                        but the video is not in it
+ *   .atvwebplayersdk-captions-text       the subtitles of the cue on screen, a
+ *                                        <br> between its rows; there is no
+ *                                        .atvwebplayersdk-captions-overlay
+ *   .atvwebplayersdk-title-text          the show or film, in the document only
+ *                                        while the controls show
  *   .atvwebplayersdk-subtitle-text       the episode ("Season 1, Ep. 3 Name")
- *   .atvwebplayersdk-timeindicator-text  "elapsed / time left"
- *   .atvwebplayersdk-captions-overlay    the subtitles, one
- *   .atvwebplayersdk-captions-text       element per line, rebuilt per cue
- * The player holds more than one <video> (a placeholder beside the real one);
- * the real one is the largest with media loaded. Pages also play muted trailers
- * in their banner, outside the player: nothing outside the player is read.
+ *   .atvwebplayersdk-timeindicator-text  and "elapsed / time left" in others'
+ *                                        notes; the 2026-11-19 page had
+ *                                        -episode-info and
+ *                                        -episode-timing-container instead,
+ *                                        read too, their text not yet seen
+ * The player may hold more than one <video> (a placeholder beside the real
+ * one); the real one is the largest with media loaded. Pages also play muted
+ * trailers in their banner, outside the player: nothing outside it is read.
  */
 
 (function () {
@@ -82,11 +92,14 @@
   // ── The player ──
 
   /*
-   * The player's outermost element, newest markup first. `#dv-web-player` is
-   * the container older pages kept in the document at all times, hidden while
-   * nothing plays, hence the check that it is drawn at all.
+   * The player's outermost element. A container only counts with the playing
+   * video inside it: `.atvwebplayersdk-player-container`, first here at first,
+   * turned out to be the subtitle layer, drawn over the whole player but with
+   * no video in it, and taken for the player it had nothing ever sent. The
+   * page can keep `#dv-web-player` in the document while nothing plays, hidden,
+   * hence the check that it is drawn at all.
    */
-  const PLAYER_SELECTORS = ['.atvwebplayersdk-player-container', '#dv-web-player'];
+  const PLAYER_SELECTORS = ['#dv-web-player', '.webPlayerSDKContainer', '.atvwebplayersdk-player-container'];
 
   /**
    * Drawn on the page, with an area. A player the page has hidden, or emptied
@@ -107,10 +120,13 @@
     return !!el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
   }
 
-  function playerRoot() {
+  /** The open player and its video, or null: the first drawn container with media loaded in it. */
+  function findPlayer() {
     for (const sel of PLAYER_SELECTORS) {
       for (const el of document.querySelectorAll(sel)) {
-        if (shown(el)) return el;
+        if (!shown(el)) continue;
+        const video = playerVideo(el);
+        if (video) return { root: el, video };
       }
     }
     return null;
@@ -211,15 +227,25 @@
     return { secs: (+(m[2] || 0)) * 3600 + (+m[3]) * 60 + (+m[4]), left: !!m[1] };
   }
 
-  /** The player's time display, read: { raw, elapsed, other, otherIsLeft } or null. */
+  /** Each "1:02:03", "52:10" or "-52:10" in a text. */
+  const CLOCKS = /[-−]?\d{1,2}(?::\d{2}){1,2}/g;
+
+  /**
+   * The player's time display, read: { raw, elapsed, other, otherIsLeft } or null.
+   *
+   * Under its older name, or the newer one seen on 2026-11-19, whose text was
+   * not seen. Only two clocks are taken, elapsed and the other, whatever
+   * stands between them: a lone clock, or a third, could be the hour the
+   * film ends, which read as elapsed would put the card hours off.
+   */
   function readTimeDisplay(root) {
-    const raw = textIn(root, '.atvwebplayersdk-timeindicator-text');
-    if (!raw) return null;
-    const parts = raw.split('/');
-    const a = clock(parts[0] || '');
-    if (!a || a.left) return null;
-    const b = parts.length > 1 ? clock(parts[1]) : null;
-    return { raw, elapsed: a.secs, other: b ? b.secs : null, otherIsLeft: !!(b && b.left) };
+    const raw = textIn(root, '.atvwebplayersdk-timeindicator-text') || textIn(root, '.atvwebplayersdk-episode-timing-container');
+    const clocks = raw.match(CLOCKS) || [];
+    if (clocks.length !== 2) return null;
+    const a = clock(clocks[0]);
+    const b = clock(clocks[1]);
+    if (!a || a.left || !b) return null;
+    return { raw, elapsed: a.secs, other: b.secs, otherIsLeft: b.left };
   }
 
   /*
@@ -300,14 +326,21 @@
     return String(raw || '').split(/\n+/).map(flat).filter(Boolean).join('\n');
   }
 
-  /** What the subtitles say right now, one line per row; '' with none on screen. */
+  /**
+   * What the subtitles say right now, one line per row; '' with none on screen.
+   *
+   * Read from the cue's own elements wherever they sit in the player: the
+   * overlay others wrapped them in is gone from the markup (2026-11-19), and
+   * required, it had the subtitles never read. Where an overlay is still drawn
+   * around them, a hidden one hides them.
+   */
   function readSubtitle(root) {
     const overlay = root.querySelector('.atvwebplayersdk-captions-overlay');
-    if (!drawn(overlay)) return '';
-    const rows = Array.from(overlay.querySelectorAll('.atvwebplayersdk-captions-text'))
+    if (overlay && !drawn(overlay)) return '';
+    const rows = Array.from((overlay || root).querySelectorAll('.atvwebplayersdk-captions-text'))
       // A line styled in parts can nest the class; the outermost one is the line.
-      .filter((el) => !el.parentElement || !el.parentElement.closest('.atvwebplayersdk-captions-text'));
-    const text = (rows.length ? rows.map(lineText) : [lineText(overlay)]).filter(Boolean).join('\n');
+      .filter((el) => drawn(el) && (!el.parentElement || !el.parentElement.closest('.atvwebplayersdk-captions-text')));
+    const text = (rows.length ? rows.map(lineText) : overlay ? [lineText(overlay)] : []).filter(Boolean).join('\n');
     return text.slice(0, 400);
   }
 
@@ -316,21 +349,52 @@
   let titleKey = '';
   let titleSince = 0;
 
+  /*
+   * What the player's header last said, and about which video. The header
+   * leaves the document with the controls a few seconds after the mouse stops
+   * (seen 2026-11-19), so it is read on every look and remembered: read only
+   * when a push goes out, it was mostly missed, and the title would have come
+   * and gone with the controls, and the card with it. A new film or episode
+   * loading in that video makes it stale (see forgetHeader).
+   */
+  let header = null;
+
+  /**
+   * Note what the header says, while it shows. Run on every look. The episode
+   * line under its older name, else the newer one (seen 2026-11-19 on a
+   * special, which had none to show, so its text was not seen).
+   */
+  function trackHeader(root, video) {
+    const title = textIn(root, '.atvwebplayersdk-title-text');
+    if (!title) return;
+    const episode = textIn(root, '.atvwebplayersdk-subtitle-text') || textIn(root, '.atvwebplayersdk-episode-info');
+    header = { video, title, episode };
+  }
+
+  /** The video it named loads something else: until the header shows again, it names nothing. */
+  function forgetHeader(e) {
+    if (header && header.video === e.target) header = null;
+  }
+
   /**
    * What the tab shows, or null when no player is open.
    *
-   * A title and an episode from the player's own header. Without that header a
-   * player is only believed when it fills the window: a page's banner trailer
-   * plays in a video too, and would otherwise be announced as watched.
+   * A title and an episode from the player's own header. A player whose header
+   * has not shown since its video loaded is only believed when it fills the
+   * window: a page's banner trailer plays in a video too, and would otherwise
+   * be announced as watched.
    */
   function describe() {
-    const root = playerRoot();
-    if (!root) return null;
-    const video = playerVideo(root);
-    if (!video) return null;
-    let title = textIn(root, '.atvwebplayersdk-title-text');
-    const episode = title ? textIn(root, '.atvwebplayersdk-subtitle-text') : '';
-    if (!title) {
+    const p = findPlayer();
+    if (!p) return null;
+    const { root, video } = p;
+    trackHeader(root, video);
+    let title = '';
+    let episode = '';
+    if (header && header.video === video) {
+      title = header.title;
+      episode = header.episode;
+    } else {
       const r = root.getBoundingClientRect();
       const fills = r.width >= window.innerWidth * 0.8 && r.height >= window.innerHeight * 0.8;
       if (!fills) return null;
@@ -437,27 +501,36 @@
     if (video === watchedVideo) return;
     watchedVideo = video;
     for (const type of ['play', 'pause', 'seeked', 'ended']) video.addEventListener(type, pushSoon);
+    for (const type of ['emptied', 'loadstart']) video.addEventListener(type, forgetHeader);
   }
 
   /*
    * One look at the player per WATCH_MS while one is open: subtitles that
-   * changed, a time display that ticked. A few lookups, none of them over the
-   * whole document; once a second while there is no player.
+   * changed, a time display that ticked, a header that showed. A few lookups,
+   * none of them over the whole document; once a second while there is no
+   * player.
    */
   function watch() {
     let root = null;
     try {
-      root = playerRoot();
-      const video = root && playerVideo(root);
-      if (video) {
-        attachVideoListeners(video);
-        trackDisplay(root, video);
-      }
-      const text = root ? readSubtitle(root) : '';
-      if (text !== subtitleText) {
-        subtitleText = text;
-        subtitleAt = Date.now();
-        pushSoon();
+      const p = findPlayer();
+      if (p) {
+        root = p.root;
+        attachVideoListeners(p.video);
+        trackDisplay(root, p.video);
+        trackHeader(root, p.video);
+        /*
+         * Only with a player in view. The next episode loading takes the
+         * player out of view for a moment; counted as the subtitles going
+         * blank, the last episode's final line, still up when it came back,
+         * read as said again, under the new episode's name.
+         */
+        const text = readSubtitle(root);
+        if (text !== subtitleText) {
+          subtitleText = text;
+          subtitleAt = Date.now();
+          pushSoon();
+        }
       }
     } catch (e) {
       // A page halfway through redrawing its player: look again next time.
