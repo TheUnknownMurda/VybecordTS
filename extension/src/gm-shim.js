@@ -1,8 +1,8 @@
 /**
  * Greasemonkey compatibility layer.
  *
- * The six site scripts are the Tampermonkey userscripts, carried over with their
- * scraping logic untouched. That logic is the valuable part — it is what knows
+ * Six of the site scripts are the Tampermonkey userscripts, carried over with their
+ * scraping logic untouched (Prime Video's, written later, uses the same calls). That logic is the valuable part — it is what knows
  * where SoundCloud hides the real artist and how to tell a YouTube live edge
  * from a rewind — and rewriting it would have meant re-deriving all of it and
  * re-introducing its bugs. Instead this provides the three Greasemonkey APIs

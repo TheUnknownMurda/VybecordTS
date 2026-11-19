@@ -27,7 +27,7 @@ markdown left out:
 **Summary / short description** (132 characters max)
 
 ```
-Sends what you are playing on Spotify, YouTube, SoundCloud, Bandcamp, Twitch and Kick to the Vybecord desktop app.
+Sends what you are playing on Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick and Prime Video to the Vybecord desktop app.
 ```
 
 **Category** — Entertainment
@@ -51,13 +51,15 @@ Vybecord shows what you are listening to on your Discord profile, with lyrics
 that scroll in time with the song.
 
 This extension is the part that reads what is playing in your browser. It works
-with Spotify, YouTube and YouTube Music, SoundCloud, Bandcamp, Twitch and Kick,
-and hands that over to the Vybecord desktop app running on the same computer.
+with Spotify, YouTube and YouTube Music, SoundCloud, Bandcamp, Twitch, Kick and
+Prime Video, and hands that over to the Vybecord desktop app running on the
+same computer. On Kick and Prime Video it can also pass on the captions and
+subtitles you have turned on in the player, which the app shows like lyrics.
 
 It needs the desktop app to do anything at all — download it from
 https://theunknownmurda.github.io/VybecordTS/
 
-Each of the six sites has its own switch, so you can report your music without
+Each of the seven sites has its own switch, so you can report your music without
 reporting your streams, or the other way round. Your listening is sent to one
 place only — the app on your own machine, at 127.0.0.1. There is no server, no
 account, and no analytics. On Kick, the extension additionally asks Kick's own
@@ -82,7 +84,7 @@ Chrome requires one sentence, and rejects extensions whose stated purpose is
 broader than what the code does.
 
 ```
-Read the metadata of the media currently playing on six supported sites and
+Read the metadata of the media currently playing on seven supported sites and
 send it to the Vybecord desktop application on the same computer, so it can be
 displayed as the user's Discord status.
 ```
@@ -100,7 +102,7 @@ Each of these is a separate box in the Chrome dashboard.
 **`storage`**
 
 ```
-Stores six on/off switches, one per supported site, so the user's choice of
+Stores seven on/off switches, one per supported site, so the user's choice of
 which sites to report survives a browser restart. Nothing else is stored.
 ```
 
@@ -138,7 +140,7 @@ makes no request to youtube.com with it; the content script already runs there
 under its normal match pattern.
 ```
 
-**Content scripts on the six supported sites**
+**Content scripts on the seven supported sites**
 
 ```
 The extension reads the title, artist, album, artwork address, playback
@@ -155,6 +157,16 @@ content script also reads the text of the player's caption overlay, so the
 desktop app can show what is being said as the stream's lyrics. It is read off
 the page like everything else, sent only to the desktop app, and nothing is
 read while captions are off.
+
+Prime Video is matched on primevideo.com and, on Amazon's own country sites, on
+the Prime Video pages (/gp/video/) and on product pages (/dp/), because a film
+or a series found through Amazon's search plays on its product page. On those
+pages the content script looks for Prime Video's player and does nothing when
+none is open: it reads nothing else of the page and sends nothing. With the
+player open, it reads the title, the episode, the position, the poster and the
+page's own link, and, when the user has turned subtitles on in the player, the
+subtitle text on screen, so the desktop app can show it as the film's lyrics.
+Nothing is requested from Amazon.
 
 On kick.com only, the content script also makes requests to Kick's own API
 (kick.com/api/v1/channels/<channel> or kick.com/api/v2/clips/<id>, and for a
@@ -284,7 +296,7 @@ session to fetch that video's captions. They are never sent to any server.
 
 At least one is required. 1280×800 or 640×400 for Chrome; 1366×768 for Edge.
 
-The options page is the obvious subject — it shows the six site switches and
+The options page is the obvious subject — it shows the seven site switches and
 the connection status, which is the whole interface. Open the extension's
 options in a tab, with the desktop app running so the status reads connected,
 and capture it at one of the sizes above.

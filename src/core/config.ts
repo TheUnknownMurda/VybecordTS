@@ -18,6 +18,7 @@ const DEFAULTS: VybecordConfig = {
   detect_apple_music: true,
   detect_kick: true,
   detect_twitch: true,
+  detect_prime_video: true,
   detect_browser: true,
   detect_other_apps: true,
   // The Offline card a Twitch or Kick tab gets on a channel that is not
@@ -48,6 +49,9 @@ const DEFAULTS: VybecordConfig = {
   // A Short on any card: Watching, because it is watched. Listening (2) for
   // anyone who would rather it read like the music around it.
   rpc_shorts_activity_type: 3,
+  // A film or an episode on Prime Video, on any card: Watching too. Listening
+  // (2) is offered as it is for Shorts.
+  rpc_prime_video_activity_type: 3,
   rpc_status_display: 'app', // status line keeps showing the app name by default
   rpc_status_template: '{title} - {artist}',
   // The playlist has always been on the presence; the switch is for people who
@@ -154,6 +158,7 @@ export const CONFIG_SCHEMA: Record<string, FieldSpec> = {
   detect_apple_music: { type: 'boolean' },
   detect_kick: { type: 'boolean' },
   detect_twitch: { type: 'boolean' },
+  detect_prime_video: { type: 'boolean' },
   detect_browser: { type: 'boolean' },
   detect_other_apps: { type: 'boolean' },
   show_offline_channels: { type: 'boolean' },
@@ -180,6 +185,8 @@ export const CONFIG_SCHEMA: Record<string, FieldSpec> = {
   rpc_activity_type_5: { type: 'number', min: -1, max: 5 },
   // Listening(2) or Watching(3): the two verbs offered for a Short.
   rpc_shorts_activity_type: { type: 'number', min: 2, max: 3 },
+  // The same two for Prime Video.
+  rpc_prime_video_activity_type: { type: 'number', min: 2, max: 3 },
   rpc_status_display: { type: 'string', values: STATUS_DISPLAY_CHOICES },
   rpc_status_template: { type: 'string', maxLength: 128 },
   rpc_show_playlist: { type: 'boolean' },

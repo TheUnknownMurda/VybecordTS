@@ -169,6 +169,12 @@ function lyricsCheck() {
       ? { kind: 'ok', title: 'Kick’s captions are on the card' }
       : { kind: 'info', title: 'No captions yet', detail: 'Turn on captions (CC) in Kick’s player: what is said shows on the card, as lyrics.' };
   }
+  // A film's subtitles arrive as lines too, read off Prime Video's player.
+  if (t.media_source === 'prime_video') {
+    return synced
+      ? { kind: 'ok', title: 'The subtitles are on the card' }
+      : { kind: 'info', title: 'No subtitles yet', detail: 'Turn on subtitles in Prime Video’s player: what is said shows on the card, as lyrics. Without them, the card shows the title and the episode.' };
+  }
   if (t.is_live || t.media_source === 'twitch' || t.media_source === 'kick') {
     return { kind: 'info', title: 'Streams show their title, not lyrics' };
   }

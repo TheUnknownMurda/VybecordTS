@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Vybecord",
-  "version": "2.2.3",
-  "description": "Sends what you are playing on Spotify, YouTube, SoundCloud, Bandcamp, Twitch and Kick to the Vybecord desktop app.",
+  "version": "2.3.0",
+  "description": "Sends what you are playing on Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick and Prime Video to the Vybecord desktop app.",
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
@@ -64,6 +64,37 @@
       "matches": ["https://kick.com/*"],
       "js": ["src/gm-shim.js", "src/sites/kick.js"],
       "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://*.primevideo.com/*",
+        "https://www.amazon.com/*gp/video/*",
+        "https://www.amazon.com/*dp/*",
+        "https://www.amazon.ca/*gp/video/*",
+        "https://www.amazon.ca/*dp/*",
+        "https://www.amazon.co.uk/*gp/video/*",
+        "https://www.amazon.co.uk/*dp/*",
+        "https://www.amazon.de/*gp/video/*",
+        "https://www.amazon.de/*dp/*",
+        "https://www.amazon.fr/*gp/video/*",
+        "https://www.amazon.fr/*dp/*",
+        "https://www.amazon.it/*gp/video/*",
+        "https://www.amazon.it/*dp/*",
+        "https://www.amazon.es/*gp/video/*",
+        "https://www.amazon.es/*dp/*",
+        "https://www.amazon.co.jp/*gp/video/*",
+        "https://www.amazon.co.jp/*dp/*",
+        "https://www.amazon.com.br/*gp/video/*",
+        "https://www.amazon.com.br/*dp/*",
+        "https://www.amazon.com.mx/*gp/video/*",
+        "https://www.amazon.com.mx/*dp/*",
+        "https://www.amazon.com.au/*gp/video/*",
+        "https://www.amazon.com.au/*dp/*",
+        "https://www.amazon.in/*gp/video/*",
+        "https://www.amazon.in/*dp/*"
+      ],
+      "js": ["src/gm-shim.js", "src/sites/primevideo.js"],
+      "run_at": "document_idle"
     }
   ]
 }

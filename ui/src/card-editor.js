@@ -37,6 +37,8 @@ export const ACTIVITY_TYPES = [[2, 'Listening to'], [0, 'Playing'], [3, 'Watchin
 export const ACTIVITY_KEYS = ['rpc_activity_type', 'rpc_activity_type_2', 'rpc_activity_type_3', 'rpc_activity_type_4', 'rpc_activity_type_5'];
 /** A YouTube Short's verb, on every card. Watching first: it is the default. */
 export const SHORTS_ACTIVITY_TYPES = [[3, 'Watching'], [2, 'Listening to']];
+/** A Prime Video film's or episode's verb, on every card: the same two, Watching the default. */
+export const PRIME_VIDEO_ACTIVITY_TYPES = SHORTS_ACTIVITY_TYPES;
 export const STATUS_DISPLAY = [
   ['app', 'App name'], ['title', 'Track title'], ['title_artist', 'Title — Artist'],
   ['artist_title', 'Artist — Title'], ['artist', 'Artist'], ['album', 'Album'],
@@ -199,7 +201,10 @@ const PARTS = {
       // not say what is picked above (see buildActivity).
       choices('A YouTube Short says', 'all', SHORTS_ACTIVITY_TYPES,
         () => cfg('rpc_shorts_activity_type', 3),
-        (v) => put('rpc_shorts_activity_type', Number(v)),
+        (v) => put('rpc_shorts_activity_type', Number(v))),
+      choices('Prime Video says', 'all', PRIME_VIDEO_ACTIVITY_TYPES,
+        () => cfg('rpc_prime_video_activity_type', 3),
+        (v) => put('rpc_prime_video_activity_type', Number(v)),
         'Everything else says what is picked above.'),
       select('Status line', 'all', STATUS_DISPLAY,
         () => cfg('rpc_status_display', 'app'),

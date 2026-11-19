@@ -106,6 +106,15 @@ const TONE_ICONS: Record<CoverTone, [string, string]> = {
   green: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/VVjYzmfdMIF5hHA8SUnbi.gif', '✨ Radiate'],
 };
 
+/**
+ * Prime Video's logo: the icon of its Discord application (see
+ * PLATFORM_DISCORD_APP_IDS in backend.ts), served by Discord itself, so the
+ * card's badge and the icon Discord's Active Now list shows are one picture.
+ * A new icon set in the Developer Portal gets a new address: this one keeps
+ * showing the old picture until it is changed here.
+ */
+const PRIME_VIDEO_LOGO = 'https://cdn.discordapp.com/app-icons/1572804675755966535/5c8868e507c774a2036deac4811a328e.png';
+
 // ── Platform icons (external URLs — rendered by Discord image proxy) ──
 // Note: Discord no longer supports external URLs for small_image. Using compatible host.
 const PLATFORM_ICONS: Record<string, [string, string]> = {
@@ -121,6 +130,7 @@ const PLATFORM_ICONS: Record<string, [string, string]> = {
   youtube: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/2Fhe7kDaQIQjvCtdlhlmo.png', 'YouTube'],
   kick: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/MUt6rne1YSKthqduqQF4N.jpg', 'Kick'],
   twitch: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/VGmX6BMle1xqCoM7LDX4w.png', 'Twitch'],
+  prime_video: [PRIME_VIDEO_LOGO, 'Prime Video'],
   // Browsers (YouTube / web player)
   browser_chrome: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/2Fhe7kDaQIQjvCtdlhlmo.png', 'YouTube'],
   browser_firefox: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/2Fhe7kDaQIQjvCtdlhlmo.png', 'YouTube'],
@@ -138,10 +148,12 @@ const PLATFORM_ICONS: Record<string, [string, string]> = {
   wmp: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/VVjYzmfdMIF5hHA8SUnbi.gif', 'Windows Media Player'],
 };
 
-// ── Platform-specific large images (Discord rich presence assets) ──
-// These are asset names uploaded to the Discord application, not full URLs
+// ── Platform-specific large images, for a card with no picture of its own ──
+// An asset name uploaded to the platform's Discord application, or a full URL.
 const PLATFORM_LARGE_IMAGES: Record<string, string> = {
   kick: 'kicklogo.png',
+  // A film the page names no poster for: the player moved on to it by itself.
+  prime_video: PRIME_VIDEO_LOGO,
 };
 
 export interface LyricsEngineCallbacks {
@@ -283,6 +295,8 @@ export class LyricsEngine {
   private cfgActivityType = 2;
   /** A Short's verb on any card: Watching (3), or Listening (2) when set so. */
   private cfgShortsActivityType = 3;
+  /** The same for a film or an episode on Prime Video. */
+  private cfgPrimeVideoActivityType = 3;
   private cfgStatusDisplay = 'app';
   private cachedStatusName = '';
   private cfgShowPlaylist = true;
@@ -542,7 +556,8 @@ export class LyricsEngine {
 
   /**
    * Captions, as they are spoken (see live-captions.ts): a live stream's, or a
-   * past broadcast's as it plays.
+   * past broadcast's as it plays. A film's subtitles too, as its player shows
+   * them (see subtitle-lines.ts): read off the player for the same reason.
    *
    * Not injectLyrics: those lines are timed against a song and the scheduler
    * walks them, while these arrive already in the past and the newest is always
@@ -585,8 +600,14 @@ export class LyricsEngine {
      * line after it starts.
      */
     const showing = !this.inLyricGap;
-    if (!showing && lines.length) this.liveFloor = lines[lines.length - 1].time;
-    const paired = lines.length > 1 && showing && lines[lines.length - 2].time >= this.liveFloor;
+    /*
+     * A subtitle's two rows came on together and are one thing said: the
+     * first stays on top of the second even right after the title, where
+     * Kick's line before the newest would not (see subtitle-lines.ts).
+     */
+    const together = lines.length > 1 && !!lines[lines.length - 1].withPrevious;
+    if (!showing && lines.length) this.liveFloor = lines[lines.length - (together ? 2 : 1)].time;
+    const paired = lines.length > 1 && (showing || together) && lines[lines.length - 2].time >= this.liveFloor;
     this.lyrics = lines;
     this.liveLines = lines.length > 0;
     this.cancelTimer();
@@ -1475,7 +1496,9 @@ export class LyricsEngine {
     const platformLargeImage = PLATFORM_LARGE_IMAGES[source];
     this.cachedLargeImage = art || platformLargeImage || DEFAULT_ART;
 
-    this.cachedSpotifySearch = platformSearchUrl(source, `${d.artist_name} ${d.track_name}`);
+    // A film is found by its title alone: the episode line under it is no
+    // artist, and "S1 E3 · Name" in front of it finds nothing.
+    this.cachedSpotifySearch = platformSearchUrl(source, source === 'prime_video' ? d.track_name : `${d.artist_name} ${d.track_name}`);
     this.cachedArtistSearch = platformSearchUrl(source, d.artist_name);
 
     // Buttons (stable per-track + config)
@@ -1486,8 +1509,10 @@ export class LyricsEngine {
     // Read here, before the hover text, which repeats a Short's verb. Anything
     // but Listening is Watching: those two are all a Short is offered.
     this.cfgShortsActivityType = (this.rpcConfig.rpc_shorts_activity_type as number) === 2 ? 2 : 3;
+    this.cfgPrimeVideoActivityType = (this.rpcConfig.rpc_prime_video_activity_type as number) === 2 ? 2 : 3;
     this.cachedPlatText = !this.cachedIcon ? ''
       : d.is_short ? `${this.cfgShortsActivityType === 2 ? 'Listening to' : 'Watching'} ${SHORTS_NAME}`
+      : source === 'prime_video' ? `${this.cfgPrimeVideoActivityType === 2 ? 'Listening' : 'Watching'} on ${this.cachedIcon[1]}`
       : `Playing on ${this.cachedIcon[1]}`;
 
     // Cache config flags to avoid per-emit boolean casts
@@ -1548,6 +1573,11 @@ export class LyricsEngine {
       this.cachedDetailsUrl = d.spotify_url || d.context_url || '';
       // A stream's state field carries its category, which nothing links to.
       this.cachedStateUrl = '';
+    } else if (d.media_source === 'prime_video') {
+      // Both lines are the title's: its name, then the episode of it. Both
+      // open its page, or a search for it on a page that did not say which.
+      this.cachedDetailsUrl = d.video_url || this.cachedSpotifySearch;
+      this.cachedStateUrl = this.cachedDetailsUrl;
     } else {
       // A video's own page before a search for it: the extension always names
       // the video, and a title search can land on somebody's re-upload.
@@ -1569,7 +1599,7 @@ export class LyricsEngine {
     // The link follows that same test. With a context worth showing the state
     // field shows it; without one it shows the artist, and used to link to the
     // playlist anyway.
-    if (!d.is_local && d.media_source !== 'kick' && d.media_source !== 'twitch') {
+    if (!d.is_local && d.media_source !== 'kick' && d.media_source !== 'twitch' && d.media_source !== 'prime_video') {
       this.cachedStateUrl = this.cachedIsRedundantCtx
         ? (d.artist_url || this.cachedArtistSearch)
         : (d.context_url || d.artist_url || this.cachedArtistSearch);
@@ -1581,8 +1611,9 @@ export class LyricsEngine {
     // A Kick stream's card while its captions show: channel, title, category,
     // without the note, microphone and disc a song's fields are marked with.
     // A Short's, under its captions: its title and its channel, plain, since
-    // neither is a song or an artist.
-    this.cachedInfoText = d.media_source === 'kick' || d.media_source === 'twitch' || d.is_short
+    // neither is a song or an artist. A film's, under its subtitles: its title
+    // and the episode, the same way.
+    this.cachedInfoText = d.media_source === 'kick' || d.media_source === 'twitch' || d.is_short || d.media_source === 'prime_video'
       ? truncate([cardTitle(d), this.cachedDisplayArtist, d.album_name].filter(Boolean).join(' | ') || '  ', 128)
       : buildInfoText(d, '', '', this.cfgShowPlaylist);
     // Insert play mode suffix after context/album in infoText (visible in large_text when lyrics are showing)
@@ -1605,8 +1636,8 @@ export class LyricsEngine {
       const effectiveSource = this.isCC ? 'youtube' : source;
       const btn2Resolved = platformButtonLabel(btn2Label, effectiveSource);
       let btn2Url: string;
-      // Use direct video URL if available (YouTube, Twitch, Kick), otherwise search
-      if (d.video_url && (effectiveSource === 'youtube' || effectiveSource === 'youtube_music' || effectiveSource === 'twitch' || effectiveSource === 'kick')) {
+      // Use direct video URL if available (YouTube, Twitch, Kick, Prime Video), otherwise search
+      if (d.video_url && (effectiveSource === 'youtube' || effectiveSource === 'youtube_music' || effectiveSource === 'twitch' || effectiveSource === 'kick' || effectiveSource === 'prime_video')) {
         btn2Url = d.video_url;
       } else if (this.isCC) {
         const ytSearch = platformSearchUrl('youtube', `${d.artist_name} ${d.track_name}`);
@@ -1633,7 +1664,11 @@ export class LyricsEngine {
     // (rpc_shorts_activity_type): Watching unless set to Listening. Following
     // the card's would have Shorts "listened to" on the card left on
     // Listening for the music, which is most of them.
-    const activityType = d.is_short ? this.cfgShortsActivityType : this.cfgActivityType;
+    // A film or an episode on Prime Video has one of its own the same way
+    // (rpc_prime_video_activity_type): Listening to a film is no default.
+    const activityType = d.is_short ? this.cfgShortsActivityType
+      : d.media_source === 'prime_video' ? this.cfgPrimeVideoActivityType
+      : this.cfgActivityType;
 
     /*
      * When the track started, as one number that does not move.
@@ -1765,8 +1800,9 @@ export class LyricsEngine {
           largeText = truncate(parts.join(' | '), 128);
         }
       } else {
-        // Kick/Twitch, and a video's channel: a name, not an artist, so no microphone.
-        state = this.cachedDisplayArtist ? truncate((d.media_source === 'kick' || d.media_source === 'twitch' || d.artist_is_channel) ? this.cachedDisplayArtist : `🎤 ${this.cachedDisplayArtist}`, 128) : '  ';
+        // Kick/Twitch, a video's channel and a film's episode: not an artist, so no microphone.
+        const plain = d.media_source === 'kick' || d.media_source === 'twitch' || d.media_source === 'prime_video' || d.artist_is_channel;
+        state = this.cachedDisplayArtist ? truncate(plain ? this.cachedDisplayArtist : `🎤 ${this.cachedDisplayArtist}`, 128) : '  ';
         if (status) {
           largeText = truncate(status, 128);
         } else if (d.is_short) {
@@ -2253,6 +2289,7 @@ const PLATFORM_SEARCH: Record<string, (q: string) => string> = {
   youtube:         q => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
   kick:            q => `https://kick.com/search?q=${encodeURIComponent(q)}`,
   twitch:          q => `https://www.twitch.tv/search?q=${encodeURIComponent(q)}`,
+  prime_video:     q => `https://www.primevideo.com/search?phrase=${encodeURIComponent(q)}`,
   browser_chrome: q => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
   browser_firefox:q => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
   browser_edge:   q => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
@@ -2306,7 +2343,7 @@ export function spotifyAppLink(url: string): string {
 function largeImageUrl(d: TrackData, search: string): string {
   if (d.is_local) return '';
   if (d.media_source === 'soundcloud') return d.spotify_url || search;
-  if (d.media_source === 'youtube' || d.is_short) return d.video_url || search;
+  if (d.media_source === 'youtube' || d.is_short || d.media_source === 'prime_video') return d.video_url || search;
   return d.album_url || d.spotify_url || d.video_url || search;
 }
 
@@ -2335,6 +2372,7 @@ const PLATFORM_NAMES: Record<string, string> = {
   spotify: 'Spotify', apple_music: 'Apple Music', deezer: 'Deezer',
   tidal: 'Tidal', amazon_music: 'Amazon Music', soundcloud: 'SoundCloud',
   bandcamp: 'Bandcamp', youtube_music: 'YouTube Music', youtube: 'YouTube', kick: 'Kick', twitch: 'Twitch',
+  prime_video: 'Prime Video',
   browser_chrome: 'YouTube', browser_firefox: 'YouTube',
   browser_edge: 'YouTube', browser_brave: 'YouTube', browser_opera: 'YouTube',
 };
@@ -2344,7 +2382,7 @@ const PLATFORM_NAMES: Record<string, string> = {
 function platformButtonLabel(label: string, source: string): string {
   const name = PLATFORM_NAMES[source];
   if (!name) return label;
-  const isVideo = source === 'youtube' || source === 'youtube_music' || source.startsWith('browser_');
+  const isVideo = source === 'youtube' || source === 'youtube_music' || source === 'prime_video' || source.startsWith('browser_');
   const verb = isVideo ? 'Watch' : 'Listen';
   // Template: {platform} → resolved name (also swap verb for video platforms)
   if (label.includes('{platform}')) {
@@ -2356,6 +2394,7 @@ function platformButtonLabel(label: string, source: string): string {
     if (source === 'twitch') resolved = `📺 Watch on ${name}`;
     // YouTube: show "📺 Watch on YouTube"
     if (source === 'youtube') resolved = `📺 Watch on ${name}`;
+    if (source === 'prime_video') resolved = `📺 Watch on ${name}`;
     return resolved;
   }
   // Legacy/auto: "Listen on Spotify" → "Watch on YouTube"

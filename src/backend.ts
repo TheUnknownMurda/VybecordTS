@@ -46,6 +46,7 @@ import { SoundCloudSource } from './core/soundcloud-source.js';
 import { BandcampSource } from './core/bandcamp-source.js';
 import { KickSource } from './core/kick-source.js';
 import { TwitchSource } from './core/twitch-source.js';
+import { PrimeVideoSource } from './core/prime-video-source.js';
 import { isBroadcastSource } from './core/broadcast-track.js';
 import { DiscordPool } from './core/discord-pool.js';
 import { PresenceSlot, type LyricsState } from './core/presence-slot.js';
@@ -84,7 +85,7 @@ const MUSIC_APPS = new Set(['spotify', 'apple_music', 'deezer', 'tidal', 'amazon
  * purpose: its push comes from Spicetify inside the desktop client, never from
  * a browser tab.
  */
-const BROWSER_PUSH_SOURCES = new Set(['youtube', 'youtube_music', 'soundcloud', 'bandcamp', 'kick', 'twitch']);
+const BROWSER_PUSH_SOURCES = new Set(['youtube', 'youtube_music', 'soundcloud', 'bandcamp', 'kick', 'twitch', 'prime_video']);
 /** Live-stream sources: logged in the history, never counted as music played. */
 const STREAM_SOURCES = new Set(['twitch', 'kick']);
 
@@ -148,11 +149,17 @@ const MAX_SLOTS = 5;
  * at once resolve exactly as before.
  */
 const PUSH_PRIORITY: Record<string, number> = {
-  spotify: 110,
-  youtube: 109,
-  youtube_music: 109,
-  soundcloud: 108,
-  bandcamp: 107,
+  spotify: 111,
+  youtube: 110,
+  youtube_music: 110,
+  soundcloud: 109,
+  bandcamp: 108,
+  /*
+   * Above the streams: a film playing is being watched, and a stream tab left
+   * running beside it is the background (see sourcePriority). Below the music,
+   * as video sits under music everywhere else.
+   */
+  prime_video: 107,
   kick: 106,
   twitch: 105,
 };
@@ -277,6 +284,7 @@ const PLATFORM_DISCORD_APP_IDS: Record<string, readonly string[]> = {
   apple_music: ['1530715817334018189'],
   kick: ['1519781115144044636', '1566196626815721658', '1566196816532349059', '1566196981481873408', '1566197088885411950'],
   twitch: ['1489626057588998164', '1566197447913636033', '1566197587495747607', '1566197691481067542', '1566197821034467440'],
+  prime_video: ['1572804675755966535'],
 };
 
 /**
@@ -303,6 +311,7 @@ function platformConfigKey(src: string): keyof import('./core/types.js').Vybecor
   if (src === 'apple_music') return 'detect_apple_music';
   if (src === 'kick') return 'detect_kick';
   if (src === 'twitch') return 'detect_twitch';
+  if (src === 'prime_video') return 'detect_prime_video';
   if (src === 'bandcamp' || src === 'deezer' || src === 'tidal' || src === 'amazon_music') return 'detect_other_apps';
   if (src.startsWith('browser_') || src === 'unknown') return 'detect_browser';
   return null; // unknown — allow by default
@@ -411,6 +420,7 @@ export class VybecordBackend extends EventEmitter {
   private bandcampSource: BandcampSource;
   private kickSource: KickSource;
   private twitchSource: TwitchSource;
+  private primeVideoSource: PrimeVideoSource;
   /** track_id → synced lyrics pushed from the Spotify web player. */
   private spotifyLyricsStore = new Map<string, LyricLine[]>();
   /** Discord sockets, one per application, shared by the slots. */
@@ -502,6 +512,7 @@ export class VybecordBackend extends EventEmitter {
     this.kickSource = new KickSource();
     // A held tab is shown as soon as Twitch answers, not at its next push.
     this.twitchSource = new TwitchSource(() => this.reconcile(false));
+    this.primeVideoSource = new PrimeVideoSource();
 
     // React to config toggles in real-time
     this.on('configUpdate', (cfg) => {
@@ -874,6 +885,32 @@ export class VybecordBackend extends EventEmitter {
 
   isTwitchSourceActive(): boolean { return this.twitchSource.isActive; }
 
+  handlePrimeVideoPush(raw: unknown): void {
+    this.ingestPush(raw, this.primeVideoSource, 'primevideo-userscript',
+      d => `tab=${d.tab_id || '(none)'} title="${d.title}" episode="${d.episode}" paused=${d.paused}`);
+    this.showPrimeVideoSubtitles();
+  }
+
+  /**
+   * The subtitles on screen onto the presence showing that film or episode,
+   * as its lyrics, the way Kick's captions go on a stream's (showKickCaptions).
+   * Run after every Prime Video push, after the reconcile, for the same
+   * reasons.
+   */
+  private showPrimeVideoSubtitles(): void {
+    for (const slot of this.slots) {
+      const t = slot.track;
+      if (t?.media_source !== 'prime_video') continue;
+      const lines = this.primeVideoSource.subtitleLines(t.track_id);
+      if (lines.length && !slot.engine.getLyrics().length) {
+        log.info(`[CAPTIONS] Prime Video subtitles on "${t.track_name}" [${slot.name}]`);
+      }
+      slot.engine.setLiveLines(lines);
+    }
+  }
+
+  isPrimeVideoSourceActive(): boolean { return this.primeVideoSource.isActive; }
+
   // ── Spotify Web lyrics handler (event-driven, called by web server) ──
 
   /**
@@ -1023,6 +1060,7 @@ export class VybecordBackend extends EventEmitter {
       // which has a length and a position like any video. Each track says.
       { source: this.kickSource,       configKey: 'detect_kick',       label: 'kick-userscript',       web: true },
       { source: this.twitchSource,     configKey: 'detect_twitch',     label: 'twitch-userscript',     web: true },
+      { source: this.primeVideoSource, configKey: 'detect_prime_video', label: 'primevideo-userscript', web: true },
     );
   }
 
@@ -1072,7 +1110,8 @@ export class VybecordBackend extends EventEmitter {
       return this.soundcloudSource.isActive || this.anySlotKey('sc:')
         || this.bandcampSource.isActive || this.anySlotKey('bc:')
         || this.kickSource.isActive || this.anySlotKey('kick:')
-        || this.twitchSource.isActive || this.anySlotKey('twitch:');
+        || this.twitchSource.isActive || this.anySlotKey('twitch:')
+        || this.primeVideoSource.isActive || this.anySlotKey('pv:');
     }
     if (src === 'soundcloud') {
       return defer(this.soundcloudSource.isActive || this.anySlotKey('sc:'), this.soundcloudSource.isPaused);
@@ -1086,6 +1125,9 @@ export class VybecordBackend extends EventEmitter {
     }
     if (src === 'twitch') {
       return defer(this.twitchSource.isActive || this.anySlotKey('twitch:'), this.twitchSource.isPaused);
+    }
+    if (src === 'prime_video') {
+      return defer(this.primeVideoSource.isActive || this.anySlotKey('pv:'), this.primeVideoSource.isPaused);
     }
     return false;
   }
@@ -1795,6 +1837,7 @@ export class VybecordBackend extends EventEmitter {
     if (src === 'bandcamp') return this.bandcampSource;
     if (src === 'twitch') return this.twitchSource;
     if (src === 'kick') return this.kickSource;
+    if (src === 'prime_video') return this.primeVideoSource;
     return null;
   }
 
@@ -1862,8 +1905,9 @@ export class VybecordBackend extends EventEmitter {
     // Except Twitch and Kick, which never start a scrobble (see recordPlay):
     // the one still open is the song paused before the video, and a video's
     // position would count towards it.
-    // A Short neither: it never starts one either.
-    if (slot.primary && !STREAM_SOURCES.has(track.media_source) && !track.is_short) checkAndScrobble(track.progress_ms);
+    // A Short neither, nor a film: they never start one either.
+    if (slot.primary && !STREAM_SOURCES.has(track.media_source) && !track.is_short
+      && track.media_source !== 'prime_video') checkAndScrobble(track.progress_ms);
     this.emit('progressUpdate', { progress_ms: track.progress_ms, duration_ms: track.duration_ms }, slot.index);
 
     // Detect track end: engine stopped but progress is at the end (not a repeat loop)
@@ -2014,7 +2058,15 @@ export class VybecordBackend extends EventEmitter {
      */
     const declaredArt = trackData.album_art_url || '';
     const broadcast = trackData.is_live || isBroadcastSource(trackData.media_source);
-    if (!broadcast && !trackData.is_dj_narration && !/^https?:\/\//.test(declaredArt)) {
+    /*
+     * A film or an episode on Prime Video: no album behind it to find a cover
+     * for, and no lyrics to look up anywhere. Its subtitles come from the
+     * player (see prime-video-source.ts), and its picture is the poster the
+     * page names, else Prime Video's logo. The catalogue and the lyrics
+     * providers would answer with whatever song shares a word with the title.
+     */
+    const primeVideo = trackData.media_source === 'prime_video';
+    if (!broadcast && !primeVideo && !trackData.is_dj_narration && !/^https?:\/\//.test(declaredArt)) {
       const allowUpload = declaredArt === '/api/thumbnail' && (localArtExtracted || this.thumbBelongsTo(trackData));
       this.resolveDiscordArt(slot, trackData, signal, allowUpload);
     }
@@ -2036,7 +2088,9 @@ export class VybecordBackend extends EventEmitter {
      * import made specifically to replace those lyrics did nothing. Asked here,
      * the import wins the same way for every source.
      */
-    const imported = this.findImportedLyrics(trackData);
+    // Not for a film: a title like "Mission: Impossible - Dead Reckoning" splits
+    // into a song and an artist the way a video's title does.
+    const imported = primeVideo ? null : this.findImportedLyrics(trackData);
     if (imported) {
       this.lyricsCache.set(cacheKey, imported);
       log.info(`[LYRICS] Using ${imported.length} imported lines for this track`);
@@ -2104,7 +2158,7 @@ export class VybecordBackend extends EventEmitter {
       /** Set when the answer is the age-restricted notice rather than lyrics. */
       let ageGated = false;
       // Spotify's DJ talking is not a song either; see spicetify-source.ts.
-      const lyricsPromise = (!broadcast && !trackData.is_dj_narration)
+      const lyricsPromise = (!broadcast && !primeVideo && !trackData.is_dj_narration)
         ? (async (): Promise<LyricLine[]> => {
             // Spotify's own lyrics do not come through here: the Spicetify
             // extension pushes them, and they are picked up from the cache above.
@@ -2327,6 +2381,7 @@ export class VybecordBackend extends EventEmitter {
       // that never happened, 41 times in one real session.
       const noLyricsSource = broadcast
         ? 'stream or stream video, not looked up'
+        : primeVideo ? 'Prime Video, its subtitles come from the player'
         : trackData.is_dj_narration ? 'Spotify DJ talking, not looked up'
         : isYt ? 'CC fetch failed or empty' : 'LRCLib/Netease fetch failed';
       log.info(`[LYRICS] No lyrics found for "${trackData.track_name}" — ${noLyricsSource}`);
@@ -2341,7 +2396,7 @@ export class VybecordBackend extends EventEmitter {
        * scrape that cannot match anything. The synced path already knew that;
        * this one was still asking, once per stream event.
        */
-      if (!signal.aborted && !broadcast && !trackData.is_dj_narration) {
+      if (!signal.aborted && !broadcast && !primeVideo && !trackData.is_dj_narration) {
         fetchPlainLyrics(trackData.track_name, trackData.artist_name, trackData.album_name, trackData.duration_ms, signal)
           .then(lines => {
             if (lines && lines.length > 0 && slot.trackKey === expectedKey) {
@@ -2908,7 +2963,8 @@ export class VybecordBackend extends EventEmitter {
   isExtensionConnected(): boolean {
     return this.spicetify.isActive || this.youtubeSource.isActive
       || this.soundcloudSource.isActive || this.bandcampSource.isActive
-      || this.twitchSource.isActive || this.kickSource.isActive;
+      || this.twitchSource.isActive || this.kickSource.isActive
+      || this.primeVideoSource.isActive;
   }
   isAdPlaying() { return this.media?.isAdPlaying() ?? false; }
 
@@ -3217,7 +3273,11 @@ export class VybecordBackend extends EventEmitter {
     // seconds each, and none is a song: in the history they would bury the
     // music in Recently played and own the top channels, and on Last.fm every
     // one would be a public scrobble of a clip's caption.
-    if (t.context_type === 'offline' || t.is_dj_narration || t.is_short) {
+    //
+    // A film or an episode too: two hours of it are no song, and they would
+    // own the listening time in the history; on Last.fm they would be a public
+    // scrobble of a show's title.
+    if (t.context_type === 'offline' || t.is_dj_narration || t.is_short || t.media_source === 'prime_video') {
       historyTrackPause();
       return;
     }
@@ -3371,6 +3431,7 @@ export class VybecordBackend extends EventEmitter {
       // next card says Watching. A card left on -1 follows presence 1.
       rpc_activity_type: activityTypeFor(cfg, slot.index),
       rpc_shorts_activity_type: cfg.rpc_shorts_activity_type,
+      rpc_prime_video_activity_type: cfg.rpc_prime_video_activity_type,
       rpc_status_display: cfg.rpc_status_display,
       rpc_status_template: cfg.rpc_status_template,
       rpc_show_playlist: cfg.rpc_show_playlist,

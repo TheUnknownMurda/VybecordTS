@@ -7,7 +7,7 @@
  * shut. This one:
  *
  *   - binds 127.0.0.1 only, so nothing off the machine can reach it;
- *   - answers POST on eight push paths and nothing else — no config, no reads,
+ *   - answers POST on nine push paths and nothing else — no config, no reads,
  *     no way to learn anything about the user. The one thing a reply carries
  *     besides "ok" is a request: `wantCookies` on the YouTube path, asking the
  *     extension for the browser's YouTube session after an age-restricted
@@ -41,6 +41,7 @@ const PUSH_PATHS = new Set([
   '/api/bandcamp',
   '/api/twitch',
   '/api/kick',
+  '/api/primevideo',
   '/api/spotify-lyrics',
   /*
    * Posted by the extension's background, never by a site script, and only
@@ -290,6 +291,7 @@ export class PushServer {
       case '/api/bandcamp': this.backend.handleBandcampPush(data); break;
       case '/api/twitch': this.backend.handleTwitchPush(data); break;
       case '/api/kick': this.backend.handleKickPush(data); break;
+      case '/api/primevideo': this.backend.handlePrimeVideoPush(data); break;
       case '/api/spotify-lyrics': this.backend.handleSpotifyLyrics(data); break;
       case '/api/youtube-cookies': this.backend.handleYouTubeCookies(data); break;
     }

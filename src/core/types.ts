@@ -93,6 +93,12 @@ export interface LyricLine {
    * change and more can join it, so it is not worth translating yet.
    */
   open?: boolean;
+  /**
+   * Came on at the same moment as the line before it, as the second row of
+   * one subtitle (see subtitle-lines.ts): the two go on the card together,
+   * even as the first thing said after the card went back to the title.
+   */
+  withPrevious?: boolean;
 }
 
 // ── LRCLib API response ──
@@ -152,6 +158,7 @@ export interface VybecordConfig {
   detect_apple_music: boolean;
   detect_kick: boolean;
   detect_twitch: boolean;
+  detect_prime_video: boolean;
   detect_browser: boolean;
   detect_other_apps: boolean;
   /** A Twitch or Kick tab on a channel that is not streaming gets an Offline
@@ -200,6 +207,8 @@ export interface VybecordConfig {
   rpc_activity_type_5: number;
   /** The activity type of a YouTube Short on any card: 3 Watching (default) or 2 Listening. */
   rpc_shorts_activity_type: number;
+  /** The activity type of a Prime Video film or episode on any card: 3 Watching (default) or 2 Listening. */
+  rpc_prime_video_activity_type: number;
   /**
    * What the "Listening to …" status line shows (member list / profile), independent
    * of the presence card: 'app' = application name, 'title' = current track title,

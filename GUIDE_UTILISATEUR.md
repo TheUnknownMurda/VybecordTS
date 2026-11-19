@@ -151,7 +151,7 @@ L'extension navigateur optionnelle corrige ça. **Settings → Integrations → 
 - **Firefox 140 ou plus récent** (aussi Zen, LibreWolf, Waterfox, Floorp) — télécharge `vybecord-extension-<version>-firefox.zip` depuis la [page des releases](https://github.com/TheUnknownMurda/VybecordTS/releases/latest), ouvre `about:debugging#/runtime/this-firefox`, clique sur **Charger un module complémentaire temporaire** et choisis le zip. Firefox retire les modules temporaires à sa fermeture.
 - **Safari** n'est pas pris en charge : Safari n'existe pas sur Windows.
 
-Son icône ouvre une page de réglages avec un interrupteur par site — Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick — tous actifs par défaut, et l'interrupteur optionnel **Share my YouTube sign-in for captions** (désactivé par défaut, voir la section sur les sous-titres plus haut).
+Son icône ouvre une page de réglages avec un interrupteur par site — Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick, Prime Video — tous actifs par défaut, et l'interrupteur optionnel **Share my YouTube sign-in for captions** (désactivé par défaut, voir la section sur les sous-titres plus haut).
 
 Avec elle, chaque site est correctement identifié, la présence pointe directement vers le morceau, et la barre de progression lit l'élément audio de la page au lieu de la position système, plus grossière. Sans elle, tout ce qui suit reste valable.
 
@@ -199,6 +199,22 @@ Avec l'extension (2.2.2 ou plus récente), un Short a sa propre carte au lieu de
 
 Un Short n'est jamais cherché comme une chanson : son titre n'est pas le nom d'une chanson, et une chanson qui joue dessous en est un extrait de quelques secondes, que les minutages d'une chanson ne suivraient pas. Si le Short a des sous-titres sur YouTube, ce qui se dit s'affiche sur la carte, comme pour une vidéo. Les Shorts restent hors de l'historique d'écoute, d'**Activity** et de Last.fm, comme une chaîne hors ligne. Sans l'extension, Windows ne voit qu'un onglet de navigateur et un Short s'affiche comme avant.
 
+### Prime Video
+
+Avec l'extension (2.3.0 ou plus récente), un film ou un épisode qui joue sur primevideo.com, ou sur Prime Video dans un site d'Amazon (amazon.com, amazon.ca, amazon.co.uk, amazon.fr…), a sa propre carte, sous l'application **Prime Video** :
+
+- le nom du film ou de la série, puis l'épisode sous la forme **S1 E3 · Nom** (rien pour un film) ;
+- l'affiche, quand la page d'où tu es parti est celle du titre ; sinon, quand le lecteur est passé de lui-même à autre chose, le logo de Prime Video ;
+- la barre de progression, du début du film ou de l'épisode à sa fin ;
+- **Watching**, ou **Listening to** si tu préfères : **Settings → Discord presence → Activity type for Prime Video**, aussi à un clic sur le verbe de la carte dans **Now playing**. Ça vaut pour toutes les cartes ;
+- le bouton, **Watch on Prime Video**, ainsi que le titre et l'image, ouvrent la page du titre, ou une recherche sur Prime Video.
+
+**Les sous-titres comme paroles.** Active les sous-titres dans le lecteur de Prime Video et ils s'affichent sur la carte comme les paroles d'une chanson, tels que le lecteur les montre : un sous-titre de deux lignes prend les deux lignes de la carte, et un sous-titre d'une ligne vient sous la ligne d'avant. La fenêtre **Now playing** les marque **Subtitles**. Ils sont lus sur le lecteur, donc dans la langue choisie là, et sans sous-titres rien n'est lu. Si tu avances ou recules, les lignes repartent de là où tu arrives ; l'épisode suivant commence les siennes ; et quand personne n'a parlé depuis 25 secondes, la carte revient au titre. Avec la traduction activée, chaque ligne est traduite. L'interrupteur **Lyrics** les coupe comme n'importe quelles paroles.
+
+Un film en pause retire sa carte de Discord, comme une chanson en pause. Les films et les épisodes ne sont jamais cherchés comme des chansons et restent hors de l'historique d'écoute, d'**Activity** et de Last.fm. **Settings → Detection → Prime Video** coupe le tout. Sans l'extension, Windows ne voit qu'un onglet de navigateur.
+
+Après une mise à jour de Vybecord, clique sur la flèche de rechargement de l'extension dans la page des extensions de ton navigateur pour qu'elle prenne Prime Video : un navigateur qui a installé l'extension depuis une boutique te demande d'abord d'autoriser les nouveaux sites.
+
 ### Deux choses jouent en même temps
 
 Sur **Now playing**, ouvre le menu **Source** et choisis le lecteur que tu veux afficher. Il reste épinglé jusqu'à ce que tu choisisses **Automatic**.
@@ -212,7 +228,7 @@ Ou affiche-les toutes. **Settings → Discord presence → Several presences** m
 - L'historique d'écoute (et donc **Activity**) et Last.fm ne suivent que la présence 1.
 - Avec les paroles sur deux cartes ou plus, les cartes peuvent changer de place sur ton profil à chaque ligne : Discord met en haut la carte qui vient de changer, et Vybecord ne peut pas imposer l'ordre. La fenêtre te prévient quand les paroles s'activent sur une deuxième carte. Une carte *Playing* passe toujours au-dessus des cartes *Listening* et *Watching*.
 
-Chaque carte est une application Discord à part. Spotify, SoundCloud et Apple Music en ont une chacun, YouTube trois, et Kick et Twitch cinq chacun : jusqu'à cinq streams Kick ou Twitch gardent tous leur logo. Une carte dont la plateforme n'a plus d'application libre en emprunte une autre. Avec celle par défaut, ça fait dix-sept applications pour cinq cartes au maximum : il n'y a rien à configurer.
+Chaque carte est une application Discord à part. Spotify, SoundCloud, Apple Music et Prime Video en ont une chacun, YouTube trois, et Kick et Twitch cinq chacun : jusqu'à cinq streams Kick ou Twitch gardent tous leur logo. Une carte dont la plateforme n'a plus d'application libre en emprunte une autre. Avec celle par défaut, ça fait dix-huit applications pour cinq cartes au maximum : il n'y a rien à configurer.
 
 ---
 
