@@ -200,6 +200,8 @@ export function platformInfo(source) {
     // Twitch stream showed as a lowercase "twitch" under a generic note.
     twitch: ['Twitch', '🟣'],
     kick: ['Kick', '🥊'],
+    // Films and episodes, from the browser extension; a pin can name it too.
+    prime_video: ['Prime Video', '🎬'],
     vlc: ['VLC', '🔶'],
     foobar2000: ['foobar2000', '🎛️'],
     musicbee: ['MusicBee', '🐝'],

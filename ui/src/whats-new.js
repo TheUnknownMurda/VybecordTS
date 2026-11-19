@@ -40,6 +40,8 @@ const ICONS = {
   pause: '<svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>',
   palette: '<svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 000 18c1.2 0 1.9-.9 1.9-1.9 0-.5-.2-.9-.5-1.2-.3-.4-.5-.8-.5-1.3 0-1 .8-1.8 1.8-1.8H17a4 4 0 004-4C21 6.5 17 3 12 3z"/><path d="M7.5 12v0M9.5 7.8v0M14.5 7.8v0M17 11.5v0"/></svg>',
   chart: '<svg viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M7 16.5V11M12 16.5V4.5M17 16.5V8"/></svg>',
+  tv: '<svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="12.5" rx="2"/><path d="M8.5 20.5h7M12 17v3.5"/></svg>',
+  captions: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 11.5h10M7 15h6M15 15h2"/></svg>',
   // The same glyph as the Publish to LRCLIB button on a My lyrics row.
   upload: '<svg viewBox="0 0 24 24"><path d="M12 15V4M7.5 8.5L12 4l4.5 4.5M5 14v5a1 1 0 001 1h12a1 1 0 001-1v-5"/></svg>',
 };
@@ -50,6 +52,18 @@ const ICONS = {
  * telling about gets no entry.
  */
 const ENTRIES = [
+  {
+    version: '2.17.0',
+    headline: 'Prime Video gets a card of its own, with the subtitles as its lyrics.',
+    items: [
+      ['tv', 'Prime Video in your browser',
+        'A film or an episode on primevideo.com or Amazon shows on Discord under the Prime Video icon: Watching, the title, the episode and a button to the title’s page. It needs the browser extension 2.3.0.'],
+      ['captions', 'Subtitles on the card',
+        'Turn subtitles on in the player and they show on your card two lines at a time, the way Kick’s captions do. Only what the player shows is read.'],
+      ['verb', 'Watching or Listening to',
+        'Pick what Prime Video says on Discord: Settings → Discord presence → Activity type for Prime Video, or click the verb on your card.'],
+    ],
+  },
   {
     version: '2.16.0',
     headline: 'Share the lyrics you timed with everyone who uses LRCLIB.',

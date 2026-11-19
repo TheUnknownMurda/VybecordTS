@@ -151,7 +151,7 @@ The optional browser extension fixes that. **Settings → Integrations → Brows
 - **Firefox 140 or newer** (also Zen, LibreWolf, Waterfox, Floorp) — download `vybecord-extension-<version>-firefox.zip` from the [releases page](https://github.com/TheUnknownMurda/VybecordTS/releases/latest), open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on** and pick the zip. Firefox removes temporary add-ons when it closes.
 - **Safari** isn't supported: there is no Safari for Windows.
 
-Its icon opens a settings page with a switch per site — Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick — all on by default, and the optional **Share my YouTube sign-in for captions** switch (off by default, see the captions section above).
+Its icon opens a settings page with a switch per site — Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick, Prime Video — all on by default, and the optional **Share my YouTube sign-in for captions** switch (off by default, see the captions section above).
 
 With it, each site is identified properly, the presence links straight to the track, and the progress bar reads the page's own audio element instead of the coarser system position. Without it, everything below still applies.
 
@@ -199,6 +199,22 @@ With the extension (2.2.2 or later), a Short gets a card of its own instead of p
 
 A Short is never looked up as a song: its title is not a song's name, and a song playing under it is a few seconds from the middle, which a song's timings would not follow. If the Short has captions on YouTube, what is said shows on the card, like a video's. Shorts stay out of the listening history, **Activity** and Last.fm, the way an offline channel does. Without the extension, Windows only sees a browser tab, and a Short shows the way it used to.
 
+### Prime Video
+
+With the extension (2.3.0 or later), a film or an episode playing on primevideo.com, or on Prime Video on an Amazon site (amazon.com, amazon.ca, amazon.co.uk, amazon.fr…), gets a card of its own, under the **Prime Video** application:
+
+- the film's or the show's name, then the episode as **S1 E3 · Name** (nothing for a film);
+- the poster, when the page you started from is the title's own; otherwise, when the player moved on to something by itself, Prime Video's logo;
+- the progress bar, from the start of the film or the episode to its end;
+- **Watching**, or **Listening to** if you prefer: **Settings → Discord presence → Activity type for Prime Video**, also a click away on the card's verb in **Now playing**. It covers every card;
+- the button, **Watch on Prime Video**, and the title and the cover open the title's page, or a search for it on Prime Video.
+
+**Subtitles as lyrics.** Turn on subtitles in Prime Video's player and they show on the card the way a song's lyrics do, as the player shows them: a subtitle of two rows takes both lines of the card, and a one-row subtitle goes under the row before it. The **Now playing** window marks them **Subtitles**. They are read off the player, so they are in the language you picked there, and with subtitles off nothing is read. Skip ahead or back and the lines start over from where you land; the next episode starts its own; and when nobody has spoken for 25 seconds, the card goes back to the title. With translation on, each line is translated. The **Lyrics** switch turns them off like any lyrics.
+
+A paused film takes its card off Discord, as a paused song does. Films and episodes are never looked up as songs and stay out of the listening history, **Activity** and Last.fm. **Settings → Detection → Prime Video** turns the whole thing off. Without the extension, Windows only sees a browser tab.
+
+After updating Vybecord, click the reload arrow on the extension in your browser's extensions page so it picks up Prime Video: a browser that installed the extension from a store asks you to allow the new sites first.
+
 ### Two things playing at once
 
 On **Now playing**, open the **Source** menu and pick the one you want announced. It stays pinned until you pick **Automatic**.
@@ -212,7 +228,7 @@ Or show them all. **Settings → Discord presence → Several presences** puts u
 - The listening history (and so **Activity**) and Last.fm follow presence 1 only.
 - With lyrics on two cards or more, the cards can swap places on your profile at each line: Discord puts the card that changed last on top, and Vybecord cannot hold the order. The window warns you when lyrics go on a second card. A *Playing* card always sits above *Listening* and *Watching* ones.
 
-Each card is a Discord application of its own. Spotify, SoundCloud and Apple Music have one each, YouTube three, and Kick and Twitch five each, so up to five Kick or Twitch streams all keep their logo; a card whose platform has no application left borrows a free one. With the default that makes seventeen applications for five cards at most, so there is nothing to set up.
+Each card is a Discord application of its own. Spotify, SoundCloud, Apple Music and Prime Video have one each, YouTube three, and Kick and Twitch five each, so up to five Kick or Twitch streams all keep their logo; a card whose platform has no application left borrows a free one. With the default that makes eighteen applications for five cards at most, so there is nothing to set up.
 
 ---
 

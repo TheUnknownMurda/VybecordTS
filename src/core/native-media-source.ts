@@ -1090,7 +1090,8 @@ export function sourcePriority(src: string): number {
     case 'youtube_music': return 7;
     case 'youtube':
     case 'twitch':
-    case 'kick': return 6;
+    case 'kick':
+    case 'prime_video': return 6;
     default:
       if (/vlc|foobar|musicbee|aimp|winamp|mediamonkey|groove|wmp/.test(src)) return 5;
       // Everything we could not name: an unidentified tab, an unknown app.
@@ -1153,6 +1154,8 @@ export function detectWebService(s: SessionState): string | null {
   // genuinely could not tell.
   if (haystack.includes('twitch')) return 'twitch';
   if (haystack.includes('kick.com')) return 'kick';
+  // The site's name, or the Windows app's id (AmazonVideo.PrimeVideo_…).
+  if (haystack.includes('prime video') || haystack.includes('primevideo')) return 'prime_video';
   if (haystack.includes('apple music') || haystack.includes('music.apple')) return 'apple_music';
   // Before YouTube: the Spotify web player's metadata mentions both.
   if (haystack.includes('spotify')) return 'spotify';

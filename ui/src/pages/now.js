@@ -695,7 +695,8 @@ function paintTrack(playing) {
   if (!lead.length) lead.push(el('span', { class: 'pulse' }));
   // An offline channel is neither watched nor played: the tab is just open on it.
   const offline = track.context_type === 'offline';
-  const verb = !track.is_playing ? 'Paused on' : offline ? 'Open on' : track.is_short ? 'Watching' : streamCard ? 'Watching on' : 'Playing on';
+  const watched = streamCard || track.media_source === 'prime_video';
+  const verb = !track.is_playing ? 'Paused on' : offline ? 'Open on' : track.is_short ? 'Watching' : watched ? 'Watching on' : 'Playing on';
   $('#npState').replaceChildren(
     el('span', { class: 'eyebrow np-source' }, [...lead, `${verb} ${label}`]),
     ...badges(track).map((b) => statusChip(...b)),
@@ -788,6 +789,10 @@ const lineAt = (arr, i) => (i >= 0 && i < arr.length ? arr[i]?.text || '' : '');
  * off Kick's player as they are said, so neither has timings to show or fix.
  */
 const kickCaptions = (t) => t?.media_source === 'kick' && (!!t.is_live || t.context_type === 'vod');
+/** The same for a film's or an episode's subtitles on Prime Video, read off its player as they show. */
+const pvSubtitles = (t) => t?.media_source === 'prime_video';
+/** Lines read off a player as they are said: nothing to re-time, report or copy. */
+const playerLines = (t) => kickCaptions(t) || pvSubtitles(t);
 
 function paintLyrics(l) {
   const stage = $('#lyrStage');
@@ -797,15 +802,15 @@ function paintLyrics(l) {
 
   const synced = Array.isArray(l?.lyrics) && l.lyrics.length > 0;
   const plain = !synced && Array.isArray(l?.lines) && l.lines.length > 0;
-  // A Kick stream's captions, cut into lines as they are spoken: shown like a
-  // song's lines, with nothing to re-time, report or copy.
-  const captions = synced && kickCaptions(t);
+  // A Kick stream's captions, cut into lines as they are spoken, or a film's
+  // subtitles: shown like a song's lines, with nothing to re-time, report or copy.
+  const captions = synced && playerLines(t);
   kind.hidden = !(synced || plain);
   // A Short only ever gets its captions (see onNewTrack in the backend).
   const shortCaptions = synced && !!t?.is_short;
-  kind.textContent = captions ? (t.is_live ? 'Live captions' : 'Captions') : shortCaptions ? 'Captions' : synced ? 'Synced' : plain ? 'Words only' : '';
+  kind.textContent = captions ? (pvSubtitles(t) ? 'Subtitles' : t.is_live ? 'Live captions' : 'Captions') : shortCaptions ? 'Captions' : synced ? 'Synced' : plain ? 'Words only' : '';
   kind.title = plain ? 'Found without timings, so they cannot follow the song'
-    : captions ? (t.is_live ? 'Kick\'s captions, as the stream goes' : 'Kick\'s captions, as the video plays')
+    : captions ? (pvSubtitles(t) ? 'Prime Video\'s subtitles, as they show in the player' : t.is_live ? 'Kick\'s captions, as the stream goes' : 'Kick\'s captions, as the video plays')
     : shortCaptions ? 'The Short\'s captions from YouTube, as it plays' : '';
   const lyricsOff = state.config[lyricsKey(state.focus)] === false;
   const offMsg = ['Lyrics are switched off for this card', 'Turn them back on with Lyrics, in the middle column.'];
@@ -820,6 +825,10 @@ function paintLyrics(l) {
   else if (kickCaptions(t)) {
     if (lyricsOff) empty = offMsg;
     else if (!synced) empty = ['No captions yet', 'Turn on captions (CC) in Kick\'s player: what is said shows here and on the card, as lyrics.'];
+  }
+  else if (pvSubtitles(t)) {
+    if (lyricsOff) empty = offMsg;
+    else if (!synced) empty = ['No subtitles yet', 'Turn on subtitles in Prime Video\'s player: what is said shows here and on the card, as lyrics. Without them, the card shows the title and the episode.'];
   }
   else if (t.is_live) empty = ['Live streams have no lyrics', 'The card shows the stream title and how long it has been live instead.'];
   else if (t.is_short && !synced) {
@@ -1090,7 +1099,7 @@ async function showFullLyrics(mode = 'panel') {
   let signature = '';                            // what the rendered list is of
   let trackId = state.track?.track_id || '';
   let waitTimer = 0;
-  let captions = false;                          // Kick's captions, not a song's lines
+  let captions = false;                          // Kick's captions or a film's subtitles, not a song's lines
   const asking = new Set();                      // lines whose translation is on its way
 
   paintTrack_();
@@ -1196,7 +1205,7 @@ async function showFullLyrics(mode = 'panel') {
     const next = resolved || readLines();
     if (!next) return;
 
-    captions = next.synced && kickCaptions(state.track);
+    captions = next.synced && playerLines(state.track);
     /*
      * The count alone told one list from the next until Kick's captions: they
      * keep their last forty lines, so from the forty-first on a new line drops

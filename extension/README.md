@@ -15,6 +15,7 @@ This extension reads the page directly and supplies:
 | **SoundCloud** | the actual artist rather than the uploading account, track link |
 | **Bandcamp** | album and label metadata |
 | **Twitch** / **Kick** | the channel, live or offline; past broadcasts and clips with their position; stream title, category, uptime; on Kick, the player's captions while they are on, which the app shows as lyrics |
+| **Prime Video** (primevideo.com, and Prime Video on Amazon's own sites) | the film or the show and the episode, the position, the poster and the title's page when the page names them, and the subtitles while they are on, which the app shows as lyrics |
 
 It also reports position from the page's own audio element, which is exact — a browser's media session only publishes one every few seconds.
 
@@ -23,6 +24,8 @@ It also reports position from the page's own audio element, which is exact — a
 Everything above is read out of the page, with one exception noted below, and that is what keeps the extension to the one host permission it asks for — and it rules two things out.
 
 **The exception is Kick.** [`sites/kick.js`](src/sites/kick.js) calls Kick's own API — `/api/v1/channels/…` or `/api/v2/clips/…` on kick.com, and for a past broadcast `web.kick.com/api/v1/channels/…/videos/…`, the API Kick's own pages use for them — for the channel's name, picture, title, category, whether it is live and since when. The page says none of that reliably: it renders the previous channel, the sidebar and your own avatar before the one in the address bar. It is a request to Kick's own domain from a tab you already have open, made the way the page itself makes it (same-origin, or let through by Kick's own CORS headers on web.kick.com), so it needs no host permission and reaches no site you were not already on. It is the only request this extension makes to anything other than the desktop app. It cannot move to the app the way the Twitch one did: Kick answers only a browser with a real session and returns HTTP 403 to anything else.
+
+**Prime Video's subtitle files.** The player downloads each film's subtitles from Amazon before it starts, and catching that list or asking Amazon again would give the whole film's lines in advance. It would also mean running inside the page's own JavaScript and calling an undocumented Amazon API with your session, and it would hand over subtitles you have switched off. [`sites/primevideo.js`](src/sites/primevideo.js) reads the rows the player draws instead, as they show: nothing is requested from Amazon, and with subtitles off nothing is read. On Amazon's own sites it runs on the Prime Video pages and on product pages (a title found through Amazon's search plays on its product page), and does nothing on a page with no Prime Video player open.
 
 **Lyrics.** The desktop app fetches its own, from LRCLib, Netease, Musixmatch and your local database. It does not use Spotify's official lyrics, because reaching that API means taking the OAuth token out of your Spotify session — not something this extension will do for a Premium-only source the app already covers another way.
 
@@ -121,13 +124,13 @@ Playback never leaves your computer through this extension.
 manifest.json          MV3 manifest, one content script entry per site
 src/background.js      the only thing that talks to the app; per-site gate, badge
 src/gm-shim.js         Greasemonkey compatibility layer (see below)
-src/sites/*.js         the six scrapers
+src/sites/*.js         the seven scrapers
 src/options.*          the settings page
 ```
 
 ### About the shim
 
-The six site scripts are the original Tampermonkey userscripts, carried over with their scraping logic **unchanged**. That logic is the valuable part — it knows where SoundCloud hides the real artist, and how to tell a YouTube live edge from a rewind — and rewriting it would have meant re-deriving all of it and reintroducing its bugs.
+Six of the site scripts are the original Tampermonkey userscripts, carried over with their scraping logic **unchanged** (Prime Video's was written for the extension, against the same calls). That logic is the valuable part — it knows where SoundCloud hides the real artist, and how to tell a YouTube live edge from a rewind — and rewriting it would have meant re-deriving all of it and reintroducing its bugs.
 
 They use three Greasemonkey APIs, which `gm-shim.js` provides:
 

@@ -12,7 +12,7 @@ import { state, subscribe, saveConfig } from '../state.js';
 import { goto } from '../router.js';
 import { discordPreview } from '../discord-card.js';
 // The card's choices live with the editor on Now playing, so both offer the same lists.
-import { ACTIVITY_TYPES, ACTIVITY_KEYS, SHORTS_ACTIVITY_TYPES, STATUS_DISPLAY, ICON_MODES, ICON_KEYS } from '../card-editor.js';
+import { ACTIVITY_TYPES, ACTIVITY_KEYS, SHORTS_ACTIVITY_TYPES, PRIME_VIDEO_ACTIVITY_TYPES, STATUS_DISPLAY, ICON_MODES, ICON_KEYS } from '../card-editor.js';
 import { showWhatsNew } from '../whats-new.js';
 import { lyricCardCount, CARD_ORDER_NOTE } from '../why.js';
 import { ACCENT_PRESETS, applyAccent, normalizeAccent } from '../accent.js';
@@ -276,6 +276,8 @@ function presenceCat(body, { search }) {
         cfg('rpc_activity_type', 2), ACTIVITY_TYPES, (v) => put('rpc_activity_type', Number(v))),
       selectRow('Activity type for Shorts', 'The verb while a YouTube Short plays, on every card. Everything else keeps its activity type.',
         cfg('rpc_shorts_activity_type', 3), SHORTS_ACTIVITY_TYPES, (v) => put('rpc_shorts_activity_type', Number(v))),
+      selectRow('Activity type for Prime Video', 'The verb while a film or an episode plays on Prime Video, on every card.',
+        cfg('rpc_prime_video_activity_type', 3), PRIME_VIDEO_ACTIVITY_TYPES, (v) => put('rpc_prime_video_activity_type', Number(v))),
       selectRow('Status line', 'What the one-line status in the member list shows.',
         cfg('rpc_status_display', 'app'), STATUS_DISPLAY, (v) => put('rpc_status_display', v)),
       cfg('rpc_status_display') === 'custom'
@@ -481,6 +483,8 @@ function detectionCat(body) {
       cfg('detect_twitch', true) !== false, (v) => put('detect_twitch', v)),
     toggleRow('Kick', 'Live streams, reported by the browser extension.',
       cfg('detect_kick', true) !== false, (v) => put('detect_kick', v)),
+    toggleRow('Prime Video', 'Films and episodes, with the subtitles you have on, reported by the browser extension.',
+      cfg('detect_prime_video', true) !== false, (v) => put('detect_prime_video', v)),
     toggleRow('Offline channels', 'A Twitch or Kick tab left on a channel that is not streaming shows an Offline card, below anything playing. Off, that tab shows nothing.',
       cfg('show_offline_channels', true) !== false, (v) => put('show_offline_channels', v)),
     toggleRow('Other desktop apps', 'VLC, foobar2000, MusicBee, Deezer, Tidal, Bandcamp and friends.',

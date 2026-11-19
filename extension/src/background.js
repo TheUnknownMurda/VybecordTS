@@ -33,9 +33,10 @@ const ENDPOINT_SITE = {
   '/api/bandcamp': 'bandcamp',
   '/api/twitch': 'twitch',
   '/api/kick': 'kick',
+  '/api/primevideo': 'primevideo',
 };
 
-const SITES = ['spotify', 'youtube', 'soundcloud', 'bandcamp', 'twitch', 'kick'];
+const SITES = ['spotify', 'youtube', 'soundcloud', 'bandcamp', 'twitch', 'kick', 'primevideo'];
 
 /** Every site on by default: an extension that does nothing until configured is a bug report. */
 const DEFAULTS = Object.fromEntries(SITES.map(s => [s, true]));

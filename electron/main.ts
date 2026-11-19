@@ -332,7 +332,7 @@ const PRESENCE_COUNTS = ['One', 'Two', 'Three', 'Four', 'Five'];
 const DETECT_KEYS: [string, string][] = [
   ['detect_spotify', 'Spotify'], ['detect_apple_music', 'Apple Music'], ['detect_youtube', 'YouTube and YouTube Music'],
   ['detect_soundcloud', 'SoundCloud'], ['detect_browser', 'Other browser tabs'], ['detect_twitch', 'Twitch'],
-  ['detect_kick', 'Kick'], ['detect_other_apps', 'Other desktop apps'],
+  ['detect_kick', 'Kick'], ['detect_prime_video', 'Prime Video'], ['detect_other_apps', 'Other desktop apps'],
 ];
 /** The sidebar's pages, in its order and with its names ('&&' shows one '&'). */
 const TRAY_PAGES: [string, string][] = [
