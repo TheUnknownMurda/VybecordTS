@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Vybecord",
-  "version": "2.3.0",
-  "description": "Sends what you are playing on Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick and Prime Video to the Vybecord desktop app.",
+  "version": "2.4.0",
+  "description": "Sends what you play on Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick, Prime Video and Netflix to the Vybecord desktop app.",
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
@@ -94,6 +94,11 @@
         "https://www.amazon.in/*dp/*"
       ],
       "js": ["src/gm-shim.js", "src/sites/primevideo.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.netflix.com/*"],
+      "js": ["src/gm-shim.js", "src/sites/netflix.js"],
       "run_at": "document_idle"
     }
   ]

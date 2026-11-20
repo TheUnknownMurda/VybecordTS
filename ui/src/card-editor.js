@@ -39,6 +39,8 @@ export const ACTIVITY_KEYS = ['rpc_activity_type', 'rpc_activity_type_2', 'rpc_a
 export const SHORTS_ACTIVITY_TYPES = [[3, 'Watching'], [2, 'Listening to']];
 /** A Prime Video film's or episode's verb, on every card: the same two, Watching the default. */
 export const PRIME_VIDEO_ACTIVITY_TYPES = SHORTS_ACTIVITY_TYPES;
+/** The same for Netflix. */
+export const NETFLIX_ACTIVITY_TYPES = SHORTS_ACTIVITY_TYPES;
 export const STATUS_DISPLAY = [
   ['app', 'App name'], ['title', 'Track title'], ['title_artist', 'Title — Artist'],
   ['artist_title', 'Artist — Title'], ['artist', 'Artist'], ['album', 'Album'],
@@ -204,7 +206,10 @@ const PARTS = {
         (v) => put('rpc_shorts_activity_type', Number(v))),
       choices('Prime Video says', 'all', PRIME_VIDEO_ACTIVITY_TYPES,
         () => cfg('rpc_prime_video_activity_type', 3),
-        (v) => put('rpc_prime_video_activity_type', Number(v)),
+        (v) => put('rpc_prime_video_activity_type', Number(v))),
+      choices('Netflix says', 'all', NETFLIX_ACTIVITY_TYPES,
+        () => cfg('rpc_netflix_activity_type', 3),
+        (v) => put('rpc_netflix_activity_type', Number(v)),
         'Everything else says what is picked above.'),
       select('Status line', 'all', STATUS_DISPLAY,
         () => cfg('rpc_status_display', 'app'),

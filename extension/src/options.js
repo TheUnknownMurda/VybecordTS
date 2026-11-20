@@ -2,7 +2,7 @@
  * Options: one switch per site, plus whether the desktop app is reachable.
  *
  * The site list is repeated from background.js rather than imported — the
- * service worker is a classic script, and making it a module to share seven
+ * service worker is a classic script, and making it a module to share eight
  * strings would cost more than it saves.
  */
 
@@ -14,6 +14,7 @@ const SITES = [
   { key: 'twitch', name: 'Twitch', detail: 'stream title, category, uptime' },
   { key: 'kick', name: 'Kick', detail: 'stream title, category, uptime' },
   { key: 'primevideo', name: 'Prime Video', detail: 'the film or episode and where you are in it, plus the subtitles you have on' },
+  { key: 'netflix', name: 'Netflix', detail: 'the film or episode and where you are in it, plus the subtitles you have on' },
 ];
 
 const DEFAULTS = Object.fromEntries(SITES.map(s => [s.key, true]));
