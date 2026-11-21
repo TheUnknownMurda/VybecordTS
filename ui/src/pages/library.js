@@ -232,7 +232,10 @@ async function renderBrowse(body, refresh, _handover, ctx) {
   const more = el('button', { type: 'button', class: 'btn', text: 'Load more', style: 'margin:10px 12px 4px', onclick: () => load(false) });
 
   const searchInput = el('input', {
-    type: 'search', placeholder: 'Search by title, artist or album',
+    // Short enough to show whole beside Import, Export and Publish several:
+    // "Search by title, artist or album" lost its last letters there at the
+    // default window width.
+    type: 'search', placeholder: 'Search title, artist, album',
     'aria-label': 'Search your lyrics',
     oninput: debounce((e) => { search = e.target.value; load(true); }, 250),
   });

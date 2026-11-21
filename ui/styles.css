@@ -3526,7 +3526,8 @@ html[data-theme='light'] {
 
 /* Publish several — library.js (openPublishMany), and the button that opens it.
    The toolbar wraps: with Import and Export beside it, the search box was down
-   to "Sear" at the window's minimum width. The buttons go under it as one row. */
+   to "Sear" at the window's minimum width. The buttons go under it as one row
+   before the box is too narrow for its placeholder (library.js). */
 .lib-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -3534,7 +3535,7 @@ html[data-theme='light'] {
   align-items: center;
 }
 .lib-toolbar .search {
-  flex: 1 1 200px;
+  flex: 1 1 210px;
   min-width: 0;
 }
 .lib-actions {
