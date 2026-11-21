@@ -44,6 +44,9 @@ const ICONS = {
   captions: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 11.5h10M7 15h6M15 15h2"/></svg>',
   // The same glyph as the Publish to LRCLIB button on a My lyrics row.
   upload: '<svg viewBox="0 0 24 24"><path d="M12 15V4M7.5 8.5L12 4l4.5 4.5M5 14v5a1 1 0 001 1h12a1 1 0 001-1v-5"/></svg>',
+  // The same glyph as the Export button beside the My lyrics search box.
+  share: '<svg viewBox="0 0 24 24"><path d="M12 21H6a1 1 0 01-1-1V4a1 1 0 011-1h7l5 5v4"/><path d="M13 3v5h5M15 18h6M18.5 15.5L21 18l-2.5 2.5"/></svg>',
+  window: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 8.5h18M7 12.5h10M7 16h6"/></svg>',
 };
 
 /**
@@ -52,6 +55,18 @@ const ICONS = {
  * telling about gets no entry.
  */
 const ENTRIES = [
+  {
+    version: '2.18.0',
+    headline: 'Netflix gets a card of its own, lyrics can stay in this window, and your lyrics can go to a friend.',
+    items: [
+      ['tv', 'Netflix in your browser',
+        'A film or an episode on netflix.com shows on Discord under the Netflix icon: Watching, the title, the episode and a button to the page you watch on, with the subtitles as lyrics. It needs the browser extension 2.4.0. It has not been tried on the real Netflix yet: if the card does not show, say so in Settings → About → Report a problem.'],
+      ['window', 'Lyrics in Vybecord only',
+        'Click Lyrics on Now playing once and the words keep scrolling here while your Discord card shows the title and artist. A second click turns them off, a third puts them back on both sides. Settings and the tray menu offer the same three choices.'],
+      ['share', 'Share your lyrics with a friend',
+        'Lyrics → My lyrics → Export saves all your lyrics to one file. Import adds a friend’s file to yours and shows what it will change first: nothing of yours is deleted, and songs you both have keep your lyrics unless you tick theirs.'],
+    ],
+  },
   {
     version: '2.17.0',
     headline: 'Prime Video gets a card of its own, with the subtitles as its lyrics.',
