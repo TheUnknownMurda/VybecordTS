@@ -19,7 +19,7 @@ import { state, subscribe, setFocus, set, saveConfig, MAX_SLOTS } from '../state
 import { goto } from '../router.js';
 import { discordPreview, hiddenReason } from '../discord-card.js';
 import { presenceModel } from '../discord-model.js';
-import { diagnose, lyricsKey, whyPanel } from '../why.js';
+import { diagnose, lyricsMode, whyPanel } from '../why.js';
 import { cardEditor } from '../card-editor.js';
 import { seam } from './seam.js';
 
@@ -812,7 +812,7 @@ function paintLyrics(l) {
   kind.title = plain ? 'Found without timings, so they cannot follow the song'
     : captions ? (pvSubtitles(t) ? 'Prime Video\'s subtitles, as they show in the player' : t.is_live ? 'Kick\'s captions, as the stream goes' : 'Kick\'s captions, as the video plays')
     : shortCaptions ? 'The Short\'s captions from YouTube, as it plays' : '';
-  const lyricsOff = state.config[lyricsKey(state.focus)] === false;
+  const lyricsOff = lyricsMode(state.config, state.focus) === 'off';
   const offMsg = ['Lyrics are switched off for this card', 'Turn them back on with Lyrics, in the middle column.'];
 
   // What to say instead of lines, when there are none to show.

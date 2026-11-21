@@ -14,7 +14,7 @@ import { discordPreview } from '../discord-card.js';
 // The card's choices live with the editor on Now playing, so both offer the same lists.
 import { ACTIVITY_TYPES, ACTIVITY_KEYS, SHORTS_ACTIVITY_TYPES, PRIME_VIDEO_ACTIVITY_TYPES, STATUS_DISPLAY, ICON_MODES, ICON_KEYS } from '../card-editor.js';
 import { showWhatsNew } from '../whats-new.js';
-import { lyricCardCount, CARD_ORDER_NOTE } from '../why.js';
+import { lyricCardCount, CARD_ORDER_NOTE, lyricsMode, lyricsModePatch, LYRICS_MODES } from '../why.js';
 import { ACCENT_PRESETS, applyAccent, normalizeAccent } from '../accent.js';
 import { spicetifyCard } from './spicetify-card.js';
 import { updateCard } from './update-card.js';
@@ -30,10 +30,11 @@ const AWAY_DELAYS = [
 ];
 const PRESENCE_COUNTS = [[1, 'One'], [2, 'Two'], [3, 'Three'], [4, 'Four'], [5, 'Five']];
 /**
- * Which cards carry lyrics. One switch per card — presence 1 keeps the
- * `show_lyrics` switch it always had, the others have their own.
+ * Where card `i`'s lyrics show, as a row: in Vybecord and on Discord, in
+ * Vybecord only, or off. One per card, as the switch it replaced was.
  */
-const LYRICS_KEYS = ['show_lyrics', 'show_lyrics_2', 'show_lyrics_3', 'show_lyrics_4', 'show_lyrics_5'];
+const lyricsRow = (label, desc, i) => selectRow(label, desc, lyricsMode(state.config, i), LYRICS_MODES,
+  (v) => saveConfig(lyricsModePatch(i, v)));
 const presenceCount = () => Math.max(1, Math.min(5, Number(cfg('presence_count', 1)) || 1));
 
 const GUIDE_EN = 'https://github.com/TheUnknownMurda/VybecordTS/blob/main/USER_GUIDE.md';
@@ -267,9 +268,8 @@ function presenceCat(body, { search }) {
     ]),
 
     group('What your card shows', [
-      multi ? null : toggleRow('Lyrics on the card',
-        'The line being sung and the next one, in time with the song. The title, artist and album move to the line under them.',
-        cfg('show_lyrics', true) !== false, (v) => put('show_lyrics', v)),
+      multi ? null : lyricsRow('Lyrics',
+        'The line being sung and the next one, in time with the song. In Vybecord only keeps them in this window, and the card shows the title and artist.', 0),
       toggleRow('Name the playlist', 'Name the playlist, radio or Liked Songs the track is playing from — on the card and in the status line. Off, that line shows the artist instead.',
         cfg('rpc_show_playlist', true) !== false, (v) => put('rpc_show_playlist', v)),
       multi ? null : selectRow('Activity type', 'The verb Discord shows before the activity.',
@@ -304,10 +304,11 @@ function presenceCat(body, { search }) {
       selectRow('Presences at once', 'Up to five cards — the song in Spotify on one, a stream in a browser tab on another. One is how the app always behaved.',
         presenceCount(), PRESENCE_COUNTS, (v) => put('presence_count', Number(v))),
       ...(multi
-        ? LYRICS_KEYS.slice(0, presenceCount()).map((key, i) => toggleRow(
+        ? Array.from({ length: presenceCount() }, (_, i) => lyricsRow(
             `Lyrics on presence ${i + 1}`,
-            i === 0 ? 'The line being sung and the next one; the title, artist and album move to the line under them.' : 'Off shows the track without lyrics on that card.',
-            cfg(key, true) !== false, (v) => put(key, v)))
+            i === 0 ? 'On the card, the line being sung and the next one; the title, artist and album move to the line under them.'
+              : 'In Vybecord only, they show in this window while that card is on screen, and the card shows the track without them.',
+            i))
         : []),
       multi && lyricCardCount(state.config) >= 2 ? el('div', { class: 'set-warn', text: CARD_ORDER_NOTE }) : null,
       ...(multi
@@ -345,8 +346,8 @@ function lyricsCat(body) {
     group('Display', [
       presenceCount() > 1
         ? null
-        : toggleRow('Show lyrics', 'Off keeps the presence but stops fetching and showing lyrics.',
-            cfg('show_lyrics', true) !== false, (v) => put('show_lyrics', v)),
+        : lyricsRow('Show lyrics', 'In Vybecord only keeps them in this window and puts the title and artist on your card. '
+            + 'Off keeps the presence, with no lyrics here or on Discord.', 0),
       toggleRow('Romanise lyrics',
         'Writes lyrics in Latin letters: Japanese (kanji included), Korean, Chinese, Russian and other Cyrillic, '
         + 'Greek, Thai, Arabic, Hindi and other Devanagari, Georgian and Armenian.',

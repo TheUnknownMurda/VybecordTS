@@ -3,16 +3,21 @@
  * window to the Discord card, between the two sides they act on.
  *
  * Settings has pairs that read as one switch said twice — "Translate in this
- * window" and "Translate on Discord too" — and one switch that quietly does
- * both, Lyrics, which takes the words out of the window as well as off the
- * card. Here each one says which way it reaches: an arrow to the right is
- * Discord only, to the left this window only, both ways is both. They write
- * the same keys Settings writes; nothing new is stored.
+ * window" and "Translate on Discord too". Here each one says which way it
+ * reaches: an arrow to the right is Discord only, to the left this window
+ * only, both ways is both. They write the same keys Settings writes; nothing
+ * new is stored.
+ *
+ * Lyrics is the one that goes round three places instead of two: here and on
+ * Discord, this window only, off. Its arrows follow, so "this window only"
+ * reads as ← Lyrics, the way the window's Translate does. Two pills, as
+ * Translate has, would also have offered lyrics on the card and not in the
+ * window: a choice nobody asked for, in a column with no room to spare.
  */
 
 import { el } from '../util.js';
 import { state, subscribe, saveConfig } from '../state.js';
-import { lyricsKey } from '../why.js';
+import { lyricsMode, lyricsModePatch } from '../why.js';
 
 const api = window.vybecord;
 
@@ -40,15 +45,7 @@ const BRIDGES = [
       ? 'Your activity is on Discord, on every card. Off clears your status right away.'
       : 'Nothing is on your Discord profile. On puts your status back.'),
   },
-  {
-    glyph: 'note', label: 'Lyrics', reach: 'both', key: () => lyricsKey(state.focus), on: true,
-    tip: (v) => {
-      const which = multi() ? ` on card ${state.focus + 1}` : '';
-      return v
-        ? `Lyrics follow the song${which}, here and on Discord. Off hides them in both; the card keeps the title and artist.`
-        : `No lyrics${which}, here or on Discord. On shows them again.`;
-    },
-  },
+  { cycle: 'lyrics' },
   // Discord only, though Settings files it under Display: the lyrics engine
   // applies it to the lines it sends to Discord, and the window's lines
   // arrive as written.
@@ -76,6 +73,16 @@ const RULES = [
   { glyph: 'ad', label: 'Spotify ad', key: () => 'filter_spotify_ads', on: true, tip: () => 'Hide the card while a Spotify ad plays.' },
 ];
 
+/** Lyrics, one click at a time: from both sides, to this window only, to none, and back. */
+const LYRICS_NEXT = { both: 'app', app: 'off', off: 'both' };
+const LYRICS_REACH = { both: ' — here and on Discord', app: ' — this window only', off: ' — off' };
+const lyricsTip = (mode) => {
+  const which = multi() ? ` on card ${state.focus + 1}` : '';
+  if (mode === 'both') return `Lyrics follow the song${which}, here and on Discord. Click to keep them in this window only.`;
+  if (mode === 'app') return `Lyrics${which} in this window only: the card shows the title and artist. Click to turn them off here too.`;
+  return `No lyrics${which}, here or on Discord. Click to show them in both again.`;
+};
+
 const multi = () => (Number(state.status?.presenceCount) || 1) > 1;
 const isOn = (b) => (b.on ? state.config[b.key()] !== false : state.config[b.key()] === true);
 
@@ -97,7 +104,40 @@ function pill(b, cls = 'br') {
   return node;
 }
 
+/**
+ * The Lyrics pill. Not a switch, so no role="switch": its name says where the
+ * lyrics are, and the tooltip what the next click does.
+ */
+function lyricsPill() {
+  const node = el('button', {
+    type: 'button',
+    class: 'br',
+    onclick: () => {
+      const i = state.focus;
+      void saveConfig(lyricsModePatch(i, LYRICS_NEXT[lyricsMode(state.config, i)]));
+    },
+  });
+  node.innerHTML = G.left + G.note;
+  node.append(el('span', { class: 'br-label', text: 'Lyrics' }));
+  node.insertAdjacentHTML('beforeend', G.right);
+  // The arrow toward Discord, which "this window only" takes away.
+  node.lastElementChild.classList.add('br-out');
+  return node;
+}
+
+function paintLyricsPill(node) {
+  const mode = lyricsMode(state.config, state.focus);
+  node.classList.toggle('on', mode !== 'off');
+  node.dataset.mode = mode;
+  node.setAttribute('aria-label', `Lyrics${LYRICS_REACH[mode]}`);
+  node.title = lyricsTip(mode);
+}
+
 function paintPill(node, b) {
+  if (b.cycle === 'lyrics') {
+    paintLyricsPill(node);
+    return;
+  }
   const v = isOn(b);
   node.classList.toggle('on', v);
   node.setAttribute('aria-checked', v ? 'true' : 'false');
@@ -111,7 +151,7 @@ function paintPill(node, b) {
 let langs = null;
 
 export function seam() {
-  const bridges = BRIDGES.map((b) => pill(b));
+  const bridges = BRIDGES.map((b) => (b.cycle === 'lyrics' ? lyricsPill() : pill(b)));
   const rules = RULES.map((r) => pill(r, 'br br-rule'));
   const lang = el('select', {
     class: 'br-lang',
