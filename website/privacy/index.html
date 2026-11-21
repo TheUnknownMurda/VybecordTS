@@ -144,6 +144,12 @@
     playing is ever sent.
   </p>
   <p>
+    The extension also tells the app that it is there. Every 30 seconds, and whenever
+    the browser wakes it, it sends its version number and its eight site switches to
+    the same address, whether or not anything is playing, so the app can show it as
+    connected. Nothing about what you play goes with it.
+  </p>
+  <p>
     One kind of request goes elsewhere, and it carries none of that. On
     <code>kick.com</code>, the extension asks Kick's own API about the page you are on:
     the channel's name, picture, stream title, category, whether it is live and when
@@ -350,6 +356,10 @@
     </li>
     <li>
       <strong><code>storage</code></strong> &mdash; to remember which sites you switched off.
+    </li>
+    <li>
+      <strong><code>alarms</code></strong> &mdash; to wake the extension every 30 seconds, so it
+      can tell the desktop app it is running when nothing is playing.
     </li>
     <li>
       <strong>Optional: <code>cookies</code> and access to <code>youtube.com</code></strong>
