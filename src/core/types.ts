@@ -159,6 +159,7 @@ export interface VybecordConfig {
   detect_kick: boolean;
   detect_twitch: boolean;
   detect_prime_video: boolean;
+  detect_netflix: boolean;
   detect_browser: boolean;
   detect_other_apps: boolean;
   /** A Twitch or Kick tab on a channel that is not streaming gets an Offline
@@ -209,6 +210,8 @@ export interface VybecordConfig {
   rpc_shorts_activity_type: number;
   /** The activity type of a Prime Video film or episode on any card: 3 Watching (default) or 2 Listening. */
   rpc_prime_video_activity_type: number;
+  /** The same for a film or an episode on Netflix. */
+  rpc_netflix_activity_type: number;
   /**
    * What the "Listening to …" status line shows (member list / profile), independent
    * of the presence card: 'app' = application name, 'title' = current track title,

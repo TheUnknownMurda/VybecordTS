@@ -151,7 +151,7 @@ The optional browser extension fixes that. **Settings → Integrations → Brows
 - **Firefox 140 or newer** (also Zen, LibreWolf, Waterfox, Floorp) — download `vybecord-extension-<version>-firefox.zip` from the [releases page](https://github.com/TheUnknownMurda/VybecordTS/releases/latest), open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on** and pick the zip. Firefox removes temporary add-ons when it closes.
 - **Safari** isn't supported: there is no Safari for Windows.
 
-Its icon opens a settings page with a switch per site — Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick, Prime Video — all on by default, and the optional **Share my YouTube sign-in for captions** switch (off by default, see the captions section above).
+Its icon opens a settings page with a switch per site — Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick, Prime Video, Netflix — all on by default, and the optional **Share my YouTube sign-in for captions** switch (off by default, see the captions section above).
 
 With it, each site is identified properly, the presence links straight to the track, and the progress bar reads the page's own audio element instead of the coarser system position. Without it, everything below still applies.
 
@@ -215,6 +215,26 @@ A paused film takes its card off Discord, as a paused song does. Films and episo
 
 After updating Vybecord, click the reload arrow on the extension in your browser's extensions page so it picks up Prime Video: a browser that installed the extension from a store asks you to allow the new sites first.
 
+### Netflix
+
+With the extension (2.4.0 or later), a film or an episode playing on netflix.com gets a card of its own too, under the **Netflix** application:
+
+- the film's or the show's name, then the episode as **E3 · Name**, or **S1 E3 · Name** when the player names the season (nothing for a film);
+- Netflix's logo, since the page you watch on names no poster;
+- the progress bar, from the start of the film or the episode to its end;
+- **Watching**, or **Listening to** if you prefer: **Settings → Discord presence → Activity type for Netflix**, also a click away on the card's verb in **Now playing**. It covers every card;
+- the button, **Watch on Netflix**, and the title and the cover open the page you are watching on.
+
+Netflix shows the title only while its controls are on screen. If the card hasn't come up a few seconds after you start something, move the mouse over the video once: until the title has shown, Vybecord has nothing to call it. It then keeps the name for as long as you stay on that film or episode. When the player goes on to the next episode by itself, the card names the show alone until the controls show again.
+
+**Subtitles as lyrics**, as on Prime Video: turn on subtitles in Netflix's player and they show on the card as the player shows them, marked **Subtitles** in **Now playing**, in the language you picked there. With subtitles off, nothing is read. Netflix draws the subtitles of some languages (Japanese, Chinese, Arabic and a few others) as pictures, and those have no text to show.
+
+During an ad the card leaves Discord, as it does for a pause, and comes back with the film. Films and episodes are never looked up as songs and stay out of the listening history, **Activity** and Last.fm. **Settings → Detection → Netflix** turns the whole thing off.
+
+**Not tried on the real Netflix yet.** The extension reads Netflix's player from what others have published about it, and nobody working on Vybecord has had a Netflix account to check it against. If the card doesn't show, or shows the wrong thing, say so with **Settings → About → Report a problem** so it can be fixed.
+
+As with Prime Video, after updating Vybecord click the reload arrow on the extension in your browser's extensions page so it picks up Netflix: a browser that installed the extension from a store asks you to allow the new site first.
+
 ### Two things playing at once
 
 On **Now playing**, open the **Source** menu and pick the one you want announced. It stays pinned until you pick **Automatic**.
@@ -228,7 +248,7 @@ Or show them all. **Settings → Discord presence → Several presences** puts u
 - The listening history (and so **Activity**) and Last.fm follow presence 1 only.
 - With lyrics on two cards or more, the cards can swap places on your profile at each line: Discord puts the card that changed last on top, and Vybecord cannot hold the order. The window warns you when lyrics go on a second card. A *Playing* card always sits above *Listening* and *Watching* ones.
 
-Each card is a Discord application of its own. Spotify, SoundCloud, Apple Music and Prime Video have one each, YouTube three, and Kick and Twitch five each, so up to five Kick or Twitch streams all keep their logo; a card whose platform has no application left borrows a free one. With the default that makes eighteen applications for five cards at most, so there is nothing to set up.
+Each card is a Discord application of its own. Spotify, SoundCloud, Apple Music, Prime Video and Netflix have one each, YouTube three, and Kick and Twitch five each, so up to five Kick or Twitch streams all keep their logo; a card whose platform has no application left borrows a free one. With the default that makes nineteen applications for five cards at most, so there is nothing to set up.
 
 ---
 

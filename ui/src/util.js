@@ -183,6 +183,12 @@ async function resolveThumb(key) {
   return thumbCache.url;
 }
 
+/**
+ * A film or an episode, on a site that plays them: watched, never looked up
+ * as a song, its subtitles read off the player (isFilmSource in the backend).
+ */
+export const isFilm = (source) => source === 'prime_video' || source === 'netflix';
+
 /** Platform label + glyph for a media_source string. */
 export function platformInfo(source) {
   const map = {
@@ -200,8 +206,9 @@ export function platformInfo(source) {
     // Twitch stream showed as a lowercase "twitch" under a generic note.
     twitch: ['Twitch', '🟣'],
     kick: ['Kick', '🥊'],
-    // Films and episodes, from the browser extension; a pin can name it too.
+    // Films and episodes, from the browser extension; a pin can name them too.
     prime_video: ['Prime Video', '🎬'],
+    netflix: ['Netflix', '🍿'],
     vlc: ['VLC', '🔶'],
     foobar2000: ['foobar2000', '🎛️'],
     musicbee: ['MusicBee', '🐝'],

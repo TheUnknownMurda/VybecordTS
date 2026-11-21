@@ -1091,7 +1091,8 @@ export function sourcePriority(src: string): number {
     case 'youtube':
     case 'twitch':
     case 'kick':
-    case 'prime_video': return 6;
+    case 'prime_video':
+    case 'netflix': return 6;
     default:
       if (/vlc|foobar|musicbee|aimp|winamp|mediamonkey|groove|wmp/.test(src)) return 5;
       // Everything we could not name: an unidentified tab, an unknown app.
@@ -1156,6 +1157,11 @@ export function detectWebService(s: SessionState): string | null {
   if (haystack.includes('kick.com')) return 'kick';
   // The site's name, or the Windows app's id (AmazonVideo.PrimeVideo_…).
   if (haystack.includes('prime video') || haystack.includes('primevideo')) return 'prime_video';
+  // The Windows app's id (4DF9E0F8.Netflix_…), or a page naming itself just
+  // that. Not the word anywhere in the album: soundtracks are named "(Music
+  // from the Netflix Series)", and a song from one playing on YouTube Music
+  // is no film.
+  if (s.appId.toLowerCase().includes('netflix') || (s.media.albumTitle || '').trim().toLowerCase() === 'netflix') return 'netflix';
   if (haystack.includes('apple music') || haystack.includes('music.apple')) return 'apple_music';
   // Before YouTube: the Spotify web player's metadata mentions both.
   if (haystack.includes('spotify')) return 'spotify';

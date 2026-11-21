@@ -14,7 +14,7 @@
  * Why? lists what stands between the song and the card — see why.js.
  */
 
-import { el, $, fmtTime, setArt, platformInfo, toast, modal, BLANK_ART } from '../util.js';
+import { el, $, fmtTime, setArt, platformInfo, isFilm, toast, modal, BLANK_ART } from '../util.js';
 import { state, subscribe, setFocus, set, saveConfig, MAX_SLOTS } from '../state.js';
 import { goto } from '../router.js';
 import { discordPreview, hiddenReason } from '../discord-card.js';
@@ -695,7 +695,7 @@ function paintTrack(playing) {
   if (!lead.length) lead.push(el('span', { class: 'pulse' }));
   // An offline channel is neither watched nor played: the tab is just open on it.
   const offline = track.context_type === 'offline';
-  const watched = streamCard || track.media_source === 'prime_video';
+  const watched = streamCard || isFilm(track.media_source);
   const verb = !track.is_playing ? 'Paused on' : offline ? 'Open on' : track.is_short ? 'Watching' : watched ? 'Watching on' : 'Playing on';
   $('#npState').replaceChildren(
     el('span', { class: 'eyebrow np-source' }, [...lead, `${verb} ${label}`]),
@@ -789,10 +789,10 @@ const lineAt = (arr, i) => (i >= 0 && i < arr.length ? arr[i]?.text || '' : '');
  * off Kick's player as they are said, so neither has timings to show or fix.
  */
 const kickCaptions = (t) => t?.media_source === 'kick' && (!!t.is_live || t.context_type === 'vod');
-/** The same for a film's or an episode's subtitles on Prime Video, read off its player as they show. */
-const pvSubtitles = (t) => t?.media_source === 'prime_video';
+/** The same for a film's or an episode's subtitles on Prime Video or Netflix, read off its player as they show. */
+const filmSubtitles = (t) => isFilm(t?.media_source);
 /** Lines read off a player as they are said: nothing to re-time, report or copy. */
-const playerLines = (t) => kickCaptions(t) || pvSubtitles(t);
+const playerLines = (t) => kickCaptions(t) || filmSubtitles(t);
 
 function paintLyrics(l) {
   const stage = $('#lyrStage');
@@ -808,9 +808,9 @@ function paintLyrics(l) {
   kind.hidden = !(synced || plain);
   // A Short only ever gets its captions (see onNewTrack in the backend).
   const shortCaptions = synced && !!t?.is_short;
-  kind.textContent = captions ? (pvSubtitles(t) ? 'Subtitles' : t.is_live ? 'Live captions' : 'Captions') : shortCaptions ? 'Captions' : synced ? 'Synced' : plain ? 'Words only' : '';
+  kind.textContent = captions ? (filmSubtitles(t) ? 'Subtitles' : t.is_live ? 'Live captions' : 'Captions') : shortCaptions ? 'Captions' : synced ? 'Synced' : plain ? 'Words only' : '';
   kind.title = plain ? 'Found without timings, so they cannot follow the song'
-    : captions ? (pvSubtitles(t) ? 'Prime Video\'s subtitles, as they show in the player' : t.is_live ? 'Kick\'s captions, as the stream goes' : 'Kick\'s captions, as the video plays')
+    : captions ? (filmSubtitles(t) ? `${platformInfo(t.media_source)[0]}'s subtitles, as they show in the player` : t.is_live ? 'Kick\'s captions, as the stream goes' : 'Kick\'s captions, as the video plays')
     : shortCaptions ? 'The Short\'s captions from YouTube, as it plays' : '';
   const lyricsOff = state.config[lyricsKey(state.focus)] === false;
   const offMsg = ['Lyrics are switched off for this card', 'Turn them back on with Lyrics, in the middle column.'];
@@ -826,9 +826,9 @@ function paintLyrics(l) {
     if (lyricsOff) empty = offMsg;
     else if (!synced) empty = ['No captions yet', 'Turn on captions (CC) in Kick\'s player: what is said shows here and on the card, as lyrics.'];
   }
-  else if (pvSubtitles(t)) {
+  else if (filmSubtitles(t)) {
     if (lyricsOff) empty = offMsg;
-    else if (!synced) empty = ['No subtitles yet', 'Turn on subtitles in Prime Video\'s player: what is said shows here and on the card, as lyrics. Without them, the card shows the title and the episode.'];
+    else if (!synced) empty = ['No subtitles yet', `Turn on subtitles in ${platformInfo(t.media_source)[0]}'s player: what is said shows here and on the card, as lyrics. Without them, the card shows the title and the episode.`];
   }
   else if (t.is_live) empty = ['Live streams have no lyrics', 'The card shows the stream title and how long it has been live instead.'];
   else if (t.is_short && !synced) {

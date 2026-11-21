@@ -151,7 +151,7 @@ L'extension navigateur optionnelle corrige ça. **Settings → Integrations → 
 - **Firefox 140 ou plus récent** (aussi Zen, LibreWolf, Waterfox, Floorp) — télécharge `vybecord-extension-<version>-firefox.zip` depuis la [page des releases](https://github.com/TheUnknownMurda/VybecordTS/releases/latest), ouvre `about:debugging#/runtime/this-firefox`, clique sur **Charger un module complémentaire temporaire** et choisis le zip. Firefox retire les modules temporaires à sa fermeture.
 - **Safari** n'est pas pris en charge : Safari n'existe pas sur Windows.
 
-Son icône ouvre une page de réglages avec un interrupteur par site — Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick, Prime Video — tous actifs par défaut, et l'interrupteur optionnel **Share my YouTube sign-in for captions** (désactivé par défaut, voir la section sur les sous-titres plus haut).
+Son icône ouvre une page de réglages avec un interrupteur par site — Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick, Prime Video, Netflix — tous actifs par défaut, et l'interrupteur optionnel **Share my YouTube sign-in for captions** (désactivé par défaut, voir la section sur les sous-titres plus haut).
 
 Avec elle, chaque site est correctement identifié, la présence pointe directement vers le morceau, et la barre de progression lit l'élément audio de la page au lieu de la position système, plus grossière. Sans elle, tout ce qui suit reste valable.
 
@@ -215,6 +215,26 @@ Un film en pause retire sa carte de Discord, comme une chanson en pause. Les fil
 
 Après une mise à jour de Vybecord, clique sur la flèche de rechargement de l'extension dans la page des extensions de ton navigateur pour qu'elle prenne Prime Video : un navigateur qui a installé l'extension depuis une boutique te demande d'abord d'autoriser les nouveaux sites.
 
+### Netflix
+
+Avec l'extension (2.4.0 ou plus récente), un film ou un épisode qui joue sur netflix.com a lui aussi sa propre carte, sous l'application **Netflix** :
+
+- le nom du film ou de la série, puis l'épisode sous la forme **E3 · Nom**, ou **S1 E3 · Nom** quand le lecteur nomme la saison (rien pour un film) ;
+- le logo de Netflix, puisque la page où tu regardes ne nomme aucune affiche ;
+- la barre de progression, du début du film ou de l'épisode à sa fin ;
+- **Watching**, ou **Listening to** si tu préfères : **Settings → Discord presence → Activity type for Netflix**, aussi à un clic sur le verbe de la carte dans **Now playing**. Ça vaut pour toutes les cartes ;
+- le bouton, **Watch on Netflix**, ainsi que le titre et l'image, ouvrent la page où tu regardes.
+
+Netflix n'affiche le titre que pendant que ses commandes sont à l'écran. Si la carte n'apparaît pas quelques secondes après le début, passe la souris sur la vidéo une fois : tant que le titre ne s'est pas affiché, Vybecord n'a rien pour le nommer. Il garde ensuite le nom tant que tu restes sur ce film ou cet épisode. Quand le lecteur passe de lui-même à l'épisode suivant, la carte nomme seulement la série jusqu'à ce que les commandes réapparaissent.
+
+**Les sous-titres comme paroles**, comme sur Prime Video : active les sous-titres dans le lecteur de Netflix et ils s'affichent sur la carte tels que le lecteur les montre, marqués **Subtitles** dans **Now playing**, dans la langue choisie là. Sans sous-titres, rien n'est lu. Netflix dessine les sous-titres de certaines langues (japonais, chinois, arabe et quelques autres) comme des images, et ceux-là n'ont pas de texte à afficher.
+
+Pendant une pub, la carte quitte Discord comme pour une pause, et revient avec le film. Les films et les épisodes ne sont jamais cherchés comme des chansons et restent hors de l'historique d'écoute, d'**Activity** et de Last.fm. **Settings → Detection → Netflix** coupe le tout.
+
+**Pas encore essayé sur le vrai Netflix.** L'extension lit le lecteur de Netflix d'après ce que d'autres en ont publié, et personne qui travaille sur Vybecord n'avait de compte Netflix pour le vérifier. Si la carte n'apparaît pas, ou affiche n'importe quoi, dis-le avec **Settings → About → Report a problem** pour que ce soit corrigé.
+
+Comme pour Prime Video, après une mise à jour de Vybecord, clique sur la flèche de rechargement de l'extension dans la page des extensions de ton navigateur pour qu'elle prenne Netflix : un navigateur qui a installé l'extension depuis une boutique te demande d'abord d'autoriser le nouveau site.
+
 ### Deux choses jouent en même temps
 
 Sur **Now playing**, ouvre le menu **Source** et choisis le lecteur que tu veux afficher. Il reste épinglé jusqu'à ce que tu choisisses **Automatic**.
@@ -228,7 +248,7 @@ Ou affiche-les toutes. **Settings → Discord presence → Several presences** m
 - L'historique d'écoute (et donc **Activity**) et Last.fm ne suivent que la présence 1.
 - Avec les paroles sur deux cartes ou plus, les cartes peuvent changer de place sur ton profil à chaque ligne : Discord met en haut la carte qui vient de changer, et Vybecord ne peut pas imposer l'ordre. La fenêtre te prévient quand les paroles s'activent sur une deuxième carte. Une carte *Playing* passe toujours au-dessus des cartes *Listening* et *Watching*.
 
-Chaque carte est une application Discord à part. Spotify, SoundCloud, Apple Music et Prime Video en ont une chacun, YouTube trois, et Kick et Twitch cinq chacun : jusqu'à cinq streams Kick ou Twitch gardent tous leur logo. Une carte dont la plateforme n'a plus d'application libre en emprunte une autre. Avec celle par défaut, ça fait dix-huit applications pour cinq cartes au maximum : il n'y a rien à configurer.
+Chaque carte est une application Discord à part. Spotify, SoundCloud, Apple Music, Prime Video et Netflix en ont une chacun, YouTube trois, et Kick et Twitch cinq chacun : jusqu'à cinq streams Kick ou Twitch gardent tous leur logo. Une carte dont la plateforme n'a plus d'application libre en emprunte une autre. Avec celle par défaut, ça fait dix-neuf applications pour cinq cartes au maximum : il n'y a rien à configurer.
 
 ---
 
