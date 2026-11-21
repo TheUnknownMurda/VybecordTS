@@ -32,7 +32,7 @@
 
 <main class="doc">
   <h1>Privacy Policy</h1>
-  <p class="date">Vybecord browser extension and desktop app · Last updated 19 November 2026</p>
+  <p class="date">Vybecord browser extension and desktop app · Last updated 21 November 2026</p>
 
   <div class="callout">
     <p>
@@ -62,9 +62,9 @@
 
   <h2>What the extension reads</h2>
   <p>
-    On the seven sites it supports &mdash; Spotify, YouTube and YouTube Music, SoundCloud,
-    Bandcamp, Twitch, Kick and Prime Video &mdash; it reads the metadata of what is currently
-    playing:
+    On the eight sites it supports &mdash; Spotify, YouTube and YouTube Music, SoundCloud,
+    Bandcamp, Twitch, Kick, Prime Video and Netflix &mdash; it reads the metadata of what is
+    currently playing:
   </p>
   <ul>
     <li>Track, video, stream, film or show title, and a show's episode</li>
@@ -75,7 +75,7 @@
     <li>The address of the item playing, so the app can link to it</li>
   </ul>
   <p>
-    On Kick and Prime Video, it also reads the captions or subtitles the player is showing,
+    On Kick, Prime Video and Netflix, it also reads the captions or subtitles the player is showing,
     if you have turned them on there: the words on screen, as they appear, and nothing else.
     No caption or subtitle file is downloaded, and with them off, none are read.
   </p>
@@ -85,6 +85,13 @@
     those Amazon sites the extension also loads on product pages (<code>/dp/</code>), whatever
     they sell. There it looks for a Prime Video player about once a second, and as long as
     none is open, it reads nothing else and sends nothing.
+  </p>
+  <p id="netflix">
+    Netflix is a single page: going from browsing to a film changes the address without
+    loading a new page. So the extension loads everywhere on <code>www.netflix.com</code>,
+    but reads only the page a film or an episode plays on (<code>/watch/</code>). Elsewhere
+    on Netflix it looks for a player about once a second, and as long as none is open, it
+    reads nothing else and sends nothing. While an ad plays, nothing the ad shows is read.
   </p>
   <p>
     It reads this from the page you already have open. It does not sign in on your
@@ -170,12 +177,12 @@
     LRCLIB slows it down.
   </p>
   <p>
-    For a film or an episode on Prime Video, the desktop app looks nothing up: no lyrics
-    and no cover. Its card shows only what the page showed.
+    For a film or an episode on Prime Video or Netflix, the desktop app looks nothing up:
+    no lyrics and no cover. Its card shows only what the page showed.
   </p>
   <p>
     The desktop app then publishes what you are playing to your Discord profile, which
-    is the purpose of installing it. On Kick and Prime Video, that includes the captions
+    is the purpose of installing it. On Kick, Prime Video and Netflix, that includes the captions
     or subtitles on screen, when they are on: they are the card's lyrics. That step is
     Discord's, and is covered by
     <a href="https://discord.com/privacy" target="_blank" rel="noopener">Discord's privacy policy</a>.
@@ -292,13 +299,13 @@
   <h2>What is stored, and where</h2>
   <ul>
     <li>
-      <strong>Your per-site switches</strong> (which of the seven sites are enabled) are kept
+      <strong>Your per-site switches</strong> (which of the eight sites are enabled) are kept
       in the browser's synced extension storage. If you are signed into your browser,
       it syncs them across your devices the same way it syncs your bookmarks. They are
-      seven true/false values and nothing else.
+      eight true/false values and nothing else.
     </li>
     <li>
-      <strong>A tab identifier</strong>, on Twitch, Kick and Prime Video: a random string kept
+      <strong>A tab identifier</strong>, on Twitch, Kick, Prime Video and Netflix: a random string kept
       in that tab's session storage, under <code>vybecord_tab_id</code>, so that two tabs
       make two cards. It names the tab, not you, and the browser deletes it when the tab
       is closed.
@@ -331,9 +338,11 @@
   <h2>Permissions, and why each is needed</h2>
   <ul>
     <li>
-      <strong>Access to the seven supported sites</strong> &mdash; to read the metadata of what is
+      <strong>Access to the eight supported sites</strong> &mdash; to read the metadata of what is
       playing. On Amazon's sites, only their Prime Video pages and product pages, as
-      <a href="#prime-video">described above</a>. Without it there is nothing to report.
+      <a href="#prime-video">described above</a>; on Netflix, the whole site, of which only the
+      page a film or an episode plays on is read (<a href="#netflix">see above</a>). Without it
+      there is nothing to report.
     </li>
     <li>
       <strong>Access to <code>http://127.0.0.1:8888</code></strong> &mdash; to reach the desktop app.

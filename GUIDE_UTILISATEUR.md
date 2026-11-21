@@ -31,7 +31,7 @@ Ton statut Discord se met à jour tout seul. La première fois, Vybecord s'ouvre
 
 ### Fermer la fenêtre n'arrête pas l'appli
 
-Vybecord continue dans la zone de notification (à côté de l'horloge). Clique sur l'icône pour rouvrir la fenêtre, ou clic droit → **Quit** pour vraiment quitter. Le même menu du clic droit marche sans ouvrir la fenêtre : il affiche la chanson en cours, ouvre n'importe quelle page (**Go to**) et a des interrupteurs pour **Show on Discord**, **Show lyrics** (un par présence quand il y en a plusieurs), **Translate lyrics on Discord**, le nombre de présences (**Presences**), les plateformes détectées (**Detection**, une case par plateforme comme dans Settings), **Hide when paused**, **Hide when I’m away**, **Hide during Spotify ads** et **Launch at sign-in**, plus **Check for updates**. Ce sont les mêmes réglages que dans la fenêtre.
+Vybecord continue dans la zone de notification (à côté de l'horloge). Clique sur l'icône pour rouvrir la fenêtre, ou clic droit → **Quit** pour vraiment quitter. Le même menu du clic droit marche sans ouvrir la fenêtre : il affiche la chanson en cours, ouvre n'importe quelle page (**Go to**) et a des interrupteurs pour **Show on Discord**, **Lyrics** (dans Vybecord et sur Discord, dans Vybecord seulement, ou coupées ; un sous-menu par présence quand il y en a plusieurs), **Translate lyrics on Discord**, le nombre de présences (**Presences**), les plateformes détectées (**Detection**, une case par plateforme comme dans Settings), **Hide when paused**, **Hide when I’m away**, **Hide during Spotify ads** et **Launch at sign-in**, plus **Check for updates**. Ce sont les mêmes réglages que dans la fenêtre.
 
 Tu peux changer ça dans **Settings → App & window → Close to tray**. La même page a **Theme** (sombre ou clair) et **Accent colour**, le vert des boutons, des interrupteurs et des liens : choisis une pastille ou n'importe quelle couleur, et le fond prend aussi sa teinte (Emerald, la couleur par défaut, garde le fond neutre d'origine). Ta carte Discord garde les couleurs de Discord.
 
@@ -43,8 +43,8 @@ Les mises à jour se téléchargent toutes seules et s'installent quand tu quitt
 
 | Page | À quoi ça sert |
 | --- | --- |
-| **Now playing** | Deux côtés, comme un miroir. **On your screen**, à gauche : le morceau en cours (pochette, titre, artiste, album, lecteur et progression ; en pause, il reste affiché avec sa barre arrêtée, jusqu'à ce que tu fermes le lecteur ou que tu coupes sa détection) et les paroles qui défilent (clique dessus pour voir tout le morceau, ou sur **Big lyrics** pour les afficher en grand dans toute la fenêtre, comme Spotify ; **Échap** ferme). Des paroles trouvées sans minutage s'affichent en texte simple à faire défiler, marquées **Words only**. **On Discord**, à droite : ta carte telle que tes amis la voient, avec son menu **Source**, qui choisit le lecteur suivi. **Clique sur n'importe quelle partie de la carte** (ou sur **Customize**) pour la modifier : ce qu'affichent les lignes, le verbe, l'icône sur la pochette, ton bouton… Au milieu, des interrupteurs avec une flèche vers le côté qu'ils changent : **Visible** retire ton statut de Discord ou le remet, **Lyrics** active ou coupe les paroles des deux côtés, **Romanise** et l'un des deux **Translate** agissent sur Discord, l'autre **Translate** sur la fenêtre, et **Hide on Discord when** gère les pauses, l'absence et les pubs Spotify. **Why?** dit ce qui empêche ta carte d'apparaître sur Discord, avec un bouton pour corriger. |
-| **Lyrics** | Ta bibliothèque de paroles perso : **My lyrics**, **Blocked** (les paroles signalées comme fausses) et le dump **LRCLIB** hors ligne. **Add lyrics** sert à importer ou écrire de nouvelles paroles, et chaque entrée de **My lyrics** peut être partagée sur LRCLIB (voir plus bas). |
+| **Now playing** | Deux côtés, comme un miroir. **On your screen**, à gauche : le morceau en cours (pochette, titre, artiste, album, lecteur et progression ; en pause, il reste affiché avec sa barre arrêtée, jusqu'à ce que tu fermes le lecteur ou que tu coupes sa détection) et les paroles qui défilent (clique dessus pour voir tout le morceau, ou sur **Big lyrics** pour les afficher en grand dans toute la fenêtre, comme Spotify ; **Échap** ferme). Des paroles trouvées sans minutage s'affichent en texte simple à faire défiler, marquées **Words only**. **On Discord**, à droite : ta carte telle que tes amis la voient, avec son menu **Source**, qui choisit le lecteur suivi. **Clique sur n'importe quelle partie de la carte** (ou sur **Customize**) pour la modifier : ce qu'affichent les lignes, le verbe, l'icône sur la pochette, ton bouton… Au milieu, des interrupteurs avec une flèche vers le côté qu'ils changent : **Visible** retire ton statut de Discord ou le remet, **Lyrics** avance d'un cran à chaque clic : paroles des deux côtés (← Lyrics →), dans cette fenêtre seulement (← Lyrics : ta carte montre le titre et l'artiste à la place), puis coupées, **Romanise** et l'un des deux **Translate** agissent sur Discord, l'autre **Translate** sur la fenêtre, et **Hide on Discord when** gère les pauses, l'absence et les pubs Spotify. **Why?** dit ce qui empêche ta carte d'apparaître sur Discord, avec un bouton pour corriger. |
+| **Lyrics** | Ta bibliothèque de paroles perso : **My lyrics**, **Blocked** (les paroles signalées comme fausses) et le dump **LRCLIB** hors ligne. **Add lyrics** sert à importer ou écrire de nouvelles paroles, chaque entrée de **My lyrics** peut être partagée sur LRCLIB, et **Export** / **Import** partagent toute ta bibliothèque avec un ami dans un fichier (voir plus bas). |
 | **Activity** | Ce que tu as écouté sur 7 jours, 30 jours, 12 mois ou depuis toujours, pour toute ta musique ou une seule plateforme (choisis-la dans la rangée de pastilles, ou clique dessus sous **By platform**) : temps d'écoute et comparaison avec la période d'avant, graphique, part de chaque plateforme, les heures de la semaine où tu écoutes le plus, tes records et tes séries, top artistes, titres et albums, les artistes que tu découvres, et tes dernières écoutes (**See all** ouvre tout l'historique). Twitch et Kick, sous **Live**, ont leur propre vue : chaînes, catégories et séances, qui ne comptent pas dans le total de la musique. La page se met à jour toute seule à la fin de chaque morceau. |
 | **Settings** | Discord presence, Lyrics & translation, Detection, Integrations (extension navigateur, Spotify par Spicetify ou ta propre app Spotify, Last.fm), App & window et About. La barre de recherche trouve n'importe quel réglage. |
 | **Help & setup** | La liste de configuration, en bas de la barre latérale. |
@@ -52,6 +52,20 @@ Les mises à jour se téléchargent toutes seules et s'installent quand tu quitt
 Le bas de la barre latérale indique aussi si Discord est connecté et ce qui est détecté.
 
 Astuce : les touches **1 à 4** passent de Now playing à Lyrics, Activity et Settings. **Ctrl+Q** quitte l'appli.
+
+### Partager tes paroles avec un ami
+
+Dans **Lyrics → My lyrics**, **Export** (à côté de la barre de recherche) enregistre toutes tes paroles dans un seul fichier, à envoyer à un ami, sur Discord par exemple.
+
+Pour ajouter les paroles d'un ami aux tiennes, clique sur **Import** sur la même page et choisis le fichier qu'il t'a envoyé. Avant que quoi que ce soit soit enregistré, la fenêtre dit ce qui va se passer :
+
+- Les chansons que tu n'as pas sont ajoutées.
+- Les chansons que tu as déjà, avec les mêmes paroles, restent comme elles sont.
+- Les chansons que tu as déjà avec d'autres paroles gardent les tiennes, sauf si tu coches les siennes. **Compare** montre les deux versions côte à côte, et **Use theirs for all** les coche toutes.
+
+Rien de ce que tu as déjà n'est supprimé. Le fichier sert aussi de sauvegarde : importe-le dans une nouvelle installation pour retrouver tes paroles. Un `custom-lyrics.sqlite3` copié depuis un autre dossier de données s'importe de la même façon.
+
+Pour importer ton fichier, ton ami doit avoir une version de Vybecord qui a **Import**. Copier `custom-lyrics.sqlite3` dans un dossier de données remplace plutôt toute la bibliothèque qui s'y trouve.
 
 ### Partager tes paroles sur LRCLIB
 
@@ -86,7 +100,7 @@ Sur **Now playing**, ouvre le menu **Source**. Il liste tous les lecteurs que Wi
 
 ### Pas de paroles
 
-- Vérifie que **Settings → Lyrics & translation → Show lyrics** est activé
+- Vérifie que **Settings → Lyrics & translation → Show lyrics** n'est pas sur **Off**. Sur **In Vybecord only**, elles s'affichent dans la fenêtre mais pas sur ta carte
 - Certains morceaux n'ont tout simplement pas de paroles synchronisées en ligne
 - Depuis un onglet de navigateur, le titre publié est souvent le nom de la vidéo (« Artiste - Titre (Official Video) ») plutôt qu'un titre propre, ce qui rend la recherche moins fiable
 
@@ -151,7 +165,7 @@ L'extension navigateur optionnelle corrige ça. **Settings → Integrations → 
 - **Firefox 140 ou plus récent** (aussi Zen, LibreWolf, Waterfox, Floorp) — télécharge `vybecord-extension-<version>-firefox.zip` depuis la [page des releases](https://github.com/TheUnknownMurda/VybecordTS/releases/latest), ouvre `about:debugging#/runtime/this-firefox`, clique sur **Charger un module complémentaire temporaire** et choisis le zip. Firefox retire les modules temporaires à sa fermeture.
 - **Safari** n'est pas pris en charge : Safari n'existe pas sur Windows.
 
-Son icône ouvre une page de réglages avec un interrupteur par site — Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick, Prime Video — tous actifs par défaut, et l'interrupteur optionnel **Share my YouTube sign-in for captions** (désactivé par défaut, voir la section sur les sous-titres plus haut).
+Son icône ouvre une page de réglages avec un interrupteur par site — Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick, Prime Video, Netflix — tous actifs par défaut, et l'interrupteur optionnel **Share my YouTube sign-in for captions** (désactivé par défaut, voir la section sur les sous-titres plus haut).
 
 Avec elle, chaque site est correctement identifié, la présence pointe directement vers le morceau, et la barre de progression lit l'élément audio de la page au lieu de la position système, plus grossière. Sans elle, tout ce qui suit reste valable.
 
@@ -184,7 +198,7 @@ Avec l'extension, un onglet Twitch ou Kick a une carte pour ce qu'il affiche :
 
 Le nom et la photo de la chaîne viennent de Twitch lui‑même (et du site de Kick sur Kick) : la carte ne s'ouvre plus sur le nom de quelqu'un d'autre ni sur ton propre avatar pendant que la page charge. L'image reste celle de la chaîne, la catégorie s'affiche quand on la survole, et un clic dessus ouvre la page de la catégorie (Just Chatting, le jeu en cours…). Sur Kick, ce lien demande l'extension 2.2.3 ou plus récente ; avant, l'image ouvre la chaîne. Après une mise à jour de Vybecord, clique sur la flèche de rechargement de l'extension dans la page des extensions de ton navigateur pour qu'elle prenne la nouvelle version.
 
-**Les sous-titres de Kick comme paroles.** Active les sous-titres (**CC**) dans le lecteur de Kick et, sur une chaîne en direct ou une rediffusion, ce qui se dit s'affiche sur la carte comme les paroles d'une chanson : la ligne d'avant en haut et, en dessous, la ligne en train d'être dite, qui s'allonge mot à mot à mesure que le lecteur les affiche. La fenêtre **Now playing** les marque **Live captions** (simplement **Captions** sur une rediffusion). Ça marche avec les deux sortes que Kick propose : les sous-titres fournis avec le stream, et ceux que Chrome tire du son du stream. L'extension les lit sur le lecteur, donc elle ne les voit que s'ils sont activés, et la carte revient au titre du stream quand personne n'a parlé depuis 25 secondes. Si tu avances ou recules dans une rediffusion, les lignes repartent de là où tu arrives. Avec la traduction activée, chaque ligne est traduite une fois complète. Quand ça parle vite, le lecteur de Kick saute lui-même des lignes faute de place, et celles-là ne peuvent pas arriver sur la carte non plus. L'interrupteur **Lyrics** les coupe comme n'importe quelles paroles. Les streams et rediffusions Twitch, et les clips des deux sites, n'ont pas de paroles.
+**Les sous-titres de Kick comme paroles.** Active les sous-titres (**CC**) dans le lecteur de Kick et, sur une chaîne en direct ou une rediffusion, ce qui se dit s'affiche sur la carte comme les paroles d'une chanson : la ligne d'avant en haut et, en dessous, la ligne en train d'être dite, qui s'allonge mot à mot à mesure que le lecteur les affiche. La fenêtre **Now playing** les marque **Live captions** (simplement **Captions** sur une rediffusion). Ça marche avec les deux sortes que Kick propose : les sous-titres fournis avec le stream, et ceux que Chrome tire du son du stream. L'extension les lit sur le lecteur, donc elle ne les voit que s'ils sont activés, et la carte revient au titre du stream quand personne n'a parlé depuis 25 secondes. Si tu avances ou recules dans une rediffusion, les lignes repartent de là où tu arrives. Avec la traduction activée, chaque ligne est traduite une fois complète. Quand ça parle vite, le lecteur de Kick saute lui-même des lignes faute de place, et celles-là ne peuvent pas arriver sur la carte non plus. L'interrupteur **Lyrics** les garde dans la fenêtre seulement, ou les coupe, comme n'importe quelles paroles. Les streams et rediffusions Twitch, et les clips des deux sites, n'ont pas de paroles.
 
 ### Shorts YouTube
 
@@ -209,11 +223,31 @@ Avec l'extension (2.3.0 ou plus récente), un film ou un épisode qui joue sur p
 - **Watching**, ou **Listening to** si tu préfères : **Settings → Discord presence → Activity type for Prime Video**, aussi à un clic sur le verbe de la carte dans **Now playing**. Ça vaut pour toutes les cartes ;
 - le bouton, **Watch on Prime Video**, ainsi que le titre et l'image, ouvrent la page du titre, ou une recherche sur Prime Video.
 
-**Les sous-titres comme paroles.** Active les sous-titres dans le lecteur de Prime Video et ils s'affichent sur la carte comme les paroles d'une chanson, tels que le lecteur les montre : un sous-titre de deux lignes prend les deux lignes de la carte, et un sous-titre d'une ligne vient sous la ligne d'avant. La fenêtre **Now playing** les marque **Subtitles**. Ils sont lus sur le lecteur, donc dans la langue choisie là, et sans sous-titres rien n'est lu. Si tu avances ou recules, les lignes repartent de là où tu arrives ; l'épisode suivant commence les siennes ; et quand personne n'a parlé depuis 25 secondes, la carte revient au titre. Avec la traduction activée, chaque ligne est traduite. L'interrupteur **Lyrics** les coupe comme n'importe quelles paroles.
+**Les sous-titres comme paroles.** Active les sous-titres dans le lecteur de Prime Video et ils s'affichent sur la carte comme les paroles d'une chanson, tels que le lecteur les montre : un sous-titre de deux lignes prend les deux lignes de la carte, et un sous-titre d'une ligne vient sous la ligne d'avant. La fenêtre **Now playing** les marque **Subtitles**. Ils sont lus sur le lecteur, donc dans la langue choisie là, et sans sous-titres rien n'est lu. Si tu avances ou recules, les lignes repartent de là où tu arrives ; l'épisode suivant commence les siennes ; et quand personne n'a parlé depuis 25 secondes, la carte revient au titre. Avec la traduction activée, chaque ligne est traduite. L'interrupteur **Lyrics** les garde dans la fenêtre seulement, ou les coupe, comme n'importe quelles paroles.
 
 Un film en pause retire sa carte de Discord, comme une chanson en pause. Les films et les épisodes ne sont jamais cherchés comme des chansons et restent hors de l'historique d'écoute, d'**Activity** et de Last.fm. **Settings → Detection → Prime Video** coupe le tout. Sans l'extension, Windows ne voit qu'un onglet de navigateur.
 
 Après une mise à jour de Vybecord, clique sur la flèche de rechargement de l'extension dans la page des extensions de ton navigateur pour qu'elle prenne Prime Video : un navigateur qui a installé l'extension depuis une boutique te demande d'abord d'autoriser les nouveaux sites.
+
+### Netflix
+
+Avec l'extension (2.4.0 ou plus récente), un film ou un épisode qui joue sur netflix.com a lui aussi sa propre carte, sous l'application **Netflix** :
+
+- le nom du film ou de la série, puis l'épisode sous la forme **E3 · Nom**, ou **S1 E3 · Nom** quand le lecteur nomme la saison (rien pour un film) ;
+- le logo de Netflix, puisque la page où tu regardes ne nomme aucune affiche ;
+- la barre de progression, du début du film ou de l'épisode à sa fin ;
+- **Watching**, ou **Listening to** si tu préfères : **Settings → Discord presence → Activity type for Netflix**, aussi à un clic sur le verbe de la carte dans **Now playing**. Ça vaut pour toutes les cartes ;
+- le bouton, **Watch on Netflix**, ainsi que le titre et l'image, ouvrent la page où tu regardes.
+
+Netflix n'affiche le titre que pendant que ses commandes sont à l'écran. Si la carte n'apparaît pas quelques secondes après le début, passe la souris sur la vidéo une fois : tant que le titre ne s'est pas affiché, Vybecord n'a rien pour le nommer. Il garde ensuite le nom tant que tu restes sur ce film ou cet épisode. Quand le lecteur passe de lui-même à l'épisode suivant, la carte nomme seulement la série jusqu'à ce que les commandes réapparaissent.
+
+**Les sous-titres comme paroles**, comme sur Prime Video : active les sous-titres dans le lecteur de Netflix et ils s'affichent sur la carte tels que le lecteur les montre, marqués **Subtitles** dans **Now playing**, dans la langue choisie là. Sans sous-titres, rien n'est lu. Netflix dessine les sous-titres de certaines langues (japonais, chinois, arabe et quelques autres) comme des images, et ceux-là n'ont pas de texte à afficher.
+
+Pendant une pub, la carte quitte Discord comme pour une pause, et revient avec le film. Les films et les épisodes ne sont jamais cherchés comme des chansons et restent hors de l'historique d'écoute, d'**Activity** et de Last.fm. **Settings → Detection → Netflix** coupe le tout.
+
+**Pas encore essayé sur le vrai Netflix.** L'extension lit le lecteur de Netflix d'après ce que d'autres en ont publié, et personne qui travaille sur Vybecord n'avait de compte Netflix pour le vérifier. Si la carte n'apparaît pas, ou affiche n'importe quoi, dis-le avec **Settings → About → Report a problem** pour que ce soit corrigé.
+
+Comme pour Prime Video, après une mise à jour de Vybecord, clique sur la flèche de rechargement de l'extension dans la page des extensions de ton navigateur pour qu'elle prenne Netflix : un navigateur qui a installé l'extension depuis une boutique te demande d'abord d'autoriser le nouveau site.
 
 ### Deux choses jouent en même temps
 
@@ -222,13 +256,13 @@ Sur **Now playing**, ouvre le menu **Source** et choisis le lecteur que tu veux 
 Ou affiche-les toutes. **Settings → Discord presence → Several presences** met jusqu'à cinq cartes sur ton profil : la chanson Spotify en présence 1, la vidéo du navigateur en présence 2, un stream dans un autre onglet en présence 3, par exemple. Ce qui joue avec le rang le plus élevé devient la présence 1 (une appli de musique passe avant une vidéo, une vidéo avant un onglet anonyme), ce qui suit la présence 2, et ainsi de suite. Avec plus d'une carte :
 
 - Les onglets d'un même site sont des choses distinctes : quatre streams Twitch ouverts côte à côte prennent quatre cartes. Une application Discord ne porte qu'une carte, donc une fois les applications de la plateforme prises, les autres en empruntent une — l'application Vybecord par défaut, puis l'application d'une plateforme que rien n'occupe — et la carte nomme sa plateforme dans l'en‑tête de toute façon. La liste **Active Now** de Discord affiche par contre le logo de l'application empruntée, donc une carte retourne sur l'application de sa plateforme dès qu'il y en a une de libre.
-- **Lyrics on presence N** choisit quelles cartes affichent les paroles — n'importe quelle combinaison.
+- **Lyrics on presence N** choisit quelles cartes affichent les paroles, et lesquelles les gardent dans Vybecord seulement — n'importe quelle combinaison.
 - **Activity type on presence N** donne à chaque carte son propre verbe : *Listening* pour la chanson, *Watching* pour le stream. Les cartes 2 à 5 disent la même chose que la présence 1 tant que tu ne les changes pas.
 - **Now playing** montre toutes les cartes du côté **On Discord** ; clique sur une petite carte pour voir ses paroles et l'afficher en grand. Son menu **Source** épingle cette présence à un lecteur, pour qu'elle ne s'échange jamais avec une autre, et un clic sur ses parties les modifie.
 - L'historique d'écoute (et donc **Activity**) et Last.fm ne suivent que la présence 1.
-- Avec les paroles sur deux cartes ou plus, les cartes peuvent changer de place sur ton profil à chaque ligne : Discord met en haut la carte qui vient de changer, et Vybecord ne peut pas imposer l'ordre. La fenêtre te prévient quand les paroles s'activent sur une deuxième carte. Une carte *Playing* passe toujours au-dessus des cartes *Listening* et *Watching*.
+- Avec les paroles sur deux cartes ou plus, les cartes peuvent changer de place sur ton profil à chaque ligne : Discord met en haut la carte qui vient de changer, et Vybecord ne peut pas imposer l'ordre. La fenêtre te prévient quand les paroles s'activent sur une deuxième carte. Mettre les autres cartes sur **In Vybecord only** garde leurs paroles dans la fenêtre et l'ordre stable. Une carte *Playing* passe toujours au-dessus des cartes *Listening* et *Watching*.
 
-Chaque carte est une application Discord à part. Spotify, SoundCloud, Apple Music et Prime Video en ont une chacun, YouTube trois, et Kick et Twitch cinq chacun : jusqu'à cinq streams Kick ou Twitch gardent tous leur logo. Une carte dont la plateforme n'a plus d'application libre en emprunte une autre. Avec celle par défaut, ça fait dix-huit applications pour cinq cartes au maximum : il n'y a rien à configurer.
+Chaque carte est une application Discord à part. Spotify, SoundCloud, Apple Music, Prime Video et Netflix en ont une chacun, YouTube trois, et Kick et Twitch cinq chacun : jusqu'à cinq streams Kick ou Twitch gardent tous leur logo. Une carte dont la plateforme n'a plus d'application libre en emprunte une autre. Avec celle par défaut, ça fait dix-neuf applications pour cinq cartes au maximum : il n'y a rien à configurer.
 
 ---
 
