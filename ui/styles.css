@@ -3524,15 +3524,23 @@ html[data-theme='light'] {
   }
 }
 
-/* Publish several — library.js (openPublishMany), and the button that opens it. */
+/* Publish several — library.js (openPublishMany), and the button that opens it.
+   The toolbar wraps: with Import and Export beside it, the search box was down
+   to "Sear" at the window's minimum width. The buttons go under it as one row. */
 .lib-toolbar {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   align-items: center;
 }
 .lib-toolbar .search {
-  flex: 1 1 auto;
+  flex: 1 1 200px;
   min-width: 0;
+}
+.lib-actions {
+  display: flex;
+  flex: none;
+  gap: 8px;
 }
 .lib-toolbar .btn {
   flex: none;
@@ -3636,6 +3644,157 @@ html[data-theme='light'] {
 }
 .pub-row:not(.is-ready) .pub-row-title {
   color: var(--text-secondary);
+}
+
+/* Export and Import as a file — library.js (exportToFile, importFromFile). */
+.share-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 14px;
+}
+.share-path {
+  margin: 6px 0 14px;
+  padding: 9px 12px;
+  font-family: 'Cascadia Mono', ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-all;
+  color: var(--text-secondary);
+  background: var(--bg-sunken);
+  border: 1px solid var(--border-d);
+  border-radius: 10px;
+  user-select: text;
+}
+.share-sum {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin: 16px 0 12px;
+  padding: 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.share-sum li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.share-sum b {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.share-mark {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-d);
+}
+.share-mark.is-new {
+  color: var(--accent-text);
+}
+.share-mark.is-diff {
+  color: var(--amber);
+}
+.share-skipped,
+.share-note {
+  margin-bottom: 12px;
+  font-size: 12.5px;
+}
+.share-new {
+  margin-bottom: 14px;
+  font-size: 13px;
+}
+.share-new summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.share-new ul {
+  max-height: 180px;
+  overflow-y: auto;
+  margin: 8px 0 0;
+  padding: 8px 12px 8px 30px;
+  line-height: 1.6;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-s);
+  border-radius: var(--r-md);
+}
+.share-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin: 4px 0 10px;
+}
+.share-head h3 {
+  margin: 0 0 2px;
+  font-size: 14px;
+}
+.share-head .muted {
+  font-size: 12.5px;
+}
+.share-head .btn {
+  flex: none;
+}
+.share-row {
+  flex-wrap: wrap;
+}
+.share-row .pub-row-main {
+  align-items: flex-start;
+}
+.share-row .pub-row-main input {
+  margin-top: 2px;
+}
+.share-versions {
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+.share-versions b {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.share-row .pub-row-status {
+  flex: none;
+}
+.share-compare {
+  flex: 1 1 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  margin: 2px 0 4px 26px;
+}
+.share-compare[hidden] {
+  display: none;
+}
+.share-pane-head {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.share-pane .pub-preview {
+  max-height: 220px;
+  margin-top: 4px;
+}
+@media (max-width: 560px) {
+  .share-compare {
+    grid-template-columns: minmax(0, 1fr);
+    margin-left: 0;
+  }
 }
 
 /* ── Tabs ─────────────────────────────────────────────────────────────────── */

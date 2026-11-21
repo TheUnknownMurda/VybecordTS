@@ -25,12 +25,14 @@
 
 import Database from 'better-sqlite3';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { Worker } from 'node:worker_threads';
 import { createLogger, type LogLevel } from './logger.js';
 import { normalizeUserPath } from './config.js';
 import { parseLrc } from './lrc-parser.js';
 import type { LrclibSearchResult, LrclibTrackLyrics } from './lrclib-dump.js';
+import type { SharedLyrics, StoredSong } from './lyrics-share.js';
 import type { LyricLine } from './types.js';
 
 export type { LrclibSearchResult, LrclibTrackLyrics };
@@ -1006,6 +1008,192 @@ export function deleteCustomLyrics(trackId: number): boolean {
   } catch (e) {
     log.warn(`[LOCAL] deleteCustomLyrics error: ${e}`);
     return false;
+  }
+}
+
+// ── Sharing as a file ── (the file itself: src/core/lyrics-share.ts)
+
+/**
+ * Every imported entry, as Export writes it and as Import compares against it:
+ * the rows My lyrics lists, oldest first, so a file reads in the order the
+ * library grew.
+ *
+ * `created_at` is the lyrics row's rather than the track's. It is what orders
+ * My lyrics, and what decides which of two entries for one song plays, so it
+ * is the date that has to travel for the other side to end up the same.
+ *
+ * Throws rather than answering an empty list on failure: the export would
+ * write an empty file without a word, and the import would take every song in
+ * the file for a new one and add a second copy of each.
+ */
+export function customLyricsForSharing(): StoredSong[] {
+  if (!customDb) throw new Error('The lyrics database is not open');
+  const rows = customDb.prepare(`
+    SELECT t.id AS trackId, t.name AS track, t.artist_name AS artist, t.album_name AS album,
+           t.duration AS duration, coalesce(l.synced_lyrics, '') AS lyrics, l.created_at AS created_at,
+           max(coalesce(t.updated_at, ''), coalesce(l.updated_at, ''), coalesce(l.created_at, '')) AS updated_at
+    FROM tracks t
+    JOIN lyrics l ON l.id = t.last_lyrics_id
+    WHERE l.source = 'custom'
+    ORDER BY l.created_at, t.id
+  `).all() as StoredSong[];
+  return rows.map((r) => ({
+    ...r,
+    artist: r.artist ?? '',
+    album: r.album ?? '',
+    duration: typeof r.duration === 'number' && r.duration > 0 ? r.duration : null,
+    created_at: r.created_at || null,
+    updated_at: r.updated_at || null,
+  }));
+}
+
+/**
+ * Add the entries in `add`, and give the ones in `replace` new lyrics, in one
+ * transaction: an import that fails partway leaves the store as it was rather
+ * than holding half a friend's library.
+ *
+ * Added entries keep their own dates, so My lyrics sorts them by when they
+ * were made rather than piling them all on top as of today, and of two entries
+ * for one song the same one plays as on the sender's machine.
+ *
+ * A replaced entry keeps its row, its title and artist as the user spelled
+ * them, and its place in the list. It takes the other side's lyrics, with
+ * their album and duration when they have them: timings only fit the
+ * recording they were made against, and an album and duration are what LRCLIB
+ * asks for before it accepts an entry.
+ */
+export function mergeCustomLyrics(
+  add: readonly SharedLyrics[],
+  replace: readonly { trackId: number; entry: SharedLyrics }[],
+): { added: number; replaced: number } {
+  if (!customDb || !stmtInsertLyrics || !stmtInsertTrack || !stmtInsertFts || !stmtBacklinkLyrics) {
+    throw new Error('Custom DB not initialized');
+  }
+  const db = customDb;
+  const insertLyrics = stmtInsertLyrics;
+  const insertTrack = stmtInsertTrack;
+  const insertFts = stmtInsertFts;
+  const backlink = stmtBacklinkLyrics;
+  const now = new Date().toISOString();
+
+  const readTrack = db.prepare(`
+    SELECT t.name AS name, t.artist_name AS artist, t.album_name AS album, t.duration AS duration, l.id AS lyricsId
+    FROM tracks t JOIN lyrics l ON l.id = t.last_lyrics_id
+    WHERE t.id = ? AND l.source = 'custom'
+  `);
+  const setLyrics = db.prepare('UPDATE lyrics SET synced_lyrics = ?, updated_at = ? WHERE id = ?');
+  const setTrack = db.prepare('UPDATE tracks SET album_name = ?, album_name_lower = lower(?), duration = ?, updated_at = ? WHERE id = ?');
+  const dropFts = db.prepare('DELETE FROM tracks_fts WHERE rowid = ?');
+
+  const tx = db.transaction(() => {
+    let added = 0;
+    let replaced = 0;
+    for (const e of add) {
+      const created = e.created_at ?? now;
+      const updated = e.updated_at ?? created;
+      const lyricsId = insertLyrics.run(e.lyrics, created, updated).lastInsertRowid as number;
+      const trackId = insertTrack.run(
+        e.track, e.track, e.artist, e.artist, e.album, e.album, e.duration, lyricsId, created, updated,
+      ).lastInsertRowid as number;
+      backlink.run(trackId, lyricsId);
+      insertFts.run(trackId, e.track, e.album, e.artist);
+      added++;
+    }
+    for (const { trackId, entry } of replace) {
+      const row = readTrack.get(trackId) as
+        { name: string; artist: string; album: string; duration: number | null; lyricsId: number } | undefined;
+      // Deleted or changed into something else since the preview: nothing left to replace.
+      if (!row) continue;
+      const album = entry.album || row.album || '';
+      const duration = entry.duration ?? row.duration ?? null;
+      // The index row goes before the track changes, not after: the FTS table
+      // takes its content from `tracks`, and a delete removes whatever words
+      // `tracks` holds at that moment. Done after, it would remove the new
+      // album's words and leave the old ones behind. Nothing queries this
+      // index in the custom store, so it stays best-effort, as in
+      // updateCustomLyrics.
+      const albumChanged = album !== row.album;
+      if (albumChanged) {
+        try { dropFts.run(trackId); } catch { /* best-effort, see above */ }
+      }
+      setLyrics.run(entry.lyrics, now, row.lyricsId);
+      setTrack.run(album, album, duration, now, trackId);
+      if (albumChanged) {
+        try { insertFts.run(trackId, row.name, album, row.artist); } catch { /* best-effort */ }
+      }
+      replaced++;
+    }
+    return { added, replaced };
+  });
+
+  const result = tx();
+  log.info(`[LOCAL] Import merged: ${result.added} added, ${result.replaced} replaced`);
+  return result;
+}
+
+const NOT_A_STORE = 'This database is not a Vybecord lyrics store (custom-lyrics.sqlite3).';
+
+/**
+ * The entries in another Vybecord's custom-lyrics.sqlite3, for an import.
+ *
+ * Read from a private copy in the temp folder, never in place: opening a
+ * database leaves -wal and -shm files beside it, which have no business in a
+ * friend's Downloads folder, and the file picked may be the user's own live
+ * store. A -wal found beside the original is copied along, since it can hold
+ * writes the main file does not have yet.
+ *
+ * Columns that older stores lack fall back to empty: `source` and the dates
+ * were added to the schema over time (see openCustomDb). The rows come back
+ * unchecked; lyrics-share.ts cleans them exactly as it cleans a JSON file's.
+ */
+export function readLyricsStoreFile(filePath: string): Record<string, unknown>[] {
+  const tmp = path.join(os.tmpdir(), `vybecord-import-${process.pid}-${Date.now()}.sqlite3`);
+  let db: Database.Database | null = null;
+  try {
+    try {
+      fs.copyFileSync(filePath, tmp);
+      if (fs.existsSync(`${filePath}-wal`)) fs.copyFileSync(`${filePath}-wal`, `${tmp}-wal`);
+    } catch (e) {
+      throw new Error(`Could not read this file: ${(e as Error).message}`);
+    }
+    try {
+      db = new Database(tmp, { fileMustExist: true });
+      const conn = db;
+      const columns = (table: string) =>
+        new Set((conn.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name));
+      const t = columns('tracks');
+      const l = columns('lyrics');
+      if (!t.has('name') || !t.has('last_lyrics_id') || !l.has('id') || !l.has('synced_lyrics')) {
+        throw new Error(NOT_A_STORE);
+      }
+      const col = (have: Set<string>, alias: string, name: string, fallback: string) =>
+        have.has(name) ? `${alias}.${name}` : fallback;
+      // A dump-style row keeps untimed lyrics apart; the custom store keeps everything in synced_lyrics.
+      const lyrics = l.has('plain_lyrics')
+        ? `CASE WHEN trim(coalesce(l.synced_lyrics, '')) <> '' THEN l.synced_lyrics ELSE l.plain_lyrics END`
+        : 'l.synced_lyrics';
+      return conn.prepare(`
+        SELECT t.name AS track,
+               ${col(t, 't', 'artist_name', "''")} AS artist,
+               ${col(t, 't', 'album_name', "''")} AS album,
+               ${col(t, 't', 'duration', 'NULL')} AS duration,
+               ${lyrics} AS lyrics,
+               ${col(l, 'l', 'created_at', 'NULL')} AS created_at,
+               ${col(l, 'l', 'updated_at', 'NULL')} AS updated_at
+        FROM tracks t
+        JOIN lyrics l ON l.id = t.last_lyrics_id
+        ${l.has('source') ? `WHERE coalesce(l.source, 'custom') = 'custom'` : ''}
+        ORDER BY ${l.has('created_at') ? 'l.created_at, ' : ''}t.rowid
+      `).all() as Record<string, unknown>[];
+    } catch (e) {
+      if ((e as Error).message !== NOT_A_STORE) log.warn(`[LOCAL] Could not read ${filePath} as a lyrics store: ${e}`);
+      throw new Error(NOT_A_STORE);
+    }
+  } finally {
+    try { db?.close(); } catch { /* ignore */ }
+    for (const f of [tmp, `${tmp}-wal`, `${tmp}-shm`]) {
+      try { fs.rmSync(f, { force: true }); } catch { /* the temp folder is cleaned eventually anyway */ }
+    }
   }
 }
 

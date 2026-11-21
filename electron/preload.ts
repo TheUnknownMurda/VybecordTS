@@ -101,6 +101,21 @@ const api = {
   deleteCustom: (id: number) => invoke('custom:delete', id),
   checkExistingCustom: (track: string, artist: string, album: string, duration?: number) =>
     invoke('custom:checkExisting', track, artist, album, duration),
+  /** Save every entry to a file the user picks. `empty` when there is nothing to save. */
+  exportCustom: () => invoke<
+    | { ok: true; count: number; path: string }
+    | { ok: false; cancelled?: boolean; empty?: boolean }
+  >('custom:export'),
+  revealCustomExport: () => invoke<{ ok: boolean }>('custom:revealExport'),
+  /**
+   * Pick a file to import and say what importing it would do — see
+   * ImportPreview in src/core/lyrics-share.ts. Nothing is written yet.
+   */
+  pickCustomImport: () => invoke('custom:importPick'),
+  /** Run the import picked last; `replaceKeys` are the songs to take the file's version of. */
+  applyCustomImport: (token: string, replaceKeys: string[]) =>
+    invoke<{ ok: true; added: number; replaced: number; kept: number; same: number }>('custom:importApply', token, replaceKeys),
+  cancelCustomImport: () => invoke('custom:importCancel'),
 
   // ── LRCLIB dump ──
   lrclibStatus: () => invoke<{ loaded: boolean; path: string; folder: string; configured: string }>('lrclib:status'),

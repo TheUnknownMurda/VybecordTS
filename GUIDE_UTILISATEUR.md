@@ -44,7 +44,7 @@ Les mises à jour se téléchargent toutes seules et s'installent quand tu quitt
 | Page | À quoi ça sert |
 | --- | --- |
 | **Now playing** | Deux côtés, comme un miroir. **On your screen**, à gauche : le morceau en cours (pochette, titre, artiste, album, lecteur et progression ; en pause, il reste affiché avec sa barre arrêtée, jusqu'à ce que tu fermes le lecteur ou que tu coupes sa détection) et les paroles qui défilent (clique dessus pour voir tout le morceau, ou sur **Big lyrics** pour les afficher en grand dans toute la fenêtre, comme Spotify ; **Échap** ferme). Des paroles trouvées sans minutage s'affichent en texte simple à faire défiler, marquées **Words only**. **On Discord**, à droite : ta carte telle que tes amis la voient, avec son menu **Source**, qui choisit le lecteur suivi. **Clique sur n'importe quelle partie de la carte** (ou sur **Customize**) pour la modifier : ce qu'affichent les lignes, le verbe, l'icône sur la pochette, ton bouton… Au milieu, des interrupteurs avec une flèche vers le côté qu'ils changent : **Visible** retire ton statut de Discord ou le remet, **Lyrics** active ou coupe les paroles des deux côtés, **Romanise** et l'un des deux **Translate** agissent sur Discord, l'autre **Translate** sur la fenêtre, et **Hide on Discord when** gère les pauses, l'absence et les pubs Spotify. **Why?** dit ce qui empêche ta carte d'apparaître sur Discord, avec un bouton pour corriger. |
-| **Lyrics** | Ta bibliothèque de paroles perso : **My lyrics**, **Blocked** (les paroles signalées comme fausses) et le dump **LRCLIB** hors ligne. **Add lyrics** sert à importer ou écrire de nouvelles paroles, et chaque entrée de **My lyrics** peut être partagée sur LRCLIB (voir plus bas). |
+| **Lyrics** | Ta bibliothèque de paroles perso : **My lyrics**, **Blocked** (les paroles signalées comme fausses) et le dump **LRCLIB** hors ligne. **Add lyrics** sert à importer ou écrire de nouvelles paroles, chaque entrée de **My lyrics** peut être partagée sur LRCLIB, et **Export** et **Import** partagent toute la bibliothèque avec un ami (voir plus bas). |
 | **Activity** | Ce que tu as écouté sur 7 jours, 30 jours, 12 mois ou depuis toujours, pour toute ta musique ou une seule plateforme (choisis-la dans la rangée de pastilles, ou clique dessus sous **By platform**) : temps d'écoute et comparaison avec la période d'avant, graphique, part de chaque plateforme, les heures de la semaine où tu écoutes le plus, tes records et tes séries, top artistes, titres et albums, les artistes que tu découvres, et tes dernières écoutes (**See all** ouvre tout l'historique). Twitch et Kick, sous **Live**, ont leur propre vue : chaînes, catégories et séances, qui ne comptent pas dans le total de la musique. La page se met à jour toute seule à la fin de chaque morceau. |
 | **Settings** | Discord presence, Lyrics & translation, Detection, Integrations (extension navigateur, Spotify par Spicetify ou ta propre app Spotify, Last.fm), App & window et About. La barre de recherche trouve n'importe quel réglage. |
 | **Help & setup** | La liste de configuration, en bas de la barre latérale. |
@@ -52,6 +52,20 @@ Les mises à jour se téléchargent toutes seules et s'installent quand tu quitt
 Le bas de la barre latérale indique aussi si Discord est connecté et ce qui est détecté.
 
 Astuce : les touches **1 à 4** passent de Now playing à Lyrics, Activity et Settings. **Ctrl+Q** quitte l'appli.
+
+### Partager tes paroles avec un ami
+
+Dans **Lyrics → My lyrics**, **Export** (à côté de la barre de recherche) enregistre toutes tes paroles dans un seul fichier, à envoyer à un ami, sur Discord par exemple.
+
+Pour ajouter les paroles d'un ami aux tiennes, clique sur **Import** sur la même page et choisis le fichier qu'il t'a envoyé. Avant que quoi que ce soit soit enregistré, la fenêtre dit ce qui va se passer :
+
+- Les chansons que tu n'as pas sont ajoutées.
+- Les chansons que tu as déjà, avec les mêmes paroles, restent comme elles sont.
+- Les chansons que tu as déjà avec d'autres paroles gardent les tiennes, sauf si tu coches les siennes. **Compare** montre les deux versions côte à côte, et **Use theirs for all** les coche toutes.
+
+Rien de ce que tu as déjà n'est supprimé. Le fichier sert aussi de sauvegarde : importe-le dans une nouvelle installation pour retrouver tes paroles. Un `custom-lyrics.sqlite3` copié depuis un autre dossier de données s'importe de la même façon.
+
+Pour importer ton fichier, ton ami doit avoir une version de Vybecord qui a **Import**. Copier `custom-lyrics.sqlite3` dans un dossier de données remplace plutôt toute la bibliothèque qui s'y trouve.
 
 ### Partager tes paroles sur LRCLIB
 

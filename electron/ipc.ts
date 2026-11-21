@@ -16,8 +16,8 @@
  * failure mode that has nothing to do with who is calling.
  */
 
-import { ipcMain, shell, app, type BrowserWindow } from 'electron';
-import { createHash } from 'node:crypto';
+import { ipcMain, shell, app, dialog, type BrowserWindow } from 'electron';
+import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -35,6 +35,7 @@ import {
 } from '../src/core/translate.js';
 import { ytDlpStatus, ytDlpDropDir } from '../src/core/youtube-captions.js';
 import { sanitizeEdits, publishFailure, LrclibPublishError } from '../src/core/lrclib-publish.js';
+import { readLyricsImportFile, type SharedLyrics } from '../src/core/lyrics-share.js';
 import { SIGN_IN_CANCELLED } from '../src/core/spotify-auth.js';
 import {
   extensionPath, extensionExists, detectBrowsers,
@@ -309,6 +310,84 @@ export function registerIpc(
   handle('custom:delete', (id: number) => ({ ok: backend.deleteCustomLyricsEntry(id) }));
   handle('custom:checkExisting', (track: string, artist: string, album: string, duration?: number) =>
     backend.checkExistingCustomLyrics(track, artist, album, duration));
+
+  // ── My lyrics as a file: Export and Import (src/core/lyrics-share.ts) ──
+  /*
+   * The file dialogs open here rather than through an <input type="file"> in
+   * the window: the renderer gets no path and no file contents, only what an
+   * import would do. The entries read for an import wait here until the user
+   * confirms, under a token, so the import that runs is the file that was
+   * previewed and the renderer cannot hand back entries of its own.
+   */
+  let lastExportPath = '';
+  /** Where the last export or import was, so the next dialog opens there. */
+  let lastLyricsDir = '';
+  let pendingImport: { token: string; entries: SharedLyrics[] } | null = null;
+
+  /** Today as YYYY-MM-DD on the user's clock, for the export's file name. */
+  const localDate = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  handle('custom:export', async () => {
+    const count = backend.countCustomLyrics();
+    if (!count) return { ok: false, empty: true };
+    const win = getWindow();
+    const options = {
+      title: 'Export my lyrics',
+      defaultPath: path.join(lastLyricsDir || app.getPath('documents'), `Vybecord lyrics ${localDate()}.json`),
+      buttonLabel: 'Export',
+      filters: [{ name: 'Vybecord lyrics', extensions: ['json'] }],
+    };
+    const res = win && !win.isDestroyed() ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
+    if (res.canceled || !res.filePath) return { ok: false, cancelled: true };
+    const written = await backend.exportCustomLyricsFile(res.filePath, app.getVersion());
+    lastExportPath = res.filePath;
+    lastLyricsDir = path.dirname(res.filePath);
+    return { ok: true, count: written, path: res.filePath };
+  });
+  handle('custom:revealExport', () => {
+    if (!lastExportPath || !fs.existsSync(lastExportPath)) return { ok: false };
+    shell.showItemInFolder(lastExportPath);
+    return { ok: true };
+  });
+
+  handle('custom:importPick', async () => {
+    const win = getWindow();
+    const options = {
+      title: 'Import lyrics',
+      // A file a friend sent over Discord lands in Downloads.
+      defaultPath: lastLyricsDir || app.getPath('downloads'),
+      buttonLabel: 'Open',
+      properties: ['openFile' as const],
+      filters: [
+        { name: 'Vybecord lyrics', extensions: ['json', 'sqlite3'] },
+        { name: 'All files', extensions: ['*'] },
+      ],
+    };
+    const res = win && !win.isDestroyed() ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
+    const file = res.filePaths?.[0];
+    if (res.canceled || !file) return { ok: false, cancelled: true };
+    lastLyricsDir = path.dirname(file);
+    // Whatever was read before belongs to a window that is gone by now.
+    pendingImport = null;
+    const { entries, skipped } = await readLyricsImportFile(file);
+    const token = randomUUID();
+    pendingImport = { token, entries };
+    log.info(`Import picked: ${path.basename(file)} (${entries.length} entries, ${skipped} unusable)`);
+    return { ok: true, token, fileName: path.basename(file), skipped, ...backend.previewCustomLyricsImport(entries) };
+  });
+  handle('custom:importApply', (token: string, replaceKeys?: unknown) => {
+    if (!pendingImport || pendingImport.token !== token) {
+      throw new Error('This import is no longer open. Click Import and pick the file again.');
+    }
+    const keys = new Set(Array.isArray(replaceKeys) ? replaceKeys.filter((k): k is string => typeof k === 'string') : []);
+    const result = backend.applyCustomLyricsImport(pendingImport.entries, keys);
+    pendingImport = null;
+    return { ok: true, ...result };
+  });
+  handle('custom:importCancel', () => { pendingImport = null; return { ok: true }; });
 
   // ── LRCLIB dump search ──
   handle('lrclib:status', () => backend.getLrclibDumpStatus());

@@ -44,7 +44,7 @@ Updates download on their own and install when you quit. The first time you open
 | Page | What it does |
 | --- | --- |
 | **Now playing** | Two sides, like a mirror. **On your screen**, on the left: the current track (cover, title, artist, album, player and progress; paused, it stays on the card with its bar stopped, until you close the player or switch its detection off) and the scrolling lyrics (click them for the whole song, or **Big lyrics** to fill the window with them, Spotify style; **Esc** closes it). Lyrics found without timings show as plain text you can scroll, marked **Words only**. **On Discord**, on the right: your card as your friends see it, with its **Source** menu, which picks the player it follows. **Click any part of the card** (or **Customize**) to change it: what the lines show, the verb, the icon on the cover, your button… In the middle, switches with an arrow toward the side they change: **Visible** takes your status off Discord or puts it back, **Lyrics** turns them on or off on both sides, **Romanise** and one of the two **Translate** act on Discord, the other **Translate** on the window, and **Hide on Discord when** covers pauses, being away and Spotify ads. **Why?** says what is keeping your card off Discord, with a button to fix it. |
-| **Lyrics** | Your own lyrics library: **My lyrics**, **Blocked** (lyrics you marked as wrong) and the offline **LRCLIB dump**. **Add lyrics** imports or writes new ones, and each entry of **My lyrics** can be shared on LRCLIB (see below). |
+| **Lyrics** | Your own lyrics library: **My lyrics**, **Blocked** (lyrics you marked as wrong) and the offline **LRCLIB dump**. **Add lyrics** imports or writes new ones, each entry of **My lyrics** can be shared on LRCLIB, and **Export** and **Import** share the whole library with a friend (see below). |
 | **Activity** | What you listened to over 7 days, 30 days, 12 months or all time, for all your music or one platform (pick it in the row of chips, or click it under **By platform**): time listened and how it compares with the period before, a chart, each platform's share, the hours of the week you listen most, your records and streaks, top artists, tracks and albums, the artists new to you, and your recent plays (**See all** opens the full history). Twitch and Kick, under **Live**, have a view of their own: channels, categories and sittings, kept out of the music totals. It updates by itself as songs finish. |
 | **Settings** | Discord presence, Lyrics & translation, Detection, Integrations (browser extension, Spotify through Spicetify or your own Spotify app, Last.fm), App & window, and About. The search box finds any setting. |
 | **Help & setup** | The setup checklist, at the bottom of the sidebar. |
@@ -52,6 +52,20 @@ Updates download on their own and install when you quit. The first time you open
 The bottom of the sidebar also says whether Discord is connected and what is being detected.
 
 Tip: keys **1–4** jump between Now playing, Lyrics, Activity and Settings. **Ctrl+Q** quits.
+
+### Sharing your lyrics with a friend
+
+In **Lyrics → My lyrics**, **Export** (next to the search box) saves all your lyrics to one file, to send to a friend, over Discord for instance.
+
+To add a friend's lyrics to yours, click **Import** on the same page and pick the file they sent. Before anything is saved, the window says what will happen:
+
+- Songs you don't have are added.
+- Songs you already have, with the same lyrics, are left as they are.
+- Songs you already have with other lyrics keep yours, unless you tick theirs. **Compare** shows both versions side by side, and **Use theirs for all** ticks every one.
+
+Nothing you already have is deleted. The file also works as a backup: import it into a new install to get your lyrics back. A `custom-lyrics.sqlite3` copied out of another data folder can be imported the same way.
+
+To import your file, your friend needs a version of Vybecord that has **Import**. Copying `custom-lyrics.sqlite3` into a data folder instead replaces the whole library there.
 
 ### Sharing your lyrics on LRCLIB
 
