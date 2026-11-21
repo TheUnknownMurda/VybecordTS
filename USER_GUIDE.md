@@ -167,6 +167,8 @@ The optional browser extension fixes that. **Settings → Integrations → Brows
 
 Its icon opens a settings page with a switch per site — Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick, Prime Video, Netflix — all on by default, and the optional **Share my YouTube sign-in for captions** switch (off by default, see the captions section above).
 
+Once it is loaded, the card shows **Connected** within half a minute, even with nothing playing, along with the version running, what it is sending and which sites are switched off in its settings. It says **Checking…** for the first half minute after Vybecord starts. After a Vybecord update that brings a newer extension, it says **Update needed**: click the reload arrow on the extension in your browser's extensions page.
+
 With it, each site is identified properly, the presence links straight to the track, and the progress bar reads the page's own audio element instead of the coarser system position. Without it, everything below still applies.
 
 ### Spotify details without Spicetify
