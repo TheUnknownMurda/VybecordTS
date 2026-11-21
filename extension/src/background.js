@@ -75,11 +75,18 @@ const ready = chrome.storage.sync.get(DEFAULTS).then((stored) => {
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'sync') return;
+  let switched = false;
   for (const [key, { newValue }] of Object.entries(changes)) {
     // `newValue === undefined` means the key was removed, which is a reset to
     // the default rather than a switch-off — hence `!== false` and not truthiness.
-    if (key in enabled) enabled[key] = newValue === undefined ? DEFAULTS[key] : newValue !== false;
+    if (key in enabled) {
+      enabled[key] = newValue === undefined ? DEFAULTS[key] : newValue !== false;
+      switched = true;
+    }
   }
+  // The app's card lists the sites switched off here; tell it now rather than
+  // at the next hello, half a minute later.
+  if (switched) void hello(true);
 });
 
 /**
@@ -260,3 +267,72 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     .then((up) => sendResponse({ connected: up, enabled }));
   return true;
 });
+
+/**
+ * Saying hello, so the app can tell the extension is there with nothing playing.
+ *
+ * Every push above comes from a site script, and a site script only pushes
+ * while something plays. So the app could call the extension connected only
+ * once a song or a stream was going, and its card under Settings →
+ * Integrations said "Not detected" to someone who had just installed it and
+ * opened Settings to check, which is when the answer matters most. This says
+ * hello on every wake and on an alarm every 30 seconds, whatever plays; the
+ * app counts the extension as there for 90 seconds after anything it sends
+ * (src/core/extension-link.ts).
+ *
+ * An alarm, because nothing else keeps time here: the browser shuts this worker
+ * down after 30 seconds idle (Firefox suspends its event page the same way),
+ * and a timer goes with it. Half a minute is the shortest period Chrome gives a
+ * packed extension since Chrome 120, a minute before that. Alarms are not
+ * promised to survive a browser restart, so every wake checks that it is there.
+ *
+ * The body is this extension's version and its site switches, nothing about
+ * what plays, so the card can say which version runs and which sites are off.
+ * Any HTTP answer means the app is there, as in probeApp(): an app older than
+ * the hello answers 404 and is still running.
+ */
+const HELLO_ALARM = 'vybecord-hello';
+const HELLO_PERIOD_MINUTES = 0.5;
+/** A wake by the alarm runs both the top level and the listener: one hello is enough. */
+const HELLO_MIN_GAP_MS = 5_000;
+let lastHello = 0;
+
+async function hello(force = false) {
+  if (!force && Date.now() - lastHello < HELLO_MIN_GAP_MS) return;
+  lastHello = Date.now();
+  // The switches must be the user's, not the defaults: see `ready`.
+  await ready;
+  try {
+    await fetch(APP_BASE + '/api/hello', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ version: chrome.runtime.getManifest().version, sites: enabled }),
+    });
+    setBadge(true);
+  } catch {
+    setBadge(false);
+  }
+}
+
+async function keepSayingHello() {
+  try {
+    // Created only when missing: creating it again would restart its clock on
+    // every wake. Awaiting create() is harmless where it returns nothing.
+    if (!(await chrome.alarms.get(HELLO_ALARM))) {
+      await chrome.alarms.create(HELLO_ALARM, { periodInMinutes: HELLO_PERIOD_MINUTES });
+    }
+  } catch {
+    // No alarm leaves the hellos to wakes, and pushes still count while
+    // something plays: the card is no worse off than before the hello.
+  }
+}
+
+// Optional chaining, because Chrome refuses to start a service worker whose
+// first run throws, and that would take every push down with the hello. A
+// browser with no `alarms` (the permission missing from the manifest it
+// loaded) still says hello on each wake.
+chrome.alarms?.onAlarm.addListener((alarm) => {
+  if (alarm.name === HELLO_ALARM) void hello();
+});
+if (chrome.alarms) void keepSayingHello();
+void hello();

@@ -544,14 +544,23 @@ function extensionCard() {
      * not being installed, which the steps below fix. The other is the app not
      * having been able to open the port the extension pushes to, which they
      * cannot fix — and following them anyway is a loop that never closes.
+     *
+     * Connected means the extension is there, playing or not: it says hello
+     * every 30 seconds. An older copy than the one this app ships outranks it,
+     * as on the Spicetify card: everything else about an old copy that still
+     * reports looks fine, which is why it is worth saying.
      */
     const status = info.connected
-      ? el('span', { class: 'badge accent', text: 'Connected' })
+      ? info.outdated
+        ? el('span', { class: 'badge', text: 'Update needed' })
+        : el('span', { class: 'badge accent', text: 'Connected' })
       : !info.enabled
         ? el('span', { class: 'badge', text: 'Turned off' })
         : info.portBlocked
           ? el('span', { class: 'badge', style: 'color:var(--red)', text: 'Port 8888 unavailable' })
-          : el('span', { class: 'badge', text: 'Not detected' });
+          : info.waiting
+            ? el('span', { class: 'badge', text: 'Checking…' })
+            : el('span', { class: 'badge', text: 'Not detected' });
 
     const chromium = info.browsers.filter((b) => b.family === 'chromium');
     const firefox = info.browsers.filter((b) => b.family === 'firefox');
@@ -623,6 +632,21 @@ function extensionCard() {
       ]),
 
       // '' rather than null: replaceChildren turns null into the text "null".
+      info.connected
+        ? el('div', { class: 'row-desc', style: 'margin-top:8px;max-width:none' }, extensionDetail(info))
+        : '',
+
+      info.connected && info.outdated
+        ? el('div', { class: 'notice is-warn', style: 'margin:12px 0 0' }, [
+            el('b', { text: 'An older copy is running in your browser. ' }),
+            el('span', {
+              text: `This Vybecord comes with ${info.bundledVersion}. `
+                + 'Click the reload arrow on Vybecord in your browser’s extensions page so it picks up the new one. '
+                + 'If you installed it from a downloaded zip, load this app’s folder instead (Install it, below).',
+            }),
+          ])
+        : '',
+
       info.portBlocked
         ? el('div', { class: 'notice is-warn', style: 'margin:12px 0 0' },
             'Another program is holding 127.0.0.1:8888, so the extension has nowhere to send to. '
@@ -640,13 +664,32 @@ function extensionCard() {
   };
 
   paint();
-  // The status only becomes "Connected" once something plays, so keep looking.
+  // What it sends changes as things play, and a fresh start reads "Checking…"
+  // until the extension's first hello, so keep looking.
   const timer = setInterval(() => {
     if (!card.isConnected) { clearInterval(timer); return; }
     paint();
   }, 4000);
 
   return card;
+}
+
+/**
+ * What a connected extension is up to, in a sentence or two.
+ *
+ * "Connected" alone left the question people opened the card with: with
+ * nothing playing, is it working? So it says that nothing is being sent and
+ * why, and names the sites switched off in the extension, the usual reason a
+ * tab is missing from Discord with the extension connected.
+ */
+function extensionDetail(info) {
+  const names = (list) => list.length < 2 ? list.join('') : `${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}`;
+  const running = info.version ? `Version ${info.version} is running in your browser.` : 'It is running in your browser.';
+  const sending = info.sending.length
+    ? `Sending ${names(info.sending)} right now.`
+    : 'Nothing is playing on a supported site, so there is nothing to send right now.';
+  const off = info.sitesOff.length ? ` Switched off in its options: ${info.sitesOff.join(', ')}.` : '';
+  return `${running} ${sending}${off}`;
 }
 
 // ── App & window ──────────────────────────────────────────────────────────────

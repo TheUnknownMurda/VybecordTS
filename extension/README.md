@@ -47,7 +47,7 @@ The same answer also settles *whether* a channel is live. If Twitch says a chann
 
 Every Chromium browser runs the same package unchanged, because the extension
 uses nothing outside the shared WebExtension core: `runtime` messaging,
-`storage.sync`, the `action` badge, content scripts and one `fetch` to
+`storage.sync`, `alarms`, the `action` badge, content scripts and `fetch` to
 127.0.0.1. The app accepts `chrome-extension://` (every Chromium browser, Edge
 and Opera included), `moz-extension://` and `safari-web-extension://` origins.
 
@@ -116,8 +116,10 @@ for captions**, off by default.
 The desktop app listens on `127.0.0.1:8888`, and only while **Settings → Integrations → Browser extension → Accept data from the extension** is on. That endpoint:
 
 - binds loopback only, so nothing off the machine can reach it
-- answers POST on ten push paths and nothing else — no settings, no reads, nothing that could leak anything about you (the reply to a YouTube push can carry one flag, a request for the YouTube session described below)
+- answers POST on eleven paths and nothing else — no settings, no reads, nothing that could leak anything about you (the reply to a YouTube push can carry one flag, a request for the YouTube session described below)
 - accepts only `chrome-extension://` / `moz-extension://` origins, which the browser sets and a web page cannot forge
+
+Besides the pushes, the background says hello to `/api/hello` whenever it wakes and every 30 seconds, whatever is playing. The body is the extension's version and its eight site switches, nothing about what plays. That is what lets the app's card show the extension as connected with nothing playing, say which version runs and which sites are off, and what turns the toolbar badge grey within half a minute when the app stops answering. A timer would die with the service worker, which the browser stops after 30 seconds idle, so the beat is a `chrome.alarms` alarm; the `alarms` permission shows the user no prompt.
 
 Playback never leaves your computer through this extension.
 
@@ -125,7 +127,7 @@ Playback never leaves your computer through this extension.
 
 ```
 manifest.json          MV3 manifest, one content script entry per site
-src/background.js      the only thing that talks to the app; per-site gate, badge
+src/background.js      the only thing that talks to the app; per-site gate, badge, hello
 src/gm-shim.js         Greasemonkey compatibility layer (see below)
 src/sites/*.js         the eight scrapers
 src/options.*          the settings page

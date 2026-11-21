@@ -167,6 +167,8 @@ L'extension navigateur optionnelle corrige ça. **Settings → Integrations → 
 
 Son icône ouvre une page de réglages avec un interrupteur par site — Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick, Prime Video, Netflix — tous actifs par défaut, et l'interrupteur optionnel **Share my YouTube sign-in for captions** (désactivé par défaut, voir la section sur les sous-titres plus haut).
 
+Une fois l'extension chargée, le panneau affiche **Connected** en moins d'une demi-minute, même quand rien ne joue, avec la version qui tourne, ce qu'elle envoie et les sites coupés dans ses réglages. Il affiche **Checking…** pendant la première demi-minute après le démarrage de Vybecord. Après une mise à jour de Vybecord qui apporte une extension plus récente, il affiche **Update needed** : clique sur la flèche de rechargement de l'extension dans la page des extensions de ton navigateur.
+
 Avec elle, chaque site est correctement identifié, la présence pointe directement vers le morceau, et la barre de progression lit l'élément audio de la page au lieu de la position système, plus grossière. Sans elle, tout ce qui suit reste valable.
 
 ### Les détails de Spotify sans Spicetify

@@ -206,6 +206,8 @@ Firefox removes temporary add-ons when it closes. Use the `-firefox.zip` package
 
 The extension's toolbar icon opens its options, where each site has its own switch (all are on by default). The app listens for the extension only while **Settings → Integrations → Browser extension → Accept data from the extension** is on (the default).
 
+Once it is loaded, that card shows **Connected** within half a minute, with nothing playing: the extension checks in with the app every 30 seconds. It also says which version is running, what it is sending right now and which sites are switched off in its options. Right after Vybecord starts, it says **Checking…** until the first check-in. When an update of Vybecord brings a newer extension, it says **Update needed** until you click the reload arrow on Vybecord in your browser's extensions page. An extension older than 2.5.0 doesn't check in, and shows as connected only while something plays on a supported site.
+
 ### 5. Optional: offline LRCLIB lyrics dump
 
 [LRCLIB](https://lrclib.net) publishes its full database. With a local copy, lyrics lookups take about a millisecond and work offline, and the database can be searched under **Lyrics → LRCLIB dump**.
@@ -530,7 +532,8 @@ The browser extension sends data to `127.0.0.1:8888` and nowhere else. The one e
 The app runs a small HTTP server ([`src/web/push-server.ts`](src/web/push-server.ts)) for the Spicetify and browser extensions. It runs only while `extension_enabled` is `true`.
 
 - **Bind:** `127.0.0.1:8888`, loopback only. If the port is busy, the server retries 5 times, 4 seconds apart. After that, Settings shows **Port 8888 unavailable**.
-- **Paths (POST only):** `/api/spicetify`, `/api/youtube`, `/api/soundcloud`, `/api/bandcamp`, `/api/twitch`, `/api/kick`, `/api/primevideo`, `/api/netflix`, `/api/spotify-lyrics`.
+- **Paths (POST only):** `/api/spicetify`, `/api/youtube`, `/api/soundcloud`, `/api/bandcamp`, `/api/twitch`, `/api/kick`, `/api/primevideo`, `/api/netflix`, `/api/spotify-lyrics`, `/api/youtube-cookies` and `/api/hello`.
+- **Hello:** the extension's background posts `{"version": "2.5.0", "sites": {"spotify": true, …}}` to `/api/hello` whenever it wakes and every 30 seconds (an alarm), whatever is playing. Anything from an extension origin, push or hello, counts the extension as connected for 90 seconds ([`src/core/extension-link.ts`](src/core/extension-link.ts)); what the Spotify client sends does not.
 - **Allowed origins:** `chrome-extension://…`, `moz-extension://…` and `safari-web-extension://…`. The Spotify client (`https://xpui.app.spotify.com`) is accepted only on `/api/spicetify` and `/api/spotify-lyrics`. A web page can't fake its origin, so no web page can push.
 - **Body:** a JSON object of at most 32 KB, received within 5 seconds.
 - **Responses:** `200 {"ok":true}`, `204` for CORS preflight, `400` for bad JSON, `403` for a disallowed origin, `404` for anything else. Nothing can be read through it, and it exposes no settings.
@@ -772,7 +775,9 @@ Releases are made by hand from `desktop-app`. There is no release CI.
 
 **No YouTube captions.** **Settings → Lyrics & translation → YouTube captions** shows whether yt-dlp was found. Age-restricted videos need your YouTube sign-in: turn on **Share my YouTube sign-in for captions** in the extension's options, or set a cookies file. If the 🔞 line stays with either, the account is probably not age-verified. Many videos simply have no captions.
 
-**The browser extension shows "Not detected".** Check that **Accept data from the extension** is on and that something is playing in a supported site. If it shows **Port 8888 unavailable**, another program (usually a second copy of Vybecord) holds the port. Close it and reopen Vybecord.
+**The browser extension shows "Not detected".** Check that **Accept data from the extension** is on, and that Vybecord is turned on in your browser's extensions page. The extension checks in every 30 seconds whether or not anything plays, so the card says **Checking…** for the first half minute after Vybecord starts. An extension older than 2.5.0 doesn't check in and only shows while something plays on a supported site: click its reload arrow in your browser's extensions page to pick up the current one. If it shows **Port 8888 unavailable**, another program (usually a second copy of Vybecord) holds the port. Close it and reopen Vybecord.
+
+**The browser extension card shows "Update needed".** Vybecord was updated with a newer extension, but your browser still runs the old one. Click the reload arrow on Vybecord in your browser's extensions page, or load the extension folder again if you installed it from a downloaded zip.
 
 **The Spicetify card shows "Update needed".** The app was updated but Spotify still runs the old extension. Run the setup again.
 

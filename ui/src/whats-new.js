@@ -47,6 +47,7 @@ const ICONS = {
   // The same glyph as the Export button beside the My lyrics search box.
   share: '<svg viewBox="0 0 24 24"><path d="M12 21H6a1 1 0 01-1-1V4a1 1 0 011-1h7l5 5v4"/><path d="M13 3v5h5M15 18h6M18.5 15.5L21 18l-2.5 2.5"/></svg>',
   window: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 8.5h18M7 12.5h10M7 16h6"/></svg>',
+  plug: '<svg viewBox="0 0 24 24"><path d="M9 3v5M15 3v5"/><path d="M6 8h12v3a6 6 0 01-12 0V8z"/><path d="M12 17v4"/></svg>',
 };
 
 /**
@@ -55,6 +56,14 @@ const ICONS = {
  * telling about gets no entry.
  */
 const ENTRIES = [
+  {
+    version: '2.19.0',
+    headline: 'The browser extension shows as connected, even with nothing playing.',
+    items: [
+      ['plug', 'Connected, playing or not',
+        'Settings → Integrations → Browser extension said Not detected until something played in your browser. The extension 2.5.0 checks in every 30 seconds, so the card says Connected with nothing playing, along with its version, what it is sending and the sites switched off in its options. To get it, click the reload arrow on Vybecord in your browser’s extensions page.'],
+    ],
+  },
   {
     version: '2.18.0',
     headline: 'Netflix gets a card of its own, lyrics can stay in this window, and your lyrics can go to a friend.',

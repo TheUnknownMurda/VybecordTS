@@ -107,6 +107,16 @@ Stores eight on/off switches, one per supported site, so the user's choice of
 which sites to report survives a browser restart. Nothing else is stored.
 ```
 
+**`alarms`**
+
+```
+Wakes the extension's background every 30 seconds to tell the Vybecord desktop
+application on the same computer, at 127.0.0.1, that the extension is installed
+and running, including when nothing is playing, so the app can show it as
+connected. That message carries the extension's version and its eight site
+switches and nothing else. No other alarm is set.
+```
+
 **Host permission — `http://127.0.0.1:8888/*`**
 
 ```

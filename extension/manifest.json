@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Vybecord",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "description": "Sends what you play on Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick, Prime Video and Netflix to the Vybecord desktop app.",
   "icons": {
     "16": "icons/icon16.png",
@@ -30,7 +30,7 @@
       "128": "icons/icon128.png"
     }
   },
-  "permissions": ["storage"],
+  "permissions": ["storage", "alarms"],
   "host_permissions": ["http://127.0.0.1:8888/*"],
   "optional_permissions": ["cookies"],
   "optional_host_permissions": ["https://*.youtube.com/*"],
