@@ -971,6 +971,10 @@ label.field > span {
   height: 12px;
   stroke-width: 2.4;
 }
+/* Lyrics kept in this window: the arrow toward Discord goes, ← Lyrics. */
+.br[data-mode='app'] .br-out {
+  display: none;
+}
 .br-label {
   min-width: 0;
   overflow: hidden;

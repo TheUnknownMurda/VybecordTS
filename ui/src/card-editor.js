@@ -21,7 +21,7 @@
 import { el } from './util.js';
 import { state, subscribe, saveConfig } from './state.js';
 import { goto } from './router.js';
-import { lyricsKey } from './why.js';
+import { lyricsMode, lyricsModePatch } from './why.js';
 
 const api = window.vybecord;
 
@@ -226,15 +226,20 @@ const PARTS = {
   }),
 
   lines: (i) => ({
-    intro: () => (cfg(lyricsKey(i), true) !== false
+    intro: () => (lyricsMode(state.config, i) === 'both'
       ? 'The line being sung, then the next one. A song without lyrics shows its title and artist.'
       : 'The song’s title, then its artist or playlist.'),
     controls: [
-      choices('The two lines show', 'card', [[true, 'The lyrics'], [false, 'Title and artist']],
-        () => cfg(lyricsKey(i), true) !== false,
-        (v) => put(lyricsKey(i), v),
-        // The one switch here that reaches the window as well.
-        'Lyrics off stops them in this window too.'),
+      /*
+       * This bubble is about the card, so taking the lyrics off it leaves
+       * them in the window (In Vybecord only). Before that choice existed the
+       * same click took them out of both; off everywhere is now the Lyrics
+       * pill's third place, and Settings'.
+       */
+      choices('The two lines show', 'card', [['both', 'The lyrics'], ['title', 'Title and artist']],
+        () => (lyricsMode(state.config, i) === 'both' ? 'both' : 'title'),
+        (v) => saveConfig(lyricsModePatch(i, v === 'both' ? 'both' : 'app')),
+        'Title and artist keeps the lyrics in this window.'),
       toggle('Romanise', 'all',
         () => cfg('romanize_lyrics') === true,
         (v) => put('romanize_lyrics', v),
@@ -248,7 +253,7 @@ const PARTS = {
   }),
 
   info: (i) => ({
-    intro: () => (cfg(lyricsKey(i), true) !== false
+    intro: () => (lyricsMode(state.config, i) === 'both'
       ? 'Under the lyrics, the song named in full: title, artist, album and playlist.'
       : 'The album, under the title and artist.'),
     controls: [

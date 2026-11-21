@@ -38,6 +38,11 @@ const DEFAULTS: VybecordConfig = {
   show_lyrics_3: true,
   show_lyrics_4: true,
   show_lyrics_5: true,
+  rpc_show_lyrics: true,
+  rpc_show_lyrics_2: true,
+  rpc_show_lyrics_3: true,
+  rpc_show_lyrics_4: true,
+  rpc_show_lyrics_5: true,
   rpc_button1_label: '',
   rpc_button1_url: '',
   rpc_activity_type: 2, // LISTENING
@@ -141,6 +146,38 @@ export function normalizeUserPath(value: string): string {
   return (quoted ? trimmed.slice(1, -1) : trimmed).trim();
 }
 
+/** Each card's lyrics switch, by position; `show_lyrics` is presence 1's. */
+export const LYRICS_KEYS = ['show_lyrics', 'show_lyrics_2', 'show_lyrics_3', 'show_lyrics_4', 'show_lyrics_5'] as const;
+/** Whether those lyrics also go to Discord, by position. */
+export const RPC_LYRICS_KEYS = ['rpc_show_lyrics', 'rpc_show_lyrics_2', 'rpc_show_lyrics_3', 'rpc_show_lyrics_4', 'rpc_show_lyrics_5'] as const;
+
+/**
+ * Where a card's lyrics show: in the window and on Discord, in the window
+ * only, or nowhere.
+ *
+ * Two keys rather than one three-way value: `show_lyrics` has meant "lyrics
+ * here and on Discord" since the first release, and every config written
+ * since stores it as a boolean that older builds still read. The second key
+ * only narrows it, so a config with it left out behaves as it always did.
+ */
+export type LyricsMode = 'both' | 'app' | 'off';
+
+export function lyricsMode(cfg: Record<string, unknown>, index: number): LyricsMode {
+  const i = Math.max(0, Math.min(LYRICS_KEYS.length - 1, index));
+  if (cfg[LYRICS_KEYS[i]] === false) return 'off';
+  return cfg[RPC_LYRICS_KEYS[i]] === false ? 'app' : 'both';
+}
+
+/**
+ * The update that puts card `index` in `mode`. Both keys every time, so
+ * that turning lyrics off and back on with the old switch alone (the Why?
+ * panel's fix, an older build) brings them back to Discord as well.
+ */
+export function lyricsModeUpdate(index: number, mode: LyricsMode): Record<string, boolean> {
+  const i = Math.max(0, Math.min(LYRICS_KEYS.length - 1, index));
+  return { [LYRICS_KEYS[i]]: mode !== 'off', [RPC_LYRICS_KEYS[i]]: mode !== 'app' };
+}
+
 const STATUS_DISPLAY_CHOICES = [
   'app', 'title', 'title_artist', 'artist_title', 'artist', 'album', 'playlist',
   'custom', 'details', 'state',
@@ -177,6 +214,11 @@ export const CONFIG_SCHEMA: Record<string, FieldSpec> = {
   show_lyrics_3: { type: 'boolean' },
   show_lyrics_4: { type: 'boolean' },
   show_lyrics_5: { type: 'boolean' },
+  rpc_show_lyrics: { type: 'boolean' },
+  rpc_show_lyrics_2: { type: 'boolean' },
+  rpc_show_lyrics_3: { type: 'boolean' },
+  rpc_show_lyrics_4: { type: 'boolean' },
+  rpc_show_lyrics_5: { type: 'boolean' },
   // Labels are truncated to 32 chars when the activity is built; the generous
   // limit here only guards against absurd payloads (emojis cost 2 UTF-16 units).
   rpc_button1_label: { type: 'string', maxLength: 128 },

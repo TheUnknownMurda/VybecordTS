@@ -36,7 +36,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { createLogger } from './core/logger.js';
-import { ConfigManager, sanitizeConfigUpdate, normalizeUserPath } from './core/config.js';
+import { ConfigManager, sanitizeConfigUpdate, normalizeUserPath, lyricsMode } from './core/config.js';
 import { NativeMediaSource, looksLikeSpotifyAd, sourceFromAppId, sourcePriority, type DetectedPlayer } from './core/native-media-source.js';
 import { SpicetifySource } from './core/spicetify-source.js';
 import { SpotifyAuth, type SpotifyAuthStatus } from './core/spotify-auth.js';
@@ -133,8 +133,6 @@ const TRANSLATION_KEYS = new Set(['translate_lyrics', 'rpc_translate_lyrics', 't
 /** Age-gated tracks remembered for a retry; a session hears a handful at most. */
 const AGE_GATED_MAX = 50;
 
-/** The per-card lyrics switch, by position; `show_lyrics` is presence 1's. */
-const LYRICS_SWITCH_KEYS = ['show_lyrics', 'show_lyrics_2', 'show_lyrics_3', 'show_lyrics_4', 'show_lyrics_5'] as const;
 /** The per-card activity type, by position; `rpc_activity_type` is presence 1's. */
 const ACTIVITY_TYPE_KEYS = ['rpc_activity_type', 'rpc_activity_type_2', 'rpc_activity_type_3', 'rpc_activity_type_4', 'rpc_activity_type_5'] as const;
 
@@ -3442,7 +3440,11 @@ export class VybecordBackend extends EventEmitter {
       // Each card has its own lyrics switch — the one setting that is per
       // position rather than per app, because "lyrics on the song, not on the
       // video" is the whole point of having more than one.
-      show_lyrics: cfg[LYRICS_SWITCH_KEYS[slot.index] ?? 'show_lyrics'],
+      //
+      // The engine reads this for the card alone: the window gets every line
+      // whatever it says, and hides them itself when the switch is off. So
+      // lyrics kept in the window only are simply lyrics off for the engine.
+      show_lyrics: lyricsMode(cfg as unknown as Record<string, unknown>, slot.index) === 'both',
       // On another application than its platform's — the default one or a
       // free platform's — the card would be headed by that
       // application's name. Told so, the engine puts the platform's name in

@@ -20,12 +20,34 @@ import { goto } from './router.js';
 
 /** The lyrics switch of a card; `show_lyrics` is the first one's. */
 export const lyricsKey = (i) => (i > 0 ? `show_lyrics_${i + 1}` : 'show_lyrics');
+/** Whether those lyrics also go to Discord; read only while the switch is on. */
+export const rpcLyricsKey = (i) => (i > 0 ? `rpc_show_lyrics_${i + 1}` : 'rpc_show_lyrics');
 
-/** How many of the cards on air carry lyrics. */
+/**
+ * Where card `i`'s lyrics show: 'both' (here and on Discord), 'app' (this
+ * window only, the card keeps the title and artist) or 'off'. The same
+ * reading as lyricsMode() in src/core/config.ts, which the engine follows.
+ */
+export function lyricsMode(cfg, i) {
+  if (cfg?.[lyricsKey(i)] === false) return 'off';
+  return cfg?.[rpcLyricsKey(i)] === false ? 'app' : 'both';
+}
+
+/** The config update that puts card `i` in `mode`; both keys every time, as lyricsModeUpdate() writes them. */
+export const lyricsModePatch = (i, mode) => ({ [lyricsKey(i)]: mode !== 'off', [rpcLyricsKey(i)]: mode !== 'app' });
+
+/** The three places, as Settings lists them. */
+export const LYRICS_MODES = [
+  ['both', 'In Vybecord and on Discord'],
+  ['app', 'In Vybecord only'],
+  ['off', 'Off'],
+];
+
+/** How many of the cards on air carry lyrics on Discord. */
 export function lyricCardCount(cfg) {
   const count = Math.max(1, Math.min(5, Number(cfg.presence_count) || 1));
   let n = 0;
-  for (let i = 0; i < count; i++) if (cfg[lyricsKey(i)] !== false) n++;
+  for (let i = 0; i < count; i++) if (lyricsMode(cfg, i) === 'both') n++;
   return n;
 }
 
@@ -149,19 +171,31 @@ function sourceCheck(actions) {
 function lyricsCheck() {
   const t = state.track;
   if (!t) return null;
-  const key = lyricsKey(state.focus);
+  const mode = lyricsMode(state.config, state.focus);
   const l = state.lyrics;
   const synced = Array.isArray(l?.lyrics) && l.lyrics.length > 0;
   const plain = !synced && Array.isArray(l?.lines) && l.lines.length > 0;
   // Kick's captions arrive as lines, the way lyrics do — see kickCaptions() in pages/now.js.
   const kick = t.media_source === 'kick' && (!!t.is_live || t.context_type === 'vod');
 
-  if (state.config?.[key] === false) {
+  if (mode === 'off') {
     return {
       kind: 'warn',
       title: 'Lyrics are off for this card',
       detail: 'The card shows the title and artist instead, and so does this window.',
-      fixes: [{ label: 'Turn them on', run: () => saveConfig({ [key]: true }) }],
+      fixes: [
+        { label: 'Turn them on', run: () => saveConfig(lyricsModePatch(state.focus, 'both')) },
+        { label: 'In this window only', run: () => saveConfig(lyricsModePatch(state.focus, 'app')) },
+      ],
+    };
+  }
+  // Chosen, not broken, so said as information: nothing is wrong with the card.
+  if (mode === 'app') {
+    return {
+      kind: 'info',
+      title: 'Lyrics stay in this window',
+      detail: 'You chose to keep them in Vybecord: the card shows the title and artist.',
+      fixes: [{ label: 'Put them on the card', run: () => saveConfig(lyricsModePatch(state.focus, 'both')) }],
     };
   }
   if (kick) {

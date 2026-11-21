@@ -23,6 +23,7 @@ import { startAwayWatch } from './away-watch.js';
 import { WindowState } from './window-state.js';
 import { PushServer } from '../src/web/push-server.js';
 import type { TrackData } from '../src/core/types.js';
+import { LYRICS_KEYS, lyricsMode, lyricsModeUpdate, type LyricsMode } from '../src/core/config.js';
 
 const log = createLogger('Main');
 const startTime = Date.now();
@@ -325,8 +326,10 @@ function createTray(): void {
   tray.on('double-click', () => showWindow());
 }
 
-/** The per-card lyrics switches, by position; `show_lyrics` is presence 1's. */
-const LYRICS_KEYS = ['show_lyrics', 'show_lyrics_2', 'show_lyrics_3', 'show_lyrics_4', 'show_lyrics_5'] as const;
+/** Where a card's lyrics show, as the tray offers it. */
+const LYRICS_MODES: [LyricsMode, string][] = [
+  ['both', 'In Vybecord and on Discord'], ['app', 'In Vybecord only'], ['off', 'Off'],
+];
 const PRESENCE_COUNTS = ['One', 'Two', 'Three', 'Four', 'Five'];
 /** The players Settings → Detection lists, in its order and with its names. */
 const DETECT_KEYS: [string, string][] = [
@@ -355,11 +358,10 @@ function refreshTrayMenu(): void {
   if (!tray || !backend) return;
   const cfg = backend.getConfig() as unknown as Record<string, unknown>;
   const count = Math.min(LYRICS_KEYS.length, Math.max(1, Math.round(Number(cfg.presence_count) || 1)));
-  const lyricsKeys = LYRICS_KEYS.slice(0, count);
   const on = (k: string, dflt = true) => (dflt ? cfg[k] !== false : cfg[k] === true);
   const flags = {
     presence: on('rpc_enabled'),
-    lyrics: lyricsKeys.map((k) => on(k)),
+    lyrics: LYRICS_KEYS.slice(0, count).map((_, i) => lyricsMode(cfg, i)),
     translate: on('rpc_translate_lyrics', false),
     paused: on('rpc_only_when_playing', false),
     away: on('rpc_hide_when_away'),
@@ -391,6 +393,9 @@ function refreshTrayMenu(): void {
   const toggle = (label: string, checked: boolean, updates: (v: boolean) => Record<string, unknown>): MenuItemConstructorOptions => ({
     label, type: 'checkbox', checked, click: (item) => write(updates(item.checked)),
   });
+  const lyricsItems = (i: number): MenuItemConstructorOptions[] => LYRICS_MODES.map(([mode, label]) => ({
+    label, type: 'radio', checked: flags.lyrics[i] === mode, click: () => write(lyricsModeUpdate(i, mode)),
+  }));
 
   const template: MenuItemConstructorOptions[] = [
     ...(playing ? [{ label: playing, enabled: false }, { type: 'separator' } as const] : []),
@@ -398,10 +403,11 @@ function refreshTrayMenu(): void {
     { label: 'Go to', submenu: TRAY_PAGES.map(([page, label]) => ({ label, click: () => openPage(page) })) },
     { type: 'separator' },
     toggle('Show on Discord', flags.presence, (v) => ({ rpc_enabled: v })),
-    // Not "on Discord": the same switch takes them out of the window too.
+    // Not "on Discord": they can stay in the window without the card, or
+    // leave both.
     count === 1
-      ? toggle('Show lyrics', flags.lyrics[0], (v) => ({ show_lyrics: v }))
-      : { label: 'Show lyrics', submenu: lyricsKeys.map((k, i) => toggle(`Presence ${i + 1}`, flags.lyrics[i], (v) => ({ [k]: v }))) },
+      ? { label: 'Lyrics', submenu: lyricsItems(0) }
+      : { label: 'Lyrics', submenu: flags.lyrics.map((_, i) => ({ label: `Presence ${i + 1}`, submenu: lyricsItems(i) })) },
     toggle('Translate lyrics on Discord', flags.translate, (v) => ({ rpc_translate_lyrics: v })),
     {
       label: 'Detection',

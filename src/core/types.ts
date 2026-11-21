@@ -196,6 +196,17 @@ export interface VybecordConfig {
   show_lyrics_3: boolean;
   show_lyrics_4: boolean;
   show_lyrics_5: boolean;
+  /**
+   * Whether a card's lyrics also go to Discord, by position (`rpc_show_lyrics`
+   * is presence 1's). Only read while that card's `show_lyrics` is on: false
+   * keeps the lyrics in the window and puts the title and artist on the card.
+   * `show_lyrics` off still means no lyrics anywhere, as it always has.
+   */
+  rpc_show_lyrics: boolean;
+  rpc_show_lyrics_2: boolean;
+  rpc_show_lyrics_3: boolean;
+  rpc_show_lyrics_4: boolean;
+  rpc_show_lyrics_5: boolean;
   // RPC customization
   /** Which URL each clickable RPC field links to: 'track' | 'artist' | 'album' | 'context' | 'auto' */
   rpc_button1_label: string;
