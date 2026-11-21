@@ -57,7 +57,8 @@ import {
   fetchYouTubeCaptions, clearCCCache, setCcCookiesFile, setBrowserCookies, wantsBrowserCookies,
   type BrowserCookie,
 } from './core/youtube-captions.js';
-import { initLocalDb, closeLocalDb, insertCustomLyrics, listCustomLyrics, getCustomLyrics, updateCustomLyrics, deleteCustomLyrics, findExistingCustomLyrics, searchLrclibDump as searchLrclibDumpDb, getLrclibTrackLyrics as getLrclibTrackLyricsDb, lrclibDumpStatus, markCustomLyricsPublished, setCustomLyricsFound } from './core/local-lyrics-db.js';
+import { initLocalDb, closeLocalDb, insertCustomLyrics, listCustomLyrics, getCustomLyrics, updateCustomLyrics, deleteCustomLyrics, findExistingCustomLyrics, searchLrclibDump as searchLrclibDumpDb, getLrclibTrackLyrics as getLrclibTrackLyricsDb, lrclibDumpStatus, markCustomLyricsPublished, setCustomLyricsFound, customLyricsForSharing, mergeCustomLyrics } from './core/local-lyrics-db.js';
+import { planImport, previewImport, writeLyricsFile, type ImportPreview, type SharedLyrics } from './core/lyrics-share.js';
 import { previewEntry, publishEntry, publishUserAgent, type PublishEdits, type PublishStore } from './core/lrclib-publish.js';
 import { initLastFm, scrobbleTrackStart, checkAndScrobble, scrobblePause, scrobbleTrackEnd } from './core/lastfm.js';
 import { lookupCoverArt } from './core/cover-art.js';
@@ -2575,6 +2576,58 @@ export class VybecordBackend extends EventEmitter {
       this.refetchPlayingFor([{ track: entry.track_name, artist: entry.artist_name }], 'DELETE');
     }
     return ok;
+  }
+
+  // ── Sharing My lyrics as a file ── (src/core/lyrics-share.ts)
+
+  /** How many entries an export would write. */
+  countCustomLyrics(): number {
+    return listCustomLyrics(1, 0).total;
+  }
+
+  /** Write every imported entry to an export file. Returns how many went. */
+  async exportCustomLyricsFile(filePath: string, appVersion: string): Promise<number> {
+    const entries = customLyricsForSharing();
+    await writeLyricsFile(filePath, entries, appVersion);
+    log.info(`[EXPORT] Wrote ${entries.length} imported entries to ${path.basename(filePath)}`);
+    return entries.length;
+  }
+
+  /** What importing these entries would do, without doing any of it. */
+  previewCustomLyricsImport(entries: readonly SharedLyrics[]): ImportPreview {
+    return previewImport(planImport(entries, customLyricsForSharing()));
+  }
+
+  /**
+   * Import entries read from a file: add every song the store lacks, and for
+   * a song it has with other lyrics, take the file's version only when its key
+   * is in `replaceKeys` — the songs the user ticked in the import window.
+   *
+   * Planned again here rather than trusting the preview: the window may have
+   * stayed open while a song was added or edited, and a song that turned up in
+   * the meantime must count as one the user has, not be added a second time.
+   *
+   * Flags are left alone, unlike a single import's. Typing or pasting lyrics
+   * for a song says these are right; a friend's file says nothing of the kind
+   * about songs nobody here looked at, and a flag is what keeps lyrics this
+   * user already rejected off their card, whoever sends them again.
+   */
+  applyCustomLyricsImport(entries: readonly SharedLyrics[], replaceKeys: ReadonlySet<string>) {
+    const plan = planImport(entries, customLyricsForSharing());
+    const replace = plan.conflicts.filter(c => replaceKeys.has(c.key));
+    const { added, replaced } = mergeCustomLyrics(
+      plan.added,
+      replace.map(c => ({ trackId: c.mine.trackId, entry: c.theirs })),
+    );
+    const names = [
+      ...plan.added.map(e => ({ track: e.track, artist: e.artist })),
+      ...replace.map(c => ({ track: c.mine.track, artist: c.mine.artist })),
+    ];
+    let dropped = 0;
+    for (const n of names) dropped += this.evictCacheFor(n.track, n.artist);
+    if (dropped > 0) log.info(`[IMPORT] Evicted ${dropped} stale cache entries`);
+    if (names.length) this.refetchPlayingFor(names, 'IMPORT');
+    return { added, replaced, kept: plan.conflicts.length - replace.length, same: plan.same };
   }
 
   // ── Publishing to LRCLIB ── (src/core/lrclib-publish.ts)

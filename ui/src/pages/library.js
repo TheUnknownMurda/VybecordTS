@@ -11,7 +11,7 @@
  * already there, and a blank form is a strange way to greet them.
  */
 
-import { el, modal, toast, fmtTime, fmtDate, plural, plainError } from '../util.js';
+import { el, modal, toast, fmtTime, fmtDate, fmtDay, plural, plainError } from '../util.js';
 import { state, subscribe } from '../state.js';
 import { goto } from '../router.js';
 
@@ -27,6 +27,10 @@ const GLYPH = {
   flag: '<svg viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>',
   // Out of a tray: a copy goes out, the entry stays.
   publish: '<svg viewBox="0 0 24 24"><path d="M12 15V4M7.5 8.5L12 4l4.5 4.5M5 14v5a1 1 0 001 1h12a1 1 0 001-1v-5"/></svg>',
+  // Into the tray: songs from a file join the library.
+  import: '<svg viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 14v5a1 1 0 001 1h12a1 1 0 001-1v-5"/></svg>',
+  // A file leaving: the whole library goes into one, to send on.
+  export: '<svg viewBox="0 0 24 24"><path d="M12 21H6a1 1 0 01-1-1V4a1 1 0 011-1h7l5 5v4"/><path d="M13 3v5h5M15 18h6M18.5 15.5L21 18l-2.5 2.5"/></svg>',
 };
 
 /** A button whose face is a glyph, plus words when there is room for them. */
@@ -228,7 +232,10 @@ async function renderBrowse(body, refresh, _handover, ctx) {
   const more = el('button', { type: 'button', class: 'btn', text: 'Load more', style: 'margin:10px 12px 4px', onclick: () => load(false) });
 
   const searchInput = el('input', {
-    type: 'search', placeholder: 'Search by title, artist or album',
+    // Short enough to show whole beside Import, Export and Publish several:
+    // "Search by title, artist or album" lost its last letters there at the
+    // default window width.
+    type: 'search', placeholder: 'Search title, artist, album',
     'aria-label': 'Search your lyrics',
     oninput: debounce((e) => { search = e.target.value; load(true); }, 250),
   });
@@ -238,10 +245,22 @@ async function renderBrowse(body, refresh, _handover, ctx) {
   body.replaceChildren(
     el('div', { class: 'lib-toolbar' }, [
       searchBox,
-      glyphBtn('btn', GLYPH.publish, 'Publish several', {
-        title: 'Publish several entries to LRCLIB at once',
-        onclick: () => { void openPublishMany(refresh, ctx); },
-      }),
+      // One block, so that in a narrow window the buttons move under the
+      // search box together instead of squeezing it down to a few letters.
+      el('div', { class: 'lib-actions' }, [
+        glyphBtn('btn', GLYPH.import, 'Import', {
+          title: 'Add the lyrics from a file someone exported. Songs you already have keep your lyrics.',
+          onclick: () => { void importFromFile(refresh); },
+        }),
+        glyphBtn('btn', GLYPH.export, 'Export', {
+          title: 'Save all your lyrics to one file, to send to a friend or keep as a backup',
+          onclick: () => { void exportToFile(); },
+        }),
+        glyphBtn('btn', GLYPH.publish, 'Publish several', {
+          title: 'Publish several entries to LRCLIB at once',
+          onclick: () => { void openPublishMany(refresh, ctx); },
+        }),
+      ]),
     ]),
     el('div', { class: 'card', style: 'padding:8px' }, [list, more, counter]),
   );
@@ -261,7 +280,11 @@ async function renderBrowse(body, refresh, _handover, ctx) {
           ? el('div', { class: 'empty', text: 'No match.' })
           : el('div', { class: 'empty' }, [
               el('div', { text: 'Nothing here yet. Lyrics you add or fix are kept here, and always win.' }),
-              glyphBtn('btn btn-primary', GLYPH.plus, 'Add lyrics', { style: 'margin-top:14px', onclick: () => ctx?.open('import') }),
+              el('div', { class: 'share-empty-actions' }, [
+                glyphBtn('btn btn-primary', GLYPH.plus, 'Add lyrics', { onclick: () => ctx?.open('import') }),
+                // A friend's file is how many libraries will start.
+                glyphBtn('btn', GLYPH.import, 'Import a file', { onclick: () => { void importFromFile(refresh); } }),
+              ]),
             ]));
       } else {
         list.append(...entries.map((e) => entryRow(e, refresh, ctx)));
@@ -1004,6 +1027,223 @@ async function openPublishMany(refresh, ctx) {
   }, { dismissable: false });
 
   if (touched) refresh();
+}
+
+// ── Export and Import, as a file ──────────────────────────────────────────────
+
+/**
+ * Save every entry to a file the user picks, to send to a friend or keep.
+ *
+ * The main process opens the save dialog and writes the file
+ * (src/core/lyrics-share.ts). This says how it went, with a way to the file:
+ * the next thing anyone does with it is drag it into a chat.
+ */
+async function exportToFile() {
+  let res;
+  try {
+    res = await api.exportCustom();
+  } catch (e) {
+    return toast(`Could not export: ${plainError(e)}`, 'err');
+  }
+  if (!res?.ok) {
+    if (res?.empty) toast('Nothing in My lyrics to export yet', '');
+    return;
+  }
+  await modal((close) => el('div', {}, [
+    el('h2', { text: 'Lyrics exported' }),
+    el('div', { class: 'muted', style: 'margin-top:10px', text: `${plural(res.count, 'song')} saved to:` }),
+    el('div', { class: 'share-path', text: res.path }),
+    el('div', {
+      class: 'muted', style: 'margin-bottom:20px',
+      text: 'Send this file to a friend: Import, in their Lyrics page, adds these songs to theirs, and the songs they '
+        + 'already have keep their lyrics unless they pick yours. It is also a backup of your own.',
+    }),
+    el('div', { class: 'pub-actions' }, [
+      el('button', { type: 'button', class: 'btn', text: 'Show in folder', onclick: () => { void api.revealCustomExport(); } }),
+      el('button', { type: 'button', class: 'btn btn-primary', text: 'Done', onclick: () => close() }),
+    ]),
+  ]));
+}
+
+/** "42 timed lines · 3:31 · Nov 3, 2026" — one version of a song, for its row. */
+function versionText(v) {
+  return [
+    v.timed ? plural(v.lines, 'timed line') : `${plural(v.lines, 'line')}, not timed`,
+    v.duration ? fmtTime(v.duration * 1000) : '',
+    v.changed ? fmtDay(new Date(v.changed), { month: 'short', day: 'numeric', year: 'numeric' }) : '',
+  ].filter(Boolean).join(' · ');
+}
+
+/**
+ * Add the lyrics from a file someone exported, or from a custom-lyrics.sqlite3.
+ *
+ * Nothing is written until the window has said what would happen: new songs
+ * are added, songs already here word for word are left alone, and songs here
+ * with other lyrics keep the user's version unless they tick the file's, song
+ * by song, with both versions one click away. Nothing in the library is ever
+ * deleted. The comparison is the backend's (src/core/lyrics-share.ts), and it
+ * makes it again when the import runs, against the library as it is by then.
+ */
+async function importFromFile(refresh) {
+  let p;
+  try {
+    p = await api.pickCustomImport();
+  } catch (e) {
+    return toast(`Could not import: ${plainError(e)}`, 'err');
+  }
+  if (!p?.ok) return;
+
+  /** The backend's answer once the import ran; null when the window closed without one. */
+  let result = null;
+
+  await modal((close) => {
+    const rows = p.conflicts.map((c) => ({ c, take: false, check: null, status: null }));
+    const nothing = !p.added.length && !rows.length;
+    let busy = false;
+
+    const errorBox = el('div', { class: 'notice is-warn', hidden: true, role: 'alert' });
+    const cancelBtn = el('button', { type: 'button', class: 'btn', text: nothing ? 'Close' : 'Cancel', onclick: () => close() });
+    const goBtn = el('button', { type: 'button', class: 'btn btn-primary', hidden: nothing, onclick: () => { void run(); } });
+    const allBtn = el('button', { type: 'button', class: 'btn btn-sm', onclick: () => toggleAll() });
+
+    const sumLine = (kind, mark, what, outcome) => el('li', {}, [
+      el('span', { class: `share-mark is-${kind}`, text: mark, 'aria-hidden': 'true' }),
+      el('div', {}, [el('b', { text: what }), el('span', { class: 'muted', text: ` — ${outcome}` })]),
+    ]);
+
+    function conflictRow(r) {
+      const { c } = r;
+      r.check = el('input', {
+        type: 'checkbox', 'aria-label': `Use their lyrics for ${c.track}`,
+        onchange: () => { r.take = r.check.checked; paint(); },
+      });
+      r.status = el('div');
+      const pane = (label, v) => el('div', { class: 'share-pane' }, [
+        el('div', { class: 'share-pane-head', text: v.album ? `${label} · ${v.album}` : label }),
+        el('pre', { class: 'pub-preview', text: v.lyrics }),
+      ]);
+      const compare = el('div', { class: 'share-compare', hidden: true }, [pane('Yours', c.mine), pane('Theirs', c.theirs)]);
+      const compareBtn = el('button', {
+        type: 'button', class: 'btn btn-sm', text: 'Compare', 'aria-expanded': 'false',
+        onclick: () => {
+          compare.hidden = !compare.hidden;
+          compareBtn.textContent = compare.hidden ? 'Compare' : 'Hide';
+          compareBtn.setAttribute('aria-expanded', String(!compare.hidden));
+        },
+      });
+      return el('div', { class: 'pub-row share-row' }, [
+        el('label', { class: 'pub-row-main' }, [
+          r.check,
+          el('div', { class: 'pub-row-body' }, [
+            el('div', { class: 'pub-row-title', text: c.track }),
+            el('div', { class: 'pub-row-meta', text: c.artist || '(no artist)' }),
+            el('div', { class: 'share-versions' }, [
+              el('div', {}, [el('b', { text: 'Yours' }), ` · ${versionText(c.mine)}`]),
+              el('div', {}, [el('b', { text: 'Theirs' }), ` · ${versionText(c.theirs)}`]),
+            ]),
+          ]),
+        ]),
+        r.status,
+        compareBtn,
+        compare,
+      ]);
+    }
+
+    function toggleAll() {
+      const on = !rows.every((r) => r.take);
+      for (const r of rows) { r.take = on; r.check.checked = on; }
+      paint();
+    }
+
+    function paint() {
+      const n = p.added.length + rows.filter((r) => r.take).length;
+      goBtn.textContent = busy ? 'Importing…' : n ? `Import ${plural(n, 'song')}` : 'Nothing to import';
+      goBtn.disabled = busy || !n;
+      cancelBtn.disabled = busy;
+      allBtn.disabled = busy;
+      allBtn.textContent = rows.length && rows.every((r) => r.take) ? 'Keep all of mine' : 'Use theirs for all';
+      for (const r of rows) {
+        r.check.disabled = busy;
+        r.status.className = `pub-row-status${r.take ? ' is-ok' : ''}`;
+        r.status.textContent = r.take ? 'Use theirs' : 'Keep yours';
+      }
+    }
+
+    async function run() {
+      if (busy) return;
+      busy = true;
+      errorBox.hidden = true;
+      paint();
+      try {
+        const res = await api.applyCustomImport(p.token, rows.filter((r) => r.take).map((r) => r.c.key));
+        result = res;
+        close();
+        const parts = [res.added ? `${res.added} added` : '', res.replaced ? `${res.replaced} replaced` : ''].filter(Boolean);
+        toast(`Imported: ${parts.join(', ') || 'nothing new'} ✓`, 'ok');
+      } catch (e) {
+        busy = false;
+        errorBox.hidden = false;
+        errorBox.textContent = plainError(e);
+        paint();
+      }
+    }
+
+    const byTitle = (a, b) => a.track.localeCompare(b.track, undefined, { sensitivity: 'base' });
+    const body = el('div', {}, [
+      el('h2', { text: 'Import lyrics' }),
+      el('div', { class: 'muted', style: 'margin-top:6px', text: `From “${p.fileName}” · ${plural(p.songs, 'song')}` }),
+      nothing
+        ? el('div', {
+            class: 'notice', style: 'margin-top:14px',
+            text: p.songs
+              ? 'Nothing new: every song in this file is already in My lyrics, word for word.'
+              : 'This file has no songs to import.',
+          })
+        : el('ul', { class: 'share-sum' }, [
+            p.added.length ? sumLine('new', '+', plural(p.added.length, 'new song'), 'added to My lyrics') : null,
+            p.same ? sumLine('same', '=', `${plural(p.same, 'song')} you already have, word for word`, 'left as they are') : null,
+            rows.length
+              ? sumLine('diff', '≠', `${plural(rows.length, 'song')} you already have, with other lyrics`, 'yours stay unless you tick theirs below')
+              : null,
+          ]),
+      p.skipped
+        ? el('div', {
+            class: 'muted share-skipped',
+            text: `${plural(p.skipped, 'entry', 'entries')} in the file had no title or no lyrics, and ${p.skipped === 1 ? 'is' : 'are'} left out.`,
+          })
+        : null,
+      p.added.length
+        ? el('details', { class: 'share-new' }, [
+            el('summary', { text: 'See the new songs' }),
+            el('ul', {}, [...p.added].sort(byTitle).map((s) => el('li', {}, [
+              el('span', { text: s.track }),
+              el('span', { class: 'muted', text: `${s.artist ? ` — ${s.artist}` : ''}${s.timed ? '' : ' · not timed'}` }),
+            ]))),
+          ])
+        : null,
+      rows.length
+        ? el('div', { class: 'share-both' }, [
+            el('div', { class: 'share-head' }, [
+              el('div', {}, [
+                el('h3', { text: 'Songs you both have' }),
+                el('div', { class: 'muted', text: 'Tick a song to use their lyrics instead of yours.' }),
+              ]),
+              allBtn,
+            ]),
+            el('div', { class: 'pub-batch-list' }, rows.map(conflictRow)),
+          ])
+        : null,
+      errorBox,
+      nothing ? null : el('div', { class: 'muted share-note', text: 'Nothing in My lyrics is deleted.' }),
+      el('div', { class: 'pub-actions' }, [cancelBtn, goBtn]),
+    ]);
+    paint();
+    return body;
+  }, { dismissable: false });
+
+  // Closed without importing: the entries read for it can go.
+  if (!result) void api.cancelCustomImport().catch(() => {});
+  else if (result.added || result.replaced) refresh();
 }
 
 // ── Import ────────────────────────────────────────────────────────────────────

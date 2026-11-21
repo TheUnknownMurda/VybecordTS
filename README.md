@@ -71,6 +71,7 @@ Vybecord is a Windows desktop app (Electron + TypeScript). It reads the Windows 
 
 - **Several sources, tried in order:** your own library, then Spotify's lyrics (with Spicetify), then an offline LRCLIB dump, then LRCLIB, Netease and Musixmatch in parallel, then an LRCLIB fuzzy search, then YouTube captions. When there are no synced lyrics, a plain-text version (from LRCLIB or Genius) is shown in the window.
 - **Lyrics library.** Paste timed `.lrc` lyrics or untimed text, then time it with the built-in *Sync while playing* tool. You can edit and delete entries and search an offline LRCLIB dump.
+- **Share with a friend.** Export your library to one file, and import a friend's into yours: songs you have keep your lyrics unless you pick theirs, and nothing of yours is deleted.
 - **Share on LRCLIB.** Publish entries of your library to [LRCLIB](https://lrclib.net), the public lyrics database LRCGET and many players read from, one at a time or several at once, after seeing exactly what goes and what LRCLIB already has.
 - **Corrections.** Mark a wrong match so it is never used for that track again. Timing offsets are saved per track.
 - **Kick captions.** On a live Kick channel or a past broadcast, with captions on in Kick's player, what is said shows on the card as lyrics (needs the browser extension).
@@ -318,6 +319,8 @@ If none of these finds synced lyrics, plain lyrics (LRCLIB, then Genius) are sho
 
 **Publishing several at once.** **Publish several**, next to the search box in **My lyrics**, lists every entry: those ready to go, those that need something first (with what, and a **Fix** button that opens their own dialog to complete them), and those already on LRCLIB. Nothing is ticked to begin with; **Select all ready** ticks the ready ones. One confirmation covers the batch, and the entries then go one after the other, half a second apart, each with the checks of a single publish: one LRCLIB already has line for line is skipped, and each row says how its own send went. A failure that belongs to one entry (LRCLIB rejecting it) moves on to the next; one that would repeat (LRCLIB out of reach, rate-limiting, an answer that never came) stops the batch and leaves the rest unsent, still ticked for later. **Stop after this one** ends a batch between two entries.
 
+**Sharing your lyrics as a file.** **Export**, next to the search box in **My lyrics**, saves every entry to one `.json` file you pick (title, artist, album, duration, the lyrics, and when each was saved), to send to a friend or keep as a backup. It leaves out when an entry went to LRCLIB: that says what you did, and would be false on someone else's side. **Import** reads such a file, or a `custom-lyrics.sqlite3` copied out of another data folder, and shows what it would do before writing anything. Songs you don't have are added, with their own dates. Songs you have with the same lyrics (line endings and trailing spaces aside) are left alone. For songs you have with other lyrics, yours stay unless you tick theirs, song by song: **Compare** shows both, and **Use theirs for all** ticks them all. Taking their version keeps your entry and its spelling, and takes their lyrics, with their album and duration when they have them. Two entries are the same song when their title and artist match, case aside, because that is what the lookup goes by; album and duration don't count. Nothing in **My lyrics** is deleted, the import is written in one transaction, and lyrics you blocked under **Blocked** stay blocked even when they arrive in a file. The code is in [`src/core/lyrics-share.ts`](src/core/lyrics-share.ts).
+
 **Translation and romanisation** are under **Settings → Lyrics & translation**:
 
 - *Translate in this window* and *Translate on Discord too*. Target languages: English, French, Spanish, German, Portuguese, Italian, Russian, Japanese, Korean, Chinese, Arabic, Hindi, Turkish, Polish, Dutch, Swedish.
@@ -379,7 +382,7 @@ Everything has a control in **Settings**, except the few keys marked *config onl
 | File / folder | Contents |
 | --- | --- |
 | `config.json` | All settings (see below). |
-| `custom-lyrics.sqlite3` | Your imported lyrics, and when each was published to LRCLIB or found there already. Created on first run. |
+| `custom-lyrics.sqlite3` | Your imported lyrics, and when each was published to LRCLIB or found there already. Created on first run. To share it, use **Export** and **Import** in **Lyrics → My lyrics** rather than copying the file: a copy replaces the other side's whole library. |
 | `LRCLIB Dump\` | Drop folder for an LRCLIB dump. |
 | `listening-history.json` | Listening log, up to 10,000 entries. |
 | `flagged-lyrics.json` | Lyrics you marked as wrong. |

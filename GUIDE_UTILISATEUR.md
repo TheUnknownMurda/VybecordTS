@@ -53,6 +53,20 @@ Le bas de la barre latérale indique aussi si Discord est connecté et ce qui es
 
 Astuce : les touches **1 à 4** passent de Now playing à Lyrics, Activity et Settings. **Ctrl+Q** quitte l'appli.
 
+### Partager tes paroles avec un ami
+
+Dans **Lyrics → My lyrics**, **Export** (à côté de la barre de recherche) enregistre toutes tes paroles dans un seul fichier, à envoyer à un ami, sur Discord par exemple.
+
+Pour ajouter les paroles d'un ami aux tiennes, clique sur **Import** sur la même page et choisis le fichier qu'il t'a envoyé. Avant que quoi que ce soit soit enregistré, la fenêtre dit ce qui va se passer :
+
+- Les chansons que tu n'as pas sont ajoutées.
+- Les chansons que tu as déjà, avec les mêmes paroles, restent comme elles sont.
+- Les chansons que tu as déjà avec d'autres paroles gardent les tiennes, sauf si tu coches les siennes. **Compare** montre les deux versions côte à côte, et **Use theirs for all** les coche toutes.
+
+Rien de ce que tu as déjà n'est supprimé. Le fichier sert aussi de sauvegarde : importe-le dans une nouvelle installation pour retrouver tes paroles. Un `custom-lyrics.sqlite3` copié depuis un autre dossier de données s'importe de la même façon.
+
+Pour importer ton fichier, ton ami doit avoir une version de Vybecord qui a **Import**. Copier `custom-lyrics.sqlite3` dans un dossier de données remplace plutôt toute la bibliothèque qui s'y trouve.
+
 ### Partager tes paroles sur LRCLIB
 
 [LRCLIB](https://lrclib.net) est la base de paroles gratuite où LRCGET et beaucoup de lecteurs de musique vont chercher leurs paroles. Les paroles que tu as minutées toi-même peuvent y aller aussi : dans **Lyrics → My lyrics**, clique sur le bouton d'envoi d'une entrée (**Publish to LRCLIB**).

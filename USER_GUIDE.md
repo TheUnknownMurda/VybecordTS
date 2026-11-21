@@ -53,6 +53,20 @@ The bottom of the sidebar also says whether Discord is connected and what is bei
 
 Tip: keys **1–4** jump between Now playing, Lyrics, Activity and Settings. **Ctrl+Q** quits.
 
+### Sharing your lyrics with a friend
+
+In **Lyrics → My lyrics**, **Export** (next to the search box) saves all your lyrics to one file, to send to a friend, over Discord for instance.
+
+To add a friend's lyrics to yours, click **Import** on the same page and pick the file they sent. Before anything is saved, the window says what will happen:
+
+- Songs you don't have are added.
+- Songs you already have, with the same lyrics, are left as they are.
+- Songs you already have with other lyrics keep yours, unless you tick theirs. **Compare** shows both versions side by side, and **Use theirs for all** ticks every one.
+
+Nothing you already have is deleted. The file also works as a backup: import it into a new install to get your lyrics back. A `custom-lyrics.sqlite3` copied out of another data folder can be imported the same way.
+
+To import your file, your friend needs a version of Vybecord that has **Import**. Copying `custom-lyrics.sqlite3` into a data folder instead replaces the whole library there.
+
 ### Sharing your lyrics on LRCLIB
 
 [LRCLIB](https://lrclib.net) is the free lyrics database that LRCGET and many music players download their lyrics from. Lyrics you timed yourself can go there too: in **Lyrics → My lyrics**, click the upload button on an entry (**Publish to LRCLIB**).
