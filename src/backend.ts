@@ -35,6 +35,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
+import { performance } from 'node:perf_hooks';
 import { createLogger } from './core/logger.js';
 import { ConfigManager, sanitizeConfigUpdate, normalizeUserPath, lyricsMode } from './core/config.js';
 import { NativeMediaSource, looksLikeSpotifyAd, sourceFromAppId, sourcePriority, type DetectedPlayer } from './core/native-media-source.js';
@@ -49,6 +50,7 @@ import { TwitchSource } from './core/twitch-source.js';
 import { PrimeVideoSource } from './core/prime-video-source.js';
 import { NetflixSource } from './core/netflix-source.js';
 import { FilmSource, isFilmSource } from './core/film-source.js';
+import { ExtensionLink, EXTENSION_ALIVE_MS, normalizeExtensionHello } from './core/extension-link.js';
 import { isBroadcastSource } from './core/broadcast-track.js';
 import { DiscordPool } from './core/discord-pool.js';
 import { PresenceSlot, type LyricsState } from './core/presence-slot.js';
@@ -427,6 +429,10 @@ export class VybecordBackend extends EventEmitter {
   private twitchSource: TwitchSource;
   private primeVideoSource: PrimeVideoSource;
   private netflixSource: NetflixSource;
+  /** Whether the browser extension is there at all, whatever it is sending; see extension-link.ts. */
+  private extensionLink = new ExtensionLink();
+  /** Tells the window when the extension's last contact stops counting; see watchExtensionQuiet(). */
+  private extensionQuietTimer: ReturnType<typeof setTimeout> | null = null;
   /** track_id → synced lyrics pushed from the Spotify web player. */
   private spotifyLyricsStore = new Map<string, LyricLine[]>();
   /** Discord sockets, one per application, shared by the slots. */
@@ -3024,22 +3030,90 @@ export class VybecordBackend extends EventEmitter {
   isDiscordConnected() { return this.pool.anyConnected; }
   isMediaSourceReady() { return this.media?.isReady ?? false; }
 
-  /**
-   * Whether the browser extension has pushed recently.
-   *
-   * Each source ages out on its own after ~10s of silence, so this reflects an
-   * extension that is actually reporting, not merely one that was installed
-   * once. It is what lets the install page say "connected" rather than making
-   * the user guess.
-   */
   /** Whether the Spicetify extension is reporting right now. */
   isSpicetifyActive(): boolean { return this.spicetify.isActive; }
 
-  isExtensionConnected(): boolean {
-    return this.spicetify.isActive || this.youtubeSource.isActive
-      || this.soundcloudSource.isActive || this.bandcampSource.isActive
-      || this.twitchSource.isActive || this.kickSource.isActive
-      || this.primeVideoSource.isActive || this.netflixSource.isActive;
+  /**
+   * Where the browser extension stands, for its card in Settings.
+   *
+   * Connected means it is there, sending or not (see extension-link.ts); the
+   * version and the sites switched off come from its hello; `sending` names
+   * the sites it is reporting right now. A source counts there only if the
+   * extension itself posted to its path lately, because the Spotify source is
+   * fed by the Spicetify client as well, and Spicetify playing is not the
+   * browser extension sending anything.
+   */
+  getExtensionStatus(): { connected: boolean; version: string | null; sending: string[]; sitesOff: string[] } {
+    const now = performance.now();
+    if (!this.extensionLink.isConnected(now)) return { connected: false, version: null, sending: [], sitesOff: [] };
+    const hello = this.extensionLink.helloAt(now);
+    const sources: [path: string, name: string, source: { readonly isActive: boolean }][] = [
+      ['/api/spicetify', 'Spotify', this.spicetify],
+      ['/api/youtube', this.youtubeSource.latest?.source === 'youtube_music' ? 'YouTube Music' : 'YouTube', this.youtubeSource],
+      ['/api/soundcloud', 'SoundCloud', this.soundcloudSource],
+      ['/api/bandcamp', 'Bandcamp', this.bandcampSource],
+      ['/api/twitch', 'Twitch', this.twitchSource],
+      ['/api/kick', 'Kick', this.kickSource],
+      ['/api/primevideo', 'Prime Video', this.primeVideoSource],
+      ['/api/netflix', 'Netflix', this.netflixSource],
+    ];
+    return {
+      connected: true,
+      version: hello?.version || null,
+      sending: sources
+        .filter(([path, , source]) => source.isActive && this.extensionLink.pushedTo(path, now))
+        .map(([, name]) => name),
+      sitesOff: hello?.sitesOff ?? [],
+    };
+  }
+
+  /**
+   * Something arrived from the browser extension, a push or a hello.
+   *
+   * The window hears of it only when the answer changes: here on the first
+   * contact, and from watchExtensionQuiet() once the last one stops counting.
+   */
+  noteExtensionContact(path: string): void {
+    const now = performance.now();
+    const was = this.extensionLink.isConnected(now);
+    this.extensionLink.contact(path, now);
+    if (was) return;
+    log.info('Browser extension connected ✓');
+    this.emitStatus();
+    this.watchExtensionQuiet();
+  }
+
+  /** The extension's hello: its version, and which of its sites are switched off. */
+  handleExtensionHello(raw: unknown): void {
+    const hello = normalizeExtensionHello(raw);
+    if (!this.extensionLink.greet(hello, performance.now())) return;
+    log.info(`Browser extension ${hello.version || '(version unreadable)'}`
+      + (hello.sitesOff.length ? `, switched off in its options: ${hello.sitesOff.join(', ')}` : ''));
+  }
+
+  /**
+   * Repaint the window once the extension has been quiet for EXTENSION_ALIVE_MS.
+   *
+   * One timer, moved on to the latest contact each time it comes due early,
+   * rather than cleared and set again on every push: pushes come every couple
+   * of seconds per tab.
+   */
+  private watchExtensionQuiet(): void {
+    if (this.extensionQuietTimer) return;
+    const check = () => {
+      const left = this.extensionLink.msLeft(performance.now());
+      if (left > 0 && !this.shuttingDown) {
+        this.extensionQuietTimer = setTimeout(check, left + 250);
+        this.extensionQuietTimer.unref?.();
+        return;
+      }
+      this.extensionQuietTimer = null;
+      if (this.shuttingDown) return;
+      log.info(`Browser extension quiet for ${EXTENSION_ALIVE_MS / 1000}s: no longer counted as connected`);
+      this.emitStatus();
+    };
+    this.extensionQuietTimer = setTimeout(check, this.extensionLink.msLeft(performance.now()) + 250);
+    this.extensionQuietTimer.unref?.();
   }
   isAdPlaying() { return this.media?.isAdPlaying() ?? false; }
 
@@ -3112,6 +3186,9 @@ export class VybecordBackend extends EventEmitter {
       showLyrics: this.config.get('show_lyrics') !== false,
       userAway: this.userAway,
       hideWhenAway: this.config.get('rpc_hide_when_away') !== false,
+      // So a page showing the extension's state can ask again when it changes,
+      // rather than on a timer: see noteExtensionContact().
+      extensionConnected: this.extensionLink.isConnected(performance.now()),
     };
   }
 
@@ -3750,6 +3827,10 @@ export class VybecordBackend extends EventEmitter {
     if (this.pollTimer) {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
+    }
+    if (this.extensionQuietTimer) {
+      clearTimeout(this.extensionQuietTimer);
+      this.extensionQuietTimer = null;
     }
     this.spotifyWeb.stop();
     this.spotifyAuth.cancelSignIn();

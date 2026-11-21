@@ -66,6 +66,20 @@ export function extensionExists(): boolean {
 }
 
 /**
+ * The version of the extension this app ships, read off its manifest; null when
+ * unreadable. Read on each ask rather than once: in development it is the
+ * checkout's folder, which the browser may be loading and someone editing.
+ */
+export async function bundledExtensionVersion(): Promise<string | null> {
+  try {
+    const manifest = JSON.parse(await fs.promises.readFile(path.join(extensionPath(), 'manifest.json'), 'utf8'));
+    return typeof manifest?.version === 'string' ? manifest.version : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Browsers installed on this machine.
  *
  * Reads the Start Menu internet clients key, which every mainstream browser

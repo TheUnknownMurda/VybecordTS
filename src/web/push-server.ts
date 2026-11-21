@@ -7,7 +7,7 @@
  * shut. This one:
  *
  *   - binds 127.0.0.1 only, so nothing off the machine can reach it;
- *   - answers POST on ten push paths and nothing else — no config, no reads,
+ *   - answers POST on eleven paths and nothing else — no config, no reads,
  *     no way to learn anything about the user. The one thing a reply carries
  *     besides "ok" is a request: `wantCookies` on the YouTube path, asking the
  *     extension for the browser's YouTube session after an age-restricted
@@ -22,6 +22,7 @@
  */
 
 import http from 'node:http';
+import { performance } from 'node:perf_hooks';
 import { createLogger } from '../core/logger.js';
 import type { VybecordBackend } from '../backend.js';
 
@@ -50,6 +51,14 @@ const PUSH_PATHS = new Set([
    * a few dozen cookies, well under MAX_BODY.
    */
   '/api/youtube-cookies',
+  /*
+   * The extension's background says hello here every 30 seconds whatever
+   * plays, with its version and site switches, so the app can tell an
+   * installed extension with nothing to report from no extension at all. Only
+   * an extension origin reaches it: the Spotify client is admitted on its own
+   * two paths and no others.
+   */
+  '/api/hello',
 ]);
 
 /**
@@ -113,6 +122,8 @@ export class PushServer {
   private retries = 0;
   /** False once the port has been given up on, so callers can say why. */
   private available = true;
+  /** performance.now() when the port opened, so the install card knows a fresh start from a missing extension. */
+  private listeningSince = 0;
 
   constructor(backend: VybecordBackend, port = PUSH_PORT) {
     this.backend = backend;
@@ -131,6 +142,11 @@ export class PushServer {
    */
   get isAvailable(): boolean {
     return this.available;
+  }
+
+  /** How long the endpoint has been listening, in ms; 0 while it is not. */
+  get listeningMs(): number {
+    return this.isRunning ? performance.now() - this.listeningSince : 0;
   }
 
   start(): void {
@@ -185,6 +201,7 @@ export class PushServer {
 
     // Loopback only. Binding the wildcard would put this on the local network.
     this.server.listen(this.port, '127.0.0.1', () => {
+      this.listeningSince = performance.now();
       log.info(`Extension endpoint listening on 127.0.0.1:${this.port}`);
     });
   }
@@ -247,6 +264,11 @@ export class PushServer {
       return;
     }
 
+    // Anything the browser extension sends shows it is there, a push as much
+    // as a hello. The Spicetify client is not the browser extension, so only
+    // an extension origin counts.
+    if (EXTENSION_ORIGIN.test(origin)) this.backend.noteExtensionContact(path);
+
     let data: unknown;
     try {
       data = JSON.parse(await readBody(req));
@@ -296,6 +318,7 @@ export class PushServer {
       case '/api/netflix': this.backend.handleNetflixPush(data); break;
       case '/api/spotify-lyrics': this.backend.handleSpotifyLyrics(data); break;
       case '/api/youtube-cookies': this.backend.handleYouTubeCookies(data); break;
+      case '/api/hello': this.backend.handleExtensionHello(data); break;
     }
   }
 }

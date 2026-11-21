@@ -44,7 +44,7 @@ export const state = {
   preferredPlayers: new Array(MAX_SLOTS).fill(null),
   status: {
     discordConnected: false, mediaSourceReady: false, adPlaying: false, showLyrics: true,
-    presenceCount: 1, userAway: false, hideWhenAway: true,
+    presenceCount: 1, userAway: false, hideWhenAway: true, extensionConnected: false,
   },
   version: '',
 };

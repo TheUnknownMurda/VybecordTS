@@ -38,9 +38,10 @@ import { sanitizeEdits, publishFailure, LrclibPublishError } from '../src/core/l
 import { readLyricsImportFile, type SharedLyrics } from '../src/core/lyrics-share.js';
 import { SIGN_IN_CANCELLED } from '../src/core/spotify-auth.js';
 import {
-  extensionPath, extensionExists, detectBrowsers,
+  extensionPath, extensionExists, detectBrowsers, bundledExtensionVersion,
   revealExtensionFolder, copyExtensionsUrl, copyExtensionPath,
 } from './extension-install.js';
+import { compareVersions, EXTENSION_FIRST_HELLO_MS } from '../src/core/extension-link.js';
 import {
   spicetifyInfo, installSpicetifyExtension, revealSpicetifyExtensions, copyToClipboard,
   setupSpicetify,
@@ -240,23 +241,43 @@ export function registerIpc(
   });
 
   // ── Browser extension ──
-  handle('extension:info', async () => ({
-    path: extensionPath(),
-    available: extensionExists(),
-    browsers: await detectBrowsers(),
-    connected: backend.isExtensionConnected(),
-    enabled: backend.getConfig().extension_enabled !== false,
-    /*
-     * Whether the endpoint the extension pushes to is actually open.
-     *
-     * Without this the card says "Not detected" for two unrelated problems:
-     * the extension is not installed, and the app could not open port 8888
-     * because something else holds it. The first is fixed by installing the
-     * extension, and telling someone to reinstall it when the port is the
-     * problem sends them round a loop that cannot work.
-     */
-    portBlocked: getPushServer()?.isAvailable === false,
-  }));
+  handle('extension:info', async () => {
+    const server = getPushServer();
+    const status = backend.getExtensionStatus();
+    const [browsers, bundledVersion] = await Promise.all([detectBrowsers(), bundledExtensionVersion()]);
+    return {
+      path: extensionPath(),
+      available: extensionExists(),
+      browsers,
+      // connected, version, sending, sitesOff
+      ...status,
+      bundledVersion,
+      /*
+       * The browser runs an older extension than the one this app ships: an
+       * app update replaced the folder, and the browser keeps what it loaded
+       * until the extension is reloaded. Unknown is not older; an extension
+       * from before the hello (2.4.0 and earlier) never says its version.
+       */
+      outdated: !!status.version && !!bundledVersion && compareVersions(status.version, bundledVersion) < 0,
+      /*
+       * Too soon to say "Not detected": the endpoint has only just opened, and
+       * an extension in a browser that was already running says its next
+       * hello within 30 seconds.
+       */
+      waiting: !status.connected && !!server?.isRunning && server.listeningMs < EXTENSION_FIRST_HELLO_MS,
+      enabled: backend.getConfig().extension_enabled !== false,
+      /*
+       * Whether the endpoint the extension pushes to is actually open.
+       *
+       * Without this the card says "Not detected" for two unrelated problems:
+       * the extension is not installed, and the app could not open port 8888
+       * because something else holds it. The first is fixed by installing the
+       * extension, and telling someone to reinstall it when the port is the
+       * problem sends them round a loop that cannot work.
+       */
+      portBlocked: server?.isAvailable === false,
+    };
+  });
   handle('extension:reveal', () => { revealExtensionFolder(); return { ok: true }; });
   handle('extension:copyUrl', (url: string) => { copyExtensionsUrl(url); return { ok: true }; });
   handle('extension:copyPath', () => { copyExtensionPath(); return { ok: true }; });

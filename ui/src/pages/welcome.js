@@ -47,13 +47,18 @@ export function render(root) {
   let key = '';
   /** Asks the add-ons where they stand again; set once the extras are drawn. */
   let recheck = null;
+  /** The next ask while the extension's answer is "too soon to tell". */
+  let waitTimer = null;
+  /** Set once the page is left, so an answer still on its way schedules nothing. */
+  let left = false;
   function paintLive() {
     const s = state.status || {};
     const playing = state.slots.map((x) => x.track).find(Boolean) || null;
-    const k = [s.discordConnected, s.mediaSourceReady, playing?.track_name, playing?.media_source].join('|');
+    const k = [s.discordConnected, s.mediaSourceReady, playing?.track_name, playing?.media_source, s.extensionConnected].join('|');
     if (k === key) return;
     key = k;
-    // An add-on connects by reporting what plays, so this is when it changes.
+    // An add-on connects by reporting what plays, and the browser extension
+    // also by saying hello, which the status carries: this is when it changes.
     recheck?.();
 
     step(discordStep, s.discordConnected, 1, 'Discord is open',
@@ -135,7 +140,15 @@ export function render(root) {
     return function check() {
       const mine = ++asked;
       api.extensionInfo()
-        .then((i) => { if (mine === asked) done(ext, extBtn, i?.connected, i?.connected ? 'Connected' : 'Not set up'); })
+        .then((i) => {
+          if (mine !== asked || left) return;
+          done(ext, extBtn, i?.connected, i?.connected ? 'Connected' : i?.waiting ? 'Checking…' : 'Not set up');
+          // Right after the app starts, an installed extension has not said
+          // hello yet, and nothing would ask again once that window closes:
+          // "Checking…" would stay up for one that is not installed.
+          clearTimeout(waitTimer);
+          if (i?.waiting) waitTimer = setTimeout(check, 5000);
+        })
         .catch(() => { if (mine === asked) done(ext, extBtn, false, 'Unknown'); });
       // Either way in counts: Spicetify reporting, or a Spotify sign-in of the user's own.
       Promise.all([api.spicetifyInfo().catch(() => null), api.spotifyWebStatus().catch(() => null)])
@@ -156,7 +169,9 @@ export function render(root) {
   const retries = [1500, 4000, 10000].map((ms) => setTimeout(() => recheck(), ms));
   const unsubs = [subscribe('status', paintLive), subscribe('slots', paintLive)];
   return () => {
+    left = true;
     retries.forEach(clearTimeout);
+    clearTimeout(waitTimer);
     unsubs.forEach((fn) => fn());
   };
 }

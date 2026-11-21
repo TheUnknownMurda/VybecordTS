@@ -54,9 +54,23 @@ const api = {
 
   // ── Browser extension ──
   extensionInfo: () => invoke<{
-    path: string; available: boolean; connected: boolean; enabled: boolean;
+    path: string; available: boolean; enabled: boolean;
+    /** The extension is there: it said hello or pushed within the last 90 seconds, whatever plays. */
+    connected: boolean;
     /** True when something else holds 127.0.0.1:8888 and the endpoint gave up. */
     portBlocked: boolean;
+    /** The endpoint has only just opened: too soon to call the extension missing. */
+    waiting: boolean;
+    /** From its hello; null from an extension older than 2.5.0, or while not connected. */
+    version: string | null;
+    /** The extension this app ships, from its manifest. */
+    bundledVersion: string | null;
+    /** The browser runs an older extension than the one this app ships. */
+    outdated: boolean;
+    /** Sites it is reporting right now, by name. */
+    sending: string[];
+    /** Sites switched off in its options, by name. */
+    sitesOff: string[];
     browsers: { id: string; name: string; extensionsUrl: string; family: string }[];
   }>('extension:info'),
   revealExtension: () => invoke('extension:reveal'),
