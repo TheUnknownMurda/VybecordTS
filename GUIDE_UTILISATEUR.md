@@ -165,7 +165,7 @@ L'extension navigateur optionnelle corrige ça. **Settings → Integrations → 
 - **Firefox 140 ou plus récent** (aussi Zen, LibreWolf, Waterfox, Floorp) — télécharge `vybecord-extension-<version>-firefox.zip` depuis la [page des releases](https://github.com/TheUnknownMurda/VybecordTS/releases/latest), ouvre `about:debugging#/runtime/this-firefox`, clique sur **Charger un module complémentaire temporaire** et choisis le zip. Firefox retire les modules temporaires à sa fermeture.
 - **Safari** n'est pas pris en charge : Safari n'existe pas sur Windows.
 
-Son icône ouvre une page de réglages avec un interrupteur par site — Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick, Prime Video, Netflix — tous actifs par défaut, et l'interrupteur optionnel **Share my YouTube sign-in for captions** (désactivé par défaut, voir la section sur les sous-titres plus haut).
+Son icône ouvre une page de réglages avec un interrupteur par site — Spotify, YouTube, SoundCloud, Bandcamp, Amazon Music, Twitch, Kick, Prime Video, Netflix, Disney+, Paramount+, Apple TV, Crave, Crunchyroll — tous actifs par défaut, et l'interrupteur optionnel **Share my YouTube sign-in for captions** (désactivé par défaut, voir la section sur les sous-titres plus haut).
 
 Une fois l'extension chargée, le panneau affiche **Connected** en moins d'une demi-minute, même quand rien ne joue, avec la version qui tourne, ce qu'elle envoie et les sites coupés dans ses réglages. Il affiche **Checking…** pendant la première demi-minute après le démarrage de Vybecord. Après une mise à jour de Vybecord qui apporte une extension plus récente, il affiche **Update needed** : clique sur la flèche de rechargement de l'extension dans la page des extensions de ton navigateur.
 
@@ -222,7 +222,7 @@ Avec l'extension (2.3.0 ou plus récente), un film ou un épisode qui joue sur p
 - le nom du film ou de la série, puis l'épisode sous la forme **S1 E3 · Nom** (rien pour un film) ;
 - l'affiche, quand la page d'où tu es parti est celle du titre ; sinon, quand le lecteur est passé de lui-même à autre chose, le logo de Prime Video ;
 - la barre de progression, du début du film ou de l'épisode à sa fin ;
-- **Watching**, ou **Listening to** si tu préfères : **Settings → Discord presence → Activity type for Prime Video**, aussi à un clic sur le verbe de la carte dans **Now playing**. Ça vaut pour toutes les cartes ;
+- **Watching**, ou **Listening to** si tu préfères : **Settings → Discord presence → Activity type for films and series**, aussi à un clic sur le verbe de la carte dans **Now playing**. Ça vaut pour toutes les cartes et tous les sites de films ;
 - le bouton, **Watch on Prime Video**, ainsi que le titre et l'image, ouvrent la page du titre, ou une recherche sur Prime Video.
 
 **Les sous-titres comme paroles.** Active les sous-titres dans le lecteur de Prime Video et ils s'affichent sur la carte comme les paroles d'une chanson, tels que le lecteur les montre : un sous-titre de deux lignes prend les deux lignes de la carte, et un sous-titre d'une ligne vient sous la ligne d'avant. La fenêtre **Now playing** les marque **Subtitles**. Ils sont lus sur le lecteur, donc dans la langue choisie là, et sans sous-titres rien n'est lu. Si tu avances ou recules, les lignes repartent de là où tu arrives ; l'épisode suivant commence les siennes ; et quand personne n'a parlé depuis 25 secondes, la carte revient au titre. Avec la traduction activée, chaque ligne est traduite. L'interrupteur **Lyrics** les garde dans la fenêtre seulement, ou les coupe, comme n'importe quelles paroles.
@@ -238,7 +238,7 @@ Avec l'extension (2.4.0 ou plus récente), un film ou un épisode qui joue sur n
 - le nom du film ou de la série, puis l'épisode sous la forme **E3 · Nom**, ou **S1 E3 · Nom** quand le lecteur nomme la saison (rien pour un film) ;
 - le logo de Netflix, puisque la page où tu regardes ne nomme aucune affiche ;
 - la barre de progression, du début du film ou de l'épisode à sa fin ;
-- **Watching**, ou **Listening to** si tu préfères : **Settings → Discord presence → Activity type for Netflix**, aussi à un clic sur le verbe de la carte dans **Now playing**. Ça vaut pour toutes les cartes ;
+- **Watching**, ou **Listening to** si tu préfères : **Settings → Discord presence → Activity type for films and series**, comme pour Prime Video ;
 - le bouton, **Watch on Netflix**, ainsi que le titre et l'image, ouvrent la page où tu regardes.
 
 Netflix n'affiche le titre que pendant que ses commandes sont à l'écran. Si la carte n'apparaît pas quelques secondes après le début, passe la souris sur la vidéo une fois : tant que le titre ne s'est pas affiché, Vybecord n'a rien pour le nommer. Il garde ensuite le nom tant que tu restes sur ce film ou cet épisode. Quand le lecteur passe de lui-même à l'épisode suivant, la carte nomme seulement la série jusqu'à ce que les commandes réapparaissent.
@@ -250,6 +250,32 @@ Pendant une pub, la carte quitte Discord comme pour une pause, et revient avec l
 **Pas encore essayé sur le vrai Netflix.** L'extension lit le lecteur de Netflix d'après ce que d'autres en ont publié, et personne qui travaille sur Vybecord n'avait de compte Netflix pour le vérifier. Si la carte n'apparaît pas, ou affiche n'importe quoi, dis-le avec **Settings → About → Report a problem** pour que ce soit corrigé.
 
 Comme pour Prime Video, après une mise à jour de Vybecord, clique sur la flèche de rechargement de l'extension dans la page des extensions de ton navigateur pour qu'elle prenne Netflix : un navigateur qui a installé l'extension depuis une boutique te demande d'abord d'autoriser le nouveau site.
+
+### Disney+, Paramount+, Apple TV, Crave et Crunchyroll
+
+Avec l'extension (2.6.0 ou plus récente), un film ou un épisode qui joue sur disneyplus.com, paramountplus.com, tv.apple.com, crave.ca ou crunchyroll.com a sa propre carte, construite comme celle de Netflix :
+
+- le nom du film ou de la série, puis l'épisode sous la forme **S1 E3 · Nom** (rien pour un film) ;
+- l'affiche ou l'image de l'épisode quand la page en nomme une, sinon le logo du site ;
+- la barre de progression, du début du film ou de l'épisode jusqu'à sa fin ;
+- **Watching**, ou **Listening to** : **Settings → Discord presence → Activity type for films and series**, qui le règle pour tous les sites de films d'un coup ;
+- le bouton, **Watch on Disney+** (ou Paramount+, Apple TV, Crave, Crunchyroll), ainsi que le titre et l'image, ouvrent la page où tu regardes.
+
+Chacun des cinq a sa propre application Discord, donc ton profil affiche *Watching Disney+* (ou Paramount+, Apple TV…), avec le logo du site comme badge sur l'image et comme icône dans la liste **Active Now** de Discord.
+
+**Les sous-titres comme paroles**, comme sur Netflix, partout où le lecteur les écrit en texte : active-les dans le lecteur et ils s'affichent sur la carte, marqués **Subtitles** dans **Now playing**. Crunchyroll peint la plupart de ses sous-titres directement sur l'image, et ceux-là n'ont pas de texte à afficher.
+
+Un film en pause, ou une pub sur Crave, retire la carte de Discord. Les films et les épisodes restent hors de l'historique d'écoute, d'**Activity** et de Last.fm. **Settings → Detection** a un interrupteur pour chaque site. Vybecord reconnaît aussi les applications Windows d'Apple TV (qu'il prenait avant pour Apple Music), de Disney+, de Crunchyroll et de Paramount+, sans leurs sous-titres.
+
+**Pas encore essayé sur les vrais sites.** L'extension lit ces lecteurs d'après ce que d'autres en ont publié, et personne qui travaille sur Vybecord n'avait de compte pour les vérifier. Si une carte n'apparaît pas, ou affiche n'importe quoi, dis-le avec **Settings → About → Report a problem** pour que ce soit corrigé.
+
+Après une mise à jour de Vybecord, clique sur la flèche de rechargement de l'extension dans la page des extensions de ton navigateur pour qu'elle prenne les nouveaux sites : un navigateur qui a installé l'extension depuis une boutique te demande d'abord de les autoriser.
+
+### Amazon Music
+
+L'application Amazon Music pour Windows était déjà détectée. Avec l'extension (2.6.0 ou plus récente), son lecteur web l'est aussi, sur music.amazon.com et les sites des autres pays (music.amazon.ca, .co.uk, .fr…) : la chanson, l'artiste, l'album et sa pochette, la position exacte, et des liens vers l'artiste et l'album. Avant, Windows ne voyait qu'un onglet de navigateur, et Vybecord le prenait pour Spotify. Les paroles sont cherchées comme pour n'importe quelle chanson, et les chansons vont dans l'historique d'écoute et sur Last.fm.
+
+**Settings → Detection → Amazon Music** couvre l'application et le lecteur web ; avant, c'était **Other desktop apps**. Amazon Music a lui aussi sa propre application Discord, avec son logo comme badge.
 
 ### Deux choses jouent en même temps
 
@@ -264,7 +290,7 @@ Ou affiche-les toutes. **Settings → Discord presence → Several presences** m
 - L'historique d'écoute (et donc **Activity**) et Last.fm ne suivent que la présence 1.
 - Avec les paroles sur deux cartes ou plus, les cartes peuvent changer de place sur ton profil à chaque ligne : Discord met en haut la carte qui vient de changer, et Vybecord ne peut pas imposer l'ordre. La fenêtre te prévient quand les paroles s'activent sur une deuxième carte. Mettre les autres cartes sur **In Vybecord only** garde leurs paroles dans la fenêtre et l'ordre stable. Une carte *Playing* passe toujours au-dessus des cartes *Listening* et *Watching*.
 
-Chaque carte est une application Discord à part. Spotify, SoundCloud, Apple Music, Prime Video et Netflix en ont une chacun, YouTube trois, et Kick et Twitch cinq chacun : jusqu'à cinq streams Kick ou Twitch gardent tous leur logo. Une carte dont la plateforme n'a plus d'application libre en emprunte une autre. Avec celle par défaut, ça fait dix-neuf applications pour cinq cartes au maximum : il n'y a rien à configurer.
+Chaque carte est une application Discord à part. Spotify, SoundCloud, Apple Music, Amazon Music, Prime Video, Netflix, Disney+, Paramount+, Apple TV, Crave et Crunchyroll en ont une chacun, YouTube trois, et Kick et Twitch cinq chacun : jusqu'à cinq streams Kick ou Twitch gardent tous leur logo. Une carte dont la plateforme n'a plus d'application libre en emprunte une autre. Avec celle par défaut, ça fait vingt-cinq applications pour cinq cartes au maximum : il n'y a rien à configurer.
 
 ---
 
