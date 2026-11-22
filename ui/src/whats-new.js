@@ -57,6 +57,20 @@ const ICONS = {
  */
 const ENTRIES = [
   {
+    version: '2.20.0',
+    headline: 'Disney+, Paramount+, Apple TV, Crave and Crunchyroll get cards of their own, and Amazon Music is recognised in your browser.',
+    items: [
+      ['tv', 'Five more film sites',
+        'A film or an episode on Disney+, Paramount+, Apple TV, Crave or Crunchyroll shows on Discord under the site’s own icon: Watching, the title, the episode and a button to the page you watch on, with the subtitles as lyrics where the player writes them as text. It needs the browser extension 2.6.0: click the reload arrow on Vybecord in your browser’s extensions page. None has been tried on the real sites yet: if a card does not show, say so in Settings → About → Report a problem.'],
+      ['disc', 'Amazon Music in your browser',
+        'Its web player shows as Amazon Music, with the song, the album, the cover and the exact position. It used to show as Spotify. The desktop app gets the Amazon Music icon too.'],
+      ['wrench', 'Apple TV is not Apple Music',
+        'The Apple TV app for Windows was announced as Apple Music, a song with lyrics looked up for it. It shows as Apple TV now, and the Disney+, Crunchyroll and Paramount+ apps are named too.'],
+      ['verb', 'One verb for every film site',
+        'Settings → Discord presence → Activity type for films and series picks Watching or Listening to for all seven film sites at once, Prime Video and Netflix included.'],
+    ],
+  },
+  {
     version: '2.19.0',
     headline: 'The browser extension shows as connected, even with nothing playing.',
     items: [
