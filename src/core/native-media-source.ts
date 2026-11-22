@@ -1033,6 +1033,10 @@ export function sourceFromAppId(appId: string): string {
   const s = appId.replace(/\s/g, '').toLowerCase();
   let result = 'unknown';
   if (/spotify/.test(s)) result = 'spotify';
+  // Before Apple Music: Apple's Windows apps all start "AppleInc.", and the
+  // Apple TV app's (AppleInc.AppleTVWin_…) was taken for Apple Music, a film
+  // announced as a song with its lyrics looked up.
+  else if (/appletv/.test(s)) result = 'apple_tv';
   else if (/apple\.?music|appleinc|itunes/.test(s)) result = 'apple_music';
   else if (/deezer/.test(s)) result = 'deezer';
   else if (/tidal/.test(s)) result = 'tidal';
@@ -1092,7 +1096,12 @@ export function sourcePriority(src: string): number {
     case 'twitch':
     case 'kick':
     case 'prime_video':
-    case 'netflix': return 6;
+    case 'netflix':
+    case 'disney_plus':
+    case 'paramount_plus':
+    case 'apple_tv':
+    case 'crave':
+    case 'crunchyroll': return 6;
     default:
       if (/vlc|foobar|musicbee|aimp|winamp|mediamonkey|groove|wmp/.test(src)) return 5;
       // Everything we could not name: an unidentified tab, an unknown app.
@@ -1162,6 +1171,18 @@ export function detectWebService(s: SessionState): string | null {
   // from the Netflix Series)", and a song from one playing on YouTube Music
   // is no film.
   if (s.appId.toLowerCase().includes('netflix') || (s.media.albumTitle || '').trim().toLowerCase() === 'netflix') return 'netflix';
+  // The same rule for the other film sites: their Windows apps' ids
+  // (Disney.37853FC22B2CE_…, and whatever Crunchyroll's and Paramount+'s
+  // are called, with the name in them), or a page naming itself just that.
+  // Crave has no Windows app. Not the name anywhere in the album: an anime's
+  // soundtrack can say "Crunchyroll" without being the episode.
+  const app = s.appId.toLowerCase();
+  const album = (s.media.albumTitle || '').trim().toLowerCase();
+  if (app.includes('disney') || album === 'disney+') return 'disney_plus';
+  if (app.includes('crunchyroll') || album === 'crunchyroll') return 'crunchyroll';
+  if (app.includes('paramount') || album === 'paramount+') return 'paramount_plus';
+  if (album === 'apple tv' || album === 'apple tv+') return 'apple_tv';
+  if (album === 'crave') return 'crave';
   if (haystack.includes('apple music') || haystack.includes('music.apple')) return 'apple_music';
   // Before YouTube: the Spotify web player's metadata mentions both.
   if (haystack.includes('spotify')) return 'spotify';

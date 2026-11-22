@@ -37,10 +37,35 @@ export const ACTIVITY_TYPES = [[2, 'Listening to'], [0, 'Playing'], [3, 'Watchin
 export const ACTIVITY_KEYS = ['rpc_activity_type', 'rpc_activity_type_2', 'rpc_activity_type_3', 'rpc_activity_type_4', 'rpc_activity_type_5'];
 /** A YouTube Short's verb, on every card. Watching first: it is the default. */
 export const SHORTS_ACTIVITY_TYPES = [[3, 'Watching'], [2, 'Listening to']];
-/** A Prime Video film's or episode's verb, on every card: the same two, Watching the default. */
-export const PRIME_VIDEO_ACTIVITY_TYPES = SHORTS_ACTIVITY_TYPES;
-/** The same for Netflix. */
-export const NETFLIX_ACTIVITY_TYPES = SHORTS_ACTIVITY_TYPES;
+/** A film's or an episode's verb, on every card and every film site: the same two, Watching the default. */
+export const FILM_ACTIVITY_TYPES = SHORTS_ACTIVITY_TYPES;
+
+/**
+ * Each film site's verb (FILM_SITES in src/core/film-sites.ts). The config
+ * keeps one per site, as Prime Video and Netflix each had theirs; the window
+ * offers one choice for them all, seven rows of the same question being no
+ * choice anyone wanted to make seven times.
+ */
+export const FILM_ACTIVITY_KEYS = [
+  'rpc_prime_video_activity_type', 'rpc_netflix_activity_type', 'rpc_disney_plus_activity_type',
+  'rpc_paramount_plus_activity_type', 'rpc_apple_tv_activity_type', 'rpc_crave_activity_type',
+  'rpc_crunchyroll_activity_type',
+];
+
+/**
+ * The films' verb as one choice: Watching (3) or Listening to (2) when every
+ * site says it, 'mixed' when they differ (one set apart before they were
+ * offered together, or in config.json), which picks neither until one is.
+ */
+export function filmVerb(config) {
+  const verbs = new Set(FILM_ACTIVITY_KEYS.map((k) => (Number(config[k]) === 2 ? 2 : 3)));
+  return verbs.size === 1 ? [...verbs][0] : 'mixed';
+}
+
+/** The change that gives every film site this verb. */
+export function filmVerbPatch(value) {
+  return Object.fromEntries(FILM_ACTIVITY_KEYS.map((k) => [k, Number(value)]));
+}
 export const STATUS_DISPLAY = [
   ['app', 'App name'], ['title', 'Track title'], ['title_artist', 'Title — Artist'],
   ['artist_title', 'Artist — Title'], ['artist', 'Artist'], ['album', 'Album'],
@@ -204,13 +229,10 @@ const PARTS = {
       choices('A YouTube Short says', 'all', SHORTS_ACTIVITY_TYPES,
         () => cfg('rpc_shorts_activity_type', 3),
         (v) => put('rpc_shorts_activity_type', Number(v))),
-      choices('Prime Video says', 'all', PRIME_VIDEO_ACTIVITY_TYPES,
-        () => cfg('rpc_prime_video_activity_type', 3),
-        (v) => put('rpc_prime_video_activity_type', Number(v))),
-      choices('Netflix says', 'all', NETFLIX_ACTIVITY_TYPES,
-        () => cfg('rpc_netflix_activity_type', 3),
-        (v) => put('rpc_netflix_activity_type', Number(v)),
-        'Everything else says what is picked above.'),
+      choices('A film or an episode says', 'all', FILM_ACTIVITY_TYPES,
+        () => filmVerb(state.config),
+        (v) => saveConfig(filmVerbPatch(v)),
+        'On Prime Video, Netflix, Disney+, Paramount+, Apple TV, Crave and Crunchyroll. Everything else says what is picked above.'),
       select('Status line', 'all', STATUS_DISPLAY,
         () => cfg('rpc_status_display', 'app'),
         (v) => put('rpc_status_display', v),

@@ -160,6 +160,13 @@ export interface VybecordConfig {
   detect_twitch: boolean;
   detect_prime_video: boolean;
   detect_netflix: boolean;
+  detect_disney_plus: boolean;
+  detect_paramount_plus: boolean;
+  detect_apple_tv: boolean;
+  detect_crave: boolean;
+  detect_crunchyroll: boolean;
+  /** Amazon Music, its web player through the extension and its desktop app alike. */
+  detect_amazon_music: boolean;
   detect_browser: boolean;
   detect_other_apps: boolean;
   /** A Twitch or Kick tab on a channel that is not streaming gets an Offline
@@ -223,6 +230,12 @@ export interface VybecordConfig {
   rpc_prime_video_activity_type: number;
   /** The same for a film or an episode on Netflix. */
   rpc_netflix_activity_type: number;
+  /** And on each of the other film sites (see film-sites.ts). */
+  rpc_disney_plus_activity_type: number;
+  rpc_paramount_plus_activity_type: number;
+  rpc_apple_tv_activity_type: number;
+  rpc_crave_activity_type: number;
+  rpc_crunchyroll_activity_type: number;
   /**
    * What the "Listening to …" status line shows (member list / profile), independent
    * of the presence card: 'app' = application name, 'title' = current track title,

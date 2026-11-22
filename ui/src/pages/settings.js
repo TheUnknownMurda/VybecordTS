@@ -12,7 +12,7 @@ import { state, subscribe, saveConfig } from '../state.js';
 import { goto } from '../router.js';
 import { discordPreview } from '../discord-card.js';
 // The card's choices live with the editor on Now playing, so both offer the same lists.
-import { ACTIVITY_TYPES, ACTIVITY_KEYS, SHORTS_ACTIVITY_TYPES, PRIME_VIDEO_ACTIVITY_TYPES, NETFLIX_ACTIVITY_TYPES, STATUS_DISPLAY, ICON_MODES, ICON_KEYS } from '../card-editor.js';
+import { ACTIVITY_TYPES, ACTIVITY_KEYS, SHORTS_ACTIVITY_TYPES, FILM_ACTIVITY_TYPES, filmVerb, filmVerbPatch, STATUS_DISPLAY, ICON_MODES, ICON_KEYS } from '../card-editor.js';
 import { showWhatsNew } from '../whats-new.js';
 import { lyricCardCount, CARD_ORDER_NOTE, lyricsMode, lyricsModePatch, LYRICS_MODES } from '../why.js';
 import { ACCENT_PRESETS, applyAccent, normalizeAccent } from '../accent.js';
@@ -242,6 +242,19 @@ async function saveDumpPath(value) {
 
 // ── Discord presence ──────────────────────────────────────────────────────────
 
+/**
+ * One verb for every film site, which writes each site's own key (see
+ * filmVerb in card-editor.js). When the sites say different things, the row
+ * says so rather than showing one of them as though it were everyone's.
+ */
+function filmVerbRow() {
+  const now = filmVerb(state.config);
+  const options = now === 'mixed' ? [['mixed', 'Depends on the site'], ...FILM_ACTIVITY_TYPES] : FILM_ACTIVITY_TYPES;
+  return selectRow('Activity type for films and series',
+    'The verb while a film or an episode plays on Prime Video, Netflix, Disney+, Paramount+, Apple TV, Crave or Crunchyroll, on every card.',
+    now, options, (v) => { if (v !== 'mixed') saveConfig(filmVerbPatch(v)); });
+}
+
 function presenceCat(body, { search }) {
   const iconMode = ICON_KEYS.find((k) => cfg(k) === true) || '';
   const multi = presenceCount() > 1;
@@ -276,10 +289,7 @@ function presenceCat(body, { search }) {
         cfg('rpc_activity_type', 2), ACTIVITY_TYPES, (v) => put('rpc_activity_type', Number(v))),
       selectRow('Activity type for Shorts', 'The verb while a YouTube Short plays, on every card. Everything else keeps its activity type.',
         cfg('rpc_shorts_activity_type', 3), SHORTS_ACTIVITY_TYPES, (v) => put('rpc_shorts_activity_type', Number(v))),
-      selectRow('Activity type for Prime Video', 'The verb while a film or an episode plays on Prime Video, on every card.',
-        cfg('rpc_prime_video_activity_type', 3), PRIME_VIDEO_ACTIVITY_TYPES, (v) => put('rpc_prime_video_activity_type', Number(v))),
-      selectRow('Activity type for Netflix', 'The verb while a film or an episode plays on Netflix, on every card.',
-        cfg('rpc_netflix_activity_type', 3), NETFLIX_ACTIVITY_TYPES, (v) => put('rpc_netflix_activity_type', Number(v))),
+      filmVerbRow(),
       selectRow('Status line', 'What the one-line status in the member list shows.',
         cfg('rpc_status_display', 'app'), STATUS_DISPLAY, (v) => put('rpc_status_display', v)),
       cfg('rpc_status_display') === 'custom'
@@ -480,6 +490,8 @@ function detectionCat(body) {
     toggleRow('Apple Music', null, cfg('detect_apple_music', true) !== false, (v) => put('detect_apple_music', v)),
     toggleRow('YouTube and YouTube Music', null, cfg('detect_youtube', true) !== false, (v) => put('detect_youtube', v)),
     toggleRow('SoundCloud', null, cfg('detect_soundcloud', true) !== false, (v) => put('detect_soundcloud', v)),
+    toggleRow('Amazon Music', 'The desktop app, and the web player through the browser extension.',
+      cfg('detect_amazon_music', true) !== false, (v) => put('detect_amazon_music', v)),
     toggleRow('Other browser tabs', 'Anything else playing in Chrome, Firefox, Edge, Brave, Opera…',
       cfg('detect_browser', true) !== false, (v) => put('detect_browser', v)),
     toggleRow('Twitch', 'Live streams, reported by the browser extension.',
@@ -490,6 +502,16 @@ function detectionCat(body) {
       cfg('detect_prime_video', true) !== false, (v) => put('detect_prime_video', v)),
     toggleRow('Netflix', 'Films and episodes, with the subtitles you have on, reported by the browser extension.',
       cfg('detect_netflix', true) !== false, (v) => put('detect_netflix', v)),
+    toggleRow('Disney+', 'Films and episodes, with the subtitles you have on, reported by the browser extension.',
+      cfg('detect_disney_plus', true) !== false, (v) => put('detect_disney_plus', v)),
+    toggleRow('Paramount+', 'Films and episodes, reported by the browser extension.',
+      cfg('detect_paramount_plus', true) !== false, (v) => put('detect_paramount_plus', v)),
+    toggleRow('Apple TV', 'Films and episodes on tv.apple.com, reported by the browser extension, and the Apple TV app.',
+      cfg('detect_apple_tv', true) !== false, (v) => put('detect_apple_tv', v)),
+    toggleRow('Crave', 'Films and episodes, with the subtitles you have on, reported by the browser extension.',
+      cfg('detect_crave', true) !== false, (v) => put('detect_crave', v)),
+    toggleRow('Crunchyroll', 'Episodes, reported by the browser extension, with the subtitles you have on when the player writes them as text.',
+      cfg('detect_crunchyroll', true) !== false, (v) => put('detect_crunchyroll', v)),
     toggleRow('Offline channels', 'A Twitch or Kick tab left on a channel that is not streaming shows an Offline card, below anything playing. Off, that tab shows nothing.',
       cfg('show_offline_channels', true) !== false, (v) => put('show_offline_channels', v)),
     toggleRow('Other desktop apps', 'VLC, foobar2000, MusicBee, Deezer, Tidal, Bandcamp and friends.',

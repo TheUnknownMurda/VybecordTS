@@ -789,7 +789,7 @@ const lineAt = (arr, i) => (i >= 0 && i < arr.length ? arr[i]?.text || '' : '');
  * off Kick's player as they are said, so neither has timings to show or fix.
  */
 const kickCaptions = (t) => t?.media_source === 'kick' && (!!t.is_live || t.context_type === 'vod');
-/** The same for a film's or an episode's subtitles on Prime Video or Netflix, read off its player as they show. */
+/** The same for a film's or an episode's subtitles on a film site, read off its player as they show. */
 const filmSubtitles = (t) => isFilm(t?.media_source);
 /** Lines read off a player as they are said: nothing to re-time, report or copy. */
 const playerLines = (t) => kickCaptions(t) || filmSubtitles(t);

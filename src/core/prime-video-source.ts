@@ -27,9 +27,11 @@ const RE_TITLE_PAGE = /^https:\/\/(?:[a-z0-9-]+\.)*(?:primevideo\.com|amazon\.(?
  * "Saison 1, ép. 3 Name", "Staffel 1, Folge 3 Name", with nothing between the
  * episode's number and its name, which on the card ran the two together.
  * Whatever the words, the shape is the same: a word and a number, a comma, a
- * word and a number, then the name. Anything else is kept as written.
+ * word and a number, then the name. Anything else is kept as written. A dot
+ * between the number and the name ("S1, E3 · Name", as Apple TV writes it,
+ * see film-sites.ts) is a separator like a dash.
  */
-const RE_EPISODE = /^\p{L}+\.?\s*(\d{1,3})\s*[,،、]\s*\p{L}+\.?\s*(\d{1,4})(?:\s*[:.\-–—]\s*|\s+|$)(.*)$/u;
+const RE_EPISODE = /^\p{L}+\.?\s*(\d{1,3})\s*[,،、]\s*\p{L}+\.?\s*(\d{1,4})(?:\s*[:.\-–—·•]\s*|\s+|$)(.*)$/u;
 
 export function episodeLabel(raw: string): string {
   const m = RE_EPISODE.exec(raw);
@@ -42,6 +44,9 @@ export const PRIME_VIDEO: FilmSite = {
   source: 'prime_video',
   name: 'Prime Video',
   idPrefix: 'pv',
+  path: '/api/primevideo',
+  configKey: 'detect_prime_video',
+  activityKey: 'rpc_prime_video_activity_type',
   titlePage: RE_TITLE_PAGE,
   episodeLabel,
 };

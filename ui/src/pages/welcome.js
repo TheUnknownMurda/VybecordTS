@@ -103,7 +103,7 @@ export function render(root) {
         el('div', { class: 'wel-title' }, ['Make it better ', el('span', { style: 'font-weight:500;color:var(--text-muted)', text: '— optional' })]),
         el('div', { class: 'wel-desc', text: 'Any time from Settings → Integrations.' }),
       ]),
-      opt('Browser extension', 'Recognises YouTube, SoundCloud, Twitch, Kick, Prime Video and Netflix tabs by name, with the exact position, and puts Prime Video’s and Netflix’s subtitles on the card.', ext, extBtn),
+      opt('Browser extension', 'Recognises YouTube, SoundCloud, Amazon Music, Twitch, Kick, Prime Video, Netflix, Disney+, Paramount+, Apple TV, Crave and Crunchyroll tabs by name, with the exact position, and puts the films’ subtitles on the card.', ext, extBtn),
       opt('Spotify, in full', 'Every artist, the playlist you are in, the real cover — through Spicetify, which adds Spotify’s own synced lyrics, or with Premium through a Spotify app of your own.', spot, spotBtn),
       opt('Last.fm', 'Scrobble everything you play.', fm, fmBtn),
       el('div', { class: 'wel-opt', style: 'padding:0 14px' }, [

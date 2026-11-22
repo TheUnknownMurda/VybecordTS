@@ -2,19 +2,27 @@
  * Options: one switch per site, plus whether the desktop app is reachable.
  *
  * The site list is repeated from background.js rather than imported — the
- * service worker is a classic script, and making it a module to share eight
+ * service worker is a classic script, and making it a module to share fourteen
  * strings would cost more than it saves.
  */
+
+const FILM = 'the film or episode and where you are in it, plus the subtitles you have on';
 
 const SITES = [
   { key: 'spotify', name: 'Spotify', detail: 'open.spotify.com — album, playlist, shuffle and repeat, plus official lyrics' },
   { key: 'youtube', name: 'YouTube', detail: 'youtube.com and music.youtube.com — video link, live stream start time' },
   { key: 'soundcloud', name: 'SoundCloud', detail: 'the real artist rather than the uploading account, and the track link' },
   { key: 'bandcamp', name: 'Bandcamp', detail: 'album and label metadata' },
+  { key: 'amazonmusic', name: 'Amazon Music', detail: 'the song, its album and cover, and where you are in it' },
   { key: 'twitch', name: 'Twitch', detail: 'stream title, category, uptime' },
   { key: 'kick', name: 'Kick', detail: 'stream title, category, uptime' },
-  { key: 'primevideo', name: 'Prime Video', detail: 'the film or episode and where you are in it, plus the subtitles you have on' },
-  { key: 'netflix', name: 'Netflix', detail: 'the film or episode and where you are in it, plus the subtitles you have on' },
+  { key: 'primevideo', name: 'Prime Video', detail: FILM },
+  { key: 'netflix', name: 'Netflix', detail: FILM },
+  { key: 'disneyplus', name: 'Disney+', detail: FILM },
+  { key: 'paramountplus', name: 'Paramount+', detail: FILM },
+  { key: 'appletv', name: 'Apple TV', detail: `tv.apple.com — ${FILM}` },
+  { key: 'crave', name: 'Crave', detail: FILM },
+  { key: 'crunchyroll', name: 'Crunchyroll', detail: 'the episode and where you are in it, plus the subtitles you have on when the player writes them as text' },
 ];
 
 const DEFAULTS = Object.fromEntries(SITES.map(s => [s.key, true]));

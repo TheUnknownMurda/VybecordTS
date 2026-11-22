@@ -20,6 +20,7 @@ import { evictOldest } from '../core/utils.js';
 import { coverTone, type CoverTone } from '../core/cover-tone.js';
 import type { LyricLine, DiscordActivity, TrackData } from '../core/types.js';
 import { isFilmSource } from '../core/film-source.js';
+import { FILM_SITES } from '../core/film-sites.js';
 
 const log = createLogger('LyricsEngine');
 
@@ -126,12 +127,30 @@ const NETFLIX_LOGO = 'https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29d
 
 /**
  * Where each film site's verb is set (Watching or Listening to, on every
- * card): its own key, as a Short has rpc_shorts_activity_type.
+ * card): its own key, as a Short has rpc_shorts_activity_type. The window
+ * sets them all together (see FILM_ACTIVITY_KEYS in ui/src/card-editor.js).
  */
-const FILM_ACTIVITY_KEYS: Record<string, string> = {
-  prime_video: 'rpc_prime_video_activity_type',
-  netflix: 'rpc_netflix_activity_type',
-};
+const FILM_ACTIVITY_KEYS: Record<string, string> = Object.fromEntries(FILM_SITES.map(s => [s.source, String(s.activityKey)]));
+
+/**
+ * The "logo" asset Sam put on each of these platforms' Discord applications
+ * (2026-11-22, see PLATFORM_DISCORD_APP_IDS in backend.ts), as the address
+ * Discord serves it at rather than by its key. A key names an asset of the
+ * application the card is published under, and a card does not always land
+ * on its own: a second Disney+ tab borrows another application, where "logo"
+ * would be that application's picture or none at all. The address is the
+ * same picture on any of them. Replaced in the Developer Portal, an asset
+ * gets a new id, and this keeps showing the old one until it is changed here.
+ * A film site's logo is also the large picture of a film its page names no
+ * poster for, as Netflix's is (PLATFORM_LARGE_IMAGES).
+ */
+const appAsset =(appId: string, assetId: string) => `https://cdn.discordapp.com/app-assets/${appId}/${assetId}.png`;
+const AMAZON_MUSIC_LOGO = appAsset('1573933460308107434', '1573937101358108772');
+const DISNEY_PLUS_LOGO = appAsset('1573934489686638652', '1573937559925563402');
+const APPLE_TV_LOGO = appAsset('1573935003824562286', '1573937359999996054');
+const PARAMOUNT_PLUS_LOGO = appAsset('1573935828713996442', '1573937290399711382');
+const CRUNCHYROLL_LOGO = appAsset('1573936266884423680', '1573937220673609738');
+const CRAVE_LOGO = appAsset('1573936483268820992', '1573936998178234529');
 
 // ── Platform icons (external URLs — rendered by Discord image proxy) ──
 // Note: Discord no longer supports external URLs for small_image. Using compatible host.
@@ -141,7 +160,7 @@ const PLATFORM_ICONS: Record<string, [string, string]> = {
   apple_music: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/ICa0AUJOip2kfiPnSCfDq.png', 'Apple Music'],
   deezer: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/VVjYzmfdMIF5hHA8SUnbi.gif', 'Deezer'],
   tidal: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/VVjYzmfdMIF5hHA8SUnbi.gif', 'Tidal'],
-  amazon_music: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/VVjYzmfdMIF5hHA8SUnbi.gif', 'Amazon Music'],
+  amazon_music: [AMAZON_MUSIC_LOGO, 'Amazon Music'],
   soundcloud: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/AUyaLDvEnlp1O2fX4HTvX.png', 'SoundCloud'],
   bandcamp: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/VVjYzmfdMIF5hHA8SUnbi.gif', 'Bandcamp'],
   youtube_music: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/2Fhe7kDaQIQjvCtdlhlmo.png', 'YouTube Music'],
@@ -150,6 +169,11 @@ const PLATFORM_ICONS: Record<string, [string, string]> = {
   twitch: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/VGmX6BMle1xqCoM7LDX4w.png', 'Twitch'],
   prime_video: [PRIME_VIDEO_LOGO, 'Prime Video'],
   netflix: [NETFLIX_LOGO, 'Netflix'],
+  disney_plus: [DISNEY_PLUS_LOGO, 'Disney+'],
+  paramount_plus: [PARAMOUNT_PLUS_LOGO, 'Paramount+'],
+  apple_tv: [APPLE_TV_LOGO, 'Apple TV'],
+  crave: [CRAVE_LOGO, 'Crave'],
+  crunchyroll: [CRUNCHYROLL_LOGO, 'Crunchyroll'],
   // Browsers (YouTube / web player)
   browser_chrome: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/2Fhe7kDaQIQjvCtdlhlmo.png', 'YouTube'],
   browser_firefox: ['https://images.guns.lol/2d34137430fbdf92ffab3a07ade119c29de30536/2Fhe7kDaQIQjvCtdlhlmo.png', 'YouTube'],
@@ -175,6 +199,13 @@ const PLATFORM_LARGE_IMAGES: Record<string, string> = {
   prime_video: PRIME_VIDEO_LOGO,
   // Netflix's watch page names none.
   netflix: NETFLIX_LOGO,
+  // Nor does Disney+'s, as far as anyone has found; the others name one on
+  // some pages and not on others (see their scripts in extension/src/sites).
+  disney_plus: DISNEY_PLUS_LOGO,
+  paramount_plus: PARAMOUNT_PLUS_LOGO,
+  apple_tv: APPLE_TV_LOGO,
+  crave: CRAVE_LOGO,
+  crunchyroll: CRUNCHYROLL_LOGO,
 };
 
 export interface LyricsEngineCallbacks {
@@ -2313,6 +2344,13 @@ const PLATFORM_SEARCH: Record<string, (q: string) => string> = {
   twitch:          q => `https://www.twitch.tv/search?q=${encodeURIComponent(q)}`,
   prime_video:     q => `https://www.primevideo.com/search?phrase=${encodeURIComponent(q)}`,
   netflix:         q => `https://www.netflix.com/search?q=${encodeURIComponent(q)}`,
+  apple_tv:        q => `https://tv.apple.com/search?term=${encodeURIComponent(q)}`,
+  crunchyroll:     q => `https://www.crunchyroll.com/search?q=${encodeURIComponent(q)}`,
+  // No search address of theirs is known to take a query, so a web search
+  // within the site: its first answer is the title's page.
+  disney_plus:     q => `https://www.google.com/search?q=${encodeURIComponent(`site:disneyplus.com ${q}`)}`,
+  paramount_plus:  q => `https://www.google.com/search?q=${encodeURIComponent(`site:paramountplus.com ${q}`)}`,
+  crave:           q => `https://www.google.com/search?q=${encodeURIComponent(`site:crave.ca ${q}`)}`,
   browser_chrome: q => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
   browser_firefox:q => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
   browser_edge:   q => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
@@ -2395,7 +2433,8 @@ const PLATFORM_NAMES: Record<string, string> = {
   spotify: 'Spotify', apple_music: 'Apple Music', deezer: 'Deezer',
   tidal: 'Tidal', amazon_music: 'Amazon Music', soundcloud: 'SoundCloud',
   bandcamp: 'Bandcamp', youtube_music: 'YouTube Music', youtube: 'YouTube', kick: 'Kick', twitch: 'Twitch',
-  prime_video: 'Prime Video', netflix: 'Netflix',
+  prime_video: 'Prime Video', netflix: 'Netflix', disney_plus: 'Disney+', paramount_plus: 'Paramount+',
+  apple_tv: 'Apple TV', crave: 'Crave', crunchyroll: 'Crunchyroll',
   browser_chrome: 'YouTube', browser_firefox: 'YouTube',
   browser_edge: 'YouTube', browser_brave: 'YouTube', browser_opera: 'YouTube',
 };

@@ -47,9 +47,9 @@ import { SoundCloudSource } from './core/soundcloud-source.js';
 import { BandcampSource } from './core/bandcamp-source.js';
 import { KickSource } from './core/kick-source.js';
 import { TwitchSource } from './core/twitch-source.js';
-import { PrimeVideoSource } from './core/prime-video-source.js';
-import { NetflixSource } from './core/netflix-source.js';
-import { FilmSource, isFilmSource } from './core/film-source.js';
+import { AmazonMusicSource } from './core/amazon-music-source.js';
+import { FilmSource, isFilmSource, type FilmSite } from './core/film-source.js';
+import { FILM_SITES, filmSite } from './core/film-sites.js';
 import { ExtensionLink, EXTENSION_ALIVE_MS, normalizeExtensionHello } from './core/extension-link.js';
 import { isBroadcastSource } from './core/broadcast-track.js';
 import { DiscordPool } from './core/discord-pool.js';
@@ -90,7 +90,10 @@ const MUSIC_APPS = new Set(['spotify', 'apple_music', 'deezer', 'tidal', 'amazon
  * purpose: its push comes from Spicetify inside the desktop client, never from
  * a browser tab.
  */
-const BROWSER_PUSH_SOURCES = new Set(['youtube', 'youtube_music', 'soundcloud', 'bandcamp', 'kick', 'twitch', 'prime_video', 'netflix']);
+const BROWSER_PUSH_SOURCES = new Set([
+  'youtube', 'youtube_music', 'soundcloud', 'bandcamp', 'amazon_music', 'kick', 'twitch',
+  ...FILM_SITES.map(s => s.source),
+]);
 /** Live-stream sources: logged in the history, never counted as music played. */
 const STREAM_SOURCES = new Set(['twitch', 'kick']);
 
@@ -157,14 +160,14 @@ const PUSH_PRIORITY: Record<string, number> = {
   youtube_music: 110,
   soundcloud: 109,
   bandcamp: 108,
+  amazon_music: 108,
   /*
    * Above the streams: a film playing is being watched, and a stream tab left
    * running beside it is the background (see sourcePriority). Below the music,
-   * as video sits under music everywhere else. The two film sites tie: two
-   * films at once are two cards in the order their tabs first reported.
+   * as video sits under music everywhere else. The film sites tie: two films
+   * at once are two cards in the order their tabs first reported.
    */
-  prime_video: 107,
-  netflix: 107,
+  ...Object.fromEntries(FILM_SITES.map(s => [s.source, 107])),
   kick: 106,
   twitch: 105,
 };
@@ -291,6 +294,14 @@ const PLATFORM_DISCORD_APP_IDS: Record<string, readonly string[]> = {
   twitch: ['1489626057588998164', '1566197447913636033', '1566197587495747607', '1566197691481067542', '1566197821034467440'],
   prime_video: ['1572804675755966535'],
   netflix: ['1573130633314570261'],
+  // Sam's, made 2026-11-22, each with a "logo" asset the card's badge shows
+  // (see the logos in lyrics-engine.ts).
+  amazon_music: ['1573933460308107434'],
+  disney_plus: ['1573934489686638652'],
+  apple_tv: ['1573935003824562286'],
+  paramount_plus: ['1573935828713996442'],
+  crunchyroll: ['1573936266884423680'],
+  crave: ['1573936483268820992'],
 };
 
 /**
@@ -317,9 +328,10 @@ function platformConfigKey(src: string): keyof import('./core/types.js').Vybecor
   if (src === 'apple_music') return 'detect_apple_music';
   if (src === 'kick') return 'detect_kick';
   if (src === 'twitch') return 'detect_twitch';
-  if (src === 'prime_video') return 'detect_prime_video';
-  if (src === 'netflix') return 'detect_netflix';
-  if (src === 'bandcamp' || src === 'deezer' || src === 'tidal' || src === 'amazon_music') return 'detect_other_apps';
+  const film = filmSite(src);
+  if (film) return film.configKey;
+  if (src === 'amazon_music') return 'detect_amazon_music';
+  if (src === 'bandcamp' || src === 'deezer' || src === 'tidal') return 'detect_other_apps';
   if (src.startsWith('browser_') || src === 'unknown') return 'detect_browser';
   return null; // unknown — allow by default
 }
@@ -378,6 +390,17 @@ interface Candidate {
  * Everything a source can vary is a field here, which also means a new source
  * cannot silently omit a step.
  */
+/** A film site and the source fed by its pushes. */
+interface Film {
+  site: FilmSite;
+  source: FilmSource;
+}
+
+/** What the log calls a film site's pushes: 'primevideo-userscript' and 'netflix-userscript', as they always were. */
+function filmLabel(site: FilmSite): string {
+  return `${site.path.replace(/^\/api\//, '')}-userscript`;
+}
+
 interface PushSpec {
   source: {
     readonly isActive: boolean;
@@ -427,8 +450,9 @@ export class VybecordBackend extends EventEmitter {
   private bandcampSource: BandcampSource;
   private kickSource: KickSource;
   private twitchSource: TwitchSource;
-  private primeVideoSource: PrimeVideoSource;
-  private netflixSource: NetflixSource;
+  private amazonMusicSource: AmazonMusicSource;
+  /** One source per film site (film-sites.ts), by media_source. */
+  private readonly films = new Map<string, Film>();
   /** Whether the browser extension is there at all, whatever it is sending; see extension-link.ts. */
   private extensionLink = new ExtensionLink();
   /** Tells the window when the extension's last contact stops counting; see watchExtensionQuiet(). */
@@ -524,8 +548,8 @@ export class VybecordBackend extends EventEmitter {
     this.kickSource = new KickSource();
     // A held tab is shown as soon as Twitch answers, not at its next push.
     this.twitchSource = new TwitchSource(() => this.reconcile(false));
-    this.primeVideoSource = new PrimeVideoSource();
-    this.netflixSource = new NetflixSource();
+    this.amazonMusicSource = new AmazonMusicSource();
+    for (const site of FILM_SITES) this.films.set(site.source, { site, source: new FilmSource(site) });
 
     // React to config toggles in real-time
     this.on('configUpdate', (cfg) => {
@@ -898,10 +922,29 @@ export class VybecordBackend extends EventEmitter {
 
   isTwitchSourceActive(): boolean { return this.twitchSource.isActive; }
 
-  handlePrimeVideoPush(raw: unknown): void {
-    this.ingestPush(raw, this.primeVideoSource, 'primevideo-userscript',
-      d => `tab=${d.tab_id || '(none)'} title="${d.title}" episode="${d.episode}" paused=${d.paused}`);
-    this.showFilmSubtitles('prime_video', this.primeVideoSource, 'Prime Video');
+  handleAmazonMusicPush(raw: unknown): void {
+    this.ingestPush(raw, this.amazonMusicSource, 'amazonmusic-userscript');
+  }
+
+  isAmazonMusicSourceActive(): boolean { return this.amazonMusicSource.isActive; }
+
+  /** The film site whose push path this is (film-sites.ts), or undefined. */
+  private filmAt(path: string): Film | undefined {
+    for (const film of this.films.values()) if (film.site.path === path) return film;
+    return undefined;
+  }
+
+  /**
+   * A push from a film site, by the path it came to. The page's id goes in
+   * the log line too: a Netflix tab reports before its title line has shown,
+   * and "title=''" alone would not say which film it is on.
+   */
+  handleFilmPush(path: string, raw: unknown): void {
+    const film = this.filmAt(path);
+    if (!film) return;
+    this.ingestPush(raw, film.source, filmLabel(film.site),
+      d => `tab=${d.tab_id || '(none)'} id=${d.video_id || '(none)'} title="${d.title}" episode="${d.episode}" paused=${d.paused}`);
+    this.showFilmSubtitles(film);
   }
 
   /**
@@ -910,29 +953,17 @@ export class VybecordBackend extends EventEmitter {
    * Run after every push from a film site, after the reconcile, for the same
    * reasons.
    */
-  private showFilmSubtitles(source: string, films: FilmSource, name: string): void {
+  private showFilmSubtitles({ site, source }: Film): void {
     for (const slot of this.slots) {
       const t = slot.track;
-      if (t?.media_source !== source) continue;
-      const lines = films.subtitleLines(t.track_id);
+      if (t?.media_source !== site.source) continue;
+      const lines = source.subtitleLines(t.track_id);
       if (lines.length && !slot.engine.getLyrics().length) {
-        log.info(`[CAPTIONS] ${name} subtitles on "${t.track_name}" [${slot.name}]`);
+        log.info(`[CAPTIONS] ${site.name} subtitles on "${t.track_name}" [${slot.name}]`);
       }
       slot.engine.setLiveLines(lines);
     }
   }
-
-  isPrimeVideoSourceActive(): boolean { return this.primeVideoSource.isActive; }
-
-  handleNetflixPush(raw: unknown): void {
-    // The watch page too: a tab reports before its title line has shown, and
-    // "title=''" alone would not say which film it is on.
-    this.ingestPush(raw, this.netflixSource, 'netflix-userscript',
-      d => `tab=${d.tab_id || '(none)'} id=${d.video_id || '(none)'} title="${d.title}" episode="${d.episode}" paused=${d.paused}`);
-    this.showFilmSubtitles('netflix', this.netflixSource, 'Netflix');
-  }
-
-  isNetflixSourceActive(): boolean { return this.netflixSource.isActive; }
 
   // ── Spotify Web lyrics handler (event-driven, called by web server) ──
 
@@ -1083,8 +1114,10 @@ export class VybecordBackend extends EventEmitter {
       // which has a length and a position like any video. Each track says.
       { source: this.kickSource,       configKey: 'detect_kick',       label: 'kick-userscript',       web: true },
       { source: this.twitchSource,     configKey: 'detect_twitch',     label: 'twitch-userscript',     web: true },
-      { source: this.primeVideoSource, configKey: 'detect_prime_video', label: 'primevideo-userscript', web: true },
-      { source: this.netflixSource,    configKey: 'detect_netflix',    label: 'netflix-userscript',    web: true },
+      { source: this.amazonMusicSource, configKey: 'detect_amazon_music', label: 'amazonmusic-userscript', web: true },
+      ...[...this.films.values()].map(({ site, source }) => ({
+        source, configKey: site.configKey, label: filmLabel(site), web: true,
+      })),
     );
   }
 
@@ -1112,12 +1145,22 @@ export class VybecordBackend extends EventEmitter {
    * is reporting. wasRecentlyActive covers the gap after a tab closes, before
    * it ages out.
    */
-  private coveredByPush(src: string): boolean {
+  private coveredByPush(src: string, appId = ''): boolean {
     const anyPin = this.media?.anyPinned ?? false;
     const defer = (reporting: boolean, paused: boolean) => reporting && !(paused && anyPin);
     if (src === 'spotify') {
       const spotify = this.spotifyPush();
-      return defer(spotify.isActive && !spotify.isPaused, spotify.isPaused);
+      if (defer(spotify.isActive && !spotify.isPaused, spotify.isPaused)) return true;
+      /*
+       * A browser tab Windows cannot name is taken for Spotify when its page
+       * publishes an album beside a clean title (detectWebService's last
+       * guess), which Amazon Music's web player does, and a film site's may.
+       * While the extension reports one of those, such a tab is most likely
+       * that very player: with two cards, the same song went up twice, once
+       * under Spotify's name.
+       */
+      return sourceFromAppId(appId).startsWith('browser_')
+        && (this.amazonMusicSource.isActive || [...this.films.values()].some(f => f.source.isActive));
     }
     const unnamedTab = src.startsWith('browser_') || src === 'unknown';
     if (src === 'youtube' || src === 'youtube_music' || unnamedTab) {
@@ -1135,8 +1178,8 @@ export class VybecordBackend extends EventEmitter {
         || this.bandcampSource.isActive || this.anySlotKey('bc:')
         || this.kickSource.isActive || this.anySlotKey('kick:')
         || this.twitchSource.isActive || this.anySlotKey('twitch:')
-        || this.primeVideoSource.isActive || this.anySlotKey('pv:')
-        || this.netflixSource.isActive || this.anySlotKey('nf:');
+        || this.amazonMusicSource.isActive || this.anySlotKey('amz:')
+        || [...this.films.values()].some(f => f.source.isActive || this.anySlotKey(`${f.site.idPrefix}:`));
     }
     if (src === 'soundcloud') {
       return defer(this.soundcloudSource.isActive || this.anySlotKey('sc:'), this.soundcloudSource.isPaused);
@@ -1151,11 +1194,12 @@ export class VybecordBackend extends EventEmitter {
     if (src === 'twitch') {
       return defer(this.twitchSource.isActive || this.anySlotKey('twitch:'), this.twitchSource.isPaused);
     }
-    if (src === 'prime_video') {
-      return defer(this.primeVideoSource.isActive || this.anySlotKey('pv:'), this.primeVideoSource.isPaused);
+    if (src === 'amazon_music') {
+      return defer(this.amazonMusicSource.isActive || this.anySlotKey('amz:'), this.amazonMusicSource.isPaused);
     }
-    if (src === 'netflix') {
-      return defer(this.netflixSource.isActive || this.anySlotKey('nf:'), this.netflixSource.isPaused);
+    const film = this.films.get(src);
+    if (film) {
+      return defer(film.source.isActive || this.anySlotKey(`${film.site.idPrefix}:`), film.source.isPaused);
     }
     return false;
   }
@@ -1213,7 +1257,7 @@ export class VybecordBackend extends EventEmitter {
         // A pin outranks the stand-aside too: somebody pinned this very
         // session, and a candidate a pin accepts is that pin's alone (see
         // assignCandidates), so it cannot double up with the push elsewhere.
-        if (!this.isPinnedSource(src) && this.coveredByPush(src)) continue;
+        if (!this.isPinnedSource(src) && this.coveredByPush(src, track._session_id)) continue;
         out.push({
           track,
           service: src,
@@ -1865,9 +1909,8 @@ export class VybecordBackend extends EventEmitter {
     if (src === 'bandcamp') return this.bandcampSource;
     if (src === 'twitch') return this.twitchSource;
     if (src === 'kick') return this.kickSource;
-    if (src === 'prime_video') return this.primeVideoSource;
-    if (src === 'netflix') return this.netflixSource;
-    return null;
+    if (src === 'amazon_music') return this.amazonMusicSource;
+    return this.films.get(src)?.source ?? null;
   }
 
   /**
@@ -2410,7 +2453,7 @@ export class VybecordBackend extends EventEmitter {
       // that never happened, 41 times in one real session.
       const noLyricsSource = broadcast
         ? 'stream or stream video, not looked up'
-        : film ? `${trackData.media_source === 'netflix' ? 'Netflix' : 'Prime Video'}, its subtitles come from the player`
+        : film ? `${filmSite(trackData.media_source)?.name ?? 'A film site'}, its subtitles come from the player`
         : trackData.is_dj_narration ? 'Spotify DJ talking, not looked up'
         : isYt ? 'CC fetch failed or empty' : 'LRCLib/Netease fetch failed';
       log.info(`[LYRICS] No lyrics found for "${trackData.track_name}" — ${noLyricsSource}`);
@@ -3054,8 +3097,8 @@ export class VybecordBackend extends EventEmitter {
       ['/api/bandcamp', 'Bandcamp', this.bandcampSource],
       ['/api/twitch', 'Twitch', this.twitchSource],
       ['/api/kick', 'Kick', this.kickSource],
-      ['/api/primevideo', 'Prime Video', this.primeVideoSource],
-      ['/api/netflix', 'Netflix', this.netflixSource],
+      ['/api/amazonmusic', 'Amazon Music', this.amazonMusicSource],
+      ...[...this.films.values()].map(({ site, source }): [string, string, { readonly isActive: boolean }] => [site.path, site.name, source]),
     ];
     return {
       connected: true,
@@ -3587,8 +3630,8 @@ export class VybecordBackend extends EventEmitter {
       // next card says Watching. A card left on -1 follows presence 1.
       rpc_activity_type: activityTypeFor(cfg, slot.index),
       rpc_shorts_activity_type: cfg.rpc_shorts_activity_type,
-      rpc_prime_video_activity_type: cfg.rpc_prime_video_activity_type,
-      rpc_netflix_activity_type: cfg.rpc_netflix_activity_type,
+      // Each film site's verb, under its own key (FILM_ACTIVITY_KEYS in the engine).
+      ...Object.fromEntries(FILM_SITES.map(s => [s.activityKey, cfg[s.activityKey]])),
       rpc_status_display: cfg.rpc_status_display,
       rpc_status_template: cfg.rpc_status_template,
       rpc_show_playlist: cfg.rpc_show_playlist,

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Vybecord",
-  "version": "2.5.0",
-  "description": "Sends what you play on Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick, Prime Video and Netflix to the Vybecord desktop app.",
+  "version": "2.6.0",
+  "description": "Sends what you play on Spotify, YouTube, Twitch, Netflix, Disney+, Crunchyroll and other music and video sites to the Vybecord app.",
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
@@ -99,6 +99,55 @@
     {
       "matches": ["https://www.netflix.com/*"],
       "js": ["src/gm-shim.js", "src/sites/netflix.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.disneyplus.com/*"],
+      "js": ["src/gm-shim.js", "src/film-page.js", "src/sites/disneyplus.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.paramountplus.com/*"],
+      "js": ["src/gm-shim.js", "src/film-page.js", "src/sites/paramountplus.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://tv.apple.com/*"],
+      "js": ["src/gm-shim.js", "src/film-page.js", "src/sites/appletv.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.crave.ca/*"],
+      "js": ["src/gm-shim.js", "src/film-page.js", "src/sites/crave.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.crunchyroll.com/*"],
+      "js": ["src/gm-shim.js", "src/film-page.js", "src/sites/crunchyroll.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://static.crunchyroll.com/*"],
+      "js": ["src/film-page.js", "src/sites/crunchyroll-player.js"],
+      "all_frames": true,
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://music.amazon.com/*",
+        "https://music.amazon.ca/*",
+        "https://music.amazon.co.uk/*",
+        "https://music.amazon.de/*",
+        "https://music.amazon.fr/*",
+        "https://music.amazon.it/*",
+        "https://music.amazon.es/*",
+        "https://music.amazon.co.jp/*",
+        "https://music.amazon.com.br/*",
+        "https://music.amazon.com.mx/*",
+        "https://music.amazon.com.au/*",
+        "https://music.amazon.in/*"
+      ],
+      "js": ["src/gm-shim.js", "src/sites/amazonmusic.js"],
       "run_at": "document_idle"
     }
   ]

@@ -1,10 +1,11 @@
 /**
  * Films and episodes playing in a browser tab, as the extension reports them,
- * for every site that plays them: Prime Video (prime-video-source.ts) and
- * Netflix (netflix-source.ts). The two send the same thing and a card makes
- * the same of it, so the machinery is here and each site only says how it
- * differs: its name, the pages a card may link to, and how its episode line
- * reads.
+ * for every site that plays them: Prime Video (prime-video-source.ts),
+ * Netflix (netflix-source.ts), and Disney+, Paramount+, Apple TV, Crave and
+ * Crunchyroll (film-sites.ts, which lists them all). They send the same thing
+ * and a card makes the same of it, so the machinery is here and each site
+ * only says how it differs: its name, the pages a card may link to, and how
+ * its episode line reads.
  *
  * What a tab sends: the film or the show, the episode, where it is, the
  * poster and the title's page when the page names them, and the subtitles on
@@ -26,12 +27,18 @@
 import { performance } from 'node:perf_hooks';
 import { createLogger } from './logger.js';
 import { asBool, asNonNegativeInt, asRecord, asText, asUrl } from './utils.js';
-import type { LyricLine, TrackData } from './types.js';
+import type { LyricLine, TrackData, VybecordConfig } from './types.js';
 import { PushInstances, type PushInstance } from './push-instances.js';
 import { SubtitleLines } from './subtitle-lines.js';
 
-/** The sites that play films and episodes, by media_source. */
-const FILM_SOURCES: ReadonlySet<string> = new Set(['prime_video', 'netflix']);
+/**
+ * The sites that play films and episodes, by media_source. The same as
+ * FILM_SITES in film-sites.ts, which cannot be read from here: it imports
+ * this file.
+ */
+const FILM_SOURCES: ReadonlySet<string> = new Set([
+  'prime_video', 'netflix', 'disney_plus', 'paramount_plus', 'apple_tv', 'crave', 'crunchyroll',
+]);
 
 /**
  * A card of a film or an episode: watched rather than listened to, never
@@ -42,7 +49,7 @@ export function isFilmSource(src: string | undefined): boolean {
   return !!src && FILM_SOURCES.has(src);
 }
 
-/** Shape of JSON pushed by the extension (sites/primevideo.js, sites/netflix.js). */
+/** Shape of JSON pushed by the extension (sites/primevideo.js, sites/netflix.js, and film-page.js for the others). */
 export interface FilmPayload {
   /** Which tab pushed this, so two tabs are two cards (see the same field in twitch-source.ts). */
   tab_id: string;
@@ -73,10 +80,16 @@ export interface FilmPayload {
 export interface FilmSite {
   /** The media_source of its cards. */
   source: string;
-  /** Its name, for the log. */
+  /** Its name, for the log and wherever the app names it. */
   name: string;
   /** What its track ids start with, before a colon: `pv`, `nf`. */
   idPrefix: string;
+  /** The app's push path for it, which the extension posts to (extension/src/background.js). */
+  path: string;
+  /** Its detection switch. */
+  configKey: keyof VybecordConfig;
+  /** Its verb on every card, Watching (3) or Listening (2): see FILM_ACTIVITY_KEYS in the lyrics engine. */
+  activityKey: keyof VybecordConfig;
   /**
    * The pages a card may link to. A link becomes a button and a link on the
    * card, so anything else is no link at all.

@@ -7,7 +7,7 @@
  * shut. This one:
  *
  *   - binds 127.0.0.1 only, so nothing off the machine can reach it;
- *   - answers POST on eleven paths and nothing else — no config, no reads,
+ *   - answers POST on seventeen paths and nothing else — no config, no reads,
  *     no way to learn anything about the user. The one thing a reply carries
  *     besides "ok" is a request: `wantCookies` on the YouTube path, asking the
  *     extension for the browser's YouTube session after an age-restricted
@@ -25,6 +25,7 @@ import http from 'node:http';
 import { performance } from 'node:perf_hooks';
 import { createLogger } from '../core/logger.js';
 import type { VybecordBackend } from '../backend.js';
+import { FILM_SITES } from '../core/film-sites.js';
 
 const log = createLogger('PushServer');
 
@@ -42,8 +43,9 @@ const PUSH_PATHS = new Set([
   '/api/bandcamp',
   '/api/twitch',
   '/api/kick',
-  '/api/primevideo',
-  '/api/netflix',
+  '/api/amazonmusic',
+  // One per film site: /api/primevideo, /api/netflix, /api/disneyplus and the rest (film-sites.ts).
+  ...FILM_SITES.map(s => s.path),
   '/api/spotify-lyrics',
   /*
    * Posted by the extension's background, never by a site script, and only
@@ -314,11 +316,12 @@ export class PushServer {
       case '/api/bandcamp': this.backend.handleBandcampPush(data); break;
       case '/api/twitch': this.backend.handleTwitchPush(data); break;
       case '/api/kick': this.backend.handleKickPush(data); break;
-      case '/api/primevideo': this.backend.handlePrimeVideoPush(data); break;
-      case '/api/netflix': this.backend.handleNetflixPush(data); break;
+      case '/api/amazonmusic': this.backend.handleAmazonMusicPush(data); break;
       case '/api/spotify-lyrics': this.backend.handleSpotifyLyrics(data); break;
       case '/api/youtube-cookies': this.backend.handleYouTubeCookies(data); break;
       case '/api/hello': this.backend.handleExtensionHello(data); break;
+      // Every film site's path goes to the one handler, which knows them all.
+      default: this.backend.handleFilmPush(path, data); break;
     }
   }
 }

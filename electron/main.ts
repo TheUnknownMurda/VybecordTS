@@ -334,8 +334,10 @@ const PRESENCE_COUNTS = ['One', 'Two', 'Three', 'Four', 'Five'];
 /** The players Settings → Detection lists, in its order and with its names. */
 const DETECT_KEYS: [string, string][] = [
   ['detect_spotify', 'Spotify'], ['detect_apple_music', 'Apple Music'], ['detect_youtube', 'YouTube and YouTube Music'],
-  ['detect_soundcloud', 'SoundCloud'], ['detect_browser', 'Other browser tabs'], ['detect_twitch', 'Twitch'],
-  ['detect_kick', 'Kick'], ['detect_prime_video', 'Prime Video'], ['detect_netflix', 'Netflix'],
+  ['detect_soundcloud', 'SoundCloud'], ['detect_amazon_music', 'Amazon Music'], ['detect_browser', 'Other browser tabs'],
+  ['detect_twitch', 'Twitch'], ['detect_kick', 'Kick'], ['detect_prime_video', 'Prime Video'], ['detect_netflix', 'Netflix'],
+  ['detect_disney_plus', 'Disney+'], ['detect_paramount_plus', 'Paramount+'], ['detect_apple_tv', 'Apple TV'],
+  ['detect_crave', 'Crave'], ['detect_crunchyroll', 'Crunchyroll'],
   ['detect_other_apps', 'Other desktop apps'],
 ];
 /** The sidebar's pages, in its order and with its names ('&&' shows one '&'). */

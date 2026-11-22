@@ -39,7 +39,7 @@ const RE_NETFLIX_PAGE = /^https:\/\/www\.netflix\.com\/(?:[a-z]{2}(?:-[a-z]{2,4}
  * ("Season 1, Ep. 3 Name"), should Netflix write it so somewhere, is read too.
  * Anything else is kept as written.
  */
-const RE_EPISODE = /^(?:\p{L}{1,2}\s*(\d{1,3})\s*(?:[:.]\s*|\s+(?=\p{L}{1,3}\.?\d)))?(?:\p{L}{1,3}\.?|[EÉ]pisod[eio]|Folge)\s*(\d{1,4})(?:\s*[:.\-–—]\s*|\s+|$)(.*)$/iu;
+const RE_EPISODE = /^(?:\p{L}{1,2}\s*(\d{1,3})\s*(?:[:.]\s*|\s+(?=\p{L}{1,3}\.?\d)))?(?:\p{L}{1,3}\.?|[EÉ]pisod[eio]|Folge)\s*(\d{1,4})(?:\s*[:.\-–—·•]\s*|\s+|$)(.*)$/iu;
 
 export function netflixEpisodeLabel(raw: string): string {
   const prime = primeEpisodeLabel(raw);
@@ -54,6 +54,9 @@ export const NETFLIX: FilmSite = {
   source: 'netflix',
   name: 'Netflix',
   idPrefix: 'nf',
+  path: '/api/netflix',
+  configKey: 'detect_netflix',
+  activityKey: 'rpc_netflix_activity_type',
   titlePage: RE_NETFLIX_PAGE,
   episodeLabel: netflixEpisodeLabel,
 };

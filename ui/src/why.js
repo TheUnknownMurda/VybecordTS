@@ -203,7 +203,7 @@ function lyricsCheck() {
       ? { kind: 'ok', title: 'Kick’s captions are on the card' }
       : { kind: 'info', title: 'No captions yet', detail: 'Turn on captions (CC) in Kick’s player: what is said shows on the card, as lyrics.' };
   }
-  // A film's subtitles arrive as lines too, read off Prime Video's or Netflix's player.
+  // A film's subtitles arrive as lines too, read off its site's player.
   if (isFilm(t.media_source)) {
     return synced
       ? { kind: 'ok', title: 'The subtitles are on the card' }

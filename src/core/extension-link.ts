@@ -42,10 +42,16 @@ const SITE_NAMES: Record<string, string> = {
   youtube: 'YouTube',
   soundcloud: 'SoundCloud',
   bandcamp: 'Bandcamp',
+  amazonmusic: 'Amazon Music',
   twitch: 'Twitch',
   kick: 'Kick',
   primevideo: 'Prime Video',
   netflix: 'Netflix',
+  disneyplus: 'Disney+',
+  paramountplus: 'Paramount+',
+  appletv: 'Apple TV',
+  crave: 'Crave',
+  crunchyroll: 'Crunchyroll',
 };
 
 export interface ExtensionHello {

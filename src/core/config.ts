@@ -20,6 +20,14 @@ const DEFAULTS: VybecordConfig = {
   detect_twitch: true,
   detect_prime_video: true,
   detect_netflix: true,
+  detect_disney_plus: true,
+  detect_paramount_plus: true,
+  detect_apple_tv: true,
+  detect_crave: true,
+  detect_crunchyroll: true,
+  // Amazon Music had no switch of its own and rode "other apps"; it has one
+  // now that the extension reads its web player. On, as every platform is.
+  detect_amazon_music: true,
   detect_browser: true,
   detect_other_apps: true,
   // The Offline card a Twitch or Kick tab gets on a channel that is not
@@ -58,8 +66,13 @@ const DEFAULTS: VybecordConfig = {
   // A film or an episode on Prime Video, on any card: Watching too. Listening
   // (2) is offered as it is for Shorts.
   rpc_prime_video_activity_type: 3,
-  // The same for Netflix.
+  // The same for Netflix, and for the other film sites.
   rpc_netflix_activity_type: 3,
+  rpc_disney_plus_activity_type: 3,
+  rpc_paramount_plus_activity_type: 3,
+  rpc_apple_tv_activity_type: 3,
+  rpc_crave_activity_type: 3,
+  rpc_crunchyroll_activity_type: 3,
   rpc_status_display: 'app', // status line keeps showing the app name by default
   rpc_status_template: '{title} - {artist}',
   // The playlist has always been on the presence; the switch is for people who
@@ -200,6 +213,12 @@ export const CONFIG_SCHEMA: Record<string, FieldSpec> = {
   detect_twitch: { type: 'boolean' },
   detect_prime_video: { type: 'boolean' },
   detect_netflix: { type: 'boolean' },
+  detect_disney_plus: { type: 'boolean' },
+  detect_paramount_plus: { type: 'boolean' },
+  detect_apple_tv: { type: 'boolean' },
+  detect_crave: { type: 'boolean' },
+  detect_crunchyroll: { type: 'boolean' },
+  detect_amazon_music: { type: 'boolean' },
   detect_browser: { type: 'boolean' },
   detect_other_apps: { type: 'boolean' },
   show_offline_channels: { type: 'boolean' },
@@ -231,9 +250,14 @@ export const CONFIG_SCHEMA: Record<string, FieldSpec> = {
   rpc_activity_type_5: { type: 'number', min: -1, max: 5 },
   // Listening(2) or Watching(3): the two verbs offered for a Short.
   rpc_shorts_activity_type: { type: 'number', min: 2, max: 3 },
-  // The same two for Prime Video, and for Netflix.
+  // The same two for Prime Video, Netflix and the other film sites.
   rpc_prime_video_activity_type: { type: 'number', min: 2, max: 3 },
   rpc_netflix_activity_type: { type: 'number', min: 2, max: 3 },
+  rpc_disney_plus_activity_type: { type: 'number', min: 2, max: 3 },
+  rpc_paramount_plus_activity_type: { type: 'number', min: 2, max: 3 },
+  rpc_apple_tv_activity_type: { type: 'number', min: 2, max: 3 },
+  rpc_crave_activity_type: { type: 'number', min: 2, max: 3 },
+  rpc_crunchyroll_activity_type: { type: 'number', min: 2, max: 3 },
   rpc_status_display: { type: 'string', values: STATUS_DISPLAY_CHOICES },
   rpc_status_template: { type: 'string', maxLength: 128 },
   rpc_show_playlist: { type: 'boolean' },

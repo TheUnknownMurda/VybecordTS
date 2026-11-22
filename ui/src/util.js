@@ -185,9 +185,11 @@ async function resolveThumb(key) {
 
 /**
  * A film or an episode, on a site that plays them: watched, never looked up
- * as a song, its subtitles read off the player (isFilmSource in the backend).
+ * as a song, its subtitles read off the player (isFilmSource in the backend,
+ * FILM_SITES in src/core/film-sites.ts).
  */
-export const isFilm = (source) => source === 'prime_video' || source === 'netflix';
+const FILM_SOURCES = new Set(['prime_video', 'netflix', 'disney_plus', 'paramount_plus', 'apple_tv', 'crave', 'crunchyroll']);
+export const isFilm = (source) => FILM_SOURCES.has(source);
 
 /** Platform label + glyph for a media_source string. */
 export function platformInfo(source) {
@@ -209,6 +211,11 @@ export function platformInfo(source) {
     // Films and episodes, from the browser extension; a pin can name them too.
     prime_video: ['Prime Video', '🎬'],
     netflix: ['Netflix', '🍿'],
+    disney_plus: ['Disney+', '🏰'],
+    paramount_plus: ['Paramount+', '⛰️'],
+    apple_tv: ['Apple TV', '📺'],
+    crave: ['Crave', '🍁'],
+    crunchyroll: ['Crunchyroll', '🍥'],
     vlc: ['VLC', '🔶'],
     foobar2000: ['foobar2000', '🎛️'],
     musicbee: ['MusicBee', '🐝'],

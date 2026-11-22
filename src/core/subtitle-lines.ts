@@ -1,10 +1,10 @@
 /**
  * A film's or an episode's subtitles, cut into the lines the card shows.
  *
- * Prime Video's and Netflix's players show subtitles in cues: one or two rows
+ * The film sites' players show subtitles in cues: one or two rows
  * that come on together, stay a second or more, and give way to the next. The
  * extension reports the rows on screen whenever they change (see
- * sites/primevideo.js and sites/netflix.js).
+ * sites/primevideo.js, sites/netflix.js and film-page.js).
  * Unlike Kick's captions (live-captions.ts), whose overlay is a window of
  * words that moves a few at a time, nothing needs stitching back together:
  * each row becomes a line of its own, stamped when its cue came on.

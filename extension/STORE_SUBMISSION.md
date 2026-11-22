@@ -27,7 +27,7 @@ markdown left out:
 **Summary / short description** (132 characters max)
 
 ```
-Sends what you play on Spotify, YouTube, SoundCloud, Bandcamp, Twitch, Kick, Prime Video and Netflix to the Vybecord desktop app.
+Sends what you play on Spotify, YouTube, Twitch, Netflix, Disney+, Crunchyroll and other music and video sites to the Vybecord app.
 ```
 
 **Category** — Entertainment
@@ -51,16 +51,16 @@ Vybecord shows what you are listening to on your Discord profile, with lyrics
 that scroll in time with the song.
 
 This extension is the part that reads what is playing in your browser. It works
-with Spotify, YouTube and YouTube Music, SoundCloud, Bandcamp, Twitch, Kick,
-Prime Video and Netflix, and hands that over to the Vybecord desktop app
-running on the same computer. On Kick, Prime Video and Netflix it can also pass
-on the captions and subtitles you have turned on in the player, which the app
-shows like lyrics.
+with Spotify, YouTube and YouTube Music, SoundCloud, Bandcamp, Amazon Music,
+Twitch, Kick, Prime Video, Netflix, Disney+, Paramount+, Apple TV, Crave and
+Crunchyroll, and hands that over to the Vybecord desktop app running on the
+same computer. On Kick and the film sites it can also pass on the captions and
+subtitles you have turned on in the player, which the app shows like lyrics.
 
 It needs the desktop app to do anything at all — download it from
 https://theunknownmurda.github.io/VybecordTS/
 
-Each of the eight sites has its own switch, so you can report your music without
+Each of the fourteen sites has its own switch, so you can report your music without
 reporting your streams, or the other way round. Your listening is sent to one
 place only — the app on your own machine, at 127.0.0.1. There is no server, no
 account, and no analytics. On Kick, the extension additionally asks Kick's own
@@ -85,7 +85,7 @@ Chrome requires one sentence, and rejects extensions whose stated purpose is
 broader than what the code does.
 
 ```
-Read the metadata of the media currently playing on eight supported sites and
+Read the metadata of the media currently playing on fourteen supported sites and
 send it to the Vybecord desktop application on the same computer, so it can be
 displayed as the user's Discord status.
 ```
@@ -103,7 +103,7 @@ Each of these is a separate box in the Chrome dashboard.
 **`storage`**
 
 ```
-Stores eight on/off switches, one per supported site, so the user's choice of
+Stores fourteen on/off switches, one per supported site, so the user's choice of
 which sites to report survives a browser restart. Nothing else is stored.
 ```
 
@@ -113,7 +113,7 @@ which sites to report survives a browser restart. Nothing else is stored.
 Wakes the extension's background every 30 seconds to tell the Vybecord desktop
 application on the same computer, at 127.0.0.1, that the extension is installed
 and running, including when nothing is playing, so the app can show it as
-connected. That message carries the extension's version and its eight site
+connected. That message carries the extension's version and its fourteen site
 switches and nothing else. No other alarm is set.
 ```
 
@@ -151,7 +151,7 @@ makes no request to youtube.com with it; the content script already runs there
 under its normal match pattern.
 ```
 
-**Content scripts on the eight supported sites**
+**Content scripts on the fourteen supported sites**
 
 ```
 The extension reads the title, artist, album, artwork address, playback
@@ -187,6 +187,27 @@ the video, whether an ad is playing, and, when the user has turned subtitles on
 in the player, the subtitle text on screen, so the desktop app can show it as
 the film's lyrics. Nothing is requested from Netflix.
 
+Disney+ (www.disneyplus.com), Paramount+ (www.paramountplus.com), Apple TV
+(tv.apple.com), Crave (www.crave.ca) and Crunchyroll (www.crunchyroll.com) are
+read the same way as Netflix: on the page that plays a film or an episode, the
+title and the episode, the position and the length from the video, the page's
+own address and picture, and, when the user has turned subtitles on in the
+player, the subtitle text on screen. Nothing outside the player is read on the
+pages that play trailers. On Disney+ the title is read from the player's
+closed shadow root through chrome.dom.openOrClosedShadowRoot, which reads the
+page and changes nothing in it. Crunchyroll is also matched on
+static.crunchyroll.com, in all frames, because its older player plays in a
+frame from there: the script in that frame reads the video's position and the
+subtitle text, and passes them by window.postMessage to the Crunchyroll page
+around it only (www.crunchyroll.com), sending nothing anywhere else. Nothing
+is requested from any of these sites.
+
+Amazon Music is matched on music.amazon.com and the other countries' Amazon
+Music sites. The content script reads the song, the artist, the album and the
+cover the page announces to the browser's media controls, the position from
+the page's media element, and the links to the artist and the album in the
+player bar. Nothing is requested from Amazon.
+
 On kick.com only, the content script also makes requests to Kick's own API
 (kick.com/api/v1/channels/<channel> or kick.com/api/v2/clips/<id>, and for a
 past broadcast web.kick.com/api/v1/channels/<channel number>/videos/<id>, for
@@ -220,8 +241,9 @@ incapable* of reaching anything else, which is a stronger claim than a
 permission list and a worse one to leave stale.
 
 **"Reads these pages and never writes to them."** Holds as long as no site
-script touches the DOM. Today none does: the only `.style` reference in
-`src/sites/` reads a background-image URL to find the artwork, and there is no
+script touches the DOM. Today none does: the two `.style` references in
+`src/sites/` (SoundCloud's and Crave's) read a background-image URL to find the
+artwork, and there is no
 `appendChild`, `innerHTML`, `remove()`, `setAttribute` or `classList` write
 anywhere. It was not always so -- `sites/kick.js` used to strip cookie banners,
 including inside iframes, which was both undeclared and well outside a metadata
@@ -315,7 +337,7 @@ session to fetch that video's captions. They are never sent to any server.
 
 At least one is required. 1280×800 or 640×400 for Chrome; 1366×768 for Edge.
 
-The options page is the obvious subject — it shows the eight site switches and
+The options page is the obvious subject — it shows the fourteen site switches and
 the connection status, which is the whole interface. Open the extension's
 options in a tab, with the desktop app running so the status reads connected,
 and capture it at one of the sizes above.
