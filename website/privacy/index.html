@@ -32,7 +32,7 @@
 
 <main class="doc">
   <h1>Privacy Policy</h1>
-  <p class="date">Vybecord browser extension and desktop app · Last updated 21 November 2026</p>
+  <p class="date">Vybecord browser extension and desktop app · Last updated 22 November 2026</p>
 
   <div class="callout">
     <p>
@@ -62,9 +62,10 @@
 
   <h2>What the extension reads</h2>
   <p>
-    On the eight sites it supports &mdash; Spotify, YouTube and YouTube Music, SoundCloud,
-    Bandcamp, Twitch, Kick, Prime Video and Netflix &mdash; it reads the metadata of what is
-    currently playing:
+    On the fourteen sites it supports &mdash; Spotify, YouTube and YouTube Music, SoundCloud,
+    Bandcamp, Amazon Music, Twitch, Kick, and the film sites Prime Video, Netflix, Disney+,
+    Paramount+, Apple TV (<code>tv.apple.com</code>), Crave and Crunchyroll &mdash; it reads the
+    metadata of what is currently playing:
   </p>
   <ul>
     <li>Track, video, stream, film or show title, and a show's episode</li>
@@ -75,7 +76,7 @@
     <li>The address of the item playing, so the app can link to it</li>
   </ul>
   <p>
-    On Kick, Prime Video and Netflix, it also reads the captions or subtitles the player is showing,
+    On Kick and on the film sites, it also reads the captions or subtitles the player is showing,
     if you have turned them on there: the words on screen, as they appear, and nothing else.
     No caption or subtitle file is downloaded, and with them off, none are read.
   </p>
@@ -92,6 +93,29 @@
     but reads only the page a film or an episode plays on (<code>/watch/</code>). Elsewhere
     on Netflix it looks for a player about once a second, and as long as none is open, it
     reads nothing else and sends nothing. While an ad plays, nothing the ad shows is read.
+  </p>
+  <p id="film-sites">
+    Disney+, Paramount+, Apple TV, Crave and Crunchyroll are read the same way. The extension
+    loads on each of these sites and reads only a player that is open on the page a film or an
+    episode plays on (on Apple TV and Crave, a player that fills the window), never the
+    trailers that play while you browse; as long as none is open, it reads nothing else and
+    sends nothing. On Disney+, the title is drawn inside a part of the player that the page
+    hides from its own other scripts: the extension asks your browser to show it that part,
+    reads the title there, and changes nothing. On Crave, while an ad plays, nothing the ad
+    shows is read.
+  </p>
+  <p id="crunchyroll">
+    Crunchyroll's older player plays inside a frame from <code>static.crunchyroll.com</code>,
+    which the Crunchyroll page around it cannot see into. So the extension also loads in that
+    frame: it reads the video's position and the subtitles on screen there, and hands them to
+    the Crunchyroll page around it, by a message to that page and to nothing else. The frame
+    sends nothing to the app or anywhere else.
+  </p>
+  <p id="amazon-music">
+    On Amazon Music (<code>music.amazon.com</code>, and the same site in eleven other countries),
+    it reads the song, the artist, the album and the cover that the page shows in your
+    browser's own media controls, the position from the page's player, and the links to the
+    artist and the album.
   </p>
   <p>
     It reads this from the page you already have open. It does not sign in on your
@@ -145,7 +169,7 @@
   </p>
   <p>
     The extension also tells the app that it is there. Every 30 seconds, and whenever
-    the browser wakes it, it sends its version number and its eight site switches to
+    the browser wakes it, it sends its version number and its fourteen site switches to
     the same address, whether or not anything is playing, so the app can show it as
     connected. Nothing about what you play goes with it.
   </p>
@@ -183,12 +207,12 @@
     LRCLIB slows it down.
   </p>
   <p>
-    For a film or an episode on Prime Video or Netflix, the desktop app looks nothing up:
+    For a film or an episode on one of the film sites, the desktop app looks nothing up:
     no lyrics and no cover. Its card shows only what the page showed.
   </p>
   <p>
     The desktop app then publishes what you are playing to your Discord profile, which
-    is the purpose of installing it. On Kick, Prime Video and Netflix, that includes the captions
+    is the purpose of installing it. On Kick and the film sites, that includes the captions
     or subtitles on screen, when they are on: they are the card's lyrics. That step is
     Discord's, and is covered by
     <a href="https://discord.com/privacy" target="_blank" rel="noopener">Discord's privacy policy</a>.
@@ -305,13 +329,13 @@
   <h2>What is stored, and where</h2>
   <ul>
     <li>
-      <strong>Your per-site switches</strong> (which of the eight sites are enabled) are kept
+      <strong>Your per-site switches</strong> (which of the fourteen sites are enabled) are kept
       in the browser's synced extension storage. If you are signed into your browser,
       it syncs them across your devices the same way it syncs your bookmarks. They are
-      eight true/false values and nothing else.
+      fourteen true/false values and nothing else.
     </li>
     <li>
-      <strong>A tab identifier</strong>, on Twitch, Kick, Prime Video and Netflix: a random string kept
+      <strong>A tab identifier</strong>, on Twitch, Kick and the film sites: a random string kept
       in that tab's session storage, under <code>vybecord_tab_id</code>, so that two tabs
       make two cards. It names the tab, not you, and the browser deletes it when the tab
       is closed.
@@ -344,10 +368,12 @@
   <h2>Permissions, and why each is needed</h2>
   <ul>
     <li>
-      <strong>Access to the eight supported sites</strong> &mdash; to read the metadata of what is
+      <strong>Access to the fourteen supported sites</strong> &mdash; to read the metadata of what is
       playing. On Amazon's sites, only their Prime Video pages and product pages, as
-      <a href="#prime-video">described above</a>; on Netflix, the whole site, of which only the
-      page a film or an episode plays on is read (<a href="#netflix">see above</a>). Without it
+      <a href="#prime-video">described above</a>; on Netflix and the other film sites, the whole
+      site, of which only a player open on the page a film or an episode plays on is read
+      (<a href="#netflix">see above</a>); on Crunchyroll, also its player's frame on
+      <code>static.crunchyroll.com</code> (<a href="#crunchyroll">see above</a>). Without it
       there is nothing to report.
     </li>
     <li>
