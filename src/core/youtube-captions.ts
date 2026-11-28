@@ -119,7 +119,8 @@ function setCache(key: string, result: CCResult): void {
 interface Json3Event {
   tStartMs?: number;
   dDurationMs?: number;
-  segs?: { utf8: string }[];
+  /** A word's own time, in auto-captions, from the cue's start. */
+  segs?: { utf8: string; tOffsetMs?: number }[];
 }
 
 // ── Query cleaning ──
@@ -446,7 +447,10 @@ function parseJson3(raw: string): LyricLine[] {
     // noise test as it stood and came out of the old ♪ trim as "[Music]".
     const text = normalizeText(stripSoundTags(ev.segs.map(s => s.utf8).join('').replace(/\n/g, ' ')));
     if (!text || RE_CC_NOISE.test(text)) continue;
-    lines.push({ time: ev.tStartMs, text });
+    // A cue that opened on its tag ("[Music]", then the first word 2 s in)
+    // starts when its words do, or the line would come up over the music.
+    const firstWord = ev.segs.find(s => stripSoundTags(s.utf8 ?? ''));
+    lines.push({ time: ev.tStartMs + (firstWord?.tOffsetMs ?? 0), text });
   }
 
   // Deduplicate consecutive identical lines
