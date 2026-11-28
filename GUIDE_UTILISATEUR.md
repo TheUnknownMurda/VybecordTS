@@ -112,6 +112,8 @@ Les sous-titres sont un recours : ils ne servent que si aucune parole synchronis
 
 Toutes les vidéos n'ont pas de sous-titres, et la vidéo doit être retrouvable par son titre et sa chaîne : le navigateur dit à Windows ce qui joue, mais pas sur quelle page — Vybecord la cherche donc sur YouTube.
 
+Ce qui n'est pas dit est retiré des lignes : les balises comme **[Music]**, **[Applause]** ou **[Musique]**, et les ♪ autour des lignes chantées. Le **[ __ ]** que YouTube met à la place d'un mot censuré reste.
+
 Une vidéo **à âge restreint** affiche « 🔞 CC unavailable » : YouTube ne donne ses sous-titres qu'à un compte connecté dont l'âge est vérifié. Si tu la regardes dans un navigateur avec l'extension, active **Share my YouTube sign-in for captions** dans les options de l'extension (désactivé par défaut ; ton navigateur demande la permission). L'extension passe alors tes cookies YouTube à Vybecord, seulement pour les vidéos à âge restreint, et les sous-titres remplacent la ligne 🔞 quelques secondes plus tard. Vybecord garde les cookies en mémoire seulement. Un navigateur qui n'est pas connecté à YouTube n'a rien à prêter.
 
 ### Les paroles sont décalées

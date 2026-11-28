@@ -112,6 +112,8 @@ Captions are a fallback, used only when no synced lyrics exist for the track. Th
 
 Not every video has captions, and the video has to be findable by its title and channel — the browser tells Windows what is playing, but not which page it is on, so Vybecord searches YouTube for it.
 
+What isn't said is left out of the lines: tags like **[Music]**, **[Applause]** or **[Musique]**, and the ♪ around sung lines. YouTube's **[ __ ]** for a bleeped word stays.
+
 An **age-restricted** video shows "🔞 CC unavailable": YouTube gives its captions only to a signed-in, age-verified account. If you watch it in a browser with the extension, turn on **Share my YouTube sign-in for captions** in the extension's options (off by default; your browser asks for permission). The extension then hands your YouTube cookies to Vybecord, only for videos that come back age-restricted, and the captions replace the 🔞 line a few seconds later. Vybecord keeps the cookies in memory only. A browser that isn't signed in to YouTube has nothing to lend.
 
 ### Lyrics are out of sync
