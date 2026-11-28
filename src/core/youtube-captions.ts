@@ -25,14 +25,16 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createLogger } from './logger.js';
 import { evictOldest } from './utils.js';
+import { stripSoundTags } from './sound-tags.js';
 import type { LyricLine } from './types.js';
 
 const log = createLogger('YouTube-CC');
 
-// Noise patterns in auto-generated captions: [Music], [Applause], (singing), etc.
-const RE_CC_NOISE = /^\[.*\]$|^\(.*\)$/;
-// Extra noise: single punctuation, lone emoji, subscriber bait, etc.
-const RE_CC_JUNK = /^[♪♫🎵🎶\s]+$|^\s*$/;
+// A cue that is one bracketed aside: "(singing)", or "[ __ ]" alone once its
+// words were bleeped. One run, not `.*`: "[ __ ] that [ __ ]" starts with a
+// bracket and ends with one, and the greedy pattern dropped it, words and all.
+// Sound tags inside a cue go first, in stripSoundTags.
+const RE_CC_NOISE = /^\[[^\]]*\]$|^\([^)]*\)$/;
 
 const YT_DLP_TIMEOUT = 15_000;
 
@@ -117,7 +119,8 @@ function setCache(key: string, result: CCResult): void {
 interface Json3Event {
   tStartMs?: number;
   dDurationMs?: number;
-  segs?: { utf8: string }[];
+  /** A word's own time, in auto-captions, from the cue's start. */
+  segs?: { utf8: string; tOffsetMs?: number }[];
 }
 
 // ── Query cleaning ──
@@ -440,13 +443,14 @@ function parseJson3(raw: string): LyricLine[] {
   const lines: LyricLine[] = [];
   for (const ev of data.events) {
     if (ev.tStartMs == null || !ev.segs) continue;
-    let text = ev.segs.map(s => s.utf8).join('').replace(/\n/g, ' ').trim();
-    if (!text || RE_CC_NOISE.test(text) || RE_CC_JUNK.test(text)) continue;
-    // Strip ♪/♫ wrappers from manual CC lines (e.g. "♪ We're no strangers ♪" → "We're no strangers")
-    text = text.replace(/^[♪♫\s]+|[♪♫\s]+$/g, '').trim();
-    text = normalizeText(text);
-    if (!text) continue;
-    lines.push({ time: ev.tStartMs, text });
+    // Tags out before anything else: a cue that was "♪ [Music] ♪" passed the
+    // noise test as it stood and came out of the old ♪ trim as "[Music]".
+    const text = normalizeText(stripSoundTags(ev.segs.map(s => s.utf8).join('').replace(/\n/g, ' ')));
+    if (!text || RE_CC_NOISE.test(text)) continue;
+    // A cue that opened on its tag ("[Music]", then the first word 2 s in)
+    // starts when its words do, or the line would come up over the music.
+    const firstWord = ev.segs.find(s => stripSoundTags(s.utf8 ?? ''));
+    lines.push({ time: ev.tStartMs + (firstWord?.tOffsetMs ?? 0), text });
   }
 
   // Deduplicate consecutive identical lines

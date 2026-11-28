@@ -24,9 +24,26 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createLogger } from './logger.js';
+import { stripSoundTags } from './sound-tags.js';
 import type { LyricLine } from './types.js';
 
 const log = createLogger('LyricsCache');
+
+/**
+ * YouTube captions saved before their sound tags were stripped, cleaned the
+ * way a fresh fetch now is (see sound-tags.ts). They would otherwise show
+ * "[Music]" for up to MAX_AGE_MS on every video watched before, since a hit
+ * never asks yt-dlp again. Dropping the whole file instead would cost every
+ * cached song a lookup to fix captions only some entries hold.
+ */
+function captionText(text: string, source: 'cc' | 'sub'): string {
+  const clean = stripSoundTags(text);
+  if (clean === text || !clean) return clean;
+  // Auto-captions come lowercase and are capitalised once merged; a line
+  // that began with its tag ("[music] with 18 firearms") was capitalised on
+  // the bracket.
+  return source === 'cc' ? clean.charAt(0).toUpperCase() + clean.slice(1) : clean;
+}
 
 /** 419 of the 422 repeats in the real history above; ~4 KB of file a track. */
 const MAX_ENTRIES = 500;
@@ -78,7 +95,12 @@ export class LyricsCache {
         const lines: LyricLine[] = [];
         for (const l of e[2]) {
           if (!Array.isArray(l) || typeof l[0] !== 'number' || typeof l[1] !== 'string') continue;
-          lines.push(l[2] === 'cc' || l[2] === 'sub' ? { time: l[0], text: l[1], source: l[2] } : { time: l[0], text: l[1] });
+          if (l[2] === 'cc' || l[2] === 'sub') {
+            const text = captionText(l[1], l[2]);
+            if (text) lines.push({ time: l[0], text, source: l[2] });
+          } else {
+            lines.push({ time: l[0], text: l[1] });
+          }
         }
         if (lines.length) this.entries.set(e[0], { lines, savedAt: e[1] });
       }
